@@ -24,7 +24,28 @@ _PRESET_BILINEAR = ImageClassification(
 
 @register_weights("se_resnet_18_cls")
 class SEResNet18Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.se_resnet_18_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.se_resnet_18_cls`.
+
+    SE-ResNet-18 (Hu et al. CVPR 2018; 11.8 M params, top-1 70.6%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 70.6%), sourced from
+        ``timm/legacy_seresnet18.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Hu, Shen, Sun, *"Squeeze-and-Excitation Networks"*, CVPR
+    2018 (arXiv:1709.01507).
+
+    Examples
+    --------
+    >>> from lucid.models import se_resnet_18_cls
+    >>> model = se_resnet_18_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/se-resnet-18/resolve/main/IN1K/model.safetensors",
@@ -44,7 +65,28 @@ class SEResNet18Weights(WeightsEnum):
 
 @register_weights("se_resnet_34_cls")
 class SEResNet34Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.se_resnet_34_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.se_resnet_34_cls`.
+
+    SE-ResNet-34 (Hu et al. CVPR 2018; 22.0 M params, top-1 73.31%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 73.31%), sourced from
+        ``timm/legacy_seresnet34.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Hu, Shen, Sun, *"Squeeze-and-Excitation Networks"*, CVPR
+    2018 (arXiv:1709.01507).
+
+    Examples
+    --------
+    >>> from lucid.models import se_resnet_34_cls
+    >>> model = se_resnet_34_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/se-resnet-34/resolve/main/IN1K/model.safetensors",
@@ -69,6 +111,24 @@ class SEResNet50Weights(WeightsEnum):
     Sourced from timm's ``seresnet50.ra2_in1k`` RandAugment recipe — a
     cleanly SE-augmented ResNet whose state-dict naming matches Lucid
     one-for-one (identity key map).
+
+    Attributes
+    ----------
+    RA2_IN1K : WeightEntry
+        timm RandAugment-v2 ImageNet-1k checkpoint (top-1 78.498%),
+        sourced from ``timm/seresnet50.ra2_in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`RA2_IN1K`.
+
+    Notes
+    -----
+    Reference: Hu, Shen, Sun, *"Squeeze-and-Excitation Networks"*, CVPR
+    2018 (arXiv:1709.01507).
+
+    Examples
+    --------
+    >>> from lucid.models import se_resnet_50_cls
+    >>> model = se_resnet_50_cls(pretrained=True).eval()
     """
 
     RA2_IN1K = WeightEntry(
@@ -89,7 +149,28 @@ class SEResNet50Weights(WeightsEnum):
 
 @register_weights("se_resnet_101_cls")
 class SEResNet101Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.se_resnet_101_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.se_resnet_101_cls`.
+
+    SE-ResNet-101 (Hu et al. CVPR 2018; 49.3 M params, top-1 78.32%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 78.32%), sourced from
+        ``timm/legacy_seresnet101.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Hu, Shen, Sun, *"Squeeze-and-Excitation Networks"*, CVPR
+    2018 (arXiv:1709.01507).
+
+    Examples
+    --------
+    >>> from lucid.models import se_resnet_101_cls
+    >>> model = se_resnet_101_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/se-resnet-101/resolve/main/IN1K/model.safetensors",
@@ -109,7 +190,28 @@ class SEResNet101Weights(WeightsEnum):
 
 @register_weights("se_resnet_152_cls")
 class SEResNet152Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.se_resnet_152_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.se_resnet_152_cls`.
+
+    SE-ResNet-152 (Hu et al. CVPR 2018; 66.8 M params, top-1 78.66%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 78.66%), sourced from
+        ``timm/legacy_seresnet152.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Hu, Shen, Sun, *"Squeeze-and-Excitation Networks"*, CVPR
+    2018 (arXiv:1709.01507).
+
+    Examples
+    --------
+    >>> from lucid.models import se_resnet_152_cls
+    >>> model = se_resnet_152_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/se-resnet-152/resolve/main/IN1K/model.safetensors",

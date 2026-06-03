@@ -53,13 +53,23 @@ class WhitespaceTokenizer(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python whitespace tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int] or None, optional
+            Pre-built vocab.  ``None`` or empty = empty tokenizer;
+            call :meth:`train` to populate.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.
+        """
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
     @property
     def vocab_size(self) -> int:
-        """Number of distinct whitespace-split tokens currently registered."""
+        r"""Number of distinct whitespace-split tokens currently registered."""
         return len(self._vocab)
 
     @property
@@ -175,7 +185,7 @@ class WhitespaceTokenizerFast(Tokenizer):
 
     Same vocab format + OOV-dropping contract as
     :class:`WhitespaceTokenizer`; the encode loop runs in C++ via
-    :class:`lucid._C.engine.utils.tokenizer.WhitespaceTokenizer`.
+    the engine ``WhitespaceTokenizer`` binding.
 
     Parameters
     ----------
@@ -191,6 +201,16 @@ class WhitespaceTokenizerFast(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed whitespace tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int] or None, optional
+            Pre-built word → id map.  ``None`` or empty constructs
+            an empty C++ backend; call :meth:`train` to populate.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.
+        """
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
         if self._vocab:
             self._cpp = _C_engine.utils.tokenizer.WhitespaceTokenizer(self._vocab)
@@ -201,22 +221,57 @@ class WhitespaceTokenizerFast(Tokenizer):
 
     @property
     def vocab_size(self) -> int:
+        r"""Number of words in the live C++ vocab.
+
+        Returns
+        -------
+        int
+            ``self._cpp.vocab_size()``.
+        """
         return self._cpp.vocab_size()
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"whitespace"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"whitespace"``.
+        """
         return "whitespace"
 
     def get_vocab(self) -> dict[str, int]:
+        r"""Return a copy of the word → id map.
+
+        Returns
+        -------
+        dict[str, int]
+            Shallow copy of the Python-side cache.
+        """
         return dict(self._vocab)
 
     def id_to_token(self, token_id: int) -> str | None:
+        r"""Look up the word for ``token_id``.
+
+        Parameters
+        ----------
+        token_id : int
+            Vocab id.
+
+        Returns
+        -------
+        str or None
+            Word string, or ``None`` if unknown.
+        """
         return self._id_to_token.get(token_id)
 
     def _encode_one(self, text: str) -> list[int]:
+        r"""Delegate to the C++ encode hot path; OOV silently dropped."""
         return list(self._cpp.encode(text))
 
     def _decode_one(self, ids: list[int]) -> str:
+        r"""C++ decode — joins known surface forms with single spaces."""
         return self._cpp.decode(list(ids))
 
     def train(
@@ -225,17 +280,41 @@ class WhitespaceTokenizerFast(Tokenizer):
         *,
         vocab_size: int = 30_000,
     ) -> None:
+        r"""Collect unique whitespace-split words via the C++ trainer.
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Documents to scan.  Materialised into a list before
+            crossing into C++.
+        vocab_size : int, default 30 000
+            Maximum number of distinct words to retain.
+
+        Notes
+        -----
+        Mutates `_vocab` / `_id_to_token` in place after the C++
+        side finishes; re-resolves special-token ids against the
+        new vocab.
+        """
         self._cpp.train(list(corpus), vocab_size)
         self._vocab = dict(self._cpp.get_vocab())
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         self._refresh_special_ids()
 
     def save(self, directory: str) -> None:
+        r"""Persist as ``vocab.txt`` + unified ``tokenizer.json``.
+
+        Parameters
+        ----------
+        directory : str
+            Output directory; created if missing.
+        """
         os.makedirs(directory, exist_ok=True)
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
     def _save_extras(self) -> dict[str, object]:
+        r"""Emit the unified-format ``model`` block for the whitespace algo."""
         return {"model": {"type": "Whitespace", "vocab": self._vocab}}
 
     @classmethod
@@ -245,6 +324,25 @@ class WhitespaceTokenizerFast(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> WhitespaceTokenizerFast:
+        r"""Load from a directory containing ``vocab.txt``.
+
+        Parameters
+        ----------
+        directory : str
+            Directory previously written by :meth:`save`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Override for the on-disk special-token map.
+
+        Returns
+        -------
+        WhitespaceTokenizerFast
+            A new C++-backed tokenizer populated from disk.
+
+        Raises
+        ------
+        FileNotFoundError
+            If ``vocab.txt`` is missing.
+        """
         vocab_path = os.path.join(directory, "vocab.txt")
         if not os.path.isfile(vocab_path):
             raise FileNotFoundError(

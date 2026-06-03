@@ -23,7 +23,19 @@ def _rng(value: float | tuple[float, float]) -> tuple[float, float]:
 
 @dataclass(frozen=True)
 class BCParams:
-    """Per-call brightness offset and contrast multiplier."""
+    r"""Per-call brightness offset and contrast delta.
+
+    Carried by :class:`RandomBrightnessContrast`; the apply step fuses
+    them into ``img * (1 + contrast) + brightness`` before clipping to
+    ``[0, 1]``.
+
+    Attributes
+    ----------
+    brightness : float
+        Additive brightness offset on the unit ``[0, 1]`` scale.
+    contrast : float
+        Contrast delta; effective multiplier is ``1 + contrast``.
+    """
 
     brightness: float
     contrast: float
@@ -31,14 +43,44 @@ class BCParams:
 
 @dataclass(frozen=True)
 class ScalarParams:
-    """Single per-call scalar (gamma exponent, posterise bits, etc.)."""
+    r"""Per-call single-scalar parameter for tone / curve transforms.
+
+    Reused across :class:`RandomGamma` (gamma exponent),
+    :class:`Solarize` (inversion threshold on the unit scale),
+    :class:`RandomBrightness` (brightness offset),
+    :class:`RandomContrast` (contrast delta), and
+    :class:`RandomToneCurve` (S-curve amount).  The host transform's
+    apply step decides how to interpret ``value``.
+
+    Attributes
+    ----------
+    value : float
+        Sampled scalar; meaning depends on the host transform.
+    """
 
     value: float
 
 
 @dataclass(frozen=True)
 class TripletParams:
-    """Three per-call scalars; interpretation depends on the host transform."""
+    r"""Per-call three-scalar parameter pack for multi-knob transforms.
+
+    Used by :class:`HueSaturationValue` (hue / sat / val shifts),
+    :class:`RGBShift` (per-channel offsets, pre-divided by 255),
+    :class:`Sharpen` (alpha / lightness / unused),
+    :class:`Emboss` (alpha / strength / unused), and
+    :class:`UnsharpMask` (alpha / ksize-as-float / sigma).
+
+    Attributes
+    ----------
+    a : float
+        First sampled value; see host transform for semantics.
+    b : float
+        Second sampled value.
+    c : float
+        Third sampled value; often ``0.0`` when only two knobs are
+        needed.
+    """
 
     a: float
     b: float
@@ -47,14 +89,34 @@ class TripletParams:
 
 @dataclass(frozen=True)
 class PermParams:
-    """Per-call channel permutation used by :class:`ChannelShuffle`."""
+    r"""Per-call RGB-channel permutation used by :class:`ChannelShuffle`.
+
+    The apply step concatenates the input channels in ``order`` to
+    produce the output, so the transform is a pure slice + concat
+    (no pixel arithmetic, autograd-friendly).
+
+    Attributes
+    ----------
+    order : tuple of (int, int, int)
+        Permutation of ``(0, 1, 2)`` drawn via Fisher-Yates.
+    """
 
     order: tuple[int, int, int]
 
 
 @dataclass(frozen=True)
 class ChannelDropParams:
-    """Per-call set of channel indices to zero out (used by :class:`ChannelDropout`)."""
+    r"""Per-call set of channel indices to replace with the fill value.
+
+    Carried by :class:`ChannelDropout`; the apply step builds a
+    multiplicative keep-mask + additive fill so the operation stays
+    differentiable.
+
+    Attributes
+    ----------
+    channels : tuple of int
+        Distinct channel indices to drop (sampled without replacement).
+    """
 
     channels: tuple[int, ...]
 
@@ -103,6 +165,20 @@ class RandomBrightnessContrast(PhotometricTransform[BCParams]):
         self.contrast_limit = _rng(contrast_limit)
 
     def make_params(self, img: Tensor) -> BCParams:
+        r"""Sample per-call random parameters for :class:`RandomBrightnessContrast`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        BCParams
+            Carries ``brightness`` (additive offset) and ``contrast``
+            (multiplier delta), each drawn uniformly from their
+            respective limit ranges.
+        """
         return BCParams(
             brightness=_random.uniform(*self.brightness_limit),
             contrast=_random.uniform(*self.contrast_limit),
@@ -152,6 +228,20 @@ class RandomGamma(PhotometricTransform[ScalarParams]):
         self.gamma_limit = gamma_limit
 
     def make_params(self, img: Tensor) -> ScalarParams:
+        r"""Sample per-call random parameters for :class:`RandomGamma`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ScalarParams
+            Carries ``value`` — the gamma exponent, drawn uniformly
+            from ``gamma_limit`` and divided by 100 to convert the
+            integer-percent input to a real exponent.
+        """
         return ScalarParams(
             value=_random.uniform(self.gamma_limit[0], self.gamma_limit[1]) / 100.0
         )
@@ -222,6 +312,21 @@ class HueSaturationValue(PhotometricTransform[TripletParams]):
         self.val_shift_limit = _rng(val_shift_limit)
 
     def make_params(self, img: Tensor) -> TripletParams:
+        r"""Sample per-call random parameters for :class:`HueSaturationValue`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        TripletParams
+            Carries the hue shift (``a``, OpenCV ``[0, 179]`` scale),
+            saturation shift (``b``, ``[0, 255]``), and value shift
+            (``c``, ``[0, 255]``), each drawn uniformly from its
+            limit range.
+        """
         return TripletParams(
             a=_random.uniform(*self.hue_shift_limit),
             b=_random.uniform(*self.sat_shift_limit),
@@ -289,6 +394,20 @@ class RGBShift(PhotometricTransform[TripletParams]):
         self.b = _rng(b_shift_limit)
 
     def make_params(self, img: Tensor) -> TripletParams:
+        r"""Sample per-call random parameters for :class:`RGBShift`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        TripletParams
+            Carries the per-channel offsets ``a`` (red), ``b`` (green),
+            ``c`` (blue), each sampled from the constructor's 0-255
+            limit range and divided by 255 to land on the unit scale.
+        """
         return TripletParams(
             a=_random.uniform(*self.r) / 255.0,
             b=_random.uniform(*self.g) / 255.0,
@@ -340,6 +459,19 @@ class ChannelShuffle(PhotometricTransform[PermParams]):
         super().__init__(p=p)
 
     def make_params(self, img: Tensor) -> PermParams:
+        r"""Sample per-call random parameters for :class:`ChannelShuffle`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        PermParams
+            Carries ``order`` — a uniformly-random permutation of
+            ``(0, 1, 2)`` produced by a Fisher-Yates shuffle.
+        """
         order = [0, 1, 2]
         for i in range(2, 0, -1):
             j = _random.randint(0, i + 1)
@@ -395,6 +527,28 @@ class ChannelDropout(PhotometricTransform[ChannelDropParams]):
         self.fill_value = fill_value
 
     def make_params(self, img: Tensor) -> ChannelDropParams:
+        r"""Sample per-call random parameters for :class:`ChannelDropout`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its channel-axis size is read so that the
+            sample-without-replacement loop never returns duplicate or
+            out-of-range indices.
+
+        Returns
+        -------
+        ChannelDropParams
+            Carries ``channels`` — a tuple of distinct channel indices
+            (sampled without replacement) to replace with
+            ``fill_value`` in the apply step.
+
+        Notes
+        -----
+        The number of dropped channels is drawn from
+        ``channel_drop_range``; it is clamped to the available channel
+        count if the high bound exceeds ``C``.
+        """
         c = int(img.shape[-3])
         n = _random.randint(self.channel_drop_range[0], self.channel_drop_range[1] + 1)
         idxs = list(range(c))
@@ -552,6 +706,20 @@ class Solarize(PhotometricTransform[ScalarParams]):
         )
 
     def make_params(self, img: Tensor) -> ScalarParams:
+        r"""Sample per-call random parameters for :class:`Solarize`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ScalarParams
+            Carries ``value`` — the inversion threshold on the unit
+            scale (sampled from ``threshold`` on the 0-255 scale, then
+            divided by 255).
+        """
         return ScalarParams(value=_random.uniform(*self.threshold) / 255.0)
 
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
@@ -627,6 +795,20 @@ class Posterize(PhotometricTransform[Empty]):
         self.mode = mode
 
     def make_params(self, img: Tensor) -> Empty:
+        r"""Return the no-op parameter sentinel for :class:`Posterize`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected.
+
+        Returns
+        -------
+        Empty
+            The shared :data:`NO_PARAMS` sentinel — Posterize is
+            deterministic given ``num_bits`` / ``mode``, so no
+            per-call sampling is required.
+        """
         from lucid.utils.transforms._base import NO_PARAMS
 
         return NO_PARAMS
@@ -807,6 +989,21 @@ class Sharpen(PhotometricTransform[TripletParams]):
         self.lightness = lightness
 
     def make_params(self, img: Tensor) -> TripletParams:
+        r"""Sample per-call random parameters for :class:`Sharpen`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        TripletParams
+            Carries ``a`` (blend weight from ``alpha``), ``b``
+            (centre-weight additive term from ``lightness``), and
+            ``c = 0.0`` (unused — third slot kept for triplet
+            uniformity with sibling sharpen-family ops).
+        """
         return TripletParams(
             a=_random.uniform(*self.alpha),
             b=_random.uniform(*self.lightness),
@@ -865,6 +1062,21 @@ class Emboss(PhotometricTransform[TripletParams]):
         self.strength = strength
 
     def make_params(self, img: Tensor) -> TripletParams:
+        r"""Sample per-call random parameters for :class:`Emboss`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        TripletParams
+            Carries ``a`` (blend weight from ``alpha``), ``b``
+            (off-diagonal kernel magnitude from ``strength``), and
+            ``c = 0.0`` (unused — third slot kept for triplet
+            uniformity).
+        """
         return TripletParams(
             a=_random.uniform(*self.alpha),
             b=_random.uniform(*self.strength),
@@ -914,6 +1126,20 @@ class RandomToneCurve(PhotometricTransform[ScalarParams]):
         self.scale = scale
 
     def make_params(self, img: Tensor) -> ScalarParams:
+        r"""Sample per-call random parameters for :class:`RandomToneCurve`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ScalarParams
+            Carries ``value`` — the S-curve amount drawn uniformly
+            from ``(-scale, scale)``; positive values brighten
+            midtones, negative values darken them.
+        """
         return ScalarParams(value=_random.uniform(-self.scale, self.scale))
 
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
@@ -962,6 +1188,19 @@ class RandomBrightness(PhotometricTransform[ScalarParams]):
         self.limit = _rng(limit)
 
     def make_params(self, img: Tensor) -> ScalarParams:
+        r"""Sample per-call random parameters for :class:`RandomBrightness`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ScalarParams
+            Carries ``value`` — the additive brightness offset drawn
+            uniformly from ``limit``.
+        """
         return ScalarParams(value=_random.uniform(*self.limit))
 
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
@@ -1004,6 +1243,19 @@ class RandomContrast(PhotometricTransform[ScalarParams]):
         self.limit = _rng(limit)
 
     def make_params(self, img: Tensor) -> ScalarParams:
+        r"""Sample per-call random parameters for :class:`RandomContrast`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ScalarParams
+            Carries ``value`` — the contrast delta drawn uniformly
+            from ``limit``; the effective multiplier is ``1 + value``.
+        """
         return ScalarParams(value=_random.uniform(*self.limit))
 
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
@@ -1071,6 +1323,26 @@ class UnsharpMask(PhotometricTransform[TripletParams]):
         self.threshold = threshold
 
     def make_params(self, img: Tensor) -> TripletParams:
+        r"""Sample per-call random parameters for :class:`UnsharpMask`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        TripletParams
+            Carries ``a`` (residual blend weight from ``alpha``),
+            ``b`` (Gaussian kernel side ``k`` stored as float so the
+            triplet stays homogeneous), and ``c`` (Gaussian sigma).
+
+        Notes
+        -----
+        ``k`` is forced odd via :func:`_odd`.  A non-positive ``sigma``
+        falls back to OpenCV's kernel-derived
+        ``0.3 * ((k - 1) * 0.5 - 1.0) + 0.8`` heuristic.
+        """
         from lucid.utils.transforms._blur import _odd
 
         k = _odd(_random.randint(self.blur_limit[0], self.blur_limit[1] + 1))
@@ -1123,6 +1395,21 @@ class RingingOvershoot(PhotometricTransform[Empty]):
         self.blur_limit = blur_limit
 
     def make_params(self, img: Tensor) -> Empty:
+        r"""Return the no-op parameter sentinel for :class:`RingingOvershoot`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected.
+
+        Returns
+        -------
+        Empty
+            The shared :data:`NO_PARAMS` sentinel — the current
+            implementation uses a fixed high-pass kernel, so no
+            per-call sampling is needed.  ``blur_limit`` is kept on
+            the signature for forward compatibility but is unused.
+        """
         from lucid.utils.transforms._base import NO_PARAMS
 
         return NO_PARAMS
@@ -1173,6 +1460,21 @@ class FancyPCA(PhotometricTransform[Empty]):
         self.alpha = alpha
 
     def make_params(self, img: Tensor) -> Empty:
+        r"""Return the no-op parameter sentinel for :class:`FancyPCA`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected here.
+
+        Returns
+        -------
+        Empty
+            The shared :data:`NO_PARAMS` sentinel — the random
+            eigenvector weights are drawn inline in the apply step
+            because they depend on the per-image covariance
+            decomposition.
+        """
         from lucid.utils.transforms._base import NO_PARAMS
 
         return NO_PARAMS
@@ -1251,6 +1553,22 @@ class PixelDropout(PhotometricTransform[PixelMaskParams]):
         self.drop_value = drop_value
 
     def make_params(self, img: Tensor) -> PixelMaskParams:
+        r"""Sample per-call random parameters for :class:`PixelDropout`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its channel count and spatial size are read
+            to size the Bernoulli keep-mask.
+
+        Returns
+        -------
+        PixelMaskParams
+            Carries ``mask`` — a per-pixel keep mask of shape
+            ``(C, H, W)`` (when ``per_channel=True``) or ``(1, H, W)``
+            (otherwise), with each entry independently 1 with
+            probability ``1 - dropout_prob``.
+        """
         c, h, w = int(img.shape[-3]), *F._spatial_hw(img)
         shape = (c, h, w) if self.per_channel else (1, h, w)
         keep = (lucid.rand(*shape) >= self.dropout_prob).to(img.dtype)
@@ -1327,6 +1645,22 @@ class XYMasking(PhotometricTransform[BandParams]):
         self.fill_value = fill_value
 
     def make_params(self, img: Tensor) -> BandParams:
+        r"""Sample per-call random parameters for :class:`XYMasking`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size is read to bound the
+            uniformly-sampled band start positions.
+
+        Returns
+        -------
+        BandParams
+            Carries ``rows`` (``num_masks_y`` horizontal band intervals)
+            and ``cols`` (``num_masks_x`` vertical band intervals),
+            each interval ``(start, stop)`` with width ``mask_y_length``
+            / ``mask_x_length`` (clipped to the image edge).
+        """
         h, w = F._spatial_hw(img)
         cols = tuple(
             (lambda s: (s, min(s + self.mask_x_length, w)))(

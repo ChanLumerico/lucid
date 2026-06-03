@@ -554,7 +554,7 @@ class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
 
     Sampling
         * Use :meth:`generate` from :class:`DiffusionMixin` — pass any
-          :class:`Scheduler` (``DDPMScheduler`` for ancestral sampling).
+          ``Scheduler`` (``DDPMScheduler`` for ancestral sampling).
 
     Parameters
     ----------

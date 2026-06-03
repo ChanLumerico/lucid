@@ -14,7 +14,28 @@ _PRESET = ImageClassification(crop_size=224, resize_size=256)
 
 @register_weights("densenet_121_cls")
 class DenseNet121Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.densenet_121_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.densenet_121_cls`.
+
+    121-layer DenseNet (growth-rate 32, 8.0 M params, top-1 74.43%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 74.434% / top-5 91.972%),
+        sourced from ``torchvision/DenseNet121_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Huang, Liu, van der Maaten, Weinberger, *"Densely
+    Connected Convolutional Networks"*, CVPR 2017 (arXiv:1608.06993).
+
+    Examples
+    --------
+    >>> from lucid.models import densenet_121_cls
+    >>> model = densenet_121_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/densenet-121/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -34,7 +55,28 @@ class DenseNet121Weights(WeightsEnum):
 
 @register_weights("densenet_161_cls")
 class DenseNet161Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.densenet_161_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.densenet_161_cls`.
+
+    161-layer DenseNet (growth-rate 48, 28.7 M params, top-1 77.14%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 77.138% / top-5 93.560%),
+        sourced from ``torchvision/DenseNet161_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Huang, Liu, van der Maaten, Weinberger, *"Densely
+    Connected Convolutional Networks"*, CVPR 2017 (arXiv:1608.06993).
+
+    Examples
+    --------
+    >>> from lucid.models import densenet_161_cls
+    >>> model = densenet_161_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/densenet-161/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -54,7 +96,28 @@ class DenseNet161Weights(WeightsEnum):
 
 @register_weights("densenet_169_cls")
 class DenseNet169Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.densenet_169_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.densenet_169_cls`.
+
+    169-layer DenseNet (growth-rate 32, 14.1 M params, top-1 75.60%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 75.600% / top-5 92.806%),
+        sourced from ``torchvision/DenseNet169_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Huang, Liu, van der Maaten, Weinberger, *"Densely
+    Connected Convolutional Networks"*, CVPR 2017 (arXiv:1608.06993).
+
+    Examples
+    --------
+    >>> from lucid.models import densenet_169_cls
+    >>> model = densenet_169_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/densenet-169/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -74,7 +137,28 @@ class DenseNet169Weights(WeightsEnum):
 
 @register_weights("densenet_201_cls")
 class DenseNet201Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.densenet_201_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.densenet_201_cls`.
+
+    201-layer DenseNet (growth-rate 32, 20.0 M params, top-1 76.90%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 76.896% / top-5 93.370%),
+        sourced from ``torchvision/DenseNet201_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Huang, Liu, van der Maaten, Weinberger, *"Densely
+    Connected Convolutional Networks"*, CVPR 2017 (arXiv:1608.06993).
+
+    Examples
+    --------
+    >>> from lucid.models import densenet_201_cls
+    >>> model = densenet_201_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/densenet-201/resolve/main/IMAGENET1K_V1/model.safetensors",

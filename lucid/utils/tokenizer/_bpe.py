@@ -216,6 +216,28 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python BPE tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int]
+            Token-string → id map; must cover every starting symbol
+            referenced by ``merges``.
+        merges : list of (str, str)
+            Ordered merge pairs; index = rank (lower wins).
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normalisation chain.  Defaults to :class:`NFC`.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            Chunk splitter.  Defaults to :class:`WhitespaceSplit`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.
+
+        Notes
+        -----
+        Mutates internal state: copies ``vocab`` / ``merges``, builds
+        the `_pair_to_merge` compiled lookup, and registers special
+        tokens via the base :class:`Tokenizer` constructor.
+        """
         self._vocab: dict[str, int] = dict(vocab)
         self._merges: list[tuple[str, str]] = list(merges)
         self._normalizer = normalizer if normalizer is not None else NFC()
@@ -228,10 +250,16 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         super().__init__(special_tokens=special_tokens)
 
     def _rebuild_tables(self) -> None:
-        """Recompute :attr:`_pair_to_merge` + the reverse vocab.
+        r"""Recompute the `_pair_to_merge` cache + reverse vocab.
 
         Called after construction and after :meth:`train`; subclasses
         adding mutating operations must call this themselves.
+
+        Notes
+        -----
+        Mutates `_id_to_token` and `_pair_to_merge` in place.  Merges
+        whose left, right, or merged-string ids are missing from the
+        vocab are silently skipped (matches the reference framework).
         """
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         self._pair_to_merge = {}
@@ -248,26 +276,66 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
 
     @property
     def vocab_size(self) -> int:
+        r"""Number of tokens currently registered in the vocab.
+
+        Returns
+        -------
+        int
+            ``len(self._vocab)`` — includes special tokens that were
+            registered into the main vocab.
+        """
         return len(self._vocab)
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"bpe"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"bpe"`` — used by the unified
+            ``tokenizer.json`` writer to label the algorithm.
+        """
         return "bpe"
 
     def get_vocab(self) -> dict[str, int]:
+        r"""Return a shallow copy of the token → id map.
+
+        Returns
+        -------
+        dict[str, int]
+            Copy of the internal vocab; mutating it does not affect
+            the tokenizer.
+        """
         return dict(self._vocab)
 
     def id_to_token(self, token_id: int) -> str | None:
+        r"""Look up the surface string for a token id.
+
+        Parameters
+        ----------
+        token_id : int
+            Vocab id.
+
+        Returns
+        -------
+        str or None
+            The token string for ``token_id``, or ``None`` if the id
+            is not in the reverse table.
+        """
         return self._id_to_token.get(token_id)
 
     def _encode_one(self, text: str) -> list[int]:
-        """Algorithm-specific encode: chunk → ids via BPE merges."""
+        r"""Algorithm-specific encode: chunk → ids via BPE merges."""
         all_ids: list[int] = []
         for chunk in self._prepare_chunks(text):
             all_ids.extend(self._encode_chunk(chunk))
         return all_ids
 
     def _decode_one(self, ids: list[int]) -> str:
+        r"""Concatenate surface strings for ``ids``; unknown ids are
+        silently dropped.
+        """
         out: list[str] = []
         for i in ids:
             tok = self._id_to_token.get(i)
@@ -339,8 +407,8 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
            until ``vocab_size`` is reached or no pair appears more
            than once.
 
-        Replaces :attr:`_vocab` + :attr:`_merges` in place; previous
-        contents are discarded.
+        Replaces `_vocab` + `_merges` in place; previous contents
+        are discarded.
 
         Parameters
         ----------
@@ -551,10 +619,9 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
     r"""C++-backed BPE tokenizer.
 
     Identical algorithm + vocab format to :class:`BPETokenizer`; the
-    hot loop (per-chunk merge application) runs in C++ via
-    :class:`lucid._C.engine.utils.tokenizer.BPE`.  Encode outputs
-    are bit-identical for the same vocab + same merges + same
-    normalizer + same pre-tokenizer.
+    hot loop (per-chunk merge application) runs in C++ via the engine
+    ``BPE`` binding.  Encode outputs are bit-identical for the same
+    vocab + same merges + same normalizer + same pre-tokenizer.
 
     Use this in production training / inference.  Use
     :class:`BPETokenizer` for debugging / extending the algorithm
@@ -563,7 +630,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
     Parameters
     ----------
     Same as :class:`BPETokenizer`.  The C++ backend is constructed
-    transparently in ``__init__`` and held as :attr:`_cpp`.
+    transparently in ``__init__`` and held as `_cpp`.
     """
 
     def __init__(
@@ -575,6 +642,29 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed BPE tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int]
+            Token-string → id map; copied into both Python and C++
+            state.
+        merges : list of (str, str)
+            Ordered merge pairs; rank = list index.
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normalisation chain.  Defaults to :class:`NFC`.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            Chunk splitter.  Defaults to :class:`WhitespaceSplit`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry; mirrored into the C++ side via
+            :meth:`_sync_special_tokens_to_cpp`.
+
+        Notes
+        -----
+        Builds the C++ ``BPE`` backend once and caches it on `_cpp`;
+        the Python-side `_id_to_token` is kept in sync so decode
+        avoids a binding round-trip.
+        """
         self._vocab: dict[str, int] = dict(vocab)
         self._merges: list[tuple[str, str]] = list(merges)
         self._normalizer = normalizer if normalizer is not None else NFC()
@@ -591,7 +681,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         self._sync_special_tokens_to_cpp()
 
     def _sync_special_tokens_to_cpp(self) -> None:
-        """Mirror :attr:`_special_ids` into the C++ tokenizer's
+        r"""Mirror `_special_ids` into the C++ tokenizer's
         ``SpecialTokens`` registry so the C++ encode fall-back path
         (UNK substitution) has the same view of the world.
         """
@@ -614,22 +704,64 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
 
     @property
     def vocab_size(self) -> int:
+        r"""Number of tokens in the C++ side vocab.
+
+        Returns
+        -------
+        int
+            Result of ``self._cpp.vocab_size()`` — authoritative
+            count for the live tokenizer (kept in sync with the
+            Python cache after every :meth:`train`).
+        """
         return self._cpp.vocab_size()
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"bpe"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"bpe"``.
+        """
         return "bpe"
 
     def get_vocab(self) -> dict[str, int]:
+        r"""Return a shallow copy of the token → id map.
+
+        Returns
+        -------
+        dict[str, int]
+            Copy of the Python-side cache, kept in sync with the C++
+            side by `__init__` and :meth:`train`.
+
+        Notes
+        -----
+        Reads from the Python cache to avoid a binding round-trip;
+        both halves are updated atomically.
+        """
         # Pull from Python-side cache for speed; both are kept in
         # sync by ``train`` + ``__init__``.
         return dict(self._vocab)
 
     def id_to_token(self, token_id: int) -> str | None:
+        r"""Look up the surface string for a token id.
+
+        Parameters
+        ----------
+        token_id : int
+            Vocab id.
+
+        Returns
+        -------
+        str or None
+            The token string for ``token_id``, or ``None`` if the id
+            is not in the reverse table.
+        """
         return self._id_to_token.get(token_id)
 
     def _encode_one(self, text: str) -> list[int]:
-        """C++ encode path: normalize + pre-tokenize in Python,
+        r"""C++ encode path: normalize + pre-tokenize in Python,
         per-chunk merge in C++.
         """
         all_ids: list[int] = []
@@ -638,9 +770,11 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         return all_ids
 
     def _decode_one(self, ids: list[int]) -> str:
-        # C++ decode for parity.  Note: ``self._cpp.decode`` returns
-        # the joined token-string surface form (no special-token
-        # stripping — that's the base class's job).
+        r"""C++ decode for parity with the Python flavour.
+
+        Returns the joined token-string surface form; special-token
+        stripping is handled by the :class:`Tokenizer` base.
+        """
         return self._cpp.decode(list(ids))
 
     # ── Training ────────────────────────────────────────────────────
@@ -688,6 +822,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         super().save(directory)
 
     def _save_extras(self) -> dict[str, object]:
+        r"""Emit the BPE ``model`` block for the unified ``tokenizer.json``."""
         return {
             "model": {
                 "type": "BPE",

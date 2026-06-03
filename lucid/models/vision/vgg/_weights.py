@@ -22,7 +22,28 @@ _PRESET = ImageClassification(crop_size=224, resize_size=256)
 
 @register_weights("vgg_11_cls")
 class VGG11Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_11_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_11_cls`.
+
+    VGG-A 11-layer config (132.9 M params, 7.6 GFLOPs, top-1 69.02%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 69.020% / top-5 88.628%),
+        sourced from ``torchvision/VGG11_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_11_cls
+    >>> model = vgg_11_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-11/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -43,7 +64,28 @@ class VGG11Weights(WeightsEnum):
 
 @register_weights("vgg_13_cls")
 class VGG13Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_13_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_13_cls`.
+
+    VGG-B 13-layer config (133.0 M params, 11.3 GFLOPs, top-1 69.93%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 69.928% / top-5 89.246%),
+        sourced from ``torchvision/VGG13_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_13_cls
+    >>> model = vgg_13_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-13/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -64,7 +106,28 @@ class VGG13Weights(WeightsEnum):
 
 @register_weights("vgg_16_cls")
 class VGG16Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_16_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_16_cls`.
+
+    VGG-D 16-layer config (138.4 M params, 15.5 GFLOPs, top-1 71.59%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 71.592% / top-5 90.382%),
+        sourced from ``torchvision/VGG16_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_16_cls
+    >>> model = vgg_16_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-16/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -85,7 +148,28 @@ class VGG16Weights(WeightsEnum):
 
 @register_weights("vgg_19_cls")
 class VGG19Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_19_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_19_cls`.
+
+    VGG-E 19-layer config (143.7 M params, 19.6 GFLOPs, top-1 72.38%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 72.376% / top-5 90.876%),
+        sourced from ``torchvision/VGG19_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_19_cls
+    >>> model = vgg_19_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-19/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -106,7 +190,30 @@ class VGG19Weights(WeightsEnum):
 
 @register_weights("vgg_11_bn_cls")
 class VGG11BNWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_11_bn_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_11_bn_cls`.
+
+    VGG-A with BatchNorm (132.9 M params, 7.6 GFLOPs, top-1 70.37%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 70.370% / top-5 89.810%),
+        sourced from ``torchvision/VGG11_BN_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+    BatchNorm added in the torchvision reimplementation (not in the
+    original paper).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_11_bn_cls
+    >>> model = vgg_11_bn_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-11-bn/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -127,7 +234,30 @@ class VGG11BNWeights(WeightsEnum):
 
 @register_weights("vgg_13_bn_cls")
 class VGG13BNWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_13_bn_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_13_bn_cls`.
+
+    VGG-B with BatchNorm (133.1 M params, 11.3 GFLOPs, top-1 71.59%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 71.586% / top-5 90.374%),
+        sourced from ``torchvision/VGG13_BN_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+    BatchNorm added in the torchvision reimplementation (not in the
+    original paper).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_13_bn_cls
+    >>> model = vgg_13_bn_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-13-bn/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -148,7 +278,30 @@ class VGG13BNWeights(WeightsEnum):
 
 @register_weights("vgg_16_bn_cls")
 class VGG16BNWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_16_bn_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_16_bn_cls`.
+
+    VGG-D with BatchNorm (138.4 M params, 15.5 GFLOPs, top-1 73.36%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 73.360% / top-5 91.516%),
+        sourced from ``torchvision/VGG16_BN_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+    BatchNorm added in the torchvision reimplementation (not in the
+    original paper).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_16_bn_cls
+    >>> model = vgg_16_bn_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-16-bn/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -169,7 +322,30 @@ class VGG16BNWeights(WeightsEnum):
 
 @register_weights("vgg_19_bn_cls")
 class VGG19BNWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.vgg_19_bn_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.vgg_19_bn_cls`.
+
+    VGG-E with BatchNorm (143.7 M params, 19.6 GFLOPs, top-1 74.22%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 74.218% / top-5 91.842%),
+        sourced from ``torchvision/VGG19_BN_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
+    for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
+    BatchNorm added in the torchvision reimplementation (not in the
+    original paper).
+
+    Examples
+    --------
+    >>> from lucid.models import vgg_19_bn_cls
+    >>> model = vgg_19_bn_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/vgg-19-bn/resolve/main/IMAGENET1K_V1/model.safetensors",

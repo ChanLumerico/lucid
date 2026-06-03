@@ -52,7 +52,7 @@ def checkpoint(
     -------
     Tensor or tuple[Tensor, ...]
         Whatever ``function(*args, **kwargs)`` returns — the gradient
-        graph routes through :class:`CheckpointFunction` so backward
+        graph routes through `CheckpointFunction` so backward
         triggers the recompute path.
 
     Examples

@@ -420,6 +420,10 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         proposals : list of Tensor, optional
             Per-image proposals the RoI features were sampled from
             (required — pass the same list :meth:`forward` used).
+        features : list of Tensor, optional
+            Multi-scale FPN feature maps; accepted for API symmetry with
+            the detector-stage post-processor but not consumed here (mask
+            logits are already gathered onto the proposals).
 
         Returns
         -------

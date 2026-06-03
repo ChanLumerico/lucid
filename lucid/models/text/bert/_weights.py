@@ -39,7 +39,28 @@ def _url_tag(slug: str, tag: str) -> str:
 
 @register_weights("bert_tiny")
 class BERTTinyWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_tiny`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_tiny`.
+
+    Turc et al. 2019 ``L=2, H=128, A=2`` distilled encoder (4.4 M params).
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint sourced from
+        ``transformers/google/bert_uncased_L-2_H-128_A-2``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Turc, Chang, Lee, Toutanova, *"Well-Read Students Learn
+    Better"*, 2019 (arXiv:1908.08962).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_tiny
+    >>> model = bert_tiny(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-tiny"),
@@ -59,7 +80,28 @@ class BERTTinyWeights(WeightsEnum):
 
 @register_weights("bert_mini")
 class BERTMiniWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_mini`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_mini`.
+
+    Turc et al. 2019 ``L=4, H=256, A=4`` distilled encoder (11.2 M params).
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint sourced from
+        ``transformers/google/bert_uncased_L-4_H-256_A-4``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Turc, Chang, Lee, Toutanova, *"Well-Read Students Learn
+    Better"*, 2019 (arXiv:1908.08962).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_mini
+    >>> model = bert_mini(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-mini"),
@@ -79,7 +121,28 @@ class BERTMiniWeights(WeightsEnum):
 
 @register_weights("bert_small")
 class BERTSmallWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_small`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_small`.
+
+    Turc et al. 2019 ``L=4, H=512, A=8`` distilled encoder (28.8 M params).
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint sourced from
+        ``transformers/google/bert_uncased_L-4_H-512_A-8``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Turc, Chang, Lee, Toutanova, *"Well-Read Students Learn
+    Better"*, 2019 (arXiv:1908.08962).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_small
+    >>> model = bert_small(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-small"),
@@ -99,7 +162,28 @@ class BERTSmallWeights(WeightsEnum):
 
 @register_weights("bert_medium")
 class BERTMediumWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_medium`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_medium`.
+
+    Turc et al. 2019 ``L=8, H=512, A=8`` distilled encoder (41.4 M params).
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint sourced from
+        ``transformers/google/bert_uncased_L-8_H-512_A-8``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Turc, Chang, Lee, Toutanova, *"Well-Read Students Learn
+    Better"*, 2019 (arXiv:1908.08962).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_medium
+    >>> model = bert_medium(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-medium"),
@@ -119,7 +203,29 @@ class BERTMediumWeights(WeightsEnum):
 
 @register_weights("bert_base")
 class BERTBaseWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_base`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_base`.
+
+    Devlin et al. 2018 ``L=12, H=768, A=12`` uncased encoder (109.5 M params).
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint sourced from
+        ``transformers/google-bert/bert-base-uncased``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL
+    2019 (arXiv:1810.04805).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_base
+    >>> model = bert_base(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-base"),
@@ -139,7 +245,29 @@ class BERTBaseWeights(WeightsEnum):
 
 @register_weights("bert_large")
 class BERTLargeWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_large`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_large`.
+
+    Devlin et al. 2018 ``L=24, H=1024, A=16`` uncased encoder (335.1 M params).
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint sourced from
+        ``transformers/google-bert/bert-large-uncased``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL
+    2019 (arXiv:1810.04805).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_large
+    >>> model = bert_large(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-large"),
@@ -159,7 +287,29 @@ class BERTLargeWeights(WeightsEnum):
 
 @register_weights("bert_base_mlm")
 class BERTBaseMLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_base_mlm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_base_mlm`.
+
+    BERT-Base encoder + tied MLM head over the 30 522 WordPiece vocab.
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint (encoder + MLM
+        head) sourced from ``transformers/google-bert/bert-base-uncased``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL
+    2019 (arXiv:1810.04805).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_base_mlm
+    >>> model = bert_base_mlm(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-base-mlm"),
@@ -179,7 +329,29 @@ class BERTBaseMLMWeights(WeightsEnum):
 
 @register_weights("bert_large_mlm")
 class BERTLargeMLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.bert_large_mlm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.bert_large_mlm`.
+
+    BERT-Large encoder + tied MLM head over the 30 522 WordPiece vocab.
+
+    Attributes
+    ----------
+    WIKIPEDIA_BOOKSCORPUS : WeightEntry
+        Wikipedia + BookCorpus pre-training checkpoint (encoder + MLM
+        head) sourced from ``transformers/google-bert/bert-large-uncased``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WIKIPEDIA_BOOKSCORPUS`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL
+    2019 (arXiv:1810.04805).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_large_mlm
+    >>> model = bert_large_mlm(pretrained=True).eval()
+    """
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
         url=_url("bert-large-mlm"),
@@ -210,7 +382,29 @@ _CONLL_TAG = "CONLL2003"
 
 @register_weights("bert_base_qa")
 class BERTBaseQAWeights(WeightsEnum):
-    r"""Fine-tuned SQuAD v1.1 weights for :func:`lucid.models.bert_base_qa`."""
+    r"""Fine-tuned SQuAD v1.1 weights for :func:`lucid.models.bert_base_qa`.
+
+    BERT-Base encoder + 2-way span head; F1 88.1 / EM 80.9.
+
+    Attributes
+    ----------
+    SQUAD_V1 : WeightEntry
+        SQuAD v1.1 fine-tuned checkpoint (F1 88.1 / EM 80.9), sourced
+        from ``transformers/csarron/bert-base-uncased-squad-v1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`SQUAD_V1`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL
+    2019 (arXiv:1810.04805).  Fine-tuned on SQuAD v1.1.
+
+    Examples
+    --------
+    >>> from lucid.models import bert_base_qa
+    >>> model = bert_base_qa(pretrained=True).eval()
+    """
 
     SQUAD_V1 = WeightEntry(
         url=_url_tag("bert-base-squad", _SQUAD_TAG),
@@ -233,6 +427,26 @@ class BERTLargeQAWeights(WeightsEnum):
     r"""Fine-tuned SQuAD v1.1 weights for :func:`lucid.models.bert_large_qa`.
 
     The official Google whole-word-masking BERT-Large SQuAD checkpoint.
+
+    Attributes
+    ----------
+    SQUAD_V1 : WeightEntry
+        SQuAD v1.1 fine-tuned checkpoint (F1 93.2 / EM 86.9), sourced
+        from ``transformers/google-bert/bert-large-uncased-whole-word-
+        masking-finetuned-squad``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`SQUAD_V1`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL
+    2019 (arXiv:1810.04805).  Fine-tuned on SQuAD v1.1.
+
+    Examples
+    --------
+    >>> from lucid.models import bert_large_qa
+    >>> model = bert_large_qa(pretrained=True).eval()
     """
 
     SQUAD_V1 = WeightEntry(
@@ -261,6 +475,26 @@ class BERTBaseNERWeights(WeightsEnum):
     ``dslim/bert-base-NER`` — a **cased** BERT-Base (vocab 28 996) with a
     9-way BIO tag head (O, B/I-PER, B/I-ORG, B/I-LOC, B/I-MISC).  Tokenize
     with the cased :class:`BERTTokenizer` (``do_lower_case=False``).
+
+    Attributes
+    ----------
+    CONLL2003 : WeightEntry
+        CoNLL-2003 NER fine-tuned checkpoint (F1 91.3), sourced from
+        ``transformers/dslim/bert-base-NER``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`CONLL2003`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL
+    2019 (arXiv:1810.04805).  Fine-tuned on CoNLL-2003 NER
+    (dslim/bert-base-NER).
+
+    Examples
+    --------
+    >>> from lucid.models import bert_base_token_cls
+    >>> model = bert_base_token_cls(pretrained=True).eval()
     """
 
     CONLL2003 = WeightEntry(

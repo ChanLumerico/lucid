@@ -1485,13 +1485,44 @@ def multiscale_roi_align(
     canonical_scale: int = 224,
     canonical_level: int = 4,
 ) -> Tensor:
-    """Pool per-image proposals from their assigned FPN level (RoI Align).
+    r"""Pool per-image proposals from their assigned FPN level (RoI Align).
 
-    Mirrors the reference ``MultiScaleRoIAlign``: each proposal is routed to
-    one FPN level by :func:`_fpn_level_for_boxes`, RoI-aligned there with the
-    level's spatial scale, and the per-level crops are scattered back into a
-    single ``(sum(N_i), C, output_size, output_size)`` stack preserving the
-    original proposal order (image-major, then per-image proposal order).
+    Mirrors the reference ``MultiScaleRoIAlign``: each proposal is routed
+    to one FPN level by :func:`_fpn_level_for_boxes`, RoI-aligned there
+    with the level's spatial scale, and the per-level crops are scattered
+    back into a single ``(sum(N_i), C, output_size, output_size)`` stack
+    preserving the original proposal order (image-major, then per-image
+    proposal order).
+
+    Parameters
+    ----------
+    features : list[Tensor]
+        FPN feature maps ``[P2, P3, ...]``, each of shape ``(B, C, H, W)``
+        in coarsening order (highest spatial resolution first).
+    boxes : list[Tensor]
+        Per-image proposal boxes; ``boxes[i]`` has shape ``(N_i, 4)`` in
+        image-pixel coordinates ``(x1, y1, x2, y2)``.
+    output_size : int
+        Spatial size of each pooled crop (square output of side
+        ``output_size``).
+    spatial_scales : list[float]
+        Per-level scale factor mapping image pixels to feature-map units
+        (e.g. ``1/4, 1/8, 1/16, 1/32`` for an FPN with 4 levels).
+    sampling_ratio : int
+        Number of bilinear samples per output bin (``0`` = adaptive,
+        matching the reference RoI-Align default).
+    canonical_scale : int, default 224
+        Reference object scale used by the FPN level-assignment heuristic
+        (Lin 2017 Eq. 1); larger boxes go to coarser levels.
+    canonical_level : int, default 4
+        FPN level a ``canonical_scale``-sized box is routed to.
+
+    Returns
+    -------
+    Tensor
+        Pooled features of shape
+        ``(sum(N_i), C, output_size, output_size)``, image-major and
+        preserving per-image proposal order.
     """
     num_levels = len(features)
     C = int(features[0].shape[1])

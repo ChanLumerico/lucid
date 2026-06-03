@@ -601,7 +601,7 @@ def entr(x: Tensor) -> Tensor:
 
     The function is concave with maximum :math:`1/e \approx 0.3679` at
     :math:`x = 1/e`.  It vanishes at both ``x = 0`` (limit) and
-    ``x = 1``.  Related quantities include :func:`rel_entr` (point-wise
+    ``x = 1``.  Related quantities include `rel_entr` (point-wise
     relative entropy) and :func:`kl_div` (KL kernel).
 
     Examples

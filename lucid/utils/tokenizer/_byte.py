@@ -53,6 +53,14 @@ class ByteTokenizer(Tokenizer):
     """
 
     def __init__(self, special_tokens: SpecialTokens | None = None) -> None:
+        r"""Construct a pure-Python byte tokenizer.
+
+        Parameters
+        ----------
+        special_tokens : SpecialTokens or None, optional
+            Optional special-token registry.  The byte vocab itself
+            is universal (256 entries) and is built unconditionally.
+        """
         self._vocab = _build_byte_vocab()
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
@@ -178,6 +186,19 @@ class ByteTokenizerFast(Tokenizer):
     """
 
     def __init__(self, special_tokens: SpecialTokens | None = None) -> None:
+        r"""Construct a C++-backed byte tokenizer.
+
+        Parameters
+        ----------
+        special_tokens : SpecialTokens or None, optional
+            Optional special-token registry.
+
+        Notes
+        -----
+        Instantiates the C++ ``ByteTokenizer`` backend; the canonical
+        256-entry Python vocab is also cached for ``get_vocab`` /
+        ``id_to_token`` parity.
+        """
         self._cpp = _C_engine.utils.tokenizer.ByteTokenizer()
         self._vocab = _build_byte_vocab()
         self._id_to_token = {v: k for k, v in self._vocab.items()}

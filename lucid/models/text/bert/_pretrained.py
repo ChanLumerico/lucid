@@ -117,6 +117,8 @@ def bert_tiny(
     pretrained : bool, default=False
         Reserved for future weight registration.  No checkpoints are wired up
         yet, so the model is always returned with random initialisation.
+    weights : BERTTinyWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides (e.g. ``vocab_size=...``,
         ``num_labels=...``).  Forwarded into a fresh ``BERTConfig`` whose
@@ -172,6 +174,8 @@ def bert_mini(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : BERTMiniWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
@@ -225,6 +229,8 @@ def bert_small(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : BERTSmallWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
@@ -279,6 +285,8 @@ def bert_medium(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : BERTMediumWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
@@ -336,6 +344,8 @@ def bert_base(
     pretrained : bool, default=False
         Reserved for future weight registration.  Returns a randomly
         initialised model today.
+    weights : BERTBaseWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides (e.g. ``vocab_size=...``,
         ``max_position_embeddings=...``) forwarded into the underlying
@@ -395,6 +405,8 @@ def bert_large(
     pretrained : bool, default=False
         Reserved for future weight registration.  Returns a randomly
         initialised model today.
+    weights : BERTLargeWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
@@ -455,6 +467,8 @@ def bert_base_mlm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : BERTBaseMLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
@@ -510,6 +524,8 @@ def bert_large_mlm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : BERTLargeMLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.

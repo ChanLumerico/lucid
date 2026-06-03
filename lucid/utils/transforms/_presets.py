@@ -298,7 +298,7 @@ class ImageClassification(TransformsPreset):
     Notes
     -----
     Input is assumed already scaled to ``[0, 1]`` (prepend
-    :class:`~lucid.utils.transforms.Rescale` for uint8).
+    :class:`~lucid.utils.transforms.ToFloat` for uint8).
     """
 
     preset_type: ClassVar[str] = "ImageClassification"

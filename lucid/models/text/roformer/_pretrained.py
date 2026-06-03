@@ -55,6 +55,8 @@ def roformer(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : RoFormerWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`RoFormerConfig` field overrides (e.g.
         ``vocab_size=...``, ``rotary_base=...``,
@@ -128,6 +130,8 @@ def roformer_mlm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : RoFormerMLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`RoFormerConfig` field overrides forwarded into the
         underlying config.

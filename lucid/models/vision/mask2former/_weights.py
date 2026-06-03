@@ -3,7 +3,7 @@
 Four paper-cited Swin-backbone variants (Cheng et al., CVPR 2022) ship
 ADE20k semantic-segmentation checkpoints converted from the
 ``facebook/mask2former-swin-{tiny,small,base,large}-ade-semantic``
-:class:`Mask2FormerForUniversalSegmentation` checkpoints:
+``Mask2FormerForUniversalSegmentation`` checkpoints:
 :class:`Mask2FormerSwinTinyWeights` / ``...Small`` / ``...Base`` / ``...Large``.
 
 Each checkpoint is the 150-class ADE20k segmenter (mask-classification

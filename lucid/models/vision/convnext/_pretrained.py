@@ -295,6 +295,8 @@ def convnext_tiny_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-1k pretrained weights when
         available.  Defaults to ``False``.
+    weights : ConvNeXtTinyWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-T config.
 
@@ -355,6 +357,8 @@ def convnext_small_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-1k pretrained weights when
         available.  Defaults to ``False``.
+    weights : ConvNeXtSmallWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-S config.
 
@@ -414,6 +418,8 @@ def convnext_base_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-1k or ImageNet-22k pretrained
         weights when available.  Defaults to ``False``.
+    weights : ConvNeXtBaseWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-B config.
 
@@ -474,6 +480,8 @@ def convnext_large_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-22k pretrained weights when
         available.  Defaults to ``False``.
+    weights : ConvNeXtLargeWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-L config.
 
@@ -535,6 +543,8 @@ def convnext_xlarge_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-22k pretrained weights when
         available.  Defaults to ``False``.
+    weights : ConvNeXtXLargeWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-XL config.
 

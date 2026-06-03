@@ -24,7 +24,28 @@ def _url(slug: str, tag: str) -> str:
 @register_weights("ddpm_cifar")
 @register_weights("ddpm_cifar_gen")
 class DDPMCifarWeights(WeightsEnum):
-    r"""Pretrained DDPM weights for :func:`lucid.models.ddpm_cifar`."""
+    r"""Pretrained DDPM weights for :func:`lucid.models.ddpm_cifar`.
+
+    35.7 M-parameter UNet trained on CIFAR-10 32x32 (FID 3.17).
+
+    Attributes
+    ----------
+    CIFAR10 : WeightEntry
+        CIFAR-10 32x32 UNet checkpoint (FID 3.17), sourced from
+        ``diffusers/google/ddpm-cifar10-32``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`CIFAR10`.
+
+    Notes
+    -----
+    Reference: Ho, Jain, Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS 2020 (arXiv:2006.11239).
+
+    Examples
+    --------
+    >>> from lucid.models import ddpm_cifar
+    >>> model = ddpm_cifar(pretrained=True).eval()
+    """
 
     CIFAR10 = WeightEntry(
         url=_url("ddpm-cifar10", "CIFAR10"),
@@ -47,7 +68,25 @@ class DDPMCifarWeights(WeightsEnum):
 class DDPMChurchWeights(WeightsEnum):
     r"""Pretrained DDPM weights for :func:`lucid.models.ddpm_lsun`.
 
-    LSUN-Church 256×256 (``google/ddpm-church-256``).
+    LSUN-Church 256x256 (``google/ddpm-church-256``).
+
+    Attributes
+    ----------
+    LSUN_CHURCH : WeightEntry
+        LSUN-Church 256x256 UNet checkpoint (FID 7.89), sourced from
+        ``diffusers/google/ddpm-church-256``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`LSUN_CHURCH`.
+
+    Notes
+    -----
+    Reference: Ho, Jain, Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS 2020 (arXiv:2006.11239).
+
+    Examples
+    --------
+    >>> from lucid.models import ddpm_lsun
+    >>> model = ddpm_lsun(pretrained=True).eval()
     """
 
     LSUN_CHURCH = WeightEntry(

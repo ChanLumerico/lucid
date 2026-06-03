@@ -98,7 +98,7 @@ class DiagnosisReport:
     total_ops : int
         Sum of every op occurrence in the trace.
     registered : list[OpInfo]
-        Ops with a registered :class:`VjpEmitter` — real gradient.
+        Ops with a registered `VjpEmitter` — real gradient.
     grad_sinks : list[OpInfo]
         Ops in the walker's ``no_grad_ops`` set — gradient flow stops
         here by design (not a fallback).
@@ -140,7 +140,7 @@ def diagnose(fn: Callable[..., object], *example_inputs: Tensor) -> DiagnosisRep
 
     Runs ``fn`` once inside a :func:`_tracing` context to capture the
     op DAG, then classifies every op against the registry exposed by
-    :func:`lucid._C.engine.compile.vjp_registration_status`.  Does
+    `vjp_registration_status` (C++ engine binding).  Does
     **not** compile or execute the captured graph — purely
     introspective, runs in milliseconds even for large models.
 

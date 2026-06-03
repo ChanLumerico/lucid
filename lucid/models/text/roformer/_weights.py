@@ -27,7 +27,28 @@ _LICENSE = "apache-2.0"
 
 @register_weights("roformer")
 class RoFormerWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.roformer`."""
+    r"""Pretrained weight tags for :func:`lucid.models.roformer`.
+
+    Su et al. 2021 12-layer rotary encoder trunk (``H=768``, 123.6 M params).
+
+    Attributes
+    ----------
+    CLUECORPUSSMALL : WeightEntry
+        CLUECorpusSmall Chinese pre-training checkpoint sourced from
+        ``transformers/junnyu/roformer_chinese_base``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`CLUECORPUSSMALL`.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, 2021 (arXiv:2104.09864).
+
+    Examples
+    --------
+    >>> from lucid.models import roformer
+    >>> model = roformer(pretrained=True).eval()
+    """
 
     CLUECORPUSSMALL = WeightEntry(
         url=f"{HUB_BASE}/roformer-chinese-base/resolve/main/{_TAG}/model.safetensors",
@@ -47,7 +68,28 @@ class RoFormerWeights(WeightsEnum):
 
 @register_weights("roformer_mlm")
 class RoFormerMLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.roformer_mlm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.roformer_mlm`.
+
+    RoFormer encoder + tied MLM head over the 50 000-token Chinese vocab.
+
+    Attributes
+    ----------
+    CLUECORPUSSMALL : WeightEntry
+        CLUECorpusSmall Chinese pre-training checkpoint (encoder + MLM
+        head) sourced from ``transformers/junnyu/roformer_chinese_base``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`CLUECORPUSSMALL`.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, 2021 (arXiv:2104.09864).
+
+    Examples
+    --------
+    >>> from lucid.models import roformer_mlm
+    >>> model = roformer_mlm(pretrained=True).eval()
+    """
 
     CLUECORPUSSMALL = WeightEntry(
         url=f"{HUB_BASE}/roformer-chinese-base-mlm/resolve/main/{_TAG}/model.safetensors",

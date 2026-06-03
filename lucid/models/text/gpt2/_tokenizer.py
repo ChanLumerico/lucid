@@ -19,8 +19,8 @@ Loads any HF GPT-2 ``vocab.json`` + ``merges.txt`` pair or unified
 Two flavours, bit-identical encode output:
 
 * :class:`GPT2Tokenizer` — pure-Python reference.
-* :class:`GPT2TokenizerFast` — C++-backed via
-  :class:`lucid._C.engine.utils.tokenizer.BPE`.
+* :class:`GPT2TokenizerFast` — C++-backed via the engine-side
+  ``BPE`` binding.
 """
 
 from lucid.utils.tokenizer._base import SpecialTokens
@@ -104,8 +104,8 @@ class GPT2TokenizerFast(ByteLevelBPETokenizerFast):
     """GPT-2 tokenizer — C++-backed.
 
     Bit-identical to :class:`GPT2Tokenizer`.  The BPE merge loop runs
-    in C++ via :class:`lucid._C.engine.utils.tokenizer.BPE` for
-    production throughput.
+    in C++ via the engine-side ``BPE`` binding for production
+    throughput.
 
     Constructor parameters mirror :class:`GPT2Tokenizer` — see that
     class for the full reference.

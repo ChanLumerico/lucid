@@ -782,7 +782,7 @@ def rand_like(
     arguments.  Sampling follows the same dtype-default rule as
     :func:`lucid.rand`: only floating-point dtypes are supported.  Calling
     this on an integer tensor without overriding ``dtype`` raises — use
-    :func:`lucid.randint_like` for integer noise.
+    :func:`lucid.randint` with an explicit shape for integer noise.
     """
     _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(

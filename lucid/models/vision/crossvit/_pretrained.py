@@ -199,9 +199,34 @@ def crossvit_tiny_cls(
     r"""CrossViT-Ti image classifier (Chen et al., ICCV 2021).
 
     Two-branch ViT with embedding dims ``(96, 192)``, per-stage depths
-    ``((1, 4, 0)) × 3``, and 3 attention heads per branch.  ~7M
+    ``((1, 4, 0)) x 3``, and 3 attention heads per branch.  ~7M
     parameters; paper Table 2 reports **72.6%** ImageNet-1k top-1 at
-    240×240.
+    240x240.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CrossViTTinyWeights`; a string
+        selects a named entry from that enum.
+    weights : CrossViTTinyWeights, optional
+        Explicit weight-enum member.  Mutually exclusive with a string
+        ``pretrained``; raises if both resolve to different entries.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CrossViTConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
+
+    Returns
+    -------
+    CrossViTForImageClassification
+        The configured classifier, ready for ``model(x)`` inference or
+        fine-tuning.
+
+    Notes
+    -----
+    Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
+    Multi-Scale Vision Transformer for Image Classification"*, ICCV
+    2021 (arXiv:2103.14899).
     """
     entry = weights_mod.resolve_weights(CrossViTTinyWeights, pretrained, weights)
     model = _c(_CFG_TINY, overrides)
@@ -225,8 +250,31 @@ def crossvit_small_cls(
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-S image classifier — ``embed_dims=(192, 384)``, depths
-    ``((1, 4, 0)) × 3``, 6 heads per branch.  ~26.7M params; paper
-    Table 2 reports **81.0%** ImageNet-1k top-1 at 240×240."""
+    ``((1, 4, 0)) x 3``, 6 heads per branch.  ~26.7M params; paper
+    Table 2 reports **81.0%** ImageNet-1k top-1 at 240x240.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CrossViTSmallWeights`; a string
+        selects a named entry from that enum.
+    weights : CrossViTSmallWeights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CrossViTConfig`.
+
+    Returns
+    -------
+    CrossViTForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
+    Multi-Scale Vision Transformer for Image Classification"*, ICCV
+    2021 (arXiv:2103.14899).
+    """
     entry = weights_mod.resolve_weights(CrossViTSmallWeights, pretrained, weights)
     model = _c(_CFG_SMALL, overrides)
     if entry is not None:
@@ -249,8 +297,31 @@ def crossvit_base_cls(
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-B image classifier — ``embed_dims=(384, 768)``, depths
-    ``((1, 4, 0)) × 3``, 12 heads per branch.  ~105M params; paper
-    Table 2 reports **82.2%** ImageNet-1k top-1 at 240×240."""
+    ``((1, 4, 0)) x 3``, 12 heads per branch.  ~105M params; paper
+    Table 2 reports **82.2%** ImageNet-1k top-1 at 240x240.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CrossViTBaseWeights`; a string
+        selects a named entry from that enum.
+    weights : CrossViTBaseWeights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CrossViTConfig`.
+
+    Returns
+    -------
+    CrossViTForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
+    Multi-Scale Vision Transformer for Image Classification"*, ICCV
+    2021 (arXiv:2103.14899).
+    """
     entry = weights_mod.resolve_weights(CrossViTBaseWeights, pretrained, weights)
     model = _c(_CFG_BASE, overrides)
     if entry is not None:
@@ -273,8 +344,31 @@ def crossvit_9_cls(
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-9 image classifier — ``embed_dims=(128, 256)``, depths
-    ``((1, 3, 0)) × 3``, 4 heads per branch.  ~8.6M params; paper
-    Table 2 reports **73.9%** ImageNet-1k top-1 at 240×240."""
+    ``((1, 3, 0)) x 3``, 4 heads per branch.  ~8.6M params; paper
+    Table 2 reports **73.9%** ImageNet-1k top-1 at 240x240.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CrossViT9Weights`; a string
+        selects a named entry from that enum.
+    weights : CrossViT9Weights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CrossViTConfig`.
+
+    Returns
+    -------
+    CrossViTForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
+    Multi-Scale Vision Transformer for Image Classification"*, ICCV
+    2021 (arXiv:2103.14899).
+    """
     entry = weights_mod.resolve_weights(CrossViT9Weights, pretrained, weights)
     model = _c(_CFG_9, overrides)
     if entry is not None:
@@ -297,8 +391,31 @@ def crossvit_15_cls(
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-15 image classifier — ``embed_dims=(192, 384)``, depths
-    ``((1, 5, 0)) × 3``, 6 heads per branch.  ~27.4M params; paper
-    Table 2 reports **81.5%** ImageNet-1k top-1 at 240×240."""
+    ``((1, 5, 0)) x 3``, 6 heads per branch.  ~27.4M params; paper
+    Table 2 reports **81.5%** ImageNet-1k top-1 at 240x240.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CrossViT15Weights`; a string
+        selects a named entry from that enum.
+    weights : CrossViT15Weights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CrossViTConfig`.
+
+    Returns
+    -------
+    CrossViTForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
+    Multi-Scale Vision Transformer for Image Classification"*, ICCV
+    2021 (arXiv:2103.14899).
+    """
     entry = weights_mod.resolve_weights(CrossViT15Weights, pretrained, weights)
     model = _c(_CFG_15, overrides)
     if entry is not None:
@@ -321,8 +438,31 @@ def crossvit_18_cls(
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-18 image classifier — ``embed_dims=(224, 448)``, depths
-    ``((1, 6, 0)) × 3``, 7 heads per branch.  ~43.3M params; paper
-    Table 2 reports **82.5%** ImageNet-1k top-1 at 240×240."""
+    ``((1, 6, 0)) x 3``, 7 heads per branch.  ~43.3M params; paper
+    Table 2 reports **82.5%** ImageNet-1k top-1 at 240x240.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CrossViT18Weights`; a string
+        selects a named entry from that enum.
+    weights : CrossViT18Weights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CrossViTConfig`.
+
+    Returns
+    -------
+    CrossViTForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
+    Multi-Scale Vision Transformer for Image Classification"*, ICCV
+    2021 (arXiv:2103.14899).
+    """
     entry = weights_mod.resolve_weights(CrossViT18Weights, pretrained, weights)
     model = _c(_CFG_18, overrides)
     if entry is not None:

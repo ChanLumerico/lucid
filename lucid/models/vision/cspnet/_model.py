@@ -453,7 +453,46 @@ class CSPNet(PretrainedModel, BackboneMixin):
 
 
 class CSPNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    r"""CSPNet with timm-style ``ClassifierHead`` (GAP + dropout + Linear)."""
+    r"""CSPNet image classifier — backbone + GAP + dropout + linear head.
+
+    Wraps a :class:`CSPNet` trunk and appends the timm-style
+    ``ClassifierHead`` (global-average-pool, dropout, ``Linear``) so the
+    whole pipeline returns ``(B, num_classes)`` logits.  Use this entry
+    point when training or fine-tuning on classification datasets.
+
+    Parameters
+    ----------
+    config : CSPNetConfig
+        Hyperparameters including ``num_classes`` and head ``dropout``.
+
+    Attributes
+    ----------
+    stem : nn.Module
+        Conv-BN-act stem assembled from the config ``stem`` block.
+    stages : nn.ModuleList
+        The four CSP / Darknet stages emitting the ``C2..C5`` feature
+        pyramid.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool over the final feature map.
+    classifier : nn.Linear
+        Final linear projection to ``num_classes`` (named ``head.fc`` to
+        match the upstream timm layout for direct checkpoint loading).
+
+    Notes
+    -----
+    Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
+    Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> from lucid.models import cspresnet_50_cls
+    >>> model = cspresnet_50_cls()
+    >>> import lucid
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[CSPNetConfig]] = CSPNetConfig
     base_model_prefix: ClassVar[str] = "cspnet"

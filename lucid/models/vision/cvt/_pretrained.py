@@ -219,6 +219,8 @@ def cvt_13_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-1k pretrained weights when
         available.  Defaults to ``False``.
+    weights : CvT13Weights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical CvT-13 config.
 
@@ -274,6 +276,8 @@ def cvt_21_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-1k pretrained weights when
         available.  Defaults to ``False``.
+    weights : CvT21Weights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical CvT-21 config.
 
@@ -330,6 +334,8 @@ def cvt_w24_cls(
     pretrained : bool, optional
         If ``True``, loads ImageNet-22k pretrained weights when
         available.  Defaults to ``False``.
+    weights : CvTW24Weights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical CvT-W24 config.
 

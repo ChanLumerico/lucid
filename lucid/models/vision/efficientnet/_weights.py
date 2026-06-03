@@ -56,7 +56,28 @@ _PRESET_B7 = ImageClassification(
 
 @register_weights("efficientnet_b0_cls")
 class EfficientNetB0Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b0_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b0_cls`.
+
+    baseline B0 at 224 (5.3 M params, 0.39 GFLOPs, top-1 77.69%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 77.692% / top-5 93.532%),
+        sourced from ``torchvision/EfficientNet_B0_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b0_cls
+    >>> model = efficientnet_b0_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b0/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -77,7 +98,28 @@ class EfficientNetB0Weights(WeightsEnum):
 
 @register_weights("efficientnet_b1_cls")
 class EfficientNetB1Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b1_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b1_cls`.
+
+    compound-scaled B1 at 240 (7.8 M params, 0.69 GFLOPs, top-1 78.64%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 78.642% / top-5 94.186%),
+        sourced from ``torchvision/EfficientNet_B1_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b1_cls
+    >>> model = efficientnet_b1_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b1/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -98,7 +140,28 @@ class EfficientNetB1Weights(WeightsEnum):
 
 @register_weights("efficientnet_b2_cls")
 class EfficientNetB2Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b2_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b2_cls`.
+
+    compound-scaled B2 at 288 (9.1 M params, 1.09 GFLOPs, top-1 80.61%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 80.608% / top-5 95.310%),
+        sourced from ``torchvision/EfficientNet_B2_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b2_cls
+    >>> model = efficientnet_b2_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b2/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -119,7 +182,28 @@ class EfficientNetB2Weights(WeightsEnum):
 
 @register_weights("efficientnet_b3_cls")
 class EfficientNetB3Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b3_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b3_cls`.
+
+    compound-scaled B3 at 300 (12.2 M params, 1.83 GFLOPs, top-1 82.01%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 82.008% / top-5 96.054%),
+        sourced from ``torchvision/EfficientNet_B3_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b3_cls
+    >>> model = efficientnet_b3_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b3/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -140,7 +224,28 @@ class EfficientNetB3Weights(WeightsEnum):
 
 @register_weights("efficientnet_b4_cls")
 class EfficientNetB4Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b4_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b4_cls`.
+
+    compound-scaled B4 at 380 (19.3 M params, 4.39 GFLOPs, top-1 83.38%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 83.384% / top-5 96.594%),
+        sourced from ``torchvision/EfficientNet_B4_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b4_cls
+    >>> model = efficientnet_b4_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b4/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -161,7 +266,28 @@ class EfficientNetB4Weights(WeightsEnum):
 
 @register_weights("efficientnet_b5_cls")
 class EfficientNetB5Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b5_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b5_cls`.
+
+    compound-scaled B5 at 456 (30.4 M params, 10.27 GFLOPs, top-1 83.44%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 83.444% / top-5 96.628%),
+        sourced from ``torchvision/EfficientNet_B5_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b5_cls
+    >>> model = efficientnet_b5_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b5/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -182,7 +308,28 @@ class EfficientNetB5Weights(WeightsEnum):
 
 @register_weights("efficientnet_b6_cls")
 class EfficientNetB6Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b6_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b6_cls`.
+
+    compound-scaled B6 at 528 (43.0 M params, 19.07 GFLOPs, top-1 84.01%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 84.008% / top-5 96.916%),
+        sourced from ``torchvision/EfficientNet_B6_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b6_cls
+    >>> model = efficientnet_b6_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b6/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -203,7 +350,28 @@ class EfficientNetB6Weights(WeightsEnum):
 
 @register_weights("efficientnet_b7_cls")
 class EfficientNetB7Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.efficientnet_b7_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.efficientnet_b7_cls`.
+
+    compound-scaled B7 at 600 (66.3 M params, 37.75 GFLOPs, top-1 84.12%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 84.122% / top-5 96.908%),
+        sourced from ``torchvision/EfficientNet_B7_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Tan, Le, *"EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks"*, ICML 2019 (arXiv:1905.11946).
+
+    Examples
+    --------
+    >>> from lucid.models import efficientnet_b7_cls
+    >>> model = efficientnet_b7_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/efficientnet-b7/resolve/main/IMAGENET1K_V1/model.safetensors",

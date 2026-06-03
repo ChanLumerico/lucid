@@ -97,7 +97,15 @@ def _c(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNetForImageClassification
     params=21_620_000,
 )
 def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
-    r"""CSPResNet-50 backbone — ResNet-50 with CSP-wrapped stages."""
+    r"""CSPResNet-50 backbone — ResNet-50 with CSP-wrapped stages.
+
+    The CSPNet recipe applied to the ResNet-50 trunk (Wang et al.,
+    CVPRW 2020).  Returns the final feature map only; pair with a
+    classifier head via :func:`cspresnet_50_cls`.
+
+    Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
+    Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+    """
     return _b(_CFG_CSPRESNET_50, overrides)
 
 
@@ -110,7 +118,15 @@ def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     params=20_570_000,
 )
 def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
-    r"""CSPResNeXt-50 backbone — ResNeXt-50 (32×4d) with CSP wrap."""
+    r"""CSPResNeXt-50 backbone — ResNeXt-50 (32x4d) with CSP wrap.
+
+    The CSPNet recipe applied to the grouped-conv ResNeXt-50 trunk
+    (Wang et al., CVPRW 2020).  Returns the final feature map only;
+    pair with a classifier head via :func:`cspresnext_50_cls`.
+
+    Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
+    Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+    """
     return _b(_CFG_CSPRESNEXT_50, overrides)
 
 
@@ -123,7 +139,16 @@ def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     params=27_610_000,
 )
 def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
-    r"""CSPDarknet-53 backbone — Darknet-53 (YOLOv3 base) with CSP wrap."""
+    r"""CSPDarknet-53 backbone — Darknet-53 (YOLOv3 base) with CSP wrap.
+
+    The CSPNet recipe applied to the Darknet-53 trunk (Wang et al.,
+    CVPRW 2020); same architecture later adopted by YOLOv4.  Returns
+    the final feature map only; pair with a classifier head via
+    :func:`cspdarknet_53_cls`.
+
+    Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
+    Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+    """
     return _b(_CFG_CSPDARKNET_53, overrides)
 
 
@@ -147,7 +172,30 @@ def cspresnet_50_cls(
     **overrides: object,
 ) -> CSPNetForImageClassification:
     r"""CSPResNet-50 image classifier — paper Table 1, **21.6M** params,
-    ImageNet-1k acc@1 ≈ 76.2% (timm ``ra_in1k`` recipe)."""
+    ImageNet-1k acc@1 ~76.2% (timm ``ra_in1k`` recipe).
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CSPResNet50Weights`; a string
+        selects a named entry from that enum.
+    weights : CSPResNet50Weights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CSPNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
+
+    Returns
+    -------
+    CSPNetForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
+    Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+    """
     entry = weights_mod.resolve_weights(CSPResNet50Weights, pretrained, weights)
     model = _c(_CFG_CSPRESNET_50, overrides)
     if entry is not None:
@@ -170,7 +218,29 @@ def cspresnext_50_cls(
     **overrides: object,
 ) -> CSPNetForImageClassification:
     r"""CSPResNeXt-50 image classifier — paper Table 1, **20.6M**
-    params, ImageNet-1k acc@1 ≈ 80.0% (timm ``ra_in1k`` recipe)."""
+    params, ImageNet-1k acc@1 ~80.0% (timm ``ra_in1k`` recipe).
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CSPResNeXt50Weights`; a string
+        selects a named entry from that enum.
+    weights : CSPResNeXt50Weights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CSPNetConfig`.
+
+    Returns
+    -------
+    CSPNetForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
+    Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+    """
     entry = weights_mod.resolve_weights(CSPResNeXt50Weights, pretrained, weights)
     model = _c(_CFG_CSPRESNEXT_50, overrides)
     if entry is not None:
@@ -193,7 +263,29 @@ def cspdarknet_53_cls(
     **overrides: object,
 ) -> CSPNetForImageClassification:
     r"""CSPDarknet-53 image classifier — paper Table 1, **27.6M**
-    params, ImageNet-1k acc@1 ≈ 80.1% (timm ``ra_in1k`` recipe)."""
+    params, ImageNet-1k acc@1 ~80.1% (timm ``ra_in1k`` recipe).
+
+    Parameters
+    ----------
+    pretrained : bool or str, default ``False``
+        ``False`` returns randomly-initialised weights; ``True`` loads
+        the default entry of :class:`CSPDarknet53Weights`; a string
+        selects a named entry from that enum.
+    weights : CSPDarknet53Weights, optional
+        Explicit weight-enum member overriding ``pretrained``.
+    **overrides : object
+        Per-field overrides forwarded to :class:`CSPNetConfig`.
+
+    Returns
+    -------
+    CSPNetForImageClassification
+        The configured classifier.
+
+    Notes
+    -----
+    Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
+    Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+    """
     entry = weights_mod.resolve_weights(CSPDarknet53Weights, pretrained, weights)
     model = _c(_CFG_CSPDARKNET_53, overrides)
     if entry is not None:

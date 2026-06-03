@@ -56,6 +56,17 @@ class CharTokenizer(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python character tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int] or None, optional
+            Pre-built codepoint → id map; ``None`` or empty means
+            empty tokenizer (call :meth:`train` to populate).
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry; configure ``unk`` for OOV
+            fallback during encode.
+        """
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
@@ -198,6 +209,23 @@ class CharTokenizerFast(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed character tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int] or None, optional
+            Pre-built codepoint → id map.  ``None`` or empty
+            constructs the C++ backend with an empty vocab; call
+            :meth:`train` to populate.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.
+
+        Notes
+        -----
+        Caches the Python-side vocab so :meth:`get_vocab` and
+        :meth:`id_to_token` avoid a binding round-trip; both halves
+        are kept in sync by :meth:`train`.
+        """
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
         if self._vocab:
             self._cpp = _C_engine.utils.tokenizer.CharTokenizer(self._vocab)

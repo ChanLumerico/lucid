@@ -52,7 +52,7 @@ class OptimizerSpec:
 
     ``frozen=True`` because the spec is captured once at compile time and
     consumed by both the trace recorder (``_fused_step.py``) and the C++
-    emitter (when going through :func:`compile_fused_training_step`).
+    emitter (when going through `compile_fused_training_step`).
     Mutating after capture would silently desync the executable.
 
     Attributes

@@ -80,7 +80,7 @@ class Image:
     """Wraps a pixel image tensor ``(C, H, W)`` or ``(B, C, H, W)``.
 
     A lightweight typed marker so multi-target transforms can dispatch
-    on :func:`isinstance` and route a pixel image differently from a
+    on ``isinstance`` and route a pixel image differently from a
     segmentation :class:`Mask`, a :class:`BoundingBoxes` target, or a
     :class:`Keypoints` target.  Single-image pipelines need not wrap —
     a bare :class:`lucid.Tensor` is also treated as an image.
@@ -411,10 +411,10 @@ def pad_boxes(
 ) -> BoundingBoxes:
     r"""Shift boxes by a pad offset onto a larger canvas.
 
-    Geometric companion to :class:`Pad`.  Adds ``(left, top)`` to every
-    corner so each box keeps its place inside the original sub-region
-    of the new, larger canvas.  Coordinates are not clipped because the
-    new canvas fully contains the old.
+    Geometric companion to ``Pad`` / :class:`PadIfNeeded`.  Adds
+    ``(left, top)`` to every corner so each box keeps its place inside
+    the original sub-region of the new, larger canvas.  Coordinates are
+    not clipped because the new canvas fully contains the old.
 
     Parameters
     ----------
@@ -559,10 +559,10 @@ def pad_keypoints(
 ) -> Keypoints:
     r"""Shift keypoints by a pad offset onto a larger canvas.
 
-    Geometric companion to :class:`Pad` for the keypoints target.
-    Adds ``(left, top)`` to every point so each keeps its place inside
-    the original sub-region of the new, larger canvas; trailing
-    columns are preserved.
+    Geometric companion to ``Pad`` / :class:`PadIfNeeded` for the
+    keypoints target.  Adds ``(left, top)`` to every point so each
+    keeps its place inside the original sub-region of the new, larger
+    canvas; trailing columns are preserved.
 
     Parameters
     ----------
@@ -608,8 +608,8 @@ def affine_boxes(
 ) -> BoundingBoxes:
     r"""Warp boxes by a forward affine matrix and re-axis-align them.
 
-    Geometric companion to :class:`Affine` / :class:`RandomAffine` /
-    :class:`RandomRotation`.  Each input rectangle is warped by mapping
+    Geometric companion to :class:`Affine` / :class:`Rotate` /
+    :class:`ShiftScaleRotate`.  Each input rectangle is warped by mapping
     its four corners through ``matrix`` and then taking the smallest
     enclosing axis-aligned box of the warped quadrilateral.  Results
     are clipped to ``out_hw`` so partially-out-of-frame boxes survive
@@ -669,8 +669,8 @@ def affine_keypoints(
 ) -> Keypoints:
     r"""Warp keypoint coordinates by a forward affine matrix.
 
-    Geometric companion to :class:`Affine` / :class:`RandomAffine` /
-    :class:`RandomRotation` for the keypoints target.  The ``x, y``
+    Geometric companion to :class:`Affine` / :class:`Rotate` /
+    :class:`ShiftScaleRotate` for the keypoints target.  The ``x, y``
     columns are passed through
     :func:`lucid.utils.transforms.functional.affine_points`; trailing
     columns (visibility / score / angle / scale) are preserved.
@@ -753,7 +753,7 @@ def transpose_keypoints(kps: Keypoints) -> Keypoints:
 def rot90_boxes(boxes: BoundingBoxes, k: int) -> BoundingBoxes:
     r"""Rotate boxes by ``k`` CCW quarter-turns to match :func:`rot90`.
 
-    Geometric companion to :class:`Rot90` / pipeline use of
+    Geometric companion to :class:`RandomRotate90` / pipeline use of
     :func:`lucid.rot90` on the image side.  Each quarter-turn maps a
     box ``(x1, y1, x2, y2)`` on a ``(H, W)`` canvas to
     ``(y1, (W-1)-x2, y2, (W-1)-x1)`` on a ``(W, H)`` canvas, applied
@@ -791,8 +791,8 @@ def rot90_boxes(boxes: BoundingBoxes, k: int) -> BoundingBoxes:
 def rot90_keypoints(kps: Keypoints, k: int) -> Keypoints:
     r"""Rotate keypoints by ``k`` CCW quarter-turns to match :func:`rot90`.
 
-    Geometric companion to :class:`Rot90` for the keypoints target.
-    Each quarter-turn maps ``(x, y)`` on a ``(H, W)`` canvas to
+    Geometric companion to :class:`RandomRotate90` for the keypoints
+    target.  Each quarter-turn maps ``(x, y)`` on a ``(H, W)`` canvas to
     ``(y, (W-1)-x)`` on a ``(W, H)`` canvas, applied ``k mod 4`` times;
     trailing columns (visibility / score / ...) are preserved.
 

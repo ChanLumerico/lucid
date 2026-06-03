@@ -81,6 +81,8 @@ def gpt2_small(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2SmallWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.
@@ -140,6 +142,8 @@ def gpt2_medium(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2MediumWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.
@@ -197,6 +201,8 @@ def gpt2_large(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2LargeWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.
@@ -254,6 +260,8 @@ def gpt2_xlarge(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2XLargeWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.
@@ -311,6 +319,8 @@ def gpt2_small_lm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2SmallLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.
@@ -364,6 +374,8 @@ def gpt2_medium_lm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2MediumLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.
@@ -417,6 +429,8 @@ def gpt2_large_lm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2LargeLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.
@@ -470,6 +484,8 @@ def gpt2_xlarge_lm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPT2XLargeLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.

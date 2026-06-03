@@ -18,7 +18,7 @@ per model), and the standard ImageNet mean / std.
 
 All four checkpoints are hosted under the ``lucid-dl`` Hugging Face
 org and load directly via ``swin_<size>_cls(pretrained=True)``.  See the
-family conversion recipe in :mod:`tools.convert_weights.swin`.
+family conversion recipe in ``tools.convert_weights.swin``.
 """
 
 from lucid.utils.transforms import ImageClassification

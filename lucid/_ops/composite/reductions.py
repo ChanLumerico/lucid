@@ -135,7 +135,7 @@ def nanmedian(
     Computes the median over the requested axis (or the entire tensor
     when ``dim`` is ``None``), treating NaN entries as missing data
     rather than propagating them.  This is the NaN-safe counterpart of
-    :func:`lucid.median`.
+    a regular ``median`` reduction.
 
     Parameters
     ----------

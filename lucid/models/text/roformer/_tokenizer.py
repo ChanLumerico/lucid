@@ -120,8 +120,8 @@ class RoFormerTokenizerFast(WordPieceTokenizerFast):
     """RoFormer tokenizer — C++-backed.
 
     Bit-identical to :class:`RoFormerTokenizer`.  The greedy
-    longest-match loop runs in C++ via
-    :class:`lucid._C.engine.utils.tokenizer.WordPiece`.
+    longest-match loop runs in C++ via the engine-side ``WordPiece``
+    binding.
 
     Constructor parameters mirror :class:`RoFormerTokenizer` — see
     that class for the full reference.

@@ -1739,7 +1739,7 @@ class _MaxUnpoolNd(Module):
     :class:`MaxUnpool3d`.
 
     Stores ``kernel_size``, ``stride``, and ``padding`` — the same
-    parameters used by the corresponding :class:`MaxPool` layer — and
+    parameters used by the corresponding `MaxPool{1,2,3}d` layer — and
     provides a shared :meth:`extra_repr`.  Concrete subclasses implement
     :meth:`forward` by delegating to the appropriate functional call.
     """

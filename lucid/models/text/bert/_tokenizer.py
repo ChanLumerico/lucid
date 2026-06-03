@@ -22,8 +22,8 @@ Two flavours, bit-identical encode output:
 
 * :class:`BERTTokenizer` — the easy-to-debug reference path.
 * :class:`BERTTokenizerFast` — the production path; the greedy
-  longest-match loop runs in C++ via
-  :class:`lucid._C.engine.utils.tokenizer.WordPiece`.
+  longest-match loop runs in C++ via the engine-side
+  ``WordPiece`` binding.
 
 Lower-casing
 ------------
@@ -93,7 +93,7 @@ class BERTTokenizer(WordPieceTokenizer):
         Marker for non-initial subwords (BERT convention).
     max_chars_per_word : int, default 100
         Words longer than this skip the longest-match loop and emit
-        :attr:`unk_token` directly (mirrors BERT ``BasicTokenizer``).
+        the ``unk_token`` directly (mirrors BERT ``BasicTokenizer``).
     do_lower_case : bool, default ``True``
         Forwarded to :class:`BERTNormalizer`.  Set to ``False`` for
         cased checkpoints (``bert-base-cased``, multilingual models).
@@ -160,9 +160,9 @@ class BERTTokenizerFast(WordPieceTokenizerFast):
 
     Bit-identical to :class:`BERTTokenizer`: same vocab format, same
     special-token registry, same encode output.  The greedy
-    longest-match loop runs in C++ via
-    :class:`lucid._C.engine.utils.tokenizer.WordPiece`, typically
-    20-30× faster than the pure-Python flavour on large corpora.
+    longest-match loop runs in C++ via the engine-side ``WordPiece``
+    binding, typically 20-30x faster than the pure-Python flavour on
+    large corpora.
 
     Constructor parameters mirror :class:`BERTTokenizer` exactly —
     see that class for the full reference.

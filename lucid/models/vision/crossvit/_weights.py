@@ -18,7 +18,29 @@ _PRESET = ImageClassification(crop_size=240, resize_size=274, interpolation="bic
 
 @register_weights("crossvit_tiny_cls")
 class CrossViTTinyWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.crossvit_tiny_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.crossvit_tiny_cls`.
+
+    Chen et al. ICCV 2021 dual-branch ViT (7.0 M params, top-1 72.6%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 72.6%), sourced from
+        ``timm/crossvit_tiny_240.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Chen, Fan, Panda, *"CrossViT: Cross-Attention Multi-Scale
+    Vision Transformer for Image Classification"*, ICCV 2021
+    (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> from lucid.models import crossvit_tiny_cls
+    >>> model = crossvit_tiny_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-tiny/resolve/main/IN1K/model.safetensors",
@@ -38,7 +60,29 @@ class CrossViTTinyWeights(WeightsEnum):
 
 @register_weights("crossvit_small_cls")
 class CrossViTSmallWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.crossvit_small_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.crossvit_small_cls`.
+
+    Chen et al. ICCV 2021 dual-branch ViT (26.9 M params, top-1 81.0%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 81.0%), sourced from
+        ``timm/crossvit_small_240.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Chen, Fan, Panda, *"CrossViT: Cross-Attention Multi-Scale
+    Vision Transformer for Image Classification"*, ICCV 2021
+    (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> from lucid.models import crossvit_small_cls
+    >>> model = crossvit_small_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-small/resolve/main/IN1K/model.safetensors",
@@ -58,7 +102,29 @@ class CrossViTSmallWeights(WeightsEnum):
 
 @register_weights("crossvit_base_cls")
 class CrossViTBaseWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.crossvit_base_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.crossvit_base_cls`.
+
+    Chen et al. ICCV 2021 dual-branch ViT (105 M params, top-1 82.2%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 82.2%), sourced from
+        ``timm/crossvit_base_240.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Chen, Fan, Panda, *"CrossViT: Cross-Attention Multi-Scale
+    Vision Transformer for Image Classification"*, ICCV 2021
+    (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> from lucid.models import crossvit_base_cls
+    >>> model = crossvit_base_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-base/resolve/main/IN1K/model.safetensors",
@@ -78,7 +144,29 @@ class CrossViTBaseWeights(WeightsEnum):
 
 @register_weights("crossvit_9_cls")
 class CrossViT9Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.crossvit_9_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.crossvit_9_cls`.
+
+    9-block CrossViT variant (Chen et al. ICCV 2021; 8.6 M params, top-1 73.9%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 73.9%), sourced from
+        ``timm/crossvit_9_240.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Chen, Fan, Panda, *"CrossViT: Cross-Attention Multi-Scale
+    Vision Transformer for Image Classification"*, ICCV 2021
+    (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> from lucid.models import crossvit_9_cls
+    >>> model = crossvit_9_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-9/resolve/main/IN1K/model.safetensors",
@@ -98,7 +186,29 @@ class CrossViT9Weights(WeightsEnum):
 
 @register_weights("crossvit_15_cls")
 class CrossViT15Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.crossvit_15_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.crossvit_15_cls`.
+
+    15-block CrossViT variant (Chen et al. ICCV 2021; 27.5 M params, top-1 81.5%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 81.5%), sourced from
+        ``timm/crossvit_15_240.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Chen, Fan, Panda, *"CrossViT: Cross-Attention Multi-Scale
+    Vision Transformer for Image Classification"*, ICCV 2021
+    (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> from lucid.models import crossvit_15_cls
+    >>> model = crossvit_15_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-15/resolve/main/IN1K/model.safetensors",
@@ -118,7 +228,29 @@ class CrossViT15Weights(WeightsEnum):
 
 @register_weights("crossvit_18_cls")
 class CrossViT18Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.crossvit_18_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.crossvit_18_cls`.
+
+    18-block CrossViT variant (Chen et al. ICCV 2021; 43.3 M params, top-1 82.5%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k checkpoint (top-1 82.5%), sourced from
+        ``timm/crossvit_18_240.in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Chen, Fan, Panda, *"CrossViT: Cross-Attention Multi-Scale
+    Vision Transformer for Image Classification"*, ICCV 2021
+    (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> from lucid.models import crossvit_18_cls
+    >>> model = crossvit_18_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-18/resolve/main/IN1K/model.safetensors",

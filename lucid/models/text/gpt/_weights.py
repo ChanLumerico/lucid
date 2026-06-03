@@ -23,7 +23,28 @@ _LICENSE = "mit"
 
 @register_weights("gpt")
 class GPTWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt`.
+
+    Radford et al. 2018 12-layer decoder trunk (``H=768, A=12``, 116.5 M params).
+
+    Attributes
+    ----------
+    BOOKCORPUS : WeightEntry
+        BookCorpus pre-training checkpoint sourced from
+        ``transformers/openai-community/openai-gpt``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`BOOKCORPUS`.
+
+    Notes
+    -----
+    Reference: Radford, Narasimhan, Salimans, Sutskever, *"Improving
+    Language Understanding by Generative Pre-Training"*, OpenAI 2018.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt
+    >>> model = gpt(pretrained=True).eval()
+    """
 
     BOOKCORPUS = WeightEntry(
         url=f"{HUB_BASE}/gpt/resolve/main/{_TAG}/model.safetensors",
@@ -43,7 +64,28 @@ class GPTWeights(WeightsEnum):
 
 @register_weights("gpt_lm")
 class GPTLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt_lm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt_lm`.
+
+    GPT-1 decoder + tied ``lm_head`` over the 40 478-token BPE vocab.
+
+    Attributes
+    ----------
+    BOOKCORPUS : WeightEntry
+        BookCorpus pre-training checkpoint (decoder + LM head) sourced
+        from ``transformers/openai-community/openai-gpt``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`BOOKCORPUS`.
+
+    Notes
+    -----
+    Reference: Radford, Narasimhan, Salimans, Sutskever, *"Improving
+    Language Understanding by Generative Pre-Training"*, OpenAI 2018.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt_lm
+    >>> model = gpt_lm(pretrained=True).eval()
+    """
 
     BOOKCORPUS = WeightEntry(
         url=f"{HUB_BASE}/gpt-lm/resolve/main/{_TAG}/model.safetensors",

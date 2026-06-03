@@ -20,7 +20,29 @@ _PRESET_384 = ImageClassification(
 
 @register_weights("cvt_13_cls")
 class CvT13Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.cvt_13_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.cvt_13_cls`.
+
+    Wu et al. ICCV 2021 13-layer convolutional ViT (20 M params, top-1 81.6%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k 224x224 finetune (top-1 81.6%), sourced from
+        ``transformers/microsoft/cvt-13``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *"CvT:
+    Introducing Convolutions to Vision Transformers"*, ICCV 2021
+    (arXiv:2103.15808).
+
+    Examples
+    --------
+    >>> from lucid.models import cvt_13_cls
+    >>> model = cvt_13_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/cvt-13/resolve/main/IN1K/model.safetensors",
@@ -40,7 +62,29 @@ class CvT13Weights(WeightsEnum):
 
 @register_weights("cvt_21_cls")
 class CvT21Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.cvt_21_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.cvt_21_cls`.
+
+    Wu et al. ICCV 2021 21-layer convolutional ViT (31.6 M params, top-1 82.5%).
+
+    Attributes
+    ----------
+    IN1K : WeightEntry
+        ImageNet-1k 224x224 finetune (top-1 82.5%), sourced from
+        ``transformers/microsoft/cvt-21``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN1K`.
+
+    Notes
+    -----
+    Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *"CvT:
+    Introducing Convolutions to Vision Transformers"*, ICCV 2021
+    (arXiv:2103.15808).
+
+    Examples
+    --------
+    >>> from lucid.models import cvt_21_cls
+    >>> model = cvt_21_cls(pretrained=True).eval()
+    """
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/cvt-21/resolve/main/IN1K/model.safetensors",
@@ -60,7 +104,29 @@ class CvT21Weights(WeightsEnum):
 
 @register_weights("cvt_w24_cls")
 class CvTW24Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.cvt_w24_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.cvt_w24_cls`.
+
+    wide CvT-w24 IN-22k→IN-1k 384 finetune (Wu et al.; 277 M params, top-1 87.7%).
+
+    Attributes
+    ----------
+    IN22K_FT_IN1K_384 : WeightEntry
+        ImageNet-22k pretrain + ImageNet-1k 384x384 finetune (top-1
+        87.7%), sourced from ``transformers/microsoft/cvt-w24-384-22k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IN22K_FT_IN1K_384`.
+
+    Notes
+    -----
+    Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *"CvT:
+    Introducing Convolutions to Vision Transformers"*, ICCV 2021
+    (arXiv:2103.15808).
+
+    Examples
+    --------
+    >>> from lucid.models import cvt_w24_cls
+    >>> model = cvt_w24_cls(pretrained=True).eval()
+    """
 
     IN22K_FT_IN1K_384 = WeightEntry(
         url=f"{HUB_BASE}/cvt-w24/resolve/main/IN22K_FT_IN1K_384/model.safetensors",

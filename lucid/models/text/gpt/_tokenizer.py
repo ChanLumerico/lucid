@@ -21,7 +21,7 @@ Two flavours, bit-identical encode output:
 
 * :class:`GPTTokenizer` — pure-Python reference.
 * :class:`GPTTokenizerFast` — C++-backed; the BPE merge loop runs
-  in :class:`lucid._C.engine.utils.tokenizer.BPE`.
+  in the engine-side ``BPE`` binding.
 """
 
 from lucid.utils.tokenizer._base import SpecialTokens
@@ -85,8 +85,8 @@ class GPTTokenizerFast(ByteLevelBPETokenizerFast):
     """GPT-1 tokenizer — C++-backed.
 
     Bit-identical to :class:`GPTTokenizer`.  The BPE merge loop runs
-    in C++ via :class:`lucid._C.engine.utils.tokenizer.BPE` for
-    production throughput.
+    in C++ via the engine-side ``BPE`` binding for production
+    throughput.
 
     Constructor parameters mirror :class:`GPTTokenizer` — see that
     class for the full reference.

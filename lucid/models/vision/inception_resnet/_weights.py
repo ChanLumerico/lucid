@@ -14,7 +14,29 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
 @register_weights("inception_resnet_v2_cls")
 class InceptionResNetV2Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.inception_resnet_v2_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.inception_resnet_v2_cls`.
+
+    Szegedy et al. AAAI 2017 (55.8 M params, top-1 80.46%).
+
+    Attributes
+    ----------
+    TF_IN1K : WeightEntry
+        TensorFlow-Slim ImageNet-1k checkpoint (top-1 80.46% / top-5
+        95.31%), sourced from ``timm/inception_resnet_v2.tf_in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`TF_IN1K`.
+
+    Notes
+    -----
+    Reference: Szegedy, Ioffe, Vanhoucke, Alemi, *"Inception-v4,
+    Inception-ResNet and the Impact of Residual Connections on
+    Learning"*, AAAI 2017 (arXiv:1602.07261).
+
+    Examples
+    --------
+    >>> from lucid.models import inception_resnet_v2_cls
+    >>> model = inception_resnet_v2_cls(pretrained=True).eval()
+    """
 
     TF_IN1K = WeightEntry(
         url=(

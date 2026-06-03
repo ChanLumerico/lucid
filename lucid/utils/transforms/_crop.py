@@ -25,7 +25,24 @@ from lucid.utils.transforms._interpolation import Interpolation, as_interpolatio
 
 @dataclass(frozen=True)
 class CropBox:
-    """Per-call crop window ``(top, left, height, width)`` in pixel coordinates."""
+    r"""Per-call crop window for :class:`RandomSizedCrop`.
+
+    The apply step extracts the rectangle ``[top:top+height,
+    left:left+width]`` from the input and resizes it to the host
+    transform's target size, with the same coordinates re-applied to
+    mask / boxes / keypoints for alignment.
+
+    Attributes
+    ----------
+    top : int
+        Top edge of the crop window in input-image pixels.
+    left : int
+        Left edge of the crop window in input-image pixels.
+    height : int
+        Crop window height in pixels.
+    width : int
+        Crop window width in pixels.
+    """
 
     top: int
     left: int
@@ -180,6 +197,23 @@ class RandomSizedCrop(GeometricTransform[CropBox]):
         self.interpolation = as_interpolation(interpolation)
 
     def make_params(self, img: Tensor) -> CropBox:
+        r"""Sample per-call random parameters for :class:`RandomSizedCrop`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size bounds both the sampled
+            crop dimensions (clamped to fit) and the uniformly
+            sampled ``(top, left)`` corner.
+
+        Returns
+        -------
+        CropBox
+            Crop window ``(top, left, height, width)``.  Height is
+            drawn uniformly from ``min_max_height``; width is
+            ``round(height * w2h_ratio)``; both are clipped to the
+            input dimensions before the corner is sampled.
+        """
         h, w = F._spatial_hw(img)
         ch = _random.randint(self.min_max_height[0], self.min_max_height[1] + 1)
         cw = int(round(ch * self.w2h_ratio))

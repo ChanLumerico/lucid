@@ -20,7 +20,29 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
 @register_weights("resnext_50_32x4d_cls")
 class ResNeXt50_32x4dWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.resnext_50_32x4d_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.resnext_50_32x4d_cls`.
+
+    ResNeXt-50 (32 groups × 4d width, 25.0 M params, top-1 81.20%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V2 : WeightEntry
+        ImageNet-1k V2 checkpoint (top-1 81.198% / top-5 95.340%),
+        sourced from ``torchvision/ResNeXt50_32X4D_Weights.IMAGENET1K_V2``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V2`.
+
+    Notes
+    -----
+    Reference: Xie, Girshick, Dollár, Tu, He, *"Aggregated Residual
+    Transformations for Deep Neural Networks"*, CVPR 2017
+    (arXiv:1611.05431).
+
+    Examples
+    --------
+    >>> from lucid.models import resnext_50_32x4d_cls
+    >>> model = resnext_50_32x4d_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V2 = WeightEntry(
         url=(
@@ -43,7 +65,29 @@ class ResNeXt50_32x4dWeights(WeightsEnum):
 
 @register_weights("resnext_101_32x8d_cls")
 class ResNeXt101_32x8dWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.resnext_101_32x8d_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.resnext_101_32x8d_cls`.
+
+    ResNeXt-101 (32 groups × 8d width, 88.8 M params, top-1 82.83%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V2 : WeightEntry
+        ImageNet-1k V2 checkpoint (top-1 82.834% / top-5 96.228%),
+        sourced from ``torchvision/ResNeXt101_32X8D_Weights.IMAGENET1K_V2``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V2`.
+
+    Notes
+    -----
+    Reference: Xie, Girshick, Dollár, Tu, He, *"Aggregated Residual
+    Transformations for Deep Neural Networks"*, CVPR 2017
+    (arXiv:1611.05431).
+
+    Examples
+    --------
+    >>> from lucid.models import resnext_101_32x8d_cls
+    >>> model = resnext_101_32x8d_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V2 = WeightEntry(
         url=(
@@ -72,6 +116,25 @@ class ResNeXt101_32x4dWeights(WeightsEnum):
     bicubic interpolation and 0.875 crop_pct (256 resize → 224 crop)
     rather than the bilinear / 232-resize preset of the torchvision V2
     variants.
+
+    Attributes
+    ----------
+    GLUON_IN1K : WeightEntry
+        timm Gluon ImageNet-1k checkpoint (top-1 80.342% / top-5
+        94.926%), sourced from ``timm/resnext101_32x4d.gluon_in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`GLUON_IN1K`.
+
+    Notes
+    -----
+    Reference: Xie, Girshick, Dollár, Tu, He, *"Aggregated Residual
+    Transformations for Deep Neural Networks"*, CVPR 2017
+    (arXiv:1611.05431).
+
+    Examples
+    --------
+    >>> from lucid.models import resnext_101_32x4d_cls
+    >>> model = resnext_101_32x4d_cls(pretrained=True).eval()
     """
 
     GLUON_IN1K = WeightEntry(

@@ -194,6 +194,21 @@ class ByteLevel(PreTokenizer):
     _byte_decoder: dict[str, int] = {}
 
     def __init__(self, *, add_prefix_space: bool = False) -> None:
+        r"""Record the prefix-space flag and warm the byte tables.
+
+        Parameters
+        ----------
+        add_prefix_space : bool, default False, keyword-only
+            Prepend a space before pre-tokenizing so the first word
+            also receives the ``Ġ`` word-start marker.  GPT-2 uses
+            ``False``, RoBERTa / BART use ``True``.
+
+        Notes
+        -----
+        Lazily builds the class-level byte-encoder / byte-decoder
+        tables on first instantiation; subsequent calls reuse the
+        cached maps.
+        """
         self._add_prefix_space = add_prefix_space
         if not ByteLevel._byte_encoder:
             ByteLevel._build_byte_tables_()

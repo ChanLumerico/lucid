@@ -140,6 +140,24 @@ class ElasticTransform(_DisplacementTransform):
         self.interpolation = as_interpolation(interpolation)
 
     def make_params(self, img: Tensor) -> DispParams:
+        r"""Sample per-call random parameters for :class:`ElasticTransform`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size sets the displacement
+            field size and the output canvas.
+
+        Returns
+        -------
+        DispParams
+            Carries per-pixel ``dx`` / ``dy`` displacement fields of
+            shape ``(H, W)`` in pixel units, built by sampling two
+            uniform ``(1, 1, H, W)`` random fields in ``[-1, 1]``,
+            blurring each with a Gaussian of ``sigma``, and scaling by
+            ``alpha`` — the Simard 2003 recipe.  ``out_hw`` equals
+            the input ``(H, W)``.
+        """
         h, w = F._spatial_hw(img)
         rx = lucid.rand(1, 1, h, w) * 2.0 - 1.0
         ry = lucid.rand(1, 1, h, w) * 2.0 - 1.0
@@ -179,6 +197,24 @@ class GridDistortion(_DisplacementTransform):
         self.interpolation = as_interpolation(interpolation)
 
     def make_params(self, img: Tensor) -> DispParams:
+        r"""Sample per-call random parameters for :class:`GridDistortion`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size sets the displacement
+            field size and the output canvas.
+
+        Returns
+        -------
+        DispParams
+            Carries per-pixel ``dx`` / ``dy`` displacement fields of
+            shape ``(H, W)`` in pixel units.  Built by sampling a
+            ``(num_steps + 1) x (num_steps + 1)`` control grid with
+            entries in ``distort_limit`` (scaled by the cell size in
+            each axis) and bilinearly upsampling to ``(H, W)``.
+            ``out_hw`` equals the input ``(H, W)``.
+        """
         h, w = F._spatial_hw(img)
         n = self.num_steps + 1
         cdx = [
@@ -242,6 +278,25 @@ class OpticalDistortion(_DisplacementTransform):
         self.interpolation = as_interpolation(interpolation)
 
     def make_params(self, img: Tensor) -> DispParams:
+        r"""Sample per-call random parameters for :class:`OpticalDistortion`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size sets the displacement
+            field size, the centred normalisation, and ``out_hw``.
+
+        Returns
+        -------
+        DispParams
+            Carries per-pixel ``dx`` / ``dy`` fields of shape
+            ``(H, W)`` realising the radial backward map
+            ``sample(p) = c + (p - c) * (1 + k * r^2)`` with ``k``
+            drawn uniformly from ``distort_limit`` and the optical
+            centre ``c`` shifted from the image centre by
+            ``shift_limit`` fractions.  ``out_hw`` equals the input
+            ``(H, W)``.
+        """
         h, w = F._spatial_hw(img)
         k = _random.uniform(self.distort_limit[0], self.distort_limit[1])
         cx = w / 2.0 + _random.uniform(self.shift_limit[0], self.shift_limit[1]) * w
@@ -292,6 +347,24 @@ class GridElasticDeform(_DisplacementTransform):
         self.interpolation = as_interpolation(interpolation)
 
     def make_params(self, img: Tensor) -> DispParams:
+        r"""Sample per-call random parameters for :class:`GridElasticDeform`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size sets the displacement
+            field size and the output canvas.
+
+        Returns
+        -------
+        DispParams
+            Carries per-pixel ``dx`` / ``dy`` fields of shape
+            ``(H, W)`` in pixel units, built by sampling a
+            ``(num_grid_xy[1] + 1, num_grid_xy[0] + 1)`` control grid
+            with entries uniform in ``[-magnitude, magnitude]`` and
+            bilinearly upsampling to ``(H, W)``.  ``out_hw`` equals
+            the input ``(H, W)``.
+        """
         from lucid.nn.functional import interpolate
 
         h, w = F._spatial_hw(img)

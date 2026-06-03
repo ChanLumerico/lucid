@@ -23,7 +23,29 @@ _PRESET = ImageClassification(crop_size=299, resize_size=342)
 
 @register_weights("inception_v3_cls")
 class InceptionV3Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.inception_v3_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.inception_v3_cls`.
+
+    Szegedy et al. CVPR 2016 (23.8 M params, top-1 77.29% on ImageNet-1k).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 77.294% / top-5 93.450%),
+        sourced from ``torchvision/Inception_V3_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Szegedy, Vanhoucke, Ioffe, Shlens, Wojna, *"Rethinking the
+    Inception Architecture for Computer Vision"*, CVPR 2016
+    (arXiv:1512.00567).
+
+    Examples
+    --------
+    >>> from lucid.models import inception_v3_cls
+    >>> model = inception_v3_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/inception-v3/resolve/main/IMAGENET1K_V1/model.safetensors",

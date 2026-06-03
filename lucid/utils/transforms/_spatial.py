@@ -78,7 +78,19 @@ class FlipAxis:
 
 @dataclass(frozen=True)
 class Rot90Param:
-    """Per-call number of 90° rotations used by :class:`RandomRotate90`."""
+    r"""Per-call number of 90° rotations for :class:`RandomRotate90`.
+
+    The apply step calls :func:`lucid.rot90` with this ``k`` on the
+    image / mask and uses the matching coordinate transform for boxes
+    and keypoints — exact (no interpolation), so it is a free
+    augmentation for square inputs.
+
+    Attributes
+    ----------
+    k : int
+        Number of counter-clockwise 90° rotations, sampled uniformly
+        from ``{0, 1, 2, 3}``.
+    """
 
     k: int
 
@@ -128,6 +140,20 @@ class Flip(GeometricTransform[FlipAxis]):
         super().__init__(p=p)
 
     def make_params(self, img: Tensor) -> FlipAxis:
+        r"""Sample per-call random parameters for :class:`Flip`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        FlipAxis
+            Carries ``code`` drawn uniformly from
+            ``{-1, 0, 1}`` — vertical (``0``), horizontal (``1``),
+            or both (``-1``).
+        """
         return FlipAxis(code=_random.randint(0, 3) - 1)  # {-1, 0, 1}
 
     def _flip(self, x: Tensor, code: int) -> Tensor:
@@ -183,6 +209,18 @@ class RandomRotate90(GeometricTransform[Rot90Param]):
         super().__init__(p=p)
 
     def make_params(self, img: Tensor) -> Rot90Param:
+        r"""Sample per-call random parameters for :class:`RandomRotate90`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        Rot90Param
+            Carries ``k`` drawn uniformly from ``{0, 1, 2, 3}``.
+        """
         return Rot90Param(k=_random.randint(0, 4))  # 0..3
 
     def _apply_image(self, img: Tensor, params: Rot90Param) -> Tensor:
@@ -262,6 +300,21 @@ class Rotate(_WarpTransform):
         self.value = value
 
     def make_params(self, img: Tensor) -> WarpParams:
+        r"""Sample per-call random parameters for :class:`Rotate`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size is read to anchor the
+            rotation about the image centre and to set ``out_hw``.
+
+        Returns
+        -------
+        WarpParams
+            Carries the ``(3, 3)`` forward pixel-coordinate rotation
+            ``matrix`` and ``out_hw`` equal to the input
+            ``(H, W)``.  Angle is sampled uniformly from ``limit``.
+        """
         h, w = F._spatial_hw(img)
         angle = _random.uniform(self.limit[0], self.limit[1])
         matrix = F.rotation_matrix(angle, (w - 1) / 2.0, (h - 1) / 2.0)
@@ -305,6 +358,29 @@ class ShiftScaleRotate(_WarpTransform):
         self.value = value
 
     def make_params(self, img: Tensor) -> WarpParams:
+        r"""Sample per-call random parameters for :class:`ShiftScaleRotate`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size is read to anchor the warp
+            and to convert ``shift_limit`` from a fraction-of-size into
+            pixel translations.
+
+        Returns
+        -------
+        WarpParams
+            Carries the composed ``(3, 3)`` matrix (rotate about the
+            image centre, then scale and translate) and ``out_hw``
+            equal to the input ``(H, W)``.
+
+        Notes
+        -----
+        The sampled rotation angle is negated when fed to
+        :func:`affine_matrix` to align the math-convention CCW
+        rotation with the cv2 / image-convention CW rotation used by
+        :class:`Rotate`.
+        """
         h, w = F._spatial_hw(img)
         angle = _random.uniform(self.rotate_limit[0], self.rotate_limit[1])
         scale = 1.0 + _random.uniform(self.scale_limit[0], self.scale_limit[1])
@@ -371,6 +447,28 @@ class Affine(_WarpTransform):
         self.value = value
 
     def make_params(self, img: Tensor) -> WarpParams:
+        r"""Sample per-call random parameters for :class:`Affine`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size is read to anchor the warp
+            and to convert ``translate_percent`` into pixel
+            translations.
+
+        Returns
+        -------
+        WarpParams
+            Carries the composed ``(3, 3)`` matrix (scale, rotate,
+            shear-x, translate, anchored at the image centre) and
+            ``out_hw`` equal to the input ``(H, W)``.
+
+        Notes
+        -----
+        The sampled rotation angle is negated when fed to
+        :func:`affine_matrix` so :class:`Affine` agrees with
+        :class:`Rotate` on rotation sign.
+        """
         h, w = F._spatial_hw(img)
         s = _random.uniform(self.scale[0], self.scale[1])
         angle = _random.uniform(self.rotate[0], self.rotate[1])
@@ -427,6 +525,21 @@ class Perspective(_WarpTransform):
         self.value = value
 
     def make_params(self, img: Tensor) -> WarpParams:
+        r"""Sample per-call random parameters for :class:`Perspective`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size is read to scale the
+            per-corner displacement and to set ``out_hw``.
+
+        Returns
+        -------
+        WarpParams
+            Carries the ``(3, 3)`` homography mapping the perturbed
+            corners back to the canvas and ``out_hw`` equal to the
+            input ``(H, W)``.
+        """
         h, w = F._spatial_hw(img)
         frac = _random.uniform(self.scale[0], self.scale[1])
         src = [[0.0, 0.0], [w - 1.0, 0.0], [w - 1.0, h - 1.0], [0.0, h - 1.0]]
@@ -450,7 +563,20 @@ class Perspective(_WarpTransform):
 
 @dataclass(frozen=True)
 class ScaleParam:
-    """Per-call target ``(new_h, new_w)`` used by :class:`RandomScale`."""
+    r"""Per-call target spatial size for :class:`RandomScale`.
+
+    The host transform's apply step resizes the image / mask to
+    ``(new_h, new_w)`` (image uses the configured interpolation; mask
+    uses nearest) and rescales boxes / keypoints by the implied
+    factor.
+
+    Attributes
+    ----------
+    new_h : int
+        Target output height in pixels.
+    new_w : int
+        Target output width in pixels.
+    """
 
     new_h: int
     new_w: int
@@ -486,6 +612,22 @@ class RandomScale(GeometricTransform[ScaleParam]):
         self.interpolation = as_interpolation(interpolation)
 
     def make_params(self, img: Tensor) -> ScaleParam:
+        r"""Sample per-call random parameters for :class:`RandomScale`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size is read to compute the
+            target ``(new_h, new_w)`` after scaling.
+
+        Returns
+        -------
+        ScaleParam
+            Carries the target ``new_h`` and ``new_w``, each at least
+            ``1``, derived from a single scale factor
+            ``1 + uniform(scale_limit)`` applied to the input height
+            and width.
+        """
         h, w = F._spatial_hw(img)
         f = 1.0 + _random.uniform(self.scale_limit[0], self.scale_limit[1])
         return ScaleParam(
@@ -539,6 +681,21 @@ class D4(GeometricTransform[D4Param]):
         super().__init__(p=p)
 
     def make_params(self, img: Tensor) -> D4Param:
+        r"""Sample per-call random parameters for :class:`D4`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        D4Param
+            Carries ``k`` (rot90 count, ``0..3``) and ``flip`` (whether
+            to follow with a horizontal flip).  The two together
+            uniformly cover the 8 elements of the square-symmetry
+            group D4.
+        """
         g = _random.randint(0, 8)
         return D4Param(k=g % 4, flip=g >= 4)
 
@@ -625,6 +782,29 @@ class SafeRotate(_WarpTransform):
         self.value = value
 
     def make_params(self, img: Tensor) -> WarpParams:
+        r"""Sample per-call random parameters for :class:`SafeRotate`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size is read to compute the
+            expanded output canvas that fully contains the rotated
+            rectangle.
+
+        Returns
+        -------
+        WarpParams
+            Carries the composed ``(3, 3)`` matrix (rotate about the
+            old centre, then translate into the centre of the new
+            canvas) and ``out_hw`` equal to the expanded
+            ``(new_h, new_w)``.
+
+        Notes
+        -----
+        ``new_w = ceil(W*|cos| + H*|sin|)`` and
+        ``new_h = ceil(W*|sin| + H*|cos|)`` so no rotated content is
+        clipped.
+        """
         import math
 
         h, w = F._spatial_hw(img)
@@ -671,6 +851,21 @@ class RandomGridShuffle(GeometricTransform[ShuffleParam]):
         self.grid = grid
 
     def make_params(self, img: Tensor) -> ShuffleParam:
+        r"""Sample per-call random parameters for :class:`RandomGridShuffle`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ShuffleParam
+            Carries ``perm`` (a Fisher-Yates permutation of the
+            ``grid_h * grid_w`` cell indices in row-major order) and
+            ``grid`` (the cell-grid shape verbatim from the
+            constructor).
+        """
         n = self.grid[0] * self.grid[1]
         perm = list(range(n))
         for i in range(n - 1, 0, -1):

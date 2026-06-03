@@ -32,7 +32,27 @@ def _url(slug: str) -> str:
 
 @register_weights("gpt2_small")
 class GPT2SmallWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_small`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_small`.
+
+    Radford et al. 2019 12-layer trunk (``H=768, A=12``, 124 M params).
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint sourced from ``transformers/gpt2``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_small
+    >>> model = gpt2_small(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-small"),
@@ -52,7 +72,28 @@ class GPT2SmallWeights(WeightsEnum):
 
 @register_weights("gpt2_medium")
 class GPT2MediumWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_medium`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_medium`.
+
+    Radford et al. 2019 24-layer trunk (``H=1024, A=16``, 355 M params).
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint sourced from
+        ``transformers/gpt2-medium``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_medium
+    >>> model = gpt2_medium(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-medium"),
@@ -72,7 +113,28 @@ class GPT2MediumWeights(WeightsEnum):
 
 @register_weights("gpt2_large")
 class GPT2LargeWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_large`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_large`.
+
+    Radford et al. 2019 36-layer trunk (``H=1280, A=20``, 774 M params).
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint sourced from
+        ``transformers/gpt2-large``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_large
+    >>> model = gpt2_large(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-large"),
@@ -92,7 +154,28 @@ class GPT2LargeWeights(WeightsEnum):
 
 @register_weights("gpt2_xlarge")
 class GPT2XLargeWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_xlarge`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_xlarge`.
+
+    Radford et al. 2019 48-layer trunk (``H=1600, A=25``, 1.56 B params).
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint sourced from
+        ``transformers/gpt2-xl``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_xlarge
+    >>> model = gpt2_xlarge(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-xlarge"),
@@ -112,7 +195,28 @@ class GPT2XLargeWeights(WeightsEnum):
 
 @register_weights("gpt2_small_lm")
 class GPT2SmallLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_small_lm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_small_lm`.
+
+    GPT-2 Small trunk + tied ``lm_head`` over the 50 257-token BPE vocab.
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint (trunk + LM head) sourced from
+        ``transformers/gpt2``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_small_lm
+    >>> model = gpt2_small_lm(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-small-lm"),
@@ -132,7 +236,28 @@ class GPT2SmallLMWeights(WeightsEnum):
 
 @register_weights("gpt2_medium_lm")
 class GPT2MediumLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_medium_lm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_medium_lm`.
+
+    GPT-2 Medium trunk + tied ``lm_head`` over the 50 257-token BPE vocab.
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint (trunk + LM head) sourced from
+        ``transformers/gpt2-medium``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_medium_lm
+    >>> model = gpt2_medium_lm(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-medium-lm"),
@@ -152,7 +277,28 @@ class GPT2MediumLMWeights(WeightsEnum):
 
 @register_weights("gpt2_large_lm")
 class GPT2LargeLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_large_lm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_large_lm`.
+
+    GPT-2 Large trunk + tied ``lm_head`` over the 50 257-token BPE vocab.
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint (trunk + LM head) sourced from
+        ``transformers/gpt2-large``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_large_lm
+    >>> model = gpt2_large_lm(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-large-lm"),
@@ -172,7 +318,28 @@ class GPT2LargeLMWeights(WeightsEnum):
 
 @register_weights("gpt2_xlarge_lm")
 class GPT2XLargeLMWeights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.gpt2_xlarge_lm`."""
+    r"""Pretrained weight tags for :func:`lucid.models.gpt2_xlarge_lm`.
+
+    GPT-2 XLarge trunk + tied ``lm_head`` over the 50 257-token BPE vocab.
+
+    Attributes
+    ----------
+    WEBTEXT : WeightEntry
+        WebText pre-training checkpoint (trunk + LM head) sourced from
+        ``transformers/gpt2-xl``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`WEBTEXT`.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, Sutskever, *"Language
+    Models are Unsupervised Multitask Learners"*, OpenAI 2019.
+
+    Examples
+    --------
+    >>> from lucid.models import gpt2_xlarge_lm
+    >>> model = gpt2_xlarge_lm(pretrained=True).eval()
+    """
 
     WEBTEXT = WeightEntry(
         url=_url("gpt2-xlarge-lm"),

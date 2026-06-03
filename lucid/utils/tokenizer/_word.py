@@ -93,6 +93,17 @@ class WordTokenizer(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python word tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int] or None, optional
+            Pre-built word → id map; ``None`` or empty leaves the
+            tokenizer empty (call :meth:`train` to populate).
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry; configure ``unk`` for OOV
+            fallback at encode time.
+        """
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
@@ -266,6 +277,18 @@ class WordTokenizerFast(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed word tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int] or None, optional
+            Pre-built word → id map.  ``None`` or empty constructs
+            the C++ backend with an empty vocab.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry; mirrored into the C++ backend
+            via :meth:`_sync_specials_to_cpp` so the C++ encode
+            fall-back path sees the same UNK id.
+        """
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
         if self._vocab:
             self._cpp = _C_engine.utils.tokenizer.WordTokenizer(self._vocab)

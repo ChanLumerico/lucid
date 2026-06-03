@@ -20,14 +20,39 @@ def _odd(k: int) -> int:
 
 @dataclass(frozen=True)
 class KSizeParam:
-    """Per-call kernel-size parameter (used by box / median / Gaussian blurs)."""
+    r"""Per-call kernel-size parameter for box / median / motion blur.
+
+    Carried by :class:`Blur` and :class:`MedianBlur` from
+    :meth:`make_params` into ``_apply_image``; the kernel is built as a
+    ``ksize x ksize`` window centred on each pixel.
+
+    Attributes
+    ----------
+    ksize : int
+        Odd kernel side length in pixels.  Sampling routes round even
+        values up to the next odd integer so the window stays centred.
+    """
 
     ksize: int
 
 
 @dataclass(frozen=True)
 class SigmaParam:
-    """Per-call kernel size + Gaussian standard deviation."""
+    r"""Per-call kernel size + Gaussian standard deviation.
+
+    Carried by :class:`GaussianBlur` (and :class:`UnsharpMask`) so the
+    same odd ``ksize`` and sampled ``sigma`` feed both the kernel
+    construction and the cv2-compatible fallback formula.
+
+    Attributes
+    ----------
+    ksize : int
+        Odd Gaussian-kernel side length in pixels.
+    sigma : float
+        Gaussian standard deviation; if the user requested ``0`` the
+        OpenCV auto-sigma rule ``0.3 * ((k - 1) * 0.5 - 1.0) + 0.8`` is
+        applied before this dataclass is constructed.
+    """
 
     ksize: int
     sigma: float
@@ -35,7 +60,19 @@ class SigmaParam:
 
 @dataclass(frozen=True)
 class MotionParam:
-    """Per-call motion-blur parameters: kernel size + line angle (degrees)."""
+    r"""Per-call motion-blur kernel size and streak angle.
+
+    Carried by :class:`MotionBlur`; the kernel is built by drawing a
+    1-pixel-wide line at ``angle`` through the centre of a
+    ``ksize x ksize`` window and normalising.
+
+    Attributes
+    ----------
+    ksize : int
+        Odd kernel side length in pixels.
+    angle : float
+        Streak direction in degrees, sampled from ``[0, 180)``.
+    """
 
     ksize: int
     angle: float
@@ -43,14 +80,40 @@ class MotionParam:
 
 @dataclass(frozen=True)
 class NoiseParam:
-    """Per-call additive-noise standard deviation."""
+    r"""Per-call noise magnitude for additive / sensor-style noise.
+
+    Used by :class:`GaussNoise` (additive Gaussian on the unit-scale
+    image) and :class:`ISONoise` (luminance Gaussian + saturation
+    perturbation).  The semantics of ``std`` depend on the host:
+    :class:`GaussNoise` interprets it as the unit-scale standard
+    deviation already divided by 255, while :class:`ISONoise` uses it
+    as a generic intensity scale (multiplied by ``0.1`` internally).
+
+    Attributes
+    ----------
+    std : float
+        Standard deviation / intensity of the per-pixel noise.
+    """
 
     std: float
 
 
 @dataclass(frozen=True)
 class MultiplierParam:
-    """Per-call multiplicative-noise bounds (lower / upper)."""
+    r"""Per-call multiplicative-noise bounds.
+
+    Carried by :class:`MultiplicativeNoise`.  The bounds are passed
+    through to the apply step so a per-pixel uniform sample (when
+    ``elementwise=True``) or a single scalar (otherwise) can be drawn
+    from the same ``[lo, hi]`` range.
+
+    Attributes
+    ----------
+    lo : float
+        Inclusive lower bound of the multiplier range.
+    hi : float
+        Inclusive upper bound of the multiplier range.
+    """
 
     lo: float
     hi: float
@@ -58,7 +121,19 @@ class MultiplierParam:
 
 @dataclass(frozen=True)
 class ScaleParam:
-    """Per-call downscale factor used by :class:`Downscale`."""
+    r"""Per-call downscale factor used by :class:`Downscale`.
+
+    The :class:`Downscale` apply step resizes the image to
+    ``(round(H * scale), round(W * scale))`` then resizes back to
+    ``(H, W)`` via nearest-neighbour, simulating sensor / JPEG
+    block-level degradation.
+
+    Attributes
+    ----------
+    scale : float
+        Downscale factor in ``(0, 1]``; smaller values lose more
+        high-frequency detail.
+    """
 
     scale: float
 
@@ -87,6 +162,25 @@ class Blur(PhotometricTransform[KSizeParam]):
         self.blur_limit = blur_limit
 
     def make_params(self, img: Tensor) -> KSizeParam:
+        r"""Sample per-call random parameters for :class:`Blur`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor used only to fix the parameter dtype / dispatch
+            context; no spatial information is read.
+
+        Returns
+        -------
+        KSizeParam
+            Carries ``ksize`` — the odd box-kernel side length sampled
+            uniformly from ``[3, blur_limit]``.
+
+        Notes
+        -----
+        Even draws are forced to the next odd integer so the kernel
+        stays centred on each output pixel.
+        """
         return KSizeParam(ksize=_odd(_random.randint(3, self.blur_limit + 1)))
 
     def _apply_image(self, img: Tensor, params: KSizeParam) -> Tensor:
@@ -120,6 +214,25 @@ class MedianBlur(PhotometricTransform[KSizeParam]):
         self.blur_limit = blur_limit
 
     def make_params(self, img: Tensor) -> KSizeParam:
+        r"""Sample per-call random parameters for :class:`MedianBlur`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, only carried through for the
+            transform dispatch.
+
+        Returns
+        -------
+        KSizeParam
+            Carries ``ksize`` — the odd window side length sampled
+            uniformly from ``[3, blur_limit]``.
+
+        Notes
+        -----
+        Even draws are forced to the next odd integer so the median
+        window is centred on each output pixel.
+        """
         return KSizeParam(ksize=_odd(_random.randint(3, self.blur_limit + 1)))
 
     def _apply_image(self, img: Tensor, params: KSizeParam) -> Tensor:
@@ -160,6 +273,26 @@ class MotionBlur(PhotometricTransform[MotionParam]):
         self.blur_limit = blur_limit
 
     def make_params(self, img: Tensor) -> MotionParam:
+        r"""Sample per-call random parameters for :class:`MotionBlur`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        MotionParam
+            Carries ``ksize`` (odd kernel side, ``[3, blur_limit]``)
+            and ``angle`` in degrees sampled uniformly from
+            ``[0, 180)``.
+
+        Notes
+        -----
+        Even kernel-size draws are forced to the next odd integer.
+        Angles outside ``[0, 180)`` are unnecessary since the streak
+        kernel is symmetric under 180° rotation.
+        """
         return MotionParam(
             ksize=_odd(_random.randint(3, self.blur_limit + 1)),
             angle=_random.uniform(0.0, 180.0),
@@ -217,6 +350,25 @@ class GaussianBlur(PhotometricTransform[SigmaParam]):
         )
 
     def make_params(self, img: Tensor) -> SigmaParam:
+        r"""Sample per-call random parameters for :class:`GaussianBlur`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        SigmaParam
+            Carries ``ksize`` (odd kernel side from ``blur_limit``) and
+            ``sigma`` (Gaussian standard deviation).
+
+        Notes
+        -----
+        A non-positive sampled ``sigma`` falls back to OpenCV's
+        kernel-derived default ``0.3 * ((k - 1) * 0.5 - 1.0) + 0.8``
+        so the Gaussian matches cv2's auto-sigma policy.
+        """
         k = _odd(_random.randint(self.blur_limit[0], self.blur_limit[1] + 1))
         sigma = _random.uniform(self.sigma_limit[0], self.sigma_limit[1])
         if sigma <= 0.0:
@@ -250,6 +402,26 @@ class GaussNoise(PhotometricTransform[NoiseParam]):
         self.mean = mean
 
     def make_params(self, img: Tensor) -> NoiseParam:
+        r"""Sample per-call random parameters for :class:`GaussNoise`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        NoiseParam
+            Carries ``std`` — the per-pixel Gaussian standard deviation
+            on the unit ``[0, 1]`` scale.
+
+        Notes
+        -----
+        ``var_limit`` is on the 0-255 scale (Albumentations
+        convention); the sampled variance is square-rooted and
+        divided by 255 so it can be added directly to the unit-scale
+        image.
+        """
         var = _random.uniform(self.var_limit[0], self.var_limit[1])
         return NoiseParam(std=math.sqrt(var) / 255.0)
 
@@ -291,6 +463,22 @@ class MultiplicativeNoise(PhotometricTransform[MultiplierParam]):
         self.elementwise = elementwise
 
     def make_params(self, img: Tensor) -> MultiplierParam:
+        r"""Sample per-call random parameters for :class:`MultiplicativeNoise`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        MultiplierParam
+            Carries the constructor's ``multiplier`` bounds verbatim
+            (``lo``, ``hi``).  The actual scalar / per-pixel multiplier
+            draw is deferred to the apply step so ``elementwise`` can
+            switch between the two regimes without re-running the
+            sampling head.
+        """
         return MultiplierParam(lo=self.multiplier[0], hi=self.multiplier[1])
 
     def _apply_image(self, img: Tensor, params: MultiplierParam) -> Tensor:
@@ -322,6 +510,20 @@ class ISONoise(PhotometricTransform[NoiseParam]):
         self.intensity = intensity
 
     def make_params(self, img: Tensor) -> NoiseParam:
+        r"""Sample per-call random parameters for :class:`ISONoise`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        NoiseParam
+            Carries ``std`` — sensor-noise intensity sampled uniformly
+            from ``intensity``.  The colour-shift term is re-sampled
+            inside the apply step.
+        """
         return NoiseParam(std=_random.uniform(self.intensity[0], self.intensity[1]))
 
     def _apply_image(self, img: Tensor, params: NoiseParam) -> Tensor:
@@ -367,6 +569,19 @@ class Downscale(PhotometricTransform[ScaleParam]):
         self.scale_max = scale_max
 
     def make_params(self, img: Tensor) -> ScaleParam:
+        r"""Sample per-call random parameters for :class:`Downscale`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ScaleParam
+            Carries ``scale`` — the downscale factor sampled uniformly
+            from ``[scale_min, scale_max]``.
+        """
         return ScaleParam(scale=_random.uniform(self.scale_min, self.scale_max))
 
     def _apply_image(self, img: Tensor, params: ScaleParam) -> Tensor:
@@ -388,7 +603,19 @@ class Downscale(PhotometricTransform[ScaleParam]):
 
 @dataclass(frozen=True)
 class RadiusParam:
-    """Per-call disk-kernel radius used by :class:`Defocus`."""
+    r"""Per-call disk-kernel radius used by :class:`Defocus`.
+
+    The :class:`Defocus` apply step builds a normalised disk kernel of
+    radius ``radius`` (pixels inside the disk get weight
+    ``1 / area``) and convolves it with the image to approximate the
+    bokeh circle of an out-of-focus lens.
+
+    Attributes
+    ----------
+    radius : int
+        Disk radius in pixels; larger values produce more aggressive
+        defocus.
+    """
 
     radius: int
 
@@ -416,6 +643,19 @@ class Defocus(PhotometricTransform[RadiusParam]):
         self.radius = radius
 
     def make_params(self, img: Tensor) -> RadiusParam:
+        r"""Sample per-call random parameters for :class:`Defocus`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        RadiusParam
+            Carries ``radius`` — the disk-kernel radius in pixels
+            drawn uniformly from the constructor's ``radius`` range.
+        """
         return RadiusParam(radius=_random.randint(self.radius[0], self.radius[1] + 1))
 
     def _apply_image(self, img: Tensor, params: RadiusParam) -> Tensor:
@@ -435,7 +675,17 @@ class Defocus(PhotometricTransform[RadiusParam]):
 
 @dataclass(frozen=True)
 class ZoomParam:
-    """Per-call zoom factor used by :class:`ZoomBlur` (>1 = zoom in)."""
+    r"""Per-call zoom factor used by :class:`ZoomBlur`.
+
+    The :class:`ZoomBlur` apply step averages 5 centre-zoomed copies
+    of the image at zoom levels evenly spaced between ``1.0`` and
+    ``factor``, simulating a fast dolly into the scene.
+
+    Attributes
+    ----------
+    factor : float
+        Final zoom factor; ``> 1`` means zoom in.
+    """
 
     factor: float
 
@@ -471,6 +721,20 @@ class ZoomBlur(PhotometricTransform[ZoomParam]):
         self.step_factor = step_factor
 
     def make_params(self, img: Tensor) -> ZoomParam:
+        r"""Sample per-call random parameters for :class:`ZoomBlur`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        ZoomParam
+            Carries ``factor`` — the final zoom factor drawn uniformly
+            from ``[1.0, max_factor]``.  The apply step interpolates
+            5 intermediate zoom levels between ``1.0`` and ``factor``.
+        """
         return ZoomParam(factor=_random.uniform(1.0, self.max_factor))
 
     def _apply_image(self, img: Tensor, params: ZoomParam) -> Tensor:

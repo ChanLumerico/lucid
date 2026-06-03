@@ -133,6 +133,29 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
         normalizer: Normalizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python byte-level BPE tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int]
+            GPT-2 byte-mapped token → id map.
+        merges : list of (str, str)
+            BPE merge pairs over the byte-mapped alphabet.
+        add_prefix_space : bool, default False
+            Prepend a space before pre-tokenizing (GPT-2: ``False``,
+            RoBERTa: ``True``).
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normaliser.  Defaults to :class:`NFC`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.
+
+        Notes
+        -----
+        The pre-tokenizer is fixed to :class:`ByteLevel` with the
+        chosen ``add_prefix_space`` — that's the whole point of
+        byte-level BPE.  Forwards everything else to
+        :meth:`BPETokenizer.__init__`.
+        """
         self._add_prefix_space = add_prefix_space
         super().__init__(
             vocab,
@@ -144,10 +167,18 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"byte_bpe"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"byte_bpe"`` — distinguishes byte-level
+            BPE from classical BPE in the unified ``tokenizer.json``.
+        """
         return "byte_bpe"
 
     def _save_extras(self) -> dict[str, object]:
-        """Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
+        r"""Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
         return {
             "model": {
                 "type": "ByteLevelBPE",
@@ -268,9 +299,9 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
     r"""C++-backed byte-level BPE tokenizer.
 
     Identical configuration semantics to
-    :class:`ByteLevelBPETokenizer`; uses
-    :class:`lucid._C.engine.utils.tokenizer.BPE` for the merge hot
-    loop and the same :class:`ByteLevel` pre-tokenizer in Python.
+    :class:`ByteLevelBPETokenizer`; uses the engine ``BPE`` binding
+    for the merge hot loop and the same :class:`ByteLevel`
+    pre-tokenizer in Python.
     Encode outputs are bit-identical to the pure-Python flavour for
     the same vocab + same merges.
 
@@ -292,6 +323,28 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         normalizer: Normalizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed byte-level BPE tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int]
+            GPT-2 byte-mapped token → id map.
+        merges : list of (str, str)
+            BPE merge pairs over the byte-mapped alphabet.
+        add_prefix_space : bool, default False
+            Prepend a space before pre-tokenizing (GPT-2 default
+            ``False``; RoBERTa default ``True``).
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normaliser.  Defaults to :class:`NFC`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.
+
+        Notes
+        -----
+        Fixes the pre-tokenizer to :class:`ByteLevel` and forwards to
+        :meth:`BPETokenizerFast.__init__` — which constructs the C++
+        ``BPE`` backend and caches it on `_cpp`.
+        """
         self._add_prefix_space = add_prefix_space
         super().__init__(
             vocab,
@@ -303,10 +356,17 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"byte_bpe"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"byte_bpe"``.
+        """
         return "byte_bpe"
 
     def _save_extras(self) -> dict[str, object]:
-        """Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
+        r"""Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
         return {
             "model": {
                 "type": "ByteLevelBPE",

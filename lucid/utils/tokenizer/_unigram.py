@@ -16,9 +16,9 @@ This file holds **both flavours**:
   numerical loop and a Python rewrite would be 100-1000x slower for
   any non-trivial corpus.
 
-* :class:`UnigramTokenizerFast` — C++-backed via
-  :class:`lucid._C.engine.utils.tokenizer.Unigram`.  Same on-disk
-  format, bit-identical encode output, used in production.
+* :class:`UnigramTokenizerFast` — C++-backed via the engine
+  ``Unigram`` binding.  Same on-disk format, bit-identical encode
+  output, used in production.
 
 **On-disk format.** A single unified ``tokenizer.json`` with
 ``model.vocab = [[piece, log_prob], ...]`` (matching the Hugging
@@ -73,6 +73,14 @@ class SentencePiecePreTokenizer(PreTokenizer):
     SP_SPACE = "▁"  # ▁
 
     def __init__(self, add_dummy_prefix: bool = True) -> None:
+        r"""Record the SentencePiece prefix-prepend flag.
+
+        Parameters
+        ----------
+        add_dummy_prefix : bool, default True
+            When ``True`` (the canonical setting), prepend ``▁`` to
+            the first word so it carries the word-start marker.
+        """
         self._add_dummy_prefix = add_dummy_prefix
 
     def pre_tokenize(self, text: str) -> list[tuple[str, tuple[int, int]]]:
@@ -238,6 +246,30 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python Unigram tokenizer.
+
+        Parameters
+        ----------
+        pieces : list of (str, float)
+            Ordered ``(piece, log_prob)`` list; index = token id.
+        unk_token : str, default "<unk>"
+            Fallback piece string for unmatchable input regions.
+        unk_log_prob : float, default -100.0
+            Log probability assigned to UNK substitutions.
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normalisation.  Defaults to :class:`NFKC`.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            Chunk splitter.  Defaults to
+            :class:`SentencePiecePreTokenizer`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.  Defaults to
+            ``SpecialTokens(unk=unk_token)``.
+
+        Notes
+        -----
+        Builds piece-id maps and caches the longest piece in bytes
+        for the Viterbi DP via :meth:`_rebuild_tables`.
+        """
         self._pieces: list[tuple[str, float]] = list(pieces)
         self._unk_token = unk_token
         self._unk_log_prob = unk_log_prob
@@ -263,22 +295,61 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
 
     @property
     def vocab_size(self) -> int:
+        r"""Number of pieces in the Unigram vocabulary.
+
+        Returns
+        -------
+        int
+            ``len(self._pieces)``.
+        """
         return len(self._pieces)
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"unigram"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"unigram"``.
+        """
         return "unigram"
 
     def get_vocab(self) -> dict[str, int]:
+        r"""Return a copy of the piece → id map.
+
+        Returns
+        -------
+        dict[str, int]
+            Shallow copy; mutating it does not affect the tokenizer.
+        """
         return dict(self._piece_to_id)
 
     def id_to_token(self, token_id: int) -> str | None:
+        r"""Look up the piece string for a token id.
+
+        Parameters
+        ----------
+        token_id : int
+            Vocab id.
+
+        Returns
+        -------
+        str or None
+            The piece string, or ``None`` if ``token_id`` is unknown.
+        """
         return self._id_to_piece.get(token_id)
 
     @property
     def pieces(self) -> list[tuple[str, float]]:
-        """The raw ``(piece, log_prob)`` list — useful for inspection
-        and for handing off to :class:`UnigramTokenizerFast`."""
+        r"""Raw ``(piece, log_prob)`` list — useful for inspection
+        and for handing off to :class:`UnigramTokenizerFast`.
+
+        Returns
+        -------
+        list of (str, float)
+            Shallow copy of the internal pieces list.
+        """
         return list(self._pieces)
 
     def _viterbi_encode_chunk(self, chunk: str) -> list[int]:
@@ -524,9 +595,9 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
 
     Identical algorithm + on-disk format to
     :class:`UnigramTokenizer`; the per-chunk Viterbi loop runs in
-    C++ via :class:`lucid._C.engine.utils.tokenizer.Unigram`.
-    Encode outputs are bit-identical for the same pieces + same
-    normalizer + same pre-tokenizer.
+    C++ via the engine ``Unigram`` binding.  Encode outputs are
+    bit-identical for the same pieces + same normalizer + same
+    pre-tokenizer.
 
     Use this in production training / inference.  Use
     :class:`UnigramTokenizer` for debugging / extending the
@@ -536,8 +607,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
     Parameters
     ----------
     Same as :class:`UnigramTokenizer`.  The C++ backend is
-    constructed transparently in ``__init__`` and held as
-    :attr:`_cpp`.
+    constructed transparently in ``__init__`` and held as `_cpp`.
 
     See Also
     --------
@@ -554,6 +624,32 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed Unigram tokenizer.
+
+        Parameters
+        ----------
+        pieces : list of (str, float)
+            Ordered ``(piece, log_prob)`` list passed to the C++
+            backend; index = token id.
+        unk_token : str, default "<unk>"
+            Fallback piece string for unmatchable regions.
+        unk_log_prob : float, default -100.0
+            Log probability assigned to UNK substitutions in C++.
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normalisation.  Defaults to :class:`NFKC`.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            Chunk splitter.  Defaults to
+            :class:`SentencePiecePreTokenizer`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.  Defaults to
+            ``SpecialTokens(unk=unk_token)``.
+
+        Notes
+        -----
+        Constructs the C++ ``Unigram`` backend once and caches it
+        on `_cpp`; the Python-side `_id_to_piece` reverse map mirrors
+        the pieces list for fast decode.
+        """
         self._pieces: list[tuple[str, float]] = list(pieces)
         self._unk_token = unk_token
         self._unk_log_prob = unk_log_prob
@@ -573,20 +669,61 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
 
     @property
     def vocab_size(self) -> int:
+        r"""Number of pieces in the live C++ vocabulary.
+
+        Returns
+        -------
+        int
+            ``self._cpp.vocab_size()``.
+        """
         return self._cpp.vocab_size()
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"unigram"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"unigram"``.
+        """
         return "unigram"
 
     def get_vocab(self) -> dict[str, int]:
+        r"""Return a piece → id map from the C++ backend.
+
+        Returns
+        -------
+        dict[str, int]
+            Fresh dict built from ``self._cpp.get_vocab()``.
+        """
         return dict(self._cpp.get_vocab())
 
     def id_to_token(self, token_id: int) -> str | None:
+        r"""Look up the piece string for a token id.
+
+        Parameters
+        ----------
+        token_id : int
+            Vocab id.
+
+        Returns
+        -------
+        str or None
+            The piece string, or ``None`` if unknown.
+        """
         return self._id_to_piece.get(token_id)
 
     @property
     def pieces(self) -> list[tuple[str, float]]:
+        r"""Raw ``(piece, log_prob)`` list cached on the Python side.
+
+        Returns
+        -------
+        list of (str, float)
+            Shallow copy of the cached pieces list (kept in sync with
+            C++ by :meth:`train` and ``__init__``).
+        """
         return list(self._pieces)
 
     def _encode_one(self, text: str) -> list[int]:

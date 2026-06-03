@@ -1694,6 +1694,6 @@ class ChainedScheduler:
         -------
         list of float
             Current learning rate of each optimizer param group, as
-            reported by the last scheduler in :attr:`schedulers`.
+            reported by the last scheduler in `schedulers`.
         """
         return self.schedulers[-1].get_last_lr()

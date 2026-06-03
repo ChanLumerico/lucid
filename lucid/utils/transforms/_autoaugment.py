@@ -433,6 +433,23 @@ class TrivialAugmentWide(PhotometricTransform[_SingleOpParams]):
         self.fill = fill
 
     def make_params(self, img: Tensor) -> _SingleOpParams:
+        r"""Sample per-call random parameters for :class:`TrivialAugmentWide`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        _SingleOpParams
+            Carries the sampled ``op_name`` (uniform over the 14-op
+            vocabulary) and ``magnitude`` — either ``0.0`` for ops in
+            :data:`NO_MAGNITUDE_OPS`, or
+            ``magnitudes[mag_idx]`` (with a random sign for ops in
+            :data:`SIGNED_OPS`) where ``mag_idx`` is uniform over
+            ``[0, num_magnitude_bins)``.
+        """
         op_idx = _random.randint(0, len(_OP_NAMES))
         op_name = _OP_NAMES[op_idx]
         if op_name in NO_MAGNITUDE_OPS:
@@ -542,6 +559,23 @@ class RandAugment(PhotometricTransform[_RandAugmentParams]):
         self.fill = fill
 
     def make_params(self, img: Tensor) -> _RandAugmentParams:
+        r"""Sample per-call random parameters for :class:`RandAugment`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        _RandAugmentParams
+            Carries ``ops`` — a length-``num_ops`` tuple of
+            ``(op_name, signed_magnitude)`` pairs.  Op names are drawn
+            uniformly with replacement from the 14-op vocabulary; the
+            magnitude shared across all ops is fixed at the
+            ``self.magnitude`` lookup index, with a random sign for
+            ops in :data:`SIGNED_OPS`.
+        """
         ops: list[tuple[str, float]] = []
         for _ in range(self.num_ops):
             op_idx = _random.randint(0, len(_OP_NAMES))
@@ -778,6 +812,24 @@ class AutoAugment(PhotometricTransform[_AutoAugmentParams]):
         self.fill = fill
 
     def make_params(self, img: Tensor) -> _AutoAugmentParams:
+        r"""Sample per-call random parameters for :class:`AutoAugment`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; not inspected, carried through for dispatch.
+
+        Returns
+        -------
+        _AutoAugmentParams
+            Carries ``ops`` — the resolved sequence of
+            ``(op_name, signed_magnitude)`` pairs after sampling one
+            sub-policy uniformly from the active policy table and
+            gating each sub-op by its per-policy probability.
+            Ops in :data:`NO_MAGNITUDE_OPS` are emitted with
+            magnitude ``0.0``; ops in :data:`SIGNED_OPS` get a random
+            sign on the table-lookup magnitude.
+        """
         table = _POLICY_TABLES[self.policy]
         sub = table[_random.randint(0, len(table))]
         ops: list[tuple[str, float]] = []

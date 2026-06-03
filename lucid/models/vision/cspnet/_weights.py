@@ -16,7 +16,29 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
 @register_weights("cspresnet_50_cls")
 class CSPResNet50Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.cspresnet_50_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.cspresnet_50_cls`.
+
+    Wang et al. CVPRW 2020 CSP-ResNet-50 (21.6 M params, top-1 76.74%).
+
+    Attributes
+    ----------
+    RA_IN1K : WeightEntry
+        ImageNet-1k RandAugment recipe checkpoint (top-1 76.74%),
+        sourced from ``timm/cspresnet50.ra_in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`RA_IN1K`.
+
+    Notes
+    -----
+    Reference: Wang, Liao, Wu, Chen, Hsieh, Yeh, *"CSPNet: A New Backbone
+    that can Enhance Learning Capability of CNN"*, CVPRW 2020
+    (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> from lucid.models import cspresnet_50_cls
+    >>> model = cspresnet_50_cls(pretrained=True).eval()
+    """
 
     RA_IN1K = WeightEntry(
         url=f"{HUB_BASE}/cspresnet-50/resolve/main/RA_IN1K/model.safetensors",
@@ -38,7 +60,29 @@ class CSPResNet50Weights(WeightsEnum):
 
 @register_weights("cspresnext_50_cls")
 class CSPResNeXt50Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.cspresnext_50_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.cspresnext_50_cls`.
+
+    Wang et al. CVPRW 2020 CSP-ResNeXt-50 (20.6 M params, top-1 80.04%).
+
+    Attributes
+    ----------
+    RA_IN1K : WeightEntry
+        ImageNet-1k RandAugment recipe checkpoint (top-1 80.04%),
+        sourced from ``timm/cspresnext50.ra_in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`RA_IN1K`.
+
+    Notes
+    -----
+    Reference: Wang, Liao, Wu, Chen, Hsieh, Yeh, *"CSPNet: A New Backbone
+    that can Enhance Learning Capability of CNN"*, CVPRW 2020
+    (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> from lucid.models import cspresnext_50_cls
+    >>> model = cspresnext_50_cls(pretrained=True).eval()
+    """
 
     RA_IN1K = WeightEntry(
         url=f"{HUB_BASE}/cspresnext-50/resolve/main/RA_IN1K/model.safetensors",
@@ -60,7 +104,29 @@ class CSPResNeXt50Weights(WeightsEnum):
 
 @register_weights("cspdarknet_53_cls")
 class CSPDarknet53Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.cspdarknet_53_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.cspdarknet_53_cls`.
+
+    Wang et al. CVPRW 2020 CSP-Darknet-53 (27.6 M params, top-1 80.06%).
+
+    Attributes
+    ----------
+    RA_IN1K : WeightEntry
+        ImageNet-1k RandAugment recipe checkpoint (top-1 80.06%),
+        sourced from ``timm/cspdarknet53.ra_in1k``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`RA_IN1K`.
+
+    Notes
+    -----
+    Reference: Wang, Liao, Wu, Chen, Hsieh, Yeh, *"CSPNet: A New Backbone
+    that can Enhance Learning Capability of CNN"*, CVPRW 2020
+    (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> from lucid.models import cspdarknet_53_cls
+    >>> model = cspdarknet_53_cls(pretrained=True).eval()
+    """
 
     RA_IN1K = WeightEntry(
         url=f"{HUB_BASE}/cspdarknet-53/resolve/main/RA_IN1K/model.safetensors",

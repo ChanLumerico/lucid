@@ -157,7 +157,9 @@ def load_compiled(path: str) -> object:
     parameter *values* (only the graph structure + I/O ids).
 
     For a smoother AOT workflow that re-binds parameters from a live
-    model, see :func:`load_compiled_into`.
+    model, build a thin caller-side helper around ``load_compiled``
+    that stitches ``model.parameters()`` onto the executable's feed
+    list before invocation.
 
     Parameters
     ----------

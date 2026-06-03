@@ -161,6 +161,28 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python WordPiece tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int]
+            BERT-style token → id map; continuation pieces are
+            prefixed with ``continuing_prefix``.
+        unk_token : str, default "[UNK]"
+            Emitted when no longest-match prefix is found.
+        continuing_prefix : str, default "##"
+            Marker prepended to non-initial subword lookups.
+        max_chars_per_word : int, default 100
+            Words longer than this are short-circuited to UNK.
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normaliser.  Defaults to :class:`BERTNormalizer`.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            Chunk splitter.  Defaults to
+            :class:`WhitespacePunctuationSplit`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry.  Defaults to
+            ``SpecialTokens(unk=unk_token)``.
+        """
         self._vocab: dict[str, int] = dict(vocab)
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         self._unk_token = unk_token
@@ -178,16 +200,51 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
 
     @property
     def vocab_size(self) -> int:
+        r"""Number of WordPiece tokens currently registered.
+
+        Returns
+        -------
+        int
+            ``len(self._vocab)``.
+        """
         return len(self._vocab)
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"wordpiece"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"wordpiece"``.
+        """
         return "wordpiece"
 
     def get_vocab(self) -> dict[str, int]:
+        r"""Return a shallow copy of the token → id map.
+
+        Returns
+        -------
+        dict[str, int]
+            Copy of the internal vocab.
+        """
         return dict(self._vocab)
 
     def id_to_token(self, token_id: int) -> str | None:
+        r"""Look up the surface string for a token id.
+
+        Parameters
+        ----------
+        token_id : int
+            Vocab id.
+
+        Returns
+        -------
+        str or None
+            The token string, or ``None`` if unknown.  Continuation
+            pieces retain their ``continuing_prefix`` (typically
+            ``##``).
+        """
         return self._id_to_token.get(token_id)
 
     def _encode_word(self, word: str) -> list[int]:
@@ -222,12 +279,16 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         return ids
 
     def _encode_one(self, text: str) -> list[int]:
+        r"""Normalize + pre-tokenize + greedy longest-match per word."""
         out: list[int] = []
         for word in self._prepare_words(text):
             out.extend(self._encode_word(word))
         return out
 
     def _decode_one(self, ids: list[int]) -> str:
+        r"""BERT-style decode join — strips ``##`` continuations and
+        re-inserts spaces between whole-word starts.
+        """
         return self._decode_join(ids, self._id_to_token)
 
     def train(
@@ -246,7 +307,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         vocab by 1 each step until ``vocab_size`` is reached or no
         pair appears more than once.
 
-        Replaces :attr:`_vocab` in place; previous contents are
+        Replaces `_vocab` in place; previous contents are
         discarded.  The result is a BERT-compatible vocab with
         ``##`` continuation markers and the configured UNK token
         reserved at id 0.  Tie-break is lexicographic key order for
@@ -422,10 +483,10 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
     r"""C++-backed WordPiece tokenizer.
 
     Identical algorithm + vocab format to :class:`WordPieceTokenizer`;
-    the hot loops (greedy longest-match encode + training) run in
-    C++ via :class:`lucid._C.engine.utils.tokenizer.WordPiece`.
-    Encode outputs are bit-identical for the same vocab + same
-    normalizer + same pre-tokenizer.
+    the hot loops (greedy longest-match encode + training) run in C++
+    via the engine ``WordPiece`` binding.  Encode outputs are
+    bit-identical for the same vocab + same normalizer + same
+    pre-tokenizer.
 
     The Python side still handles normalisation + pre-tokenization
     (so user-defined Python normalizers compose with the C++
@@ -434,8 +495,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
     Parameters
     ----------
     Same as :class:`WordPieceTokenizer`.  The C++ backend is
-    constructed transparently in ``__init__`` and held as
-    :attr:`_cpp`.
+    constructed transparently in ``__init__`` and held as `_cpp`.
 
     See Also
     --------
@@ -453,6 +513,31 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed WordPiece tokenizer.
+
+        Parameters
+        ----------
+        vocab : dict[str, int]
+            BERT-style token → id map; passed to the C++ backend.
+        unk_token : str, default "[UNK]"
+            See :class:`WordPieceTokenizer`.
+        continuing_prefix : str, default "##"
+            See :class:`WordPieceTokenizer`.
+        max_chars_per_word : int, default 100
+            See :class:`WordPieceTokenizer`.
+        normalizer : Normalizer or None, optional, keyword-only
+            Pre-encode normaliser.  Defaults to :class:`BERTNormalizer`.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            Defaults to :class:`WhitespacePunctuationSplit`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Defaults to ``SpecialTokens(unk=unk_token)``.
+
+        Notes
+        -----
+        Constructs the C++ ``WordPiece`` backend once and caches it
+        on `_cpp`; the Python-side `_id_to_token` mirror enables fast
+        decode without round-trips.
+        """
         self._vocab: dict[str, int] = dict(vocab)
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         self._unk_token = unk_token
@@ -474,16 +559,50 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
 
     @property
     def vocab_size(self) -> int:
+        r"""Number of WordPiece tokens in the live C++ vocab.
+
+        Returns
+        -------
+        int
+            ``self._cpp.vocab_size()``.
+        """
         return self._cpp.vocab_size()
 
     @property
     def algo(self) -> str:
+        r"""Algorithm identifier (always ``"wordpiece"``).
+
+        Returns
+        -------
+        str
+            Constant string ``"wordpiece"``.
+        """
         return "wordpiece"
 
     def get_vocab(self) -> dict[str, int]:
+        r"""Return a copy of the token → id map from the Python cache.
+
+        Returns
+        -------
+        dict[str, int]
+            Shallow copy; kept in sync with the C++ backend by
+            ``__init__`` and :meth:`train`.
+        """
         return dict(self._vocab)
 
     def id_to_token(self, token_id: int) -> str | None:
+        r"""Look up the surface string for a token id.
+
+        Parameters
+        ----------
+        token_id : int
+            Vocab id.
+
+        Returns
+        -------
+        str or None
+            The token string, or ``None`` if unknown.
+        """
         return self._id_to_token.get(token_id)
 
     def _encode_one(self, text: str) -> list[int]:
@@ -494,6 +613,9 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         return out
 
     def _decode_one(self, ids: list[int]) -> str:
+        r"""BERT-style decode join — same surface form as the Python
+        flavour for parity.
+        """
         return self._decode_join(ids, self._id_to_token)
 
     def train(

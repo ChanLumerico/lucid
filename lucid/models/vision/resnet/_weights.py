@@ -37,6 +37,24 @@ class ResNet18Weights(WeightsEnum):
     canonical V1 weights distributed by the reference-framework model
     zoo, re-hosted under ``huggingface.co/lucid-dl/resnet-18`` with the
     official ``acc@1=69.758 / acc@5=89.078`` validation metrics.
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 69.758% / top-5 89.078%),
+        sourced from ``torchvision/ResNet18_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: He, Zhang, Ren, Sun, *"Deep Residual Learning for Image
+    Recognition"*, CVPR 2016 (arXiv:1512.03385).
+
+    Examples
+    --------
+    >>> from lucid.models import resnet_18_cls
+    >>> model = resnet_18_cls(pretrained=True).eval()
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -61,7 +79,28 @@ class ResNet18Weights(WeightsEnum):
 
 @register_weights("resnet_34_cls")
 class ResNet34Weights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.resnet_34_cls`."""
+    r"""Pretrained weight tags for :func:`lucid.models.resnet_34_cls`.
+
+    34-layer basic-block ResNet (21.8 M params, top-1 73.31% / top-5 91.42%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 73.314% / top-5 91.420%),
+        sourced from ``torchvision/ResNet34_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: He, Zhang, Ren, Sun, *"Deep Residual Learning for Image
+    Recognition"*, CVPR 2016 (arXiv:1512.03385).
+
+    Examples
+    --------
+    >>> from lucid.models import resnet_34_cls
+    >>> model = resnet_34_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/resnet-34/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -82,7 +121,28 @@ class ResNet34Weights(WeightsEnum):
 
 @register_weights("resnet_50_cls")
 class ResNet50Weights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.resnet_50_cls`."""
+    r"""Pretrained weight tags for :func:`lucid.models.resnet_50_cls`.
+
+    50-layer bottleneck ResNet (25.6 M params, top-1 76.13% / top-5 92.86%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 76.130% / top-5 92.862%),
+        sourced from ``torchvision/ResNet50_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: He, Zhang, Ren, Sun, *"Deep Residual Learning for Image
+    Recognition"*, CVPR 2016 (arXiv:1512.03385).
+
+    Examples
+    --------
+    >>> from lucid.models import resnet_50_cls
+    >>> model = resnet_50_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/resnet-50/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -103,7 +163,28 @@ class ResNet50Weights(WeightsEnum):
 
 @register_weights("resnet_101_cls")
 class ResNet101Weights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.resnet_101_cls`."""
+    r"""Pretrained weight tags for :func:`lucid.models.resnet_101_cls`.
+
+    101-layer bottleneck ResNet (44.5 M params, top-1 77.37% / top-5 93.55%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 77.374% / top-5 93.546%),
+        sourced from ``torchvision/ResNet101_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: He, Zhang, Ren, Sun, *"Deep Residual Learning for Image
+    Recognition"*, CVPR 2016 (arXiv:1512.03385).
+
+    Examples
+    --------
+    >>> from lucid.models import resnet_101_cls
+    >>> model = resnet_101_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/resnet-101/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -124,7 +205,28 @@ class ResNet101Weights(WeightsEnum):
 
 @register_weights("resnet_152_cls")
 class ResNet152Weights(WeightsEnum):
-    r"""Pretrained weight tags for :func:`lucid.models.resnet_152_cls`."""
+    r"""Pretrained weight tags for :func:`lucid.models.resnet_152_cls`.
+
+    152-layer bottleneck ResNet (60.2 M params, top-1 78.31% / top-5 94.05%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 78.312% / top-5 94.046%),
+        sourced from ``torchvision/ResNet152_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: He, Zhang, Ren, Sun, *"Deep Residual Learning for Image
+    Recognition"*, CVPR 2016 (arXiv:1512.03385).
+
+    Examples
+    --------
+    >>> from lucid.models import resnet_152_cls
+    >>> model = resnet_152_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/resnet-152/resolve/main/IMAGENET1K_V1/model.safetensors",
@@ -149,6 +251,24 @@ class WideResNet50Weights(WeightsEnum):
 
     Wide ResNet-50-2 (Zagoruyko & Komodakis, "Wide Residual Networks",
     BMVC 2016).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 78.468% / top-5 94.086%),
+        sourced from ``torchvision/Wide_ResNet50_2_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Zagoruyko, Komodakis, *"Wide Residual Networks"*, BMVC
+    2016 (arXiv:1605.07146).
+
+    Examples
+    --------
+    >>> from lucid.models import wide_resnet_50_cls
+    >>> model = wide_resnet_50_cls(pretrained=True).eval()
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -174,6 +294,24 @@ class WideResNet101Weights(WeightsEnum):
 
     Wide ResNet-101-2 (Zagoruyko & Komodakis, "Wide Residual Networks",
     BMVC 2016).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 78.848% / top-5 94.284%),
+        sourced from ``torchvision/Wide_ResNet101_2_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Zagoruyko, Komodakis, *"Wide Residual Networks"*, BMVC
+    2016 (arXiv:1605.07146).
+
+    Examples
+    --------
+    >>> from lucid.models import wide_resnet_101_cls
+    >>> model = wide_resnet_101_cls(pretrained=True).eval()
     """
 
     IMAGENET1K_V1 = WeightEntry(

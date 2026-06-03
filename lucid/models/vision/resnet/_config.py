@@ -132,7 +132,7 @@ class ResNetConfig(ModelConfig):
             \text{ResNet-152} \;&\to\; (\text{bottleneck},\; (3, 8, 36, 3))
         \end{aligned}
 
-    Always prefer the factory functions in :mod:`._pretrained` (e.g.
+    Always prefer the factory functions in ``._pretrained`` (e.g.
     :func:`resnet_50`) over hand-rolling a config — they encode the
     exact paper-cited topology and integrate with the model registry.
 

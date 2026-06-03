@@ -3,7 +3,7 @@
 Both paper-cited variants (Cheng et al., NeurIPS 2021) ship ADE20k
 semantic-segmentation checkpoints converted from the
 ``facebook/maskformer-resnet{50,101}-ade``
-:class:`MaskFormerForInstanceSegmentation` checkpoints:
+``MaskFormerForInstanceSegmentation`` checkpoints:
 :class:`MaskFormerResNet50Weights` and :class:`MaskFormerResNet101Weights`.
 
 Each checkpoint is the 150-class ADE20k segmenter (mask-classification

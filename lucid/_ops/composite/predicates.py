@@ -135,8 +135,8 @@ def is_same_size(a: Tensor, b: Tensor) -> bool:
     r"""Predicate: do two tensors have identical shapes?
 
     Compares the shape tuples exactly — no broadcasting compatibility is
-    implied. Use :func:`lucid.broadcast_shapes` if broadcastability is
-    the question.
+    implied. Use :func:`lucid.broadcast_to` if broadcastability is the
+    question.
 
     Parameters
     ----------

@@ -235,7 +235,19 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
 
 @dataclass(frozen=True)
 class Offset:
-    """Per-call ``(top, left)`` pixel offset used by :class:`RandomCrop`."""
+    r"""Per-call top-left pixel offset for :class:`RandomCrop`.
+
+    The host transform's apply step crops the image at
+    ``[top:top+height, left:left+width]`` and applies the same offset
+    to mask / boxes / keypoints so every target stays aligned.
+
+    Attributes
+    ----------
+    top : int
+        Vertical pixel offset of the crop window's top edge.
+    left : int
+        Horizontal pixel offset of the crop window's left edge.
+    """
 
     top: int
     left: int
@@ -264,6 +276,21 @@ class RandomCrop(GeometricTransform[Offset]):
         self.width = width
 
     def make_params(self, img: Tensor) -> Offset:
+        r"""Sample per-call random parameters for :class:`RandomCrop`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size bounds the uniform draw of
+            the crop window's top-left corner.
+
+        Returns
+        -------
+        Offset
+            Carries ``top`` ``~ U[0, H - height]`` and ``left``
+            ``~ U[0, W - width]``; the configured ``height`` /
+            ``width`` are reused as the crop size.
+        """
         h, w = F._spatial_hw(img)
         return Offset(
             top=_random.randint(0, h - self.height + 1),
@@ -309,6 +336,23 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
         self.interpolation = as_interpolation(interpolation)
 
     def make_params(self, img: Tensor) -> CropBox:
+        r"""Sample per-call random parameters for :class:`RandomResizedCrop`.
+
+        Parameters
+        ----------
+        img : Tensor
+            Image tensor; its spatial size sets the source area and
+            bounds the sampled crop window.
+
+        Returns
+        -------
+        CropBox
+            Crop window ``(top, left, height, width)`` whose area
+            fraction is uniform in ``scale`` and whose aspect ratio is
+            log-uniform in ``ratio``.  Falls back to a centred,
+            ratio-clamped crop after 10 failed area / aspect draws so
+            the method always returns a valid window.
+        """
         h, w = F._spatial_hw(img)
         area = float(h * w)
         log_ratio = (math.log(self.ratio[0]), math.log(self.ratio[1]))

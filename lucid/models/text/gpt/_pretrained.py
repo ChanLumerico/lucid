@@ -54,6 +54,8 @@ def gpt(
     pretrained : bool, default=False
         Reserved for future weight registration.  No checkpoints are wired
         yet, so the model is returned with random initialisation.
+    weights : GPTWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPTConfig` field overrides (e.g. ``vocab_size=...``,
         ``hidden_size=...``, ``num_hidden_layers=...``) forwarded into the
@@ -126,6 +128,8 @@ def gpt_lm(
     ----------
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
+    weights : GPTLMWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`GPTConfig` field overrides forwarded into the
         underlying config.

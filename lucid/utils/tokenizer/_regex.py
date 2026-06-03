@@ -110,6 +110,19 @@ class RegexTokenizer(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a pure-Python regex tokenizer.
+
+        Parameters
+        ----------
+        pattern : str
+            Match pattern compiled once via :func:`re.compile`.
+            Each :func:`re.findall` hit becomes one token candidate.
+        vocab : dict[str, int] or None, optional
+            Pre-built token → id map.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry; configure ``unk`` for OOV
+            handling (OOV matches are dropped otherwise).
+        """
         self._pattern_str = pattern
         self._pattern = re.compile(pattern)
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
@@ -310,6 +323,18 @@ class RegexTokenizerFast(Tokenizer):
         *,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
+        r"""Construct a C++-backed regex tokenizer.
+
+        Parameters
+        ----------
+        pattern : str
+            Match pattern handed to the C++ regex engine; see class
+            docstring for the cross-engine compatibility caveats.
+        vocab : dict[str, int] or None, optional
+            Pre-built token → id map.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            Special-token registry; mirrored into the C++ backend.
+        """
         self._pattern_str = pattern
         self._vocab: dict[str, int] = dict(vocab) if vocab else {}
         self._cpp = _C_engine.utils.tokenizer.RegexTokenizer(pattern, self._vocab)

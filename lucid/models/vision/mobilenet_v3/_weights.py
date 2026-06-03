@@ -19,7 +19,29 @@ _PRESET = ImageClassification(crop_size=224, resize_size=256)
 
 @register_weights("mobilenet_v3_large_cls")
 class MobileNetV3LargeWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.mobilenet_v3_large_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.mobilenet_v3_large_cls`.
+
+    Howard et al. ICCV 2019 Large (5.5 M params, top-1 74.04%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 74.042% / top-5 91.340%),
+        sourced from
+        ``torchvision/MobileNet_V3_Large_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Howard et al., *"Searching for MobileNetV3"*, ICCV 2019
+    (arXiv:1905.02244).
+
+    Examples
+    --------
+    >>> from lucid.models import mobilenet_v3_large_cls
+    >>> model = mobilenet_v3_large_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/mobilenet-v3-large/resolve/main/"
@@ -41,7 +63,29 @@ class MobileNetV3LargeWeights(WeightsEnum):
 
 @register_weights("mobilenet_v3_small_cls")
 class MobileNetV3SmallWeights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.mobilenet_v3_small_cls`."""
+    r"""Pretrained weights for :func:`lucid.models.mobilenet_v3_small_cls`.
+
+    Howard et al. ICCV 2019 Small (2.5 M params, top-1 67.67%).
+
+    Attributes
+    ----------
+    IMAGENET1K_V1 : WeightEntry
+        ImageNet-1k V1 checkpoint (top-1 67.668% / top-5 87.402%),
+        sourced from
+        ``torchvision/MobileNet_V3_Small_Weights.IMAGENET1K_V1``.
+    DEFAULT : WeightEntry
+        Alias for :attr:`IMAGENET1K_V1`.
+
+    Notes
+    -----
+    Reference: Howard et al., *"Searching for MobileNetV3"*, ICCV 2019
+    (arXiv:1905.02244).
+
+    Examples
+    --------
+    >>> from lucid.models import mobilenet_v3_small_cls
+    >>> model = mobilenet_v3_small_cls(pretrained=True).eval()
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{HUB_BASE}/mobilenet-v3-small/resolve/main/"
