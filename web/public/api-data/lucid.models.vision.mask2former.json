@@ -1,0 +1,4840 @@
+{
+  "slug": "lucid.models.vision.mask2former",
+  "name": "mask2former",
+  "path": "lucid.models.vision.mask2former",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/__init__.py#L1",
+  "members": [
+    {
+      "name": "Mask2FormerConfig",
+      "path": "lucid.models.vision.mask2former._config.Mask2FormerConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "Mask2FormerConfig(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_type: Literal['resnet', 'swin'] = 'resnet', backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256, num_feature_levels: int = 3)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.mask2former._config.Mask2FormerConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_type: Literal['resnet', 'swin'] = 'resnet', backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256, num_feature_levels: int = 3)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for Mask2Former.",
+      "extended": "Mask2Former (Cheng et al., CVPR 2022) improves over MaskFormer with three\nkey changes:\n\n1. **Masked cross-attention**: each decoder layer restricts query attention\n   to within the predicted mask region from the previous layer.\n2. **Multi-scale features**: decoder layers alternate attending to\n   different FPN feature levels (P3, P4, P5 cycling).\n3. **Improved pixel decoder**: FPN with multiple output scales.",
+      "parameters": [
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Number of semantic classes.",
+          "default": "150"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Input image channels.",
+          "default": "3"
+        },
+        {
+          "name": "backbone_layers",
+          "annotation": "tuple[int, int, int, int]",
+          "description": "ResNet layer counts (default ResNet-50: 3,4,6,3).",
+          "default": "(3, 4, 6, 3)"
+        },
+        {
+          "name": "d_model",
+          "annotation": "int",
+          "description": "Transformer embedding dimension.",
+          "default": "256"
+        },
+        {
+          "name": "n_head",
+          "annotation": "int",
+          "description": "Number of attention heads.",
+          "default": "8"
+        },
+        {
+          "name": "num_encoder_layers",
+          "annotation": "int",
+          "description": "Pixel decoder encoder depth.",
+          "default": "6"
+        },
+        {
+          "name": "num_decoder_layers",
+          "annotation": "int",
+          "description": "Query transformer decoder depth.",
+          "default": "6"
+        },
+        {
+          "name": "dim_feedforward",
+          "annotation": "int",
+          "description": "FFN inner dimension.",
+          "default": "2048"
+        },
+        {
+          "name": "dropout",
+          "annotation": "float",
+          "description": "Dropout probability.",
+          "default": "0.1"
+        },
+        {
+          "name": "num_queries",
+          "annotation": "int",
+          "description": "Number of learnable object queries N.",
+          "default": "100"
+        },
+        {
+          "name": "fpn_out_channels",
+          "annotation": "int",
+          "description": "FPN lateral / output channel width.",
+          "default": "256"
+        },
+        {
+          "name": "num_feature_levels",
+          "annotation": "int",
+          "description": "Number of multi-scale FPN levels used in decoder\n                cross-attention (cycles through them).",
+          "default": "3"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Image → ResNet backbone → [C2, C3, C4, C5]\n  → Multi-scale FPN Pixel Decoder → {P3, P4, P5} at fpn_out_channels\n                                  + P2 projected to d_model\n  → Transformer decoder (masked cross-attention cycling FPN levels)\n  → Class head + mask head (same as MaskFormer)"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Mask2FormerForSemanticSegmentation",
+      "path": "lucid.models.vision.mask2former._model.Mask2FormerForSemanticSegmentation",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "Mask2FormerForSemanticSegmentation(config: Mask2FormerConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_model.py#L456",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.mask2former._model.Mask2FormerForSemanticSegmentation.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: Mask2FormerConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_model.py#L540",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.mask2former._model.Mask2FormerForSemanticSegmentation.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, targets: dict[str, Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_model.py#L665",
+          "subcategory": "model",
+          "summary": "Run Mask2Former.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "(B, C, H, W) image batch.",
+              "default": null
+            },
+            {
+              "name": "targets",
+              "annotation": "dict[str, Tensor] | None",
+              "description": "Optional dict with `\"masks\"` (B, H, W) integer masks.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "SemanticSegmentationOutput",
+            "description": "`SemanticSegmentationOutput`:\n`logits`: (B, K+1, H, W) per-pixel class logits.\n`loss`:   training loss when targets provided."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Mask2Former universal segmentation model (Cheng et al., CVPR 2022).",
+      "extended": "A unified architecture that achieves state-of-the-art results across\nsemantic, instance, and panoptic segmentation with the same code path —\nonly the post-processing and dataset target format differ.  The\narchitectural breakthrough over MaskFormer is **masked attention**:\neach transformer decoder layer restricts cross-attention to the\nforeground region of the *previous* layer's predicted mask, which\nsharply accelerates convergence (the paper reports 6x fewer training\niterations) and improves segmentation of small objects.\n\nThe pipeline is: backbone (ResNet or Swin) -> multi-scale FPN-style\npixel decoder producing high-resolution pixel embeddings plus a\nP3 / P4 / P5 set of memory features -> $L$ masked-attention\ndecoder layers cycling through the three memory levels with query\nembeddings -> sibling class and mask-embedding heads.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "Mask2FormerConfig",
+          "description": "Frozen architecture spec.  Use the family of factories\n(`mask2former_resnet50`, `mask2former_resnet101`,\n`mask2former_swin_tiny` / `small` / `base` / `large`)\nto obtain paper-cited variants.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Semantic segmentation forward pass:\n>>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_resnet50\n>>> model = mask2former_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape   # (B, K + 1, H, W)\n(1, 151, 512, 512)"
+      ],
+      "notes": [
+        "See Cheng et al., \"Masked-attention Mask Transformer for Universal\nImage Segmentation\", CVPR 2022 ([arXiv:2112.01527](https://arxiv.org/abs/2112.01527)).  The masked\ncross-attention at decoder layer $l$ replaces the standard\nsoftmax with\n\n$$\n\\mathrm{Attn}(Q_l, K, V) =\n    \\mathrm{softmax}\\!\\bigl(\\mathcal{M}_{l-1} + Q_l K^\\top\\bigr) V,\n$$\nwhere $\\mathcal{M}_{l-1}$ is a binary bias drawn from layer\n$l - 1$'s mask prediction (0 inside the predicted foreground,\n$-\\infty$ elsewhere).  Compared to MaskFormer's standard\ncross-attention this restricts each query to attend only to its own\nobject region, accelerating convergence and giving consistent\n+1-3 AP gains.  The same Hungarian + class CE + mask BCE / dice loss\nas MaskFormer is used."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "Mask2FormerConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "backbone",
+          "annotation": "_ResNetBackbone or _SwinBackbone",
+          "description": "Multi-scale backbone selected by `config.backbone_type`."
+        },
+        {
+          "name": "pixel_decoder",
+          "annotation": "_MultiScaleFPNDecoder",
+          "description": "Multi-scale FPN-style pixel decoder producing per-pixel embeddings\nat stride 4 plus three coarser memory levels."
+        },
+        {
+          "name": "query_embed",
+          "annotation": "nn.Embedding",
+          "description": "Learned segmentation queries `(num_queries, d_model)`."
+        },
+        {
+          "name": "decoder_layers",
+          "annotation": "list[_MaskedAttentionDecoderLayer]",
+          "description": "`num_decoder_layers` decoder layers that cycle through the\nthree memory feature levels (P5 -> P4 -> P3 -> P5 -> ...) and\napply masked cross-attention using the previous layer's\npredicted mask as an attention bias."
+        },
+        {
+          "name": "class_head",
+          "annotation": "nn.Linear",
+          "description": "Per-query $(K + 1)$ class head."
+        },
+        {
+          "name": "mask_embed",
+          "annotation": "nn.Linear",
+          "description": "Mask-embedding projection used for the dot-product mask\nprediction with the pixel embedding."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "mask2former_resnet50",
+      "path": "lucid.models.vision.mask2former._pretrained.mask2former_resnet50",
+      "kind": "function",
+      "labels": [],
+      "signature": "mask2former_resnet50(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_pretrained.py#L89",
+      "subcategory": "pretrained",
+      "summary": "Mask2Former with ResNet-50 backbone (Cheng et al., CVPR 2022).",
+      "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the\npaper-cited ResNet-50 configuration: masked-attention decoder\ncycling through 3 FPN levels (P3 / P4 / P5), 100 queries,\n`d_model = 256`, 6 decoder layers, 8 attention heads, and a\n256-channel pixel decoder.  Default targets ADE20K (150 classes);\nreaches ADE20K validation mIoU of 47.2% (paper Table 2,\nMask2Former-R50 row).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `Mask2FormerConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Mask2FormerForSemanticSegmentation",
+        "description": "Segmentation model with the Mask2Former-R50 configuration applied\n(or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_resnet50\n>>> model = mask2former_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n151"
+      ],
+      "notes": [
+        "See Cheng et al., \"Masked-attention Mask Transformer for Universal\nImage Segmentation\", CVPR 2022 ([arXiv:2112.01527](https://arxiv.org/abs/2112.01527))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 36981975,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_ResNetBackbone",
+            "params": 23508032,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 9408,
+                "own_params": 9408,
+                "children": []
+              },
+              {
+                "name": "bn1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "layer1",
+                "type": "Sequential",
+                "params": 215808,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 75008,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 16896,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 70400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "layer2",
+                "type": "Sequential",
+                "params": 1219584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 379392,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 132096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 280064,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "layer3",
+                "type": "Sequential",
+                "params": 7098368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 1512448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 262144,
+                        "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 526336,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 524288,
+                            "own_params": 524288,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 1117184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 262144,
+                        "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 262144,
+                        "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 5
+                  }
+                ]
+              },
+              {
+                "name": "layer4",
+                "type": "Sequential",
+                "params": 14964736,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 6039552,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 524288,
+                        "own_params": 524288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 1048576,
+                        "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 2101248,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 2097152,
+                            "own_params": 2097152,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 4096,
+                            "own_params": 4096,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 4462592,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1048576,
+                        "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 1048576,
+                        "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 3410176,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 262400,
+                "own_params": 262400,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "mask2former_resnet101",
+      "path": "lucid.models.vision.mask2former._pretrained.mask2former_resnet101",
+      "kind": "function",
+      "labels": [],
+      "signature": "mask2former_resnet101(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_pretrained.py#L141",
+      "subcategory": "pretrained",
+      "summary": "Mask2Former with ResNet-101 backbone (Cheng et al., CVPR 2022).",
+      "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the same\ntransformer head as `mask2former_resnet50` but a deeper\nResNet-101 backbone (`[3, 4, 23, 3]` bottleneck blocks).  Reaches\nADE20K validation mIoU of 47.8% (paper Table 2, Mask2Former-R101 row).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `Mask2FormerConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Mask2FormerForSemanticSegmentation",
+        "description": "Segmentation model with the Mask2Former-R101 configuration applied\n(or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_resnet101\n>>> model = mask2former_resnet101()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n151"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 55974103,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_ResNetBackbone",
+            "params": 42500160,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 9408,
+                "own_params": 9408,
+                "children": []
+              },
+              {
+                "name": "bn1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "layer1",
+                "type": "Sequential",
+                "params": 215808,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 75008,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 16896,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 70400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "layer2",
+                "type": "Sequential",
+                "params": 1219584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 379392,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 132096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 280064,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "layer3",
+                "type": "Sequential",
+                "params": 26090496,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 1512448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 262144,
+                        "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 526336,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 524288,
+                            "own_params": 524288,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 1117184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 262144,
+                        "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 262144,
+                        "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 22
+                  }
+                ]
+              },
+              {
+                "name": "layer4",
+                "type": "Sequential",
+                "params": 14964736,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Bottleneck",
+                    "params": 6039552,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 524288,
+                        "own_params": 524288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 1048576,
+                        "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "Sequential",
+                        "params": 2101248,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 2097152,
+                            "own_params": 2097152,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "BatchNorm2d",
+                            "params": 4096,
+                            "own_params": 4096,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Bottleneck",
+                    "params": 4462592,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1048576,
+                        "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "bn2",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv3",
+                        "type": "Conv2d",
+                        "params": 1048576,
+                        "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn3",
+                        "type": "BatchNorm2d",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 3410176,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 262400,
+                "own_params": 262400,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "mask2former_swin_tiny",
+      "path": "lucid.models.vision.mask2former._pretrained.mask2former_swin_tiny",
+      "kind": "function",
+      "labels": [],
+      "signature": "mask2former_swin_tiny(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_pretrained.py#L190",
+      "subcategory": "pretrained",
+      "summary": "Mask2Former with Swin-Tiny backbone (Cheng et al., CVPR 2022).",
+      "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the\nSwin-Tiny backbone (`embed_dim = 96`, `depths = (2, 2, 6, 2)`,\n`num_heads = (3, 6, 12, 24)`, `window_size = 7`) and the standard\nmasked-attention transformer head.  Defined by Liu et al., \"Swin\nTransformer\", ICCV 2021 ([arXiv:2103.14030](https://arxiv.org/abs/2103.14030)).  Reaches ADE20K\nvalidation mIoU of 49.6% (paper Table 2, Mask2Former-Swin-T row).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `Mask2FormerConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Mask2FormerForSemanticSegmentation",
+        "description": "Segmentation model with the Mask2Former-Swin-T configuration\napplied (or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_swin_tiny\n>>> model = mask2former_swin_tiny()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n151"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 40377361,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 27517818,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 4896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 27512922,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 299190,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 224694,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 112347,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 37755,
+                                "own_params": 507,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 27936,
+                                    "own_params": 27936,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 9312,
+                                    "own_params": 9312,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 74208,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 37248,
+                                    "own_params": 37248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 36960,
+                                    "own_params": 36960,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 74496,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 73728,
+                            "own_params": 73728,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 1188204,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 891756,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 445878,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 149238,
+                                "own_params": 1014,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 111168,
+                                    "own_params": 111168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 37056,
+                                    "own_params": 37056,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 295872,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 148224,
+                                    "own_params": 148224,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 147648,
+                                    "own_params": 147648,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 296448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 294912,
+                            "own_params": 294912,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 11841672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 10658952,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 1776492,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 593388,
+                                "own_params": 2028,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 443520,
+                                    "own_params": 443520,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147840,
+                                    "own_params": 147840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 1181568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 591360,
+                                    "own_params": 591360,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 590208,
+                                    "own_params": 590208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 6
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 1182720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 3072,
+                            "own_params": 3072,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1179648,
+                            "own_params": 1179648,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 14183856,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 14183856,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 7091928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 2366424,
+                                "own_params": 4056,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 1771776,
+                                    "own_params": 1771776,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 2795776,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 98560,
+                "own_params": 98560,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 49408,
+                "own_params": 49408,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 24832,
+                "own_params": 24832,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "mask2former_swin_small",
+      "path": "lucid.models.vision.mask2former._pretrained.mask2former_swin_small",
+      "kind": "function",
+      "labels": [],
+      "signature": "mask2former_swin_small(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_pretrained.py#L236",
+      "subcategory": "pretrained",
+      "summary": "Mask2Former with Swin-Small backbone (Cheng et al., CVPR 2022).",
+      "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the\nSwin-Small backbone (`embed_dim = 96`, `depths = (2, 2, 18, 2)`,\n`num_heads = (3, 6, 12, 24)`).  Same transformer head as\n`mask2former_swin_tiny`; ADE20K validation mIoU of 51.0%\n(paper Table 2, Mask2Former-Swin-S row).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `Mask2FormerConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Mask2FormerForSemanticSegmentation",
+        "description": "Segmentation model with the Mask2Former-Swin-S configuration\napplied (or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_swin_small\n>>> model = mask2former_swin_small()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n151"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 61695265,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 48835722,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 4896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 48830826,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 299190,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 224694,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 112347,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 37755,
+                                "own_params": 507,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 27936,
+                                    "own_params": 27936,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 9312,
+                                    "own_params": 9312,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 74208,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 37248,
+                                    "own_params": 37248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 36960,
+                                    "own_params": 36960,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 74496,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 73728,
+                            "own_params": 73728,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 1188204,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 891756,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 445878,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 149238,
+                                "own_params": 1014,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 111168,
+                                    "own_params": 111168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 37056,
+                                    "own_params": 37056,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 295872,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 148224,
+                                    "own_params": 148224,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 147648,
+                                    "own_params": 147648,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 296448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 294912,
+                            "own_params": 294912,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 33159576,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 31976856,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 1776492,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 593388,
+                                "own_params": 2028,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 443520,
+                                    "own_params": 443520,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147840,
+                                    "own_params": 147840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 1181568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 591360,
+                                    "own_params": 591360,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 590208,
+                                    "own_params": 590208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 18
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 1182720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 3072,
+                            "own_params": 3072,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1179648,
+                            "own_params": 1179648,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 14183856,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 14183856,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 7091928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 2366424,
+                                "own_params": 4056,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 1771776,
+                                    "own_params": 1771776,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 2795776,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 98560,
+                "own_params": 98560,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 49408,
+                "own_params": 49408,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 24832,
+                "own_params": 24832,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "mask2former_swin_base",
+      "path": "lucid.models.vision.mask2former._pretrained.mask2former_swin_base",
+      "kind": "function",
+      "labels": [],
+      "signature": "mask2former_swin_base(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_pretrained.py#L281",
+      "subcategory": "pretrained",
+      "summary": "Mask2Former with Swin-Base backbone (Cheng et al., CVPR 2022).",
+      "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the\nSwin-Base backbone (`embed_dim = 128`, `depths = (2, 2, 18, 2)`,\n`num_heads = (4, 8, 16, 32)`).  ADE20K validation mIoU of 52.4%\n(paper Table 2, Mask2Former-Swin-B row).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `Mask2FormerConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Mask2FormerForSemanticSegmentation",
+        "description": "Segmentation model with the Mask2Former-Swin-B configuration\napplied (or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_swin_base\n>>> model = mask2former_swin_base()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n151"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 99723599,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 86741176,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 6528,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 6272,
+                    "own_params": 6272,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 86734648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 529992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 397896,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 198948,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 66724,
+                                "own_params": 676,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 49536,
+                                    "own_params": 49536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 16512,
+                                    "own_params": 16512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 131712,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 66048,
+                                    "own_params": 66048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 65664,
+                                    "own_params": 65664,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 132096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 2108560,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 1582224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 791112,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 264520,
+                                "own_params": 1352,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 197376,
+                                    "own_params": 197376,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 65792,
+                                    "own_params": 65792,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 525568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 263168,
+                                    "own_params": 263168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 262400,
+                                    "own_params": 262400,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 526336,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 524288,
+                            "own_params": 524288,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 58892832,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 56791584,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 3155088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 1053328,
+                                "own_params": 2704,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 787968,
+                                    "own_params": 787968,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 262656,
+                                    "own_params": 262656,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 2099712,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 1050624,
+                                    "own_params": 1050624,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 1049088,
+                                    "own_params": 1049088,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 18
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 2101248,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 4096,
+                            "own_params": 4096,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 2097152,
+                            "own_params": 2097152,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 25203264,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 25203264,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 12601632,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 4203808,
+                                "own_params": 5408,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 3148800,
+                                    "own_params": 3148800,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 8393728,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 4198400,
+                                    "own_params": 4198400,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 4195328,
+                                    "own_params": 4195328,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 2918656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 262400,
+                "own_params": 262400,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 33024,
+                "own_params": 33024,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "mask2former_swin_large",
+      "path": "lucid.models.vision.mask2former._pretrained.mask2former_swin_large",
+      "kind": "function",
+      "labels": [],
+      "signature": "mask2former_swin_large(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/mask2former/_pretrained.py#L325",
+      "subcategory": "pretrained",
+      "summary": "Mask2Former with Swin-Large backbone (Cheng et al., CVPR 2022).",
+      "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the largest\nSwin backbone (`embed_dim = 192`, `depths = (2, 2, 18, 2)`,\n`num_heads = (6, 12, 24, 48)`).  Reaches ADE20K validation mIoU of\n56.1% (paper Table 2, Mask2Former-Swin-L row) — the headline result\nof the paper.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `Mask2FormerConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Mask2FormerForSemanticSegmentation",
+        "description": "Segmentation model with the Mask2Former-Swin-L configuration\napplied (or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_swin_large\n>>> model = mask2former_swin_large()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n151"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 208220587,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 194992404,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 9792,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 9408,
+                    "own_params": 9408,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 194982612,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 1188204,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 891756,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 445878,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 149238,
+                                "own_params": 1014,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 111168,
+                                    "own_params": 111168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 37056,
+                                    "own_params": 37056,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 295872,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 148224,
+                                    "own_params": 148224,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 147648,
+                                    "own_params": 147648,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 296448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 294912,
+                            "own_params": 294912,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 4735704,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 3552984,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 1776492,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 593388,
+                                "own_params": 2028,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 443520,
+                                    "own_params": 443520,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147840,
+                                    "own_params": 147840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 1181568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 591360,
+                                    "own_params": 591360,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 590208,
+                                    "own_params": 590208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 1182720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 3072,
+                            "own_params": 3072,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1179648,
+                            "own_params": 1179648,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 132379440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 127654704,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 7091928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 2366424,
+                                "own_params": 4056,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 1771776,
+                                    "own_params": 1771776,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 18
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 4724736,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 6144,
+                            "own_params": 6144,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 4718592,
+                            "own_params": 4718592,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 56679264,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 56679264,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 28339632,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 3072,
+                                "own_params": 3072,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 9451440,
+                                "own_params": 8112,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 7082496,
+                                    "own_params": 7082496,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 2360832,
+                                    "own_params": 2360832,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 3072,
+                                "own_params": 3072,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 18882048,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 9443328,
+                                    "own_params": 9443328,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 9438720,
+                                    "own_params": 9438720,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 3164416,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 393472,
+                "own_params": 393472,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 98560,
+                "own_params": 98560,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 49408,
+                "own_params": 49408,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "Mask2Former (Cheng et al., CVPR 2022).",
+  "extended": "Paper: \"Masked-attention Mask Transformer for Universal Image Segmentation\"",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "Mask2Former",
+  "citation": "Cheng, Bowen, et al. \"Masked-attention Mask Transformer for Universal Image Segmentation.\" Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2022, pp. 1290–1299.",
+  "theory": "Mask2Former generalises MaskFormer into a single architecture\nthat wins on **semantic**, **instance**, and **panoptic**\nsegmentation simultaneously.  It keeps the mask-classification\nframing — $N$ object queries each predict a class and a\nbinary mask — and improves it with three orthogonal changes.\n\n**Masked cross-attention.**  In every decoder layer the queries\nattend only to feature locations that the *previous* layer\nalready considered foreground for that query:\n\n\n\n$$\n\\mathrm{attn}_{ij} = \\mathrm{softmax}_j\\!\\bigl(\n    Q_i K_j^{\\top} / \\sqrt{d} + \\mathcal{M}_{ij}^{\\,\\ell-1}\n\\bigr),\n$$\n\nwhere $\\mathcal{M}^{\\ell-1}_{ij} = 0$ if the predicted\nbinary mask of query $i$ at layer $\\ell - 1$\nactivates pixel $j$ and $-\\infty$ otherwise.  This\nconfines query updates to plausible mask regions and accelerates\nconvergence.\n\n**Multi-scale features.**  The decoder layers cycle through three\npyramid levels $(P_3, P_4, P_5)$ of an enhanced FPN-style\n*pixel decoder*, so high-resolution semantic detail and broad\ncontextual features are both available to every query.\n\n**Improved pixel decoder.**  A multi-scale deformable-attention\nencoder fuses the backbone feature maps before producing the\nper-pixel embeddings against which the query embeddings are dotted\nto form binary masks.\n\nTraining uses the same Hungarian-matched class CE + mask BCE/Dice\nlosses as MaskFormer (with auxiliary losses at intermediate\ndecoder layers).  Mask2Former sets a new SOTA on each of ADE20K,\nCityscapes, and COCO with a *single* model, eliminating the need\nfor task-specific architectures.",
+  "tasks": [
+    "semantic-segmentation"
+  ]
+}

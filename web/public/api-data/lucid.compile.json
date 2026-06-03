@@ -1,0 +1,1144 @@
+{
+  "slug": "lucid.compile",
+  "name": "compile",
+  "path": "lucid.compile",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/__init__.py#L1",
+  "members": [
+    {
+      "name": "CompiledModule",
+      "path": "lucid.compile._entry.module.CompiledModule",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "CompiledModule(model: Module, dynamic: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L211",
+      "subcategory": "entry/module",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.compile._entry.module.CompiledModule.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(model: Module, dynamic: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L338",
+          "subcategory": "module",
+          "summary": "Wrap `model` for cached graph-capture execution.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "model",
+              "annotation": "nn.Module or _CallableModule",
+              "description": "The compute unit to compile.  Stored unwrapped so\nattribute access falls through to it.",
+              "default": null
+            },
+            {
+              "name": "dynamic",
+              "annotation": "bool",
+              "description": "Opt-in to symbolic-batch-axis (Phase 1.6).  Currently\nforbidden — raises `NotImplementedError` because\nthe MPSGraph SDK rejects dynamic-shape lowering for\nconv-heavy graphs.  Default `False`.",
+              "default": "False"
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "NotImplementedError",
+              "description": "When `dynamic=True` is passed."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "model",
+          "path": "lucid.compile._entry.module.CompiledModule.model",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "model: Module",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L406",
+          "summary": "The wrapped `nn.Module` (or duck-typed callable wrapper).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Module",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "dynamic",
+          "path": "lucid.compile._entry.module.CompiledModule.dynamic",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "dynamic: bool",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L412",
+          "summary": "Whether the compile path treats batch dim as symbolic (Phase 1.6).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "bool",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "training",
+          "path": "lucid.compile._entry.module.CompiledModule.training",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "training: bool",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L418",
+          "summary": "Mirrors the inner model's `training` flag (cache-invalidating).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "bool",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "parameters",
+          "path": "lucid.compile._entry.module.CompiledModule.parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "parameters(recurse: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L422",
+          "subcategory": "module",
+          "summary": "Delegate to `model.parameters` so optimizers see the live tensors.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Iterator[Parameter]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "named_parameters",
+          "path": "lucid.compile._entry.module.CompiledModule.named_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "named_parameters(recurse: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L426",
+          "subcategory": "module",
+          "summary": "Delegate to `model.named_parameters` (no recompile, read-only).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Iterator[tuple[str, Parameter]]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "buffers",
+          "path": "lucid.compile._entry.module.CompiledModule.buffers",
+          "kind": "function",
+          "labels": [],
+          "signature": "buffers(recurse: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L430",
+          "subcategory": "module",
+          "summary": "Delegate to `model.buffers`; buffers are pinned trace constants.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Iterator[Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "state_dict",
+          "path": "lucid.compile._entry.module.CompiledModule.state_dict",
+          "kind": "function",
+          "labels": [],
+          "signature": "state_dict(destination: dict[str, Tensor] | None = None, prefix: str = '', keep_vars: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L434",
+          "subcategory": "module",
+          "summary": "Delegate to `model.state_dict` — the cache holds no separate state.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "dict[str, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "load_state_dict",
+          "path": "lucid.compile._entry.module.CompiledModule.load_state_dict",
+          "kind": "function",
+          "labels": [],
+          "signature": "load_state_dict(state_dict: dict[str, Tensor], strict: bool = True, assign: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L443",
+          "subcategory": "module",
+          "summary": "Forward to `model.load_state_dict` and **drop the cache**.",
+          "extended": "Loading new weights doesn't change the graph topology, but\ncaptured tensor *identities* may shift (e.g. when the loader\nreplaces parameter storage in-place); clearing the cache is\nthe safe default so the next call traces against the new\nstate.",
+          "parameters": [
+            {
+              "name": "state_dict",
+              "annotation": "dict[str, Tensor]",
+              "description": "Mapping from parameter / buffer name to weight tensor —\npassed straight through to the wrapped model's\n`load_state_dict`.",
+              "default": null
+            },
+            {
+              "name": "strict",
+              "annotation": "bool",
+              "description": "When `True`, mismatched keys raise; when `False`,\nmissing / unexpected entries are silently ignored\n(matches the underlying module's contract).",
+              "default": "True"
+            },
+            {
+              "name": "assign",
+              "annotation": "bool",
+              "description": "When `True`, replace parameter storage by reference\ninstead of copying into the existing tensors.  Useful for\ncheckpoint loading where the new tensors are already on\nthe correct device.",
+              "default": "False"
+            }
+          ],
+          "returns": {
+            "annotation": "object",
+            "description": "The wrapped model's `load_state_dict` return value\n(typically a `NamedTuple` of missing / unexpected\nkeys)."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "train",
+          "path": "lucid.compile._entry.module.CompiledModule.train",
+          "kind": "function",
+          "labels": [],
+          "signature": "train(mode: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L484",
+          "subcategory": "module",
+          "summary": "Flip training mode; **clears the cache** since BN / Dropout diverge.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "CompiledModule",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "eval",
+          "path": "lucid.compile._entry.module.CompiledModule.eval",
+          "kind": "function",
+          "labels": [],
+          "signature": "eval()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L492",
+          "subcategory": "module",
+          "summary": "Shorthand for `self.train(False)`; also clears the cache.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "CompiledModule",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "to",
+          "path": "lucid.compile._entry.module.CompiledModule.to",
+          "kind": "function",
+          "labels": [],
+          "signature": "to(args: object = (), kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L496",
+          "subcategory": "module",
+          "summary": "Forward to `model.to` and **drop the cache**.",
+          "extended": "Placeholders inside the cached MPSGraph executables are\ndevice-locked, so any device or dtype move invalidates every\nentry.",
+          "parameters": [],
+          "returns": {
+            "annotation": "CompiledModule",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "cache_info",
+          "path": "lucid.compile._entry.module.CompiledModule.cache_info",
+          "kind": "function",
+          "labels": [],
+          "signature": "cache_info()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L528",
+          "subcategory": "module",
+          "summary": "Snapshot the cache state for tests + telemetry.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "dict",
+            "description": "Four fields:\n\n* `entries` (int) — number of cached executables.\n* `keys` (tuple[CacheKey]) — every signature that\n  currently has a compiled executable.\n* `eager_only` (tuple[CacheKey]) — signatures that\n  failed to compile and were blacklisted; future calls\n  with these signatures route straight to eager.\n* `n_calls` (dict[CacheKey, int]) — per-signature call\n  counter, useful for spotting hot signatures."
+          },
+          "raises": [],
+          "examples": [
+            ">>> compiled = lucid.compile(model)\n>>> compiled(x1); compiled(x2)\n>>> info = compiled.cache_info()\n>>> info[\"entries\"]                 # one slot per unique signature\n2"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": [
+            {
+              "name": "timing",
+              "description": "per-signature wall-time breakdown."
+            },
+            {
+              "name": "clear_cache",
+              "description": "drop every cached entry."
+            }
+          ]
+        },
+        {
+          "name": "timing",
+          "path": "lucid.compile._entry.module.CompiledModule.timing",
+          "kind": "function",
+          "labels": [],
+          "signature": "timing()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L566",
+          "subcategory": "module",
+          "summary": "Per-signature compile + run cost breakdown.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[dict]",
+            "description": "One entry per cached signature with fields `key`\n(CacheKey), `compile_ms` (float — first-call compile\ncost), `last_run_ms` (float — most recent execution\ntime), and `n_hits` (int — total runs of this entry).\nUseful to verify the cache amortises compile cost over\nsubsequent calls."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "clear_cache",
+          "path": "lucid.compile._entry.module.CompiledModule.clear_cache",
+          "kind": "function",
+          "labels": [],
+          "signature": "clear_cache()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L590",
+          "subcategory": "module",
+          "summary": "Drop every cached executable + retry blacklist + call counter.",
+          "extended": "Invalidates the param-fingerprint cache and the lazy training\nstep callables too, so the next call re-fingerprints the\nmodel.  Called automatically by `train` / `eval`\n/ `to` / `load_state_dict` — direct user calls\nare useful only when forcing a recompile after manual\nparameter buffer surgery.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.compile._entry.module.CompiledModule.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(args: object = (), loss_fn: Callable[..., Tensor] | None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L613",
+          "subcategory": "module",
+          "summary": "Run one compiled training step.",
+          "extended": "Equivalent to::\n\nstep_fn = make_step(self.model, loss_fn)\n    loss = step_fn(*args)\n\nbut the underlying `make_step` callable is cached on this\n`CompiledModule` so repeated training-step calls with\nthe same loss function share the fwd+bwd executable.  The\nreturned scalar loss tensor carries a `grad_fn` — calling\n`loss.backward()` populates `.grad` on every parameter\nfrom the cached gradient outputs.",
+          "parameters": [
+            {
+              "name": "*args",
+              "annotation": "Tensor",
+              "description": "`(model_input, *extra_loss_inputs)` — the same positional\ntuple `make_step` expects.  Typically `(x, target)`.",
+              "default": "()"
+            },
+            {
+              "name": "loss_fn",
+              "annotation": "callable",
+              "description": "`loss_fn(model_output, *extra_inputs) -> Tensor` scalar\nloss.  Keyed by object identity for caching; pass the same\nfunction object across iterations to hit the cache.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "Scalar loss with a working `grad_fn`."
+          },
+          "raises": [],
+          "examples": [
+            ">>> cm = lucid.compile(model)\n>>> opt = lucid.optim.SGD(cm.parameters(), lr=0.1)\n>>> for x, t in loader:\n...     opt.zero_grad()\n...     loss = cm.step(x, t, loss_fn=F.cross_entropy)\n...     loss.backward()\n...     opt.step()"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "graph_dump",
+          "path": "lucid.compile._entry.module.CompiledModule.graph_dump",
+          "kind": "function",
+          "labels": [],
+          "signature": "graph_dump(key: CacheKey | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L676",
+          "subcategory": "module",
+          "summary": "Return a JSON view of the captured trace(s).",
+          "extended": "Without `key`: a JSON list of `{sig, graph}` pairs covering\nevery cached signature.  With `key`: just the graph string\nfor that one signature.\n\nUseful for offline debugging — pipe the result through\n:file:`tools/inspect_trace.py` (Phase 1.6 deliverable) or\ndiff two consecutive compiles to see what changed.",
+          "parameters": [
+            {
+              "name": "key",
+              "annotation": "CacheKey",
+              "description": "When supplied, dump only the trace for that signature.\nWhen `None` (default), dump every cached signature in\none combined JSON array.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "str",
+            "description": "JSON-encoded trace dump.  Empty string when `key` was\nprovided but no entry matches."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": [
+            {
+              "name": "cache_info",
+              "description": "structural snapshot of every cached signature."
+            },
+            {
+              "name": "lucid.compile._debug.trace_dump.trace_to_json",
+              "description": "the underlying"
+            },
+            {
+              "name": "serialiser called per cache entry.",
+              "description": ""
+            }
+          ]
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.compile._entry.module.CompiledModule.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(args: object = (), kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/module.py#L721",
+          "subcategory": "module",
+          "summary": "Route the call through the per-signature executable cache.",
+          "extended": "On cache hit: bind the input tensors to the cached\nexecutable's feed slots, run, and re-pack the flat output\nlist into the user's return structure (Tensor / tuple / dict\n/ dataclass).  On miss: trace, compile, store, run — and on\ncompile failure mark the signature `eager_only` so future\ncalls skip the recompile attempt.",
+          "parameters": [
+            {
+              "name": "*args",
+              "annotation": "object",
+              "description": "Whatever the wrapped model's `forward` accepts.  Only\npositional `Tensor` arguments become executable\nfeeds; non-tensor positionals (and any keyword arguments)\nforce the call to eager (today's compile pipeline doesn't\nbind kwargs by name).",
+              "default": "()"
+            },
+            {
+              "name": "**kwargs",
+              "annotation": "object",
+              "description": "Whatever the wrapped model's `forward` accepts.  Only\npositional `Tensor` arguments become executable\nfeeds; non-tensor positionals (and any keyword arguments)\nforce the call to eager (today's compile pipeline doesn't\nbind kwargs by name).",
+              "default": "()"
+            }
+          ],
+          "returns": {
+            "annotation": "object",
+            "description": "Same structure the underlying `model(*args, **kwargs)`\nproduces — Tensor, tuple, dataclass, etc."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": null,
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DiagnosisReport",
+      "path": "lucid.compile._debug.diagnose.DiagnosisReport",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [],
+      "labels": [],
+      "signature": "DiagnosisReport(total_ops: int, registered: list[OpInfo], grad_sinks: list[OpInfo], uncovered: list[OpInfo], recommendation: str)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_debug/diagnose.py#L88",
+      "subcategory": "debug/diagnose",
+      "methods": [
+        {
+          "name": "__str__",
+          "path": "lucid.compile._debug.diagnose.DiagnosisReport.__str__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__str__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_debug/diagnose.py#L119",
+          "subcategory": "diagnose",
+          "summary": "Render a short human-readable summary.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.compile._debug.diagnose.DiagnosisReport.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(total_ops: int, registered: list[OpInfo], grad_sinks: list[OpInfo], uncovered: list[OpInfo], recommendation: str)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_debug/diagnose.py#L1",
+          "subcategory": "diagnose",
+          "summary": "Wrap `fn` so it satisfies the `nn.Module` contract.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "fn",
+              "annotation": "callable",
+              "description": "The plain callable the user passed to `compile`.\nStored unwrapped; invoked verbatim on every forward.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Result of `diagnose`.",
+      "extended": "Holds three parallel buckets of `OpInfo` plus a one-line\n`recommendation`.  The class is immutable; `__str__` renders a\nshort human-readable summary suitable for logs.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "total_ops",
+          "annotation": "int",
+          "description": "Sum of every op occurrence in the trace."
+        },
+        {
+          "name": "registered",
+          "annotation": "list[OpInfo]",
+          "description": "Ops with a registered `VjpEmitter` — real gradient."
+        },
+        {
+          "name": "grad_sinks",
+          "annotation": "list[OpInfo]",
+          "description": "Ops in the walker's `no_grad_ops` set — gradient flow stops\nhere by design (not a fallback)."
+        },
+        {
+          "name": "uncovered",
+          "annotation": "list[OpInfo]",
+          "description": "Ops without an emitter and not in the sink set — will trigger\nsoft-fallback to MPSGraph autograd (or hard-fail under\n`LUCID_MANUAL_VJP_REQUIRE=1`)."
+        },
+        {
+          "name": "recommendation",
+          "annotation": "str",
+          "description": "One-line summary of fallback risk."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "OpInfo",
+      "path": "lucid.compile._debug.diagnose.OpInfo",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [],
+      "labels": [],
+      "signature": "OpInfo(name: str, count: int, sample_shape: tuple[int, ...] | None, sample_dtype: str | None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_debug/diagnose.py#L57",
+      "subcategory": "debug/diagnose",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.compile._debug.diagnose.OpInfo.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(name: str, count: int, sample_shape: tuple[int, ...] | None, sample_dtype: str | None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_debug/diagnose.py#L1",
+          "subcategory": "diagnose",
+          "summary": "Wrap `fn` so it satisfies the `nn.Module` contract.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "fn",
+              "annotation": "callable",
+              "description": "The plain callable the user passed to `compile`.\nStored unwrapped; invoked verbatim on every forward.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Per-op-name summary inside a `DiagnosisReport`.",
+      "extended": "A single `OpInfo` aggregates *all* nodes in the trace with\nthe same op name into one record (`count` is the number of\noccurrences; `sample_shape` / `sample_dtype` are taken from the\nfirst occurrence's primary output, useful when reporting a coverage\ngap).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "name",
+          "annotation": "str",
+          "description": "The trace op name (e.g. `\"linear\"`, `\"var\"`, `\"argmax\"`)."
+        },
+        {
+          "name": "count",
+          "annotation": "int",
+          "description": "Number of times the op appears in the captured trace."
+        },
+        {
+          "name": "sample_shape",
+          "annotation": "tuple[int, ...] | None",
+          "description": "Shape of the first occurrence's primary output, or `None` if\nthe op produces no outputs (rare; defensive fallback)."
+        },
+        {
+          "name": "sample_dtype",
+          "annotation": "str | None",
+          "description": "Dtype name of the first occurrence's primary output\n(`\"float32\"` / `\"int64\"` / ...) — uses\n`lucid._C.engine.Dtype.name`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "diagnose",
+      "path": "lucid.compile._debug.diagnose.diagnose",
+      "kind": "function",
+      "labels": [],
+      "signature": "diagnose(fn: Callable[..., object], example_inputs: Tensor = ())",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_debug/diagnose.py#L138",
+      "subcategory": "debug/diagnose",
+      "summary": "Trace `fn(*example_inputs)` and report manual-VJP coverage.",
+      "extended": "Runs `fn` once inside a `_tracing` context to capture the\nop DAG, then classifies every op against the registry exposed by\n`lucid._C.engine.compile.vjp_registration_status`.  Does\n**not** compile or execute the captured graph — purely\nintrospective, runs in milliseconds even for large models.",
+      "parameters": [
+        {
+          "name": "fn",
+          "annotation": "Callable",
+          "description": "Any callable that returns a `Tensor` (or a tuple of\nthem).  An `nn.Module` instance works because\n`Module.__call__` is the callable.",
+          "default": null
+        },
+        {
+          "name": "*example_inputs",
+          "annotation": "Tensor",
+          "description": "Positional arguments forwarded to `fn`.  Their concrete\nshape / dtype are recorded into the trace, so the diagnosis\nreflects exactly what would be compiled for these inputs.",
+          "default": "()"
+        }
+      ],
+      "returns": {
+        "annotation": "DiagnosisReport",
+        "description": "Three-bucket classification + recommendation string.  Inspect\n`.uncovered` to see which ops will fall back, or print\n`str(report)` for a quick log line."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> from lucid.compile import diagnose\n>>> model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4))\n>>> print(diagnose(model, lucid.zeros(2, 8)))\nDiagnosis: 5 op(s) total ...\n100% manual VJP coverage — no fallback expected ..."
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lucid.compile.fused_step",
+          "description": "the production training-step compile"
+        },
+        {
+          "name": "path that consults the same registry under the hood.",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "compiled_step",
+      "path": "lucid.compile._entry.function.compiled_step",
+      "kind": "function",
+      "labels": [],
+      "signature": "compiled_step(model: Module, x: Tensor, loss_fn: Callable[[Tensor], Tensor], use_grad_mode: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/function.py#L40",
+      "subcategory": "entry/function",
+      "summary": "Run one compiled training step: forward + backward + grad assignment.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Module whose `forward(x)` produces the model output.",
+          "default": null
+        },
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Input tensor (single forward pass).",
+          "default": null
+        },
+        {
+          "name": "loss_fn",
+          "annotation": "callable",
+          "description": "Maps `model(x)` → scalar loss tensor.  Typical: `lambda y: F.cross_entropy(y, target)`.",
+          "default": null
+        },
+        {
+          "name": "use_grad_mode",
+          "annotation": "bool",
+          "description": "Whether to keep autograd's GradMode on during tracing.  Default\n`False` — the compiled step bypasses Lucid's autograd graph\nentirely; we only need the trace hook to fire (it fires under\nno_grad too because the kernel hooks run before the GradMode\nshort-circuit).  Set `True` if you want the eager autograd\ngraph to also build (useful for verification).",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "The loss tensor (compiled result).  After this call,\n`param.grad` is populated for every parameter of `model`.\nThe caller can then run an optimizer step."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn, lucid.nn.functional as F\n>>> import lucid.optim as optim\n>>> from lucid.compile._entry.function import compiled_step\n>>> model = nn.Linear(8, 4).to('metal')\n>>> opt = optim.SGD(model.parameters(), lr=0.1)\n>>> for batch in batches:\n...     opt.zero_grad()\n...     loss = compiled_step(model, batch.x,\n...                          lambda y: F.cross_entropy(y, batch.target))\n...     opt.step()"
+      ],
+      "notes": [
+        "The trace is captured fresh on every call; cache integration\n(compile-or-cached) lives in Phase 1.4's `CompiledModule`.\n\nPhase 1.3 acceptance: `ResNet-18 + CE + SGD, 5 steps`, param\ndrift < 5e-3 vs eager."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lucid.compile.make_step",
+          "description": "the cached entry point preferred for"
+        },
+        {
+          "name": "repeated training loops — wraps this in a signature-keyed",
+          "description": ""
+        },
+        {
+          "name": "cache so the compile cost amortises.",
+          "description": ""
+        },
+        {
+          "name": "lucid.compile.compile",
+          "description": "module-level entrypoint."
+        }
+      ]
+    },
+    {
+      "name": "fused_step",
+      "path": "lucid.compile._entry.fused_step.fused_step",
+      "kind": "function",
+      "labels": [],
+      "signature": "fused_step(model: Module, loss_fn: Callable[..., Tensor], optimizer: Optimizer, grad_scaler: GradScaler | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/fused_step.py#L114",
+      "subcategory": "entry/fused_step",
+      "summary": "Return a callable that runs one fused training step.",
+      "extended": "The first call traces `model(*x); loss_fn(out, *targets);\noptimizer._trace_update(...)` once under a single `Tracer`,\nplumbs the ghost-grad placeholders, and compiles the resulting\ngraph into one `MPSGraphExecutable` that runs forward +\nloss + backward (via MPSGraph autodiff) + optimizer update in a\nsingle submission.  Subsequent calls reuse the cached executable.\n\nDelegates the optimizer math to the matching\n`compile_optimizer` subclass — so every Lucid eager optimizer\n(all 13: SGD, Adam, AdamW, RMSprop, Adagrad, Adadelta, Adamax,\nNAdam, SparseAdam, Rprop, ASGD, RAdam, LBFGS) compiles cleanly\ninto a fused step.  LBFGS is the closure-less single-step variant\n(per-element Barzilai-Borwein direction); full closure-driven\nline search remains eager-only.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "Module",
+          "description": "The trainable `nn.Module`.  Parameters from\n`optimizer.param_groups` must reference these tensors.",
+          "default": null
+        },
+        {
+          "name": "loss_fn",
+          "annotation": "Callable",
+          "description": "Scalar-loss-returning callable invoked as\n`loss_fn(model_output, *targets)`.  Captured by identity in\nthe trace, so passing a fresh closure each call defeats the\ncache.",
+          "default": null
+        },
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "One of the 8 supported optimizers.  Unsupported optimizers\nraise `NotImplementedError` from\n`compile_optimizer` with the structural reason\n(line-search / sign branch / per-step coefficient / …).",
+          "default": null
+        },
+        {
+          "name": "grad_scaler",
+          "annotation": "GradScaler",
+          "description": "When provided and enabled, the fused step replicates the\neager `lucid.amp.GradScaler` contract entirely inside\nthe compiled executable:\n\n1. The loss is multiplied by the current `scaler._scale`\n   before the backward derivation, so MPSGraph autograd\n   produces scaled gradients that won't underflow in F16.\n2. Each scaled gradient is unscaled in F32 by\n   `1/scaler._scale` before the optimizer reads it.\n3. `found_inf = OR(any(!isfinite(g_unscaled)))` is computed\n   across all params; each new_param / new_state is wrapped\n   with `where(found_inf, old, new)` so an overflow step\n   leaves params + state buffers unchanged.\n4. After the executable runs, `found_inf` is read back to\n   Python and `scaler.update()` is invoked — the scale\n   halves on overflow, doubles after `growth_interval`\n   clean steps.\n\nThe user-visible loss returned by `step(*args)` is always\nthe **unscaled** loss (the trace divides by scale on the\nreturn path), matching the eager API exactly.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Callable[..., Tensor]",
+        "description": "A callable `step(*args)` where `args` is\n`(model_input, *loss_targets)`.  Returns the scalar loss\n`Tensor` from the just-completed step (the parameter\nand optimizer-state buffers have already been updated\nin-place inside the executable)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn, lucid.nn.functional as F\n>>> import lucid.optim as optim\n>>> from lucid.compile import fused_step\n>>> model = nn.Linear(8, 4).to('metal')\n>>> opt = optim.Adam(model.parameters(), lr=1e-3)\n>>> step = fused_step(model, F.cross_entropy, opt)\n>>> for batch in batches:\n...     loss = step(batch.x, batch.target)       # one executable submission\n...     # opt.step() is implicit — parameters already updated in-place"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lucid.compile.make_step",
+          "description": "forward+backward only, no optimizer fusion"
+        },
+        {
+          "name": "(lets the caller drive the optimizer in Python).",
+          "description": ""
+        },
+        {
+          "name": "lucid.compile.compile_optimizer",
+          "description": "the underlying optimizer-side"
+        },
+        {
+          "name": "translator that produces the update graph.",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "compile_optimizer",
+      "path": "lucid.compile._optim.compiler.compile_optimizer",
+      "kind": "function",
+      "labels": [],
+      "signature": "compile_optimizer(opt: Optimizer)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_optim/compiler.py#L50",
+      "subcategory": "optim/compiler",
+      "summary": "Wrap `opt` so `opt.step()` runs as a single MPSGraph executable.",
+      "extended": "Dispatches on the concrete optimizer subclass and returns the\nmatching `_CompiledStepBase` subclass instance.  The\nreturned object exposes the same eager-optimizer API surface\n(`step` / `zero_grad` / `param_groups` / `state_dict` /\n`load_state_dict`) so existing training loops slot it in\nwithout code changes — the only difference is that `step()`\nruns as one compiled GPU kernel instead of N sequential per-\nparameter element-wise updates.\n\nSupported optimizers (8):\n    * `lucid.optim.SGD` — classical, with optional\n      momentum / Nesterov / weight-decay branches.\n    * `lucid.optim.Adam`, `lucid.optim.AdamW` —\n      bias-corrected first + second moments; coupled vs\n      decoupled weight decay respectively.  AMSGrad variant of\n      Adam is rejected at construct time (a planned follow-up).\n    * `lucid.optim.RMSprop` — exponentially-smoothed\n      squared gradient.  `centered=True` is rejected loudly\n      here even though the eager backend silently drops it.\n    * `lucid.optim.Adagrad` — per-parameter cumulative\n      squared gradient; `lr_decay` is fed as a per-step\n      scalar so the trace stays signature-stable.\n    * `lucid.optim.Adadelta` — running RMS-ratio\n      adaptive step (no manual LR).\n    * `lucid.optim.Adamax` — Adam variant with L∞-norm\n      second-moment estimate.\n    * `lucid.optim.NAdam` — Adam with Nesterov lookahead\n      + momentum-decay schedule (closed-form `μ_t` series).\n\nStructurally unsupported (raise `NotImplementedError`\nwith the reason at construct time):\n    * `lucid.optim.LBFGS` — line search depends on\n      data-dependent iteration count (no static-shape MPSGraph\n      equivalent).\n    * `lucid.optim.SparseAdam` — index-driven update\n      requires runtime `nonzero` / `scatter`.\n    * `lucid.optim.Rprop` — sign-based per-element\n      conditional branching.\n    * `lucid.optim.RAdam` — `ρ_t > 4` branch can't be a\n      static MPSGraph op.\n    * `lucid.optim.ASGD` — averaging coefficient\n      depends on iteration count past a warmup threshold.\n\nMulti-param-group optimizers are not yet supported (a future\npass will emit one update kernel per group); single-group\noptimizers cover essentially every practical training recipe.",
+      "parameters": [
+        {
+          "name": "opt",
+          "annotation": "Optimizer",
+          "description": "Concrete optimizer instance whose `step()` is being\nlifted.  Held by reference; LR-scheduler callbacks and\nother state mutations on `opt` continue to take effect\nbecause the compiled subclass reads them at scalar-refresh\ntime, not at construct time.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "_CompiledStepBase",
+        "description": "Drop-in optimizer replacement.  The underlying class is one\nof the `_Compiled<Name>` subclasses listed above."
+      },
+      "raises": [
+        {
+          "annotation": "NotImplementedError",
+          "description": "With a structural reason when `opt` is one of the\nunsupported families above (or AMSGrad / multi-group / etc.)."
+        },
+        {
+          "annotation": "TypeError",
+          "description": "When `opt` is not a Lucid `Optimizer` subclass at\nall — the message lists the supported set."
+        }
+      ],
+      "examples": [
+        "Drop-in replacement::\n\n    opt = lucid.optim.Adam(model.parameters(), lr=1e-3)\n    copt = compile_optimizer(opt)\n\n    for batch, target in loader:\n        copt.zero_grad()\n        loss = F.cross_entropy(model(batch), target)\n        loss.backward()\n        copt.step()             # one MPSGraph executable\n\nInspecting the rejection reason::\n\n    try:\n        copt = compile_optimizer(lucid.optim.LBFGS(params))\n    except NotImplementedError as e:\n        print(e)\n        # \"compile_optimizer: LBFGS is not supported.  LBFGS performs\n        #  a line search inside step() whose iteration count depends\n        #  on tensor values; ...\""
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "+ update via the ghost-grad mechanism.  Use this when the",
+          "description": ""
+        },
+        {
+          "name": "whole step is the unit of work and the model's forward",
+          "description": ""
+        },
+        {
+          "name": "compiles cleanly.",
+          "description": ""
+        },
+        {
+          "name": "still lets ``loss.backward()`` run a regular eager",
+          "description": ""
+        },
+        {
+          "name": "optimizer step.",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "make_step",
+      "path": "lucid.compile._entry.step.make_step",
+      "kind": "function",
+      "labels": [],
+      "signature": "make_step(model: Module, loss_fn: Callable[..., Tensor], dynamic: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/_entry/step.py#L80",
+      "subcategory": "entry/step",
+      "summary": "Return a callable that runs one compiled training step.",
+      "extended": "The returned `step(x, *extra_inputs)` callable:\n\n1. Calls `loss_fn(model(x), *extra_inputs)` once under\n   `_tracing` to capture the op DAG (forward + loss).\n2. Compiles a single MPSGraph executable that produces the loss\n   and the gradient of the loss w.r.t. every model parameter, via\n   `compile_trace_with_backward`.\n3. Runs the executable, populates a Lucid `autograd.Function`\n   with the resulting (loss, grads) so the returned scalar loss has\n   a working `grad_fn` and `loss.backward()` drives `.grad` on\n   every parameter.\n4. Caches the executable so a second call with the same input /\n   parameter signature is a pure run.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Model whose forward will be traced + compiled.",
+          "default": null
+        },
+        {
+          "name": "loss_fn",
+          "annotation": "callable",
+          "description": "`loss_fn(model_output, *extra_inputs) -> Tensor` scalar loss.",
+          "default": null
+        },
+        {
+          "name": "dynamic",
+          "annotation": "bool",
+          "description": "Reserved for Phase 1.6's symbolic batch axis.  Today the value\nis recorded in the signature but otherwise unused.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "callable",
+        "description": "`step(x, *extra_inputs) -> Tensor` — the scalar loss.\n`loss.backward()` works the same way as the eager baseline."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn, lucid.nn.functional as F\n>>> import lucid.optim as optim\n>>> from lucid.compile import make_step\n>>> model = nn.Linear(8, 4).to('metal')\n>>> step = make_step(model, lambda y, t: F.cross_entropy(y, t))\n>>> opt = optim.SGD(model.parameters(), lr=0.1)\n>>> for batch in batches:\n...     opt.zero_grad()\n...     loss = step(batch.x, batch.target)\n...     loss.backward()\n...     opt.step()"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lucid.compile.compile",
+          "description": "module-level compile entrypoint."
+        },
+        {
+          "name": "lucid.compile.compile_optimizer",
+          "description": "even tighter form that fuses"
+        },
+        {
+          "name": "the optimizer update into the same MPSGraph executable.",
+          "description": ""
+        },
+        {
+          "name": "lucid.compile._entry.module.CompiledModule.step",
+          "description": "per-instance"
+        },
+        {
+          "name": "cached version of the same dispatch.",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "save_compiled",
+      "path": "lucid.compile.save_compiled",
+      "kind": "function",
+      "labels": [],
+      "signature": "save_compiled(cm: object, path: str)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/__init__.py#L87",
+      "subcategory": null,
+      "summary": "Serialise a compiled forward graph to disk (AOT export).",
+      "extended": "Writes two files at `path`: `<path>.mpsgraphpackage` (Apple's\nnative MPSGraphExecutable archive, macOS 14+) and `<path>.meta`\n(Lucid's I/O plan + dtype / shape / ABI metadata).  A\n`CompiledModule` may hold multiple cached executables (one\nper input signature); this entry point currently serialises the\nmost-recently-compiled signature only — sufficient for AOT\ndeployment where the production input shape is fixed.\n\nThe on-disk artifact is identical to the per-process cache used\nwhen `LUCID_COMPILE_DISK_CACHE=1` is set — so calls\n`save_compiled` produces by hand are loadable by either\n`load_compiled` or the runtime cache machinery.",
+      "parameters": [
+        {
+          "name": "cm",
+          "annotation": "CompiledModule",
+          "description": "A model wrapper returned by `lucid.compile`.  Must have\nbeen invoked at least once so an executable exists to save.",
+          "default": null
+        },
+        {
+          "name": "path",
+          "annotation": "str",
+          "description": "Filesystem prefix.  Two files are written:\n`f\"{path}.mpsgraphpackage\"` and `f\"{path}.meta\"`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` on success.  Raises `RuntimeError` if `cm`\nhas no compiled entries (call the module once with the\ntarget input first)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.compile as lc\n>>> m = nn.Linear(8, 4).to(\"metal\")\n>>> cm = lc.compile(m)\n>>> _ = cm(lucid.randn(2, 8).to(\"metal\"))   # populate cache\n>>> lc.save_compiled(cm, \"/tmp/my_linear\")   # writes .mpsgraphpackage + .meta\nTrue"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "load_compiled",
+      "path": "lucid.compile.load_compiled",
+      "kind": "function",
+      "labels": [],
+      "signature": "load_compiled(path: str)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/__init__.py#L149",
+      "subcategory": null,
+      "summary": "Load a previously-saved compiled executable into a thin wrapper.",
+      "extended": "Returns an object exposing `__call__(*args)` that runs the saved\nexecutable directly.  **The executable expects every feed in\nfeed order** — that includes both model parameters and runtime\ninputs.  This is the raw artifact level: there is no automatic\nparameter re-binding, because the saved package does not carry the\nparameter *values* (only the graph structure + I/O ids).\n\nFor a smoother AOT workflow that re-binds parameters from a live\nmodel, see `load_compiled_into`.",
+      "parameters": [
+        {
+          "name": "path",
+          "annotation": "str",
+          "description": "Filesystem prefix matching a previous `save_compiled`\ncall.  Expects both `<path>.mpsgraphpackage` and\n`<path>.meta` to exist.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "object",
+        "description": "A callable wrapper.  Attributes:\n\n* `num_inputs`: total feed count the executable expects.\n* `input_ids`: ordered trace ids (debug / introspection).\n* `__call__(*feeds)`: run with feeds in `input_ids` order."
+      },
+      "raises": [
+        {
+          "annotation": "FileNotFoundError",
+          "description": "Either `.mpsgraphpackage` or `.meta` is missing."
+        },
+        {
+          "annotation": "RuntimeError",
+          "description": "The `.meta` sidecar is corrupted, the SDK ABI mismatches,\nor the saved executable references engine internals that no\nlonger exist."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> import lucid.compile as lc\n>>> step = lc.load_compiled(\"/tmp/my_linear\")\n>>> step.num_inputs\n3                                    # e.g. (W, b, x)\n>>> out = step(W, b, x)             # all feeds in order"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "compile",
+      "path": "lucid.compile.compile",
+      "kind": "function",
+      "labels": [],
+      "signature": "compile(target: object, dynamic: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/679c717aa/lucid/compile/__init__.py#L381",
+      "subcategory": null,
+      "summary": "Wrap `target` so calls are routed through cached MPSGraph executables.",
+      "extended": "Accepts three call styles:\n\n* **Module wrapping** — `lucid.compile(model)` returns a\n  `CompiledModule` that delegates parameter walks /\n  `state_dict` / device moves to `model` while routing\n  `__call__` through an executable cache.\n* **Plain callable wrapping** — `lucid.compile(fn)` where `fn`\n  is a regular function or any callable.  Returns a thin wrapper\n  whose `__call__` traces the function's body on the first\n  invocation with a new input signature and caches an executable.\n  The wrapper has no parameters of its own — pure tensor-in /\n  tensor-out.\n* **Decorator usage** — `@lucid.compile` on a function (or\n  `@lucid.compile(dynamic=True)` factory form) — identical to\n  the plain-callable form above but lets the user opt-in inline.",
+      "parameters": [
+        {
+          "name": "target",
+          "annotation": "nn.Module or callable",
+          "description": "Either an `nn.Module` instance (preferred when the\ncompiled unit carries learnable parameters) or any callable\nwhose signature is `(*tensor_args) -> Tensor | tuple | dict`.",
+          "default": null
+        },
+        {
+          "name": "dynamic",
+          "annotation": "bool",
+          "description": "Opt-in to symbolic batch-dim shape support (Phase 1.6).  Today\nonly the static path is implemented — passing `True` raises\n`NotImplementedError`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "CompiledModule",
+        "description": "A wrapper exposing the cache + run path.  When `target` was a\nModule the wrapper re-exposes the inner module's\n`parameters` / `state_dict` / training mode; when it was a\nplain callable those return empty sequences."
+      },
+      "raises": [],
+      "examples": [
+        "Module form::\n\n    compiled = lucid.compile(nn.Linear(8, 4).to('metal'))\n    y = compiled(x)\n\nCallable form::\n\n    @lucid.compile\n    def f(x, y):\n        return (x @ y.T).relu()\n\n    z = f(a, b)\n\nFactory decorator with kwargs::\n\n    @lucid.compile(dynamic=False)\n    def attention(q, k, v):\n        return F.scaled_dot_product_attention(q, k, v)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "CompiledModule",
+          "description": "the wrapper class returned by this function."
+        },
+        {
+          "name": "compile_optimizer",
+          "description": "fused forward + backward + optimizer step"
+        },
+        {
+          "name": "for an even tighter training loop.",
+          "description": ""
+        }
+      ]
+    }
+  ],
+  "summary": "lucid.compile — graph-capture compile path for Apple Silicon.",
+  "extended": "Lowers a Lucid model's forward pass (and optionally its backward +\noptimizer-update graph) into a single `MPSGraphExecutable`\nthat is cached per input signature.  Subsequent calls with the same\nsignature reuse the cached executable, skipping Python dispatch\nentirely for every op inside the captured region.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [
+    "* `compile` — the top-level entry.  Wraps either an\n  `nn.Module` or a plain callable; returns a\n  `CompiledModule`.  Also usable as a decorator\n  (`@lucid.compile` or `@lucid.compile(dynamic=False)`).\n* `CompiledModule` — module-shaped wrapper exposing\n  `cache_info()` / `timing()` / `clear_cache()` plus\n  `model`-delegated APIs (`parameters` / `state_dict` / `to`\n  / `train` / `eval`).\n* `compile_optimizer` — wraps the *update* step of an optimizer\n  into a single cached executable (8 optimizers supported; see\n  `lucid.compile._optim.compiler`).  Forward + backward stay eager.\n* `fused_step` — single executable covering forward + loss +\n  backward (via MPSGraph autodiff) + optimizer update via the\n  ghost-grad placeholder mechanism.\n* `compiled_step` — convenience wrapper combining\n  `compile` + `make_step` for one-line training loops.\n* `_tracing` — low-level context manager that installs a\n  thread-local `Tracer`; used internally by every entry above.\n  Public-but-underscored so external callers know they're touching\n  an unstable surface.\n\nThe MPSGraph builder + executable cache + per-op emitters live in\n:file:`lucid/_C/compile/`.  See :file:`lucid/compile/USER_GUIDE.md`\nfor the production-facing user guide (op coverage, perf numbers,\nfallback policy)."
+  ],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

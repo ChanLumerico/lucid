@@ -1,0 +1,704 @@
+{
+  "slug": "lucid.models.vision.alexnet",
+  "name": "alexnet",
+  "path": "lucid.models.vision.alexnet",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/__init__.py#L1",
+  "members": [
+    {
+      "name": "AlexNetConfig",
+      "path": "lucid.models.vision.alexnet._config.AlexNetConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "AlexNetConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.alexnet._config.AlexNetConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for AlexNet.",
+      "extended": "The canonical AlexNet takes 3×224×224 inputs and produces 4096-dim\nembeddings before the final classifier.\n\n`dropout` controls the two dropout layers inside the classifier\n(0.5 in the original paper).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "AlexNet",
+      "path": "lucid.models.vision.alexnet._model.AlexNet",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "AlexNet(config: AlexNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L62",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.alexnet._model.AlexNet.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: AlexNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L147",
+          "subcategory": "model",
+          "summary": "Initialise the LayerNorm module. See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.alexnet._model.AlexNet.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L160",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.alexnet._model.AlexNet.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L163",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.alexnet._model.AlexNet.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L167",
+          "subcategory": "model",
+          "summary": "Run R-CNN on a batch of images.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": null,
+              "description": "(B, C, H, W) image batch.",
+              "default": null
+            },
+            {
+              "name": "proposals",
+              "annotation": null,
+              "description": "list of B tensors, each (N_i, 4) xyxy region proposals.\n       Pass `None` to return empty detections.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "BaseModelOutput",
+            "description": "`ObjectDetectionOutput` with:\n`logits`     : (Σ N_i, num_classes + 1) raw class logits.\n`pred_boxes` : (Σ N_i, 4) decoded xyxy boxes (top class)."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "AlexNet feature-extracting backbone (no fully-connected head).",
+      "extended": "Implements the five-stage convolutional trunk from Krizhevsky,\nSutskever & Hinton, \"ImageNet Classification with Deep\nConvolutional Neural Networks\", NIPS 2012: an $11\\times11$\nstride-4 first convolution, an $5\\times5$ second\nconvolution, three $3\\times3$ convolutions, with\n`lucid.nn.LocalResponseNorm` after the first two blocks\nand overlapping $3\\times3$ max-pools that reduce the spatial\nsize by an additional factor of 2 after blocks 1, 2, and 5.  A\nfinal `lucid.nn.AdaptiveAvgPool2d` collapses the feature\nmap to $6\\times6$ regardless of input resolution.  The\noriginal two-GPU model-parallel split is collapsed into a single\nmerged stream — standard practice in modern reimplementations.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "AlexNetConfig",
+          "description": "Frozen architecture spec.  Use `alexnet` for the\npaper-cited single-stream configuration; pass a custom config\nto switch input channel count or to retarget the classifier\nvariant.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Build the backbone and run a single forward pass:\n>>> import lucid\n>>> from lucid.models.vision.alexnet import alexnet\n>>> backbone = alexnet()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape   # (B, 256, 6, 6)\n(2, 256, 6, 6)\nInspect per-stage feature descriptors:\n>>> info = backbone.feature_info\n>>> [(fi.stage, fi.num_channels, fi.reduction) for fi in info[:2]]\n[(1, 96, 4), (2, 256, 8)]"
+      ],
+      "notes": [
+        "From Krizhevsky et al., NIPS 2012, §3 and Figure 2.  AlexNet's\ncontribution to deep-learning history is threefold: the\n*rectified linear unit* $\\phi(x) = \\max(0, x)$ replaced\nsaturating nonlinearities and cut training time by several factors;\n*dropout* with $p = 0.5$ regularised the 4096-dim\nfully-connected layers against overfitting on a 1.2 M-image dataset;\nand *local response normalisation*\n\n$$\nb_{x,y}^i = \\frac{a_{x,y}^i}{\n    \\left(k + \\alpha \\sum_{j=\\max(0, i-n/2)}^{\\min(N-1, i+n/2)}\n    (a_{x,y}^j)^2 \\right)^{\\beta}\n}\n$$\nprovided implicit lateral inhibition between feature maps —\nsuperseded later by `lucid.nn.BatchNorm2d`.  The total\nparameter count is approximately 60 M (≈58 M of which sit in the\ntwo 4096-dim fully-connected layers of the classifier variant).\nWith the original ImageNet-1k training recipe AlexNet reaches a\ntop-5 error of 15.3%."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "AlexNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features",
+          "annotation": "nn.Sequential",
+          "description": "The five conv blocks (Conv → ReLU → optional LRN → optional\nMaxPool) — see `_build_features` for the exact ordering."
+        },
+        {
+          "name": "avgpool",
+          "annotation": "nn.AdaptiveAvgPool2d",
+          "description": "Global pool down to a $6\\times6$ spatial map so the\nbackbone produces a fixed-size feature regardless of input\nresolution."
+        },
+        {
+          "name": "feature_info",
+          "annotation": "list[FeatureInfo]",
+          "description": "Per-stage descriptor (channels + reduction factor) exposed via\n`BackboneMixin` for downstream decoder modules."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "AlexNetForImageClassification",
+      "path": "lucid.models.vision.alexnet._model.AlexNetForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "AlexNetForImageClassification(config: AlexNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L176",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.alexnet._model.AlexNetForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: AlexNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L251",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.alexnet._model.AlexNetForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_model.py#L261",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "AlexNet with two 4096-dim fully-connected layers and a linear classifier head.",
+      "extended": "Combines an `AlexNet` convolutional backbone with the\npaper-cited three-layer classifier head: FC6 (256·6·6 → 4096),\nFC7 (4096 → 4096), and the final linear projection to\n`config.num_classes`.  `lucid.nn.Dropout` with\n`config.dropout` is applied after both ReLU activations in the\nhidden layers — these two large FC layers dominate the parameter\ncount and are the main overfitting risk that dropout was introduced\nto control.  When `labels` are supplied to `forward`, a\ncross-entropy loss is returned alongside the logits.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "AlexNetConfig",
+          "description": "Architecture spec.  Use `alexnet_cls` for the paper-cited\nImageNet-1k configuration (1000-class head, `dropout=0.5`).",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Run inference on a batch of 224x224 RGB images:\n>>> import lucid\n>>> from lucid.models.vision.alexnet import alexnet_cls\n>>> model = alexnet_cls()\n>>> x = lucid.randn(4, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)\n>>> out.loss is None\nTrue\nCompute a training loss given integer labels:\n>>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)\n>>> out = model(x, labels=labels)\n>>> out.loss.shape\n()"
+      ],
+      "notes": [
+        "From Krizhevsky et al., NIPS 2012, §3 and Figure 2.  The two\n4096-dim hidden layers alone account for roughly 54 M of the\nnetwork's 60 M parameters — the original rationale for *dropout*,\nwhich randomly zeros out half of each FC activation during training\nso that no individual co-adapted neuron is critical for any single\ndecision.  Loss is the standard cross-entropy\n\n$$\n\\mathcal{L} = -\\frac{1}{N} \\sum_{n=1}^{N}\n    \\log \\operatorname{softmax}(\\text{logits}_n)_{\\,y_n}.\n$$"
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "AlexNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features, avgpool",
+          "annotation": null,
+          "description": "Same backbone components as on `AlexNet`; see that class\nfor shape semantics."
+        },
+        {
+          "name": "fc6, fc7",
+          "annotation": "nn.Linear",
+          "description": "The two hidden fully-connected layers, both projecting to 4096\ndimensions."
+        },
+        {
+          "name": "drop6, drop7",
+          "annotation": "nn.Dropout",
+          "description": "`lucid.nn.Dropout` layers applied after each ReLU in\nthe hidden FC stack, controlled by `config.dropout`."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Module",
+          "description": "Final linear projection to `num_classes`, built by\n`ClassificationHeadMixin._build_classifier`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "alexnet",
+      "path": "lucid.models.vision.alexnet._pretrained.alexnet",
+      "kind": "function",
+      "labels": [],
+      "signature": "alexnet(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_pretrained.py#L10",
+      "subcategory": "pretrained",
+      "summary": "AlexNet feature-extracting backbone (no fully-connected head).",
+      "extended": "Builds an `AlexNet` with the paper-cited Krizhevsky 2012\ntopology: five convolutional blocks (Conv1: 3→96 with\n$11\\times11$ stride-4; Conv2: 96→256 with $5\\times5$;\nthree $3\\times3$ convolutions Conv3-5 with widths 384/384/256),\n`lucid.nn.LocalResponseNorm` after blocks 1 and 2, and\noverlapping $3\\times3$ max-pools after blocks 1, 2, 5.\nApproximately 3.7 M parameters in the convolutional trunk alone\n(≈60 M for the full classifier variant).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored — the returned model is randomly initialised.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `AlexNetConfig` to\ncustomise individual fields (`in_channels=1` for grayscale,\n`dropout=0.0` to disable the dropout layers of the\nclassifier head).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "AlexNet",
+        "description": "Backbone with the AlexNet configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.alexnet import alexnet\n>>> model = alexnet()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 256, 6, 6)\n(1, 256, 6, 6)"
+      ],
+      "notes": [
+        "See Krizhevsky et al., \"ImageNet Classification with Deep\nConvolutional Neural Networks\", NIPS 2012, §3.  The original paper\nreports a 15.3% ImageNet-1k top-5 validation error — more than ten\npercentage points below the runner-up — and is widely credited with\nre-igniting deep-learning research after the 2006-2011 lull.  No\npaper-cited \"small / large\" variants exist (H11) — AlexNet is a\nsingle architecture."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 3747200,
+      "model_summary": {
+        "name": "AlexNet",
+        "type": "AlexNet",
+        "params": 3747200,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 3747200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 34944,
+                "own_params": 34944,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 614656,
+                "own_params": 614656,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 885120,
+                "own_params": 885120,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 1327488,
+                "own_params": 1327488,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 884992,
+                "own_params": 884992,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "alexnet_cls",
+      "path": "lucid.models.vision.alexnet._pretrained.alexnet_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "alexnet_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/alexnet/_pretrained.py#L71",
+      "subcategory": "pretrained",
+      "summary": "AlexNet image classifier (backbone + FC6 + FC7 + linear head).",
+      "extended": "Builds an `AlexNetForImageClassification` with the\npaper-cited Krizhevsky 2012 topology: the five-block conv trunk\nfollowed by FC6 (9216 → 4096), FC7 (4096 → 4096), and a final\nlinear projection to `config.num_classes` (default 1000 for\nImageNet-1k).  Approximately 60 M parameters total, dominated by\nthe two 4096-dim FC layers (≈54 M).  `lucid.nn.Dropout`\nwith `p=config.dropout` (default 0.5) is applied after both\nhidden activations.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `AlexNetConfig`.  Use\n`num_classes=N` to retarget the classifier (e.g.\n`num_classes=10` for CIFAR-10 fine-tuning) and `dropout=p`\nto adjust the regularisation strength.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "AlexNetForImageClassification",
+        "description": "Classifier with the AlexNet configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        "Run a forward pass without labels:\n>>> import lucid\n>>> from lucid.models.vision.alexnet import alexnet_cls\n>>> model = alexnet_cls()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)\nRetarget to CIFAR-10:\n>>> model = alexnet_cls(num_classes=10)\n>>> model.config.num_classes\n10"
+      ],
+      "notes": [
+        "See Krizhevsky et al., \"ImageNet Classification with Deep\nConvolutional Neural Networks\", NIPS 2012, §3.  The original paper\nreports 15.3% ImageNet-1k top-5 validation error.  The two\n`lucid.nn.Dropout` layers were a key empirical contribution\nof the paper: setting half of each 4096-dim activation to zero\nduring training was the principal technique that prevented\noverfitting of a 60 M-parameter network on 1.2 M images."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 61100840,
+      "model_summary": {
+        "name": "AlexNetForImageClassification",
+        "type": "AlexNetForImageClassification",
+        "params": 62378344,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 3747200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 34944,
+                "own_params": 34944,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 614656,
+                "own_params": 614656,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 885120,
+                "own_params": 885120,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 1327488,
+                "own_params": 1327488,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 884992,
+                "own_params": 884992,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 37752832,
+            "own_params": 37752832,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "AlexNet family — Krizhevsky, Sutskever & Hinton, 2012.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "AlexNet",
+  "citation": "Krizhevsky, Alex, et al. \"ImageNet Classification with Deep Convolutional Neural Networks.\" Advances in Neural Information Processing Systems, 2012.",
+  "theory": "AlexNet is the architecture that re-ignited deep learning, winning\nthe ILSVRC-2012 ImageNet classification challenge with a top-5\nerror of 15.3% — more than ten percentage points below the\nrunner-up — and demonstrating for the first time that a large\nconvolutional network trained end-to-end on raw pixels could\ndecisively beat hand-engineered feature pipelines.\n\nThe architecture stacks five convolutional layers followed by\nthree fully-connected layers, taking $3\\times224\\times224$\nRGB inputs and producing 1000-way softmax logits.  Three\ncontributions made training such a deep network tractable on\n2012-era hardware: (i) the *rectified linear unit*\n$\\phi(x) = \\max(0, x)$ replaced saturating nonlinearities,\ncutting training time by several factors; (ii) *dropout* with\n$p=0.5$ in the two large 4096-dim fully-connected layers\nregularised the ≈60 M parameters against overfitting; and\n(iii) *local response normalisation* together with overlapping\nmax-pooling provided implicit lateral inhibition between feature\nmaps.\n\nTraining was split across two GPUs in a model-parallel\nconfiguration — a practical necessity given the 3 GB memory\nbudget of a single GTX 580 at the time, and the origin of the\n\"two-stream\" diagram in the paper.  AlexNet's success established\nthe now-standard recipe of deep ConvNet + ReLU + dropout + heavy\ndata augmentation + SGD with momentum, and every subsequent\nImageNet-scale vision model descends from it directly.",
+  "tasks": [
+    "image-classification"
+  ]
+}

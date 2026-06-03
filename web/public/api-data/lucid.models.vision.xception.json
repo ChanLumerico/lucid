@@ -1,0 +1,1816 @@
+{
+  "slug": "lucid.models.vision.xception",
+  "name": "xception",
+  "path": "lucid.models.vision.xception",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/__init__.py#L1",
+  "members": [
+    {
+      "name": "XceptionConfig",
+      "path": "lucid.models.vision.xception._config.XceptionConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "XceptionConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.xception._config.XceptionConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for Xception (Extreme Inception).",
+      "extended": "Replaces all Inception modules with depthwise separable convolutions.\nDesigned for 299×299 inputs.\n\n`dropout` — head dropout rate (0.5 in the paper).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Xception",
+      "path": "lucid.models.vision.xception._model.Xception",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "Xception(config: XceptionConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L369",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.xception._model.Xception.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: XceptionConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L453",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.xception._model.Xception.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L466",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.xception._model.Xception.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L469",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.xception._model.Xception.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L472",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "BaseModelOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Xception feature-extracting backbone (no classification head).",
+      "extended": "Implements the \"Extreme Inception\" topology from Chollet,\n\"Xception: Deep Learning with Depthwise Separable Convolutions\",\nCVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  The architecture replaces every\nInception module of Inception-v3 with a depthwise separable\nconvolution — the limiting case of an Inception block in which\nevery output channel of the pointwise convolution receives its\nown independent spatial filter.  This makes the cross-channel\nand spatial correlations *fully decoupled*, dramatically\nreducing parameters and FLOPs:\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\longrightarrow\\;\n    M \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\nThe body is organised into three phases — *entry flow* (3\nblocks, with 1×1 strided residuals and channel doubling from\n64 → 728), *middle flow* (8 identical 728-ch blocks with\nadditive identity shortcuts), and *exit flow* (1 strided\ntransition block plus two final separable convolutions\nexpanding to 1536 → 2048 channels).  Designed for a 299×299\ninput — the same crop size as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "XceptionConfig",
+          "description": "Frozen architecture spec.  Use the `xception` factory\nfor the paper-cited configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Build an Xception backbone and run a forward pass at the\nnative 299×299 resolution:\n>>> import lucid\n>>> from lucid.models.vision.xception import xception\n>>> backbone = xception()\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape\n(2, 2048, 1, 1)"
+      ],
+      "notes": [
+        "Sub-module attribute names match timm's `legacy_xception`\nlayout so that state-dict round-trips are key-compatible with\nstandard pretrained weight files."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "XceptionConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "conv1, conv2",
+          "annotation": "nn.Conv2d",
+          "description": "Two 3×3 stem convolutions; `conv1` carries stride 2."
+        },
+        {
+          "name": "bn1, bn2",
+          "annotation": "nn.BatchNorm2d",
+          "description": "BatchNorm layers paired with the stem convs."
+        },
+        {
+          "name": "block1, block2, block3",
+          "annotation": "nn.Module",
+          "description": "Entry-flow blocks — strided 1×1 residual shortcuts with\nchannel projections 64→128, 128→256, 256→728."
+        },
+        {
+          "name": "block4, …, block11",
+          "annotation": "nn.Module",
+          "description": "Eight identical middle-flow blocks with additive identity\nshortcuts at 728 channels."
+        },
+        {
+          "name": "block12",
+          "annotation": "nn.Module",
+          "description": "Exit-flow strided transition block (728 → 1024)."
+        },
+        {
+          "name": "conv3, conv4",
+          "annotation": "_ExitSepConv",
+          "description": "Final two separable convolutions expanding to 1536 and\n2048 channels."
+        },
+        {
+          "name": "bn3, bn4",
+          "annotation": "nn.BatchNorm2d",
+          "description": "BatchNorm layers paired with `conv3` and `conv4`."
+        },
+        {
+          "name": "avgpool",
+          "annotation": "nn.AdaptiveAvgPool2d",
+          "description": "Global average pool collapsing the 2048-ch feature map to\n`(B, 2048, 1, 1)`."
+        },
+        {
+          "name": "feature_info",
+          "annotation": "list[FeatureInfo]",
+          "description": "Per-stage descriptor exposed via `BackboneMixin`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "XceptionForImageClassification",
+      "path": "lucid.models.vision.xception._model.XceptionForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "XceptionForImageClassification(config: XceptionConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L481",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.xception._model.XceptionForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: XceptionConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L540",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.xception._model.XceptionForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L546",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "XceptionOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Xception with dropout + linear classification head.",
+      "extended": "Combines an `Xception` backbone with a dropout layer\n(probability `config.dropout`, default 0.5 per the paper) and\na linear projection to `config.num_classes` logits.  When\n`labels` are supplied to `forward`, a cross-entropy\nloss is computed and returned alongside the logits inside an\n`XceptionOutput` dataclass.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "XceptionConfig",
+          "description": "Architecture spec.  Use the `xception_cls` factory for\nthe paper-cited configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Run inference at the native 299×299 input resolution:\n>>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls()\n>>> x = lucid.randn(4, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)"
+      ],
+      "notes": [
+        "The classification flow is\n\n$$\n\\text{logits} = W \\,\\operatorname{Drop}\\!\\left(\n    \\operatorname{GAP}(\\,\\mathrm{backbone}(x)\\,)\n\\right) + b.\n$$\nChollet (2017) reports 79.0% top-1 ImageNet validation\naccuracy with this configuration at the 299×299 input\nresolution, edging out Inception-v3's 78.2% at the same\nparameter count (~22.9M)."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "XceptionConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "conv1, conv2, bn1, bn2, block1, …, block12, conv3, conv4, bn3, bn4, avgpool",
+          "annotation": null,
+          "description": "Same backbone components as on `Xception`; see that\nclass for shape semantics."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Module",
+          "description": "Built by `ClassificationHeadMixin._build_classifier` —\na `lucid.nn.Sequential` wrapping\n`lucid.nn.Dropout` and `lucid.nn.Linear`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "XceptionOutput",
+      "path": "lucid.models.vision.xception._model.XceptionOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [],
+      "labels": [],
+      "signature": "XceptionOutput(logits: Tensor, loss: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L255",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.xception._model.XceptionOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(logits: Tensor, loss: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Forward-return dataclass for `XceptionForImageClassification`.",
+      "extended": "Carries the per-class logits and the optional supervised loss\ncomputed when training labels are supplied to `forward`.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls()\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)\n>>> out.loss is None\nTrue"
+      ],
+      "notes": [
+        "Returned by `XceptionForImageClassification.forward` so the\npublic API stays decoupled from raw tensor tuples — callers can\naddress fields by name (`out.logits`) and ignore irrelevant\nentries."
+      ],
+      "attributes": [
+        {
+          "name": "logits",
+          "annotation": "Tensor",
+          "description": "Pre-softmax classification scores of shape\n`(batch_size, num_classes)`.  Apply `lucid.softmax` or\n`lucid.argmax` to convert to probabilities or hard\npredictions."
+        },
+        {
+          "name": "loss",
+          "annotation": "Tensor or None, optional, default=None",
+          "description": "Scalar cross-entropy loss; present only when `labels` were\npassed to the forward call.  `None` during inference."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "xception",
+      "path": "lucid.models.vision.xception._pretrained.xception",
+      "kind": "function",
+      "labels": [],
+      "signature": "xception(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_pretrained.py#L13",
+      "subcategory": "pretrained",
+      "summary": "Xception feature-extracting backbone (no classification head).",
+      "extended": "Builds an `Xception` with the paper-cited \"Extreme\nInception\" topology from Chollet, 2017: a 2-conv stem, three\nentry-flow blocks (1×1 strided residuals with channel\nprogression 64 → 128 → 256 → 728), eight middle-flow blocks at\n728 channels, one exit-flow transition block (728 → 1024),\nand two final separable convolutions expanding to 1536 → 2048\nchannels.  Approximately 22.9M parameters — the same budget as\nInception-v3 but with depthwise separable convolutions\nthroughout.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored — the returned model is randomly initialised.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `XceptionConfig`\n(e.g. `in_channels=1` for grayscale input).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Xception",
+        "description": "Backbone with the canonical Xception configuration applied\n(or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.xception import xception\n>>> model = xception()\n>>> x = lucid.randn(1, 3, 299, 299)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 1, 1)"
+      ],
+      "notes": [
+        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  Designed for\n299×299 input — the same crop as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "Xception",
+        "type": "Xception",
+        "params": 20806952,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 864,
+            "own_params": 864,
+            "children": []
+          },
+          {
+            "name": "bn1",
+            "type": "BatchNorm2d",
+            "params": 64,
+            "own_params": 64,
+            "children": []
+          },
+          {
+            "name": "conv2",
+            "type": "Conv2d",
+            "params": 18432,
+            "own_params": 18432,
+            "children": []
+          },
+          {
+            "name": "bn2",
+            "type": "BatchNorm2d",
+            "params": 128,
+            "own_params": 128,
+            "children": []
+          },
+          {
+            "name": "block1",
+            "type": "_EntryBlock",
+            "params": 35264,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 26816,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SepConvOp",
+                    "params": 8768,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SepConvOp",
+                    "params": 17536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 8192,
+                "own_params": 8192,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block2",
+            "type": "_EntryBlock",
+            "params": 136064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 102784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 33920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 67840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 32768,
+                "own_params": 32768,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block3",
+            "type": "_EntryBlock",
+            "params": 915944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 728120,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 188672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 186368,
+                        "own_params": 186368,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 186368,
+                "own_params": 186368,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 1456,
+                "own_params": 1456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block4",
+            "type": "_MiddleBlock",
+            "params": 1613976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1613976,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "8",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 8
+          },
+          {
+            "name": "block12",
+            "type": "_ExitBlock",
+            "params": 2039584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1292064,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 752024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 745472,
+                        "own_params": 745472,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 745472,
+                "own_params": 745472,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv3",
+            "type": "_ExitSepConv",
+            "params": 1582080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 9216,
+                "own_params": 9216,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 1572864,
+                "own_params": 1572864,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn3",
+            "type": "BatchNorm2d",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          },
+          {
+            "name": "conv4",
+            "type": "_ExitSepConv",
+            "params": 3159552,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 13824,
+                "own_params": 13824,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 3145728,
+                "own_params": 3145728,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn4",
+            "type": "BatchNorm2d",
+            "params": 4096,
+            "own_params": 4096,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "xception_cls",
+      "path": "lucid.models.vision.xception._pretrained.xception_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "xception_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_pretrained.py#L70",
+      "subcategory": "pretrained",
+      "summary": "Xception image classifier (backbone + dropout + linear head).",
+      "extended": "Builds an `XceptionForImageClassification` with the\ncanonical Xception backbone (Chollet, 2017) followed by\ndropout ($p = 0.5$) and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\nApproximately 22.9M parameters and 79.0% ImageNet-1k top-1\naccuracy at 299×299 (paper, Table 5) — outperforming\nInception-v3 at the same parameter budget.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `XceptionConfig`\n(typically `num_classes` to retarget the classifier).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "XceptionForImageClassification",
+        "description": "Classifier with the canonical Xception configuration\napplied (or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
+      ],
+      "notes": [
+        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)), Table 5."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "XceptionForImageClassification",
+        "type": "XceptionForImageClassification",
+        "params": 22855952,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 864,
+            "own_params": 864,
+            "children": []
+          },
+          {
+            "name": "bn1",
+            "type": "BatchNorm2d",
+            "params": 64,
+            "own_params": 64,
+            "children": []
+          },
+          {
+            "name": "conv2",
+            "type": "Conv2d",
+            "params": 18432,
+            "own_params": 18432,
+            "children": []
+          },
+          {
+            "name": "bn2",
+            "type": "BatchNorm2d",
+            "params": 128,
+            "own_params": 128,
+            "children": []
+          },
+          {
+            "name": "block1",
+            "type": "_EntryBlock",
+            "params": 35264,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 26816,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SepConvOp",
+                    "params": 8768,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SepConvOp",
+                    "params": 17536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 8192,
+                "own_params": 8192,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block2",
+            "type": "_EntryBlock",
+            "params": 136064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 102784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 33920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 67840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 32768,
+                "own_params": 32768,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block3",
+            "type": "_EntryBlock",
+            "params": 915944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 728120,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 188672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 186368,
+                        "own_params": 186368,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 186368,
+                "own_params": 186368,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 1456,
+                "own_params": 1456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block4",
+            "type": "_MiddleBlock",
+            "params": 1613976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1613976,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "8",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 8
+          },
+          {
+            "name": "block12",
+            "type": "_ExitBlock",
+            "params": 2039584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1292064,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 752024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 745472,
+                        "own_params": 745472,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 745472,
+                "own_params": 745472,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv3",
+            "type": "_ExitSepConv",
+            "params": 1582080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 9216,
+                "own_params": 9216,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 1572864,
+                "own_params": 1572864,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn3",
+            "type": "BatchNorm2d",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          },
+          {
+            "name": "conv4",
+            "type": "_ExitSepConv",
+            "params": 3159552,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 13824,
+                "own_params": 13824,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 3145728,
+                "own_params": 3145728,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn4",
+            "type": "BatchNorm2d",
+            "params": 4096,
+            "own_params": 4096,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Sequential",
+            "params": 2049000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2049000,
+                "own_params": 2049000,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "Xception family — Chollet, 2017.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "Xception",
+  "citation": "Chollet, François. \"Xception: Deep Learning with Depthwise Separable Convolutions.\" Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2017, pp. 1251–1258.",
+  "theory": "Xception (\"Extreme Inception\") interprets the Inception module\nas an *intermediate* point on a continuum between an ordinary\nconvolution and a fully decoupled spatial/channel filter.  A\nstandard Inception block splits the input into a few parallel\nbranches, each of which is processed by a small $1\\times1$\npointwise convolution followed by a spatial convolution, and the\nbranch outputs are concatenated.  Xception pushes this idea to\nits limit: instead of a handful of branches, *every output\nchannel* of the $1\\times1$ pointwise convolution gets its\nown independent $3\\times3$ spatial filter.  This is exactly\nthe **depthwise separable convolution** — a pointwise mix in\nchannel space followed by a per-channel spatial filter.\n\nThe architectural hypothesis is that the cross-channel\ncorrelations and the spatial correlations in feature maps are\nsufficiently *decoupled* that they can — and should — be modeled\nindependently.  A regular convolution conflates the two; a\ndepthwise separable convolution separates them, dramatically\nreducing both the parameter count and the FLOPs:\n\n\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\;\\longrightarrow\\;\\;\nM \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\n\nXception stacks 36 such layers, organised into 14 modules with\nlinear residual shortcuts around each module (similar to ResNet).\nWith essentially the *same* parameter budget as Inception-v3, it\noutperforms it on ImageNet and substantially outperforms it on\nthe much larger JFT dataset.  The architecture is designed for a\n$299 \\times 299$ input — the same crop size as Inception-v3 —\nso the spatial-reduction schedule matches that of its\npredecessor exactly, isolating the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
+  "tasks": [
+    "image-classification"
+  ]
+}

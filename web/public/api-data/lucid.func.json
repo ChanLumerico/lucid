@@ -1,0 +1,451 @@
+{
+  "slug": "lucid.func",
+  "name": "func",
+  "path": "lucid.func",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L1",
+  "members": [
+    {
+      "name": "vmap",
+      "path": "lucid.func.vmap",
+      "kind": "function",
+      "labels": [],
+      "signature": "vmap(func: Callable[..., Tensor | tuple[Tensor, ...]], in_dims: int | tuple[int | None, ...] = 0, out_dims: int | tuple[int, ...] = 0, randomness: str = 'error', chunk_size: int | None = None, strategy: str = 'auto')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L115",
+      "subcategory": null,
+      "summary": "Vectorise `func` over a batch axis to produce a batched function.",
+      "extended": "Lifts a function operating on a single example into one operating on a\nwhole batch in a single dispatch, without writing an explicit Python\nloop. Mathematically, if $f : \\mathbb{R}^d \\to \\mathbb{R}^e$, then\n`vmap(f)` realises $F : \\mathbb{R}^{B \\times d} \\to \\mathbb{R}^{B \\times e}$ such that `F(x)[b] = f(x[b])` for every\nbatch index $b$. The transform composes with `grad`,\n`jacrev`, `jvp`, and `vjp` to yield per-sample\ngradients, batched Jacobians, and higher-order constructs.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Function to vectorise. Must accept and return tensors (or tuples of\ntensors).",
+          "default": null
+        },
+        {
+          "name": "in_dims",
+          "annotation": "int or tuple of (int or None)",
+          "description": "Batch axis for each input. An `int` applies to all positional\narguments; a tuple gives per-argument control. Use `None` to\nbroadcast an argument unchanged across the batch. Default `0`.",
+          "default": "0"
+        },
+        {
+          "name": "out_dims",
+          "annotation": "int or tuple of int",
+          "description": "Where the batch axis appears in the output(s). Default `0`.",
+          "default": "0"
+        },
+        {
+          "name": "randomness",
+          "annotation": "str",
+          "description": "`\"error\"` (default) forbids random ops inside `func`;\n`\"different\"` and `\"same\"` allow them with shared RNG state.",
+          "default": "'error'"
+        },
+        {
+          "name": "chunk_size",
+          "annotation": "int",
+          "description": "If set, process the batch in chunks of this size to cap peak\nmemory. Applies in both vectorised and isolated strategies.",
+          "default": "None"
+        },
+        {
+          "name": "strategy",
+          "annotation": "str",
+          "description": "`\"auto\"` (default) picks isolated mode for transforms that\nmaterialise per-output backward passes (jacrev/jacfwd/hessian) and\nfalls back to vectorised mode otherwise. `\"vectorized\"` always\nmoves the batch axis to the front and calls `func` once.\n`\"isolated\"` always loops per-element in Python.",
+          "default": "'auto'"
+        }
+      ],
+      "returns": {
+        "annotation": "Callable",
+        "description": "A new function with the batched semantics described above."
+      },
+      "raises": [],
+      "examples": [
+        "Per-sample gradients:\n>>> import lucid\n>>> from lucid.func import grad, vmap\n>>> f = lambda x: (x ** 2).sum()\n>>> X = lucid.randn(32, 4)\n>>> per_sample = vmap(grad(f))(X)  # shape (32, 4)"
+      ],
+      "notes": [
+        "In vectorised mode there is exactly one underlying engine dispatch:\non GPU this becomes a single Metal kernel launch across all batch\nelements via MLX; on CPU it becomes an Accelerate BLAS / vDSP call\nover the fully batched tensor. Reductions inside `func` must\nspecify `dim` — an unqualified `.sum()` would also collapse the\nbatch axis, which is rarely desired. In-place ops inside the\nvectorised function are unsupported."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "grad",
+      "path": "lucid.func.grad",
+      "kind": "function",
+      "labels": [],
+      "signature": "grad(func: Callable[..., Tensor], argnums: int | tuple[int, ...] = 0, has_aux: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L385",
+      "subcategory": null,
+      "summary": "Build a function returning the gradient of `func`.",
+      "extended": "The cornerstone of functional-style autograd: rather than calling\n`.backward()` and reading `.grad`, `grad(func)` produces a new\ncallable that, when invoked, returns the gradient tensor directly.\nTransforms compose, so `grad(grad(func))` yields a second\nderivative and `vmap(grad(func))` computes per-sample gradients.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Function returning a **scalar** Tensor (or `(scalar, aux)` when\n`has_aux=True`).",
+          "default": null
+        },
+        {
+          "name": "argnums",
+          "annotation": "int or tuple of int",
+          "description": "Positional argument index/indices to differentiate. Default `0`.",
+          "default": "0"
+        },
+        {
+          "name": "has_aux",
+          "annotation": "bool",
+          "description": "If `True`, `func` must return `(loss, aux)`; the wrapped\ncallable then returns `(grads, aux)` with `aux` forwarded\nthrough without differentiation. Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Callable",
+        "description": "Function with the same signature as `func` returning the\ngradient tensor — or a tuple of gradients when `argnums` is a\ntuple."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import grad\n>>> f = lambda x: (x ** 3).sum()\n>>> df = grad(f)\n>>> df(lucid.tensor([1.0, 2.0, 3.0]))  # 3 * x ** 2\nTensor([ 3., 12., 27.])"
+      ],
+      "notes": [
+        "For $f : \\mathbb{R}^n \\to \\mathbb{R}$, `grad(f)` realises\n\n$$\n\\nabla f : \\mathbb{R}^n \\to \\mathbb{R}^n,\n\\quad (\\nabla f)_i (x) = \\frac{\\partial f}{\\partial x_i}(x).\n$$\nImplementation is reverse-mode AD: one forward + one backward pass\nthrough `func`, independent of input dimensionality."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "grad_and_value",
+      "path": "lucid.func.grad_and_value",
+      "kind": "function",
+      "labels": [],
+      "signature": "grad_and_value(func: Callable[..., Tensor], argnums: int | tuple[int, ...] = 0, has_aux: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L488",
+      "subcategory": null,
+      "summary": "Return a function computing both the gradient and the primal value.",
+      "extended": "Equivalent to combining `grad` with an evaluation of `func`,\nbut evaluates the forward pass exactly once. This is the canonical\npattern for training loops where the loss value is also needed for\nlogging or learning-rate scheduling.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Function returning a scalar Tensor (or `(scalar, aux)` when\n`has_aux=True`).",
+          "default": null
+        },
+        {
+          "name": "argnums",
+          "annotation": "int or tuple of int",
+          "description": "Positional argument index/indices to differentiate. Default `0`.",
+          "default": "0"
+        },
+        {
+          "name": "has_aux",
+          "annotation": "bool",
+          "description": "If `True`, `func` must return `(loss, aux)` and the wrapped\ncallable returns `(grads, (loss, aux))`. Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Callable",
+        "description": "Function returning `(grads, value)` — or `(grads, (value, aux))`\nwhen `has_aux=True`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import grad_and_value\n>>> f = lambda x: (x ** 2).sum()\n>>> gv = grad_and_value(f)\n>>> grads, value = gv(lucid.tensor([1.0, 2.0, 3.0]))\n>>> value  # 14.0\nTensor(14.)"
+      ],
+      "notes": [
+        "Mathematically computes both $f(x)$ and $\\nabla f(x)$ in\na single forward + backward sweep, saving redundant work compared to\ncalling `func` and `grad(func)` separately."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vjp",
+      "path": "lucid.func.vjp",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjp(func: Callable[..., Tensor | tuple[Tensor, ...]], primals: Tensor = (), has_aux: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L586",
+      "subcategory": null,
+      "summary": "Compute the vector-Jacobian product of `func` at `primals`.",
+      "extended": "Evaluates `func` at the supplied primal inputs and returns both the\noutput and a callable `vjp_fn` that, given cotangent vectors\n$v$, returns $v^\\top J(\\mathrm{primals})$ — the\nbackward-mode contraction of the Jacobian against `v`. This is the\nworkhorse used internally by `grad` and `jacrev`, and is\nuseful directly when many backward passes are needed against the same\nforward computation.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Differentiable function taking the primals as positional inputs.",
+          "default": null
+        },
+        {
+          "name": "*primals",
+          "annotation": "Tensor",
+          "description": "Points at which to linearise `func`.",
+          "default": "()"
+        },
+        {
+          "name": "has_aux",
+          "annotation": "bool",
+          "description": "If `True`, `func` must return `(output, aux)`; the call\nthen yields `((output, aux), vjp_fn)`. Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple",
+        "description": "`(outputs, vjp_fn)`. `vjp_fn(*cotangents)` returns a tuple of\ninput-gradient tensors of the same shapes as `primals`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import vjp\n>>> f = lambda x: x ** 2\n>>> x = lucid.tensor([1.0, 2.0, 3.0])\n>>> y, vjp_fn = vjp(f, x)\n>>> (grads,) = vjp_fn(lucid.ones_like(y))  # 2 * x"
+      ],
+      "notes": [
+        "For $f : \\mathbb{R}^n \\to \\mathbb{R}^m$ and cotangent\n$v \\in \\mathbb{R}^m$,\n\n$$\n\\mathrm{vjp\\_fn}(v) = v^\\top J_f(x), \\quad\nJ_f(x) \\in \\mathbb{R}^{m \\times n}.\n$$\nCost is one backward pass per call to `vjp_fn` — the forward\ngraph is retained so multiple cotangents can be applied cheaply."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "jvp",
+      "path": "lucid.func.jvp",
+      "kind": "function",
+      "labels": [],
+      "signature": "jvp(func: Callable[..., Tensor | tuple[Tensor, ...]], primals: tuple[Tensor, ...], tangents: tuple[Tensor, ...], strict: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L692",
+      "subcategory": null,
+      "summary": "Compute the Jacobian-vector product of `func` at `primals`.",
+      "extended": "Returns both the primal output `func(*primals)` and the directional\nderivative $J(\\mathrm{primals}) \\cdot \\mathrm{tangents}$ — the\nforward-mode contraction of the Jacobian against a tangent vector.\nForward-mode is preferred over reverse-mode when the input dimension\nis small relative to the output dimension.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Differentiable function returning a Tensor or tuple of Tensors.",
+          "default": null
+        },
+        {
+          "name": "primals",
+          "annotation": "tuple of Tensor",
+          "description": "Points at which to evaluate `func` and its Jacobian.",
+          "default": null
+        },
+        {
+          "name": "tangents",
+          "annotation": "tuple of Tensor",
+          "description": "Tangent vectors, each matching the shape of the corresponding\nprimal.",
+          "default": null
+        },
+        {
+          "name": "strict",
+          "annotation": "bool",
+          "description": "If `True`, raise when an output is independent of any input.\nDefault `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple",
+        "description": "`(primals_out, tangents_out)` with the same nested structure as\n`func(*primals)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import jvp\n>>> f = lambda x: x ** 2\n>>> x = lucid.tensor([1.0, 2.0, 3.0])\n>>> t = lucid.ones_like(x)\n>>> y, dy = jvp(f, (x,), (t,))  # dy = 2 * x"
+      ],
+      "notes": [
+        "Implemented via the exact $\\alpha$-perturbation trick: introduce\na scalar $\\alpha$ with `requires_grad=True`, substitute\n`x + alpha * t` for each primal, and read\n$\\partial \\text{out} / \\partial \\alpha$ at $\\alpha = 0$ from\na single backward pass. No finite differences are used, so the result\nis exact up to floating-point rounding."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "linearize",
+      "path": "lucid.func.linearize",
+      "kind": "function",
+      "labels": [],
+      "signature": "linearize(func: Callable[..., Tensor | tuple[Tensor, ...]], primals: Tensor = ())",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L845",
+      "subcategory": null,
+      "summary": "Linearise `func` around `primals` for reuse across many tangents.",
+      "extended": "Returns the primal output together with a callable `linear_fn` that\napplies the first-order Taylor expansion of `func` at `primals`.\nMathematically `linear_fn(t)` evaluates $J_f(\\mathrm{primals}) \\, t$ — the same quantity as `jvp` — but the linearisation cost\nis paid once even if many tangent vectors are queried subsequently.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Differentiable function.",
+          "default": null
+        },
+        {
+          "name": "*primals",
+          "annotation": "Tensor",
+          "description": "Points at which to linearise `func`.",
+          "default": "()"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple",
+        "description": "`(primals_out, linear_fn)`. Calling `linear_fn(*tangents)`\nreturns the JVP at `primals` against `tangents`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import linearize\n>>> f = lambda x: x ** 2\n>>> x = lucid.tensor([1.0, 2.0, 3.0])\n>>> y, lin = linearize(f, x)\n>>> lin(lucid.ones_like(x))  # 2 * x"
+      ],
+      "notes": [
+        "Conceptually equivalent to a Taylor expansion truncated at first\norder:\n\n$$\nf(x + t) \\approx f(x) + J_f(x) \\, t.\n$$\nThe returned `linear_fn` is flagged for vmap isolation so that\ncomposing `vmap(linear_fn)` slices tangents one at a time."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "jacrev",
+      "path": "lucid.func.jacrev",
+      "kind": "function",
+      "labels": [],
+      "signature": "jacrev(func: Callable[..., Tensor | tuple[Tensor, ...]], argnums: int | tuple[int, ...] = 0, has_aux: bool = False, chunk_size: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L910",
+      "subcategory": null,
+      "summary": "Build a function returning the reverse-mode Jacobian of `func`.",
+      "extended": "Assembles the full Jacobian matrix one row at a time, each row\nobtained from a backward pass seeded with a one-hot cotangent. For a\nscalar-output `func` this collapses to `grad`.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Differentiable function returning a Tensor (or `(output, aux)`\nwhen `has_aux=True`).",
+          "default": null
+        },
+        {
+          "name": "argnums",
+          "annotation": "int or tuple of int",
+          "description": "Argument(s) to differentiate with respect to. Default `0`.",
+          "default": "0"
+        },
+        {
+          "name": "has_aux",
+          "annotation": "bool",
+          "description": "Whether `func` returns auxiliary data. Default `False`.",
+          "default": "False"
+        },
+        {
+          "name": "chunk_size",
+          "annotation": "int",
+          "description": "Reserved for future vmap-batched row computation.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Callable",
+        "description": "Function returning the Jacobian tensor (or tuple of tensors)\nwith shape `output.shape + arg.shape`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import jacrev\n>>> f = lambda x: lucid.stack([x.sum(), (x ** 2).sum()])\n>>> jacrev(f)(lucid.tensor([1.0, 2.0, 3.0]))  # shape (2, 3)"
+      ],
+      "notes": [
+        "For $f : \\mathbb{R}^n \\to \\mathbb{R}^m$ produces\n\n$$\nJ_{ij} = \\frac{\\partial f_i}{\\partial x_j}, \\quad\nJ \\in \\mathbb{R}^{m \\times n}.\n$$\nCost scales with the output dimension $m$ (one backward pass\nper row). Prefer `jacfwd` when $n < m$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "jacfwd",
+      "path": "lucid.func.jacfwd",
+      "kind": "function",
+      "labels": [],
+      "signature": "jacfwd(func: Callable[..., Tensor | tuple[Tensor, ...]], argnums: int | tuple[int, ...] = 0, has_aux: bool = False, randomness: str = 'error')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L1061",
+      "subcategory": null,
+      "summary": "Build a function returning the forward-mode Jacobian of `func`.",
+      "extended": "Materialises the Jacobian one column at a time by repeatedly calling\n`jvp` with one-hot tangent vectors. Each column corresponds to\nthe partial derivative of every output with respect to a single input\ncoordinate.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Differentiable function returning a Tensor (or `(output, aux)`\nwhen `has_aux=True`).",
+          "default": null
+        },
+        {
+          "name": "argnums",
+          "annotation": "int or tuple of int",
+          "description": "Argument(s) to differentiate with respect to. Default `0`.",
+          "default": "0"
+        },
+        {
+          "name": "has_aux",
+          "annotation": "bool",
+          "description": "Whether `func` returns auxiliary data. Default `False`.",
+          "default": "False"
+        },
+        {
+          "name": "randomness",
+          "annotation": "str",
+          "description": "Randomness policy forwarded to internal vmap calls. Default\n`\"error\"`.",
+          "default": "'error'"
+        }
+      ],
+      "returns": {
+        "annotation": "Callable",
+        "description": "Function returning the Jacobian tensor (or tuple of tensors)\nwith shape `output.shape + arg.shape`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import jacfwd\n>>> f = lambda x: lucid.stack([x.sum(), (x ** 2).sum()])\n>>> jacfwd(f)(lucid.tensor([1.0, 2.0, 3.0]))  # shape (2, 3)"
+      ],
+      "notes": [
+        "For $f : \\mathbb{R}^n \\to \\mathbb{R}^m$ produces\n\n$$\nJ_{ij} = \\frac{\\partial f_i}{\\partial x_j}, \\quad\nJ \\in \\mathbb{R}^{m \\times n}.\n$$\nCost scales with the input dimension $n$ (one forward / JVP per\ncolumn). Prefer this transform over `jacrev` when\n$n \\ll m$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "hessian",
+      "path": "lucid.func.hessian",
+      "kind": "function",
+      "labels": [],
+      "signature": "hessian(func: Callable[..., Tensor], argnums: int | tuple[int, ...] = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/func/__init__.py#L1209",
+      "subcategory": null,
+      "summary": "Build a function returning the Hessian of a scalar-valued `func`.",
+      "extended": "Computes the matrix of second partial derivatives by composing\nforward-mode over reverse-mode differentiation\n(`jacfwd(jacrev(func))`). The result captures the local curvature\nused by Newton-style optimisers, natural-gradient methods, and\nsecond-order analyses such as eigenvalue spectra of the loss.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "Callable",
+          "description": "Function returning a scalar Tensor.",
+          "default": null
+        },
+        {
+          "name": "argnums",
+          "annotation": "int or tuple of int",
+          "description": "Argument(s) to differentiate twice. Default `0`.",
+          "default": "0"
+        }
+      ],
+      "returns": {
+        "annotation": "Callable",
+        "description": "Function returning the Hessian tensor with shape\n`arg.shape + arg.shape`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.func import hessian\n>>> f = lambda x: (x ** 3).sum()  # H = diag(6 * x)\n>>> hessian(f)(lucid.tensor([1.0, 2.0, 3.0]))"
+      ],
+      "notes": [
+        "For $f : \\mathbb{R}^n \\to \\mathbb{R}$,\n\n$$\nH_{ij} = \\frac{\\partial^2 f}{\\partial x_i \\, \\partial x_j},\n\\quad H \\in \\mathbb{R}^{n \\times n}.\n$$\nCost is dominated by $n$ JVPs over the reverse-mode gradient\ngraph, retained via `create_graph=True`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "`lucid.func` — functional transforms (reference-framework func-compatible API).",
+  "extended": "Provides composable, higher-order transformations over Lucid functions:\n\n* `vmap`           — vectorise over a batch dimension (C++ vmapped dispatch)\n* `grad`           — gradient transform (returns a function)\n* `grad_and_value` — gradient + primal output\n* `vjp`            — vector-Jacobian product (functional style)\n* `jvp`            — Jacobian-vector product (exact via double-backward)\n* `jacrev`         — reverse-mode Jacobian\n* `jacfwd`         — forward-mode Jacobian via jvp\n* `hessian`        — second-order derivative matrix\n* `linearize`      — linearisation: (primals_out, tangent_fn)\n\nAll transforms compose: `vmap(grad(fn))`, `grad(vmap(fn))`, etc.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [
+    "`vmap` does **not** loop over batch elements in Python.  It moves the batch\ndimension to the front and calls the function **once** with the full batched\ntensor.  The underlying C++ engine ops then run on the complete batch:\n\n* **GPU (Metal/MLX)**: a single Metal dispatch handles all batch elements in\n  parallel via MLX's native batched kernels.\n* **CPU (Accelerate)**: BLAS calls (`SGEMM`, `cblas_sgemm_batch`, etc.)\n  operate on the full batched tensor with SIMD parallelism.\n\nThis gives real vectorisation — not a sequential Python loop.",
+    "* Reduction ops inside the vmapped function must use an explicit `dim`\n  argument.  An unqualified `.sum()` / `.mean()` reduces over the batch\n  dimension as well, which is almost never desired.\n* In-place ops inside a vmapped function are not supported.\n* `randomness='error'` (default) raises if the function calls any random op."
+  ],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

@@ -1,0 +1,2850 @@
+{
+  "slug": "lucid.tensor",
+  "kind": "class-module",
+  "name": "Tensor",
+  "path": "lucid.Tensor",
+  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L36",
+  "class_kind": "regular",
+  "bases": [],
+  "labels": [],
+  "signature": "Tensor(data: np.ndarray | list[object] | int | float | bool | Tensor, dtype: _dtype_cls | _C_engine.Dtype | str | None = None, device: _device_cls | str | None = None, requires_grad: bool = False)",
+  "subcategory": "tensor",
+  "methods": [
+    {
+      "name": "__init__",
+      "path": "lucid._tensor.tensor.Tensor.__init__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__init__(data: np.ndarray | list[object] | int | float | bool | Tensor, dtype: _dtype_cls | _C_engine.Dtype | str | None = None, device: _device_cls | str | None = None, requires_grad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L68",
+      "subcategory": "tensor",
+      "summary": "Construct a Tensor from Python data, a NumPy array, or another Tensor.",
+      "extended": "The data is funnelled through `lucid._factories.converters._to_impl`,\nthe canonical bridge between the outside world and Lucid's C++\n`TensorImpl`. Python scalars become 0-d tensors; nested lists are\nrecursively flattened with shape inference; NumPy arrays cross the\nsingle sanctioned host-to-engine boundary; and existing `Tensor`\nsources are rewrapped (optionally with cast and/or device transfer).",
+      "parameters": [
+        {
+          "name": "data",
+          "annotation": "ndarray | list | int | float | bool | Tensor",
+          "description": "Source data. Python scalars become 0-d tensors; lists are\nrecursively converted; NumPy arrays use the bridge boundary\ndocumented in `lucid._factories.converters`; another Tensor\nis shallow-copied to a new Tensor with possibly different\n`dtype` / `device` / `requires_grad`.",
+          "default": null
+        },
+        {
+          "name": "dtype",
+          "annotation": "dtype | str | None",
+          "description": "Element type. If `None`, inferred from `data`.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "device | str | None",
+          "description": "Target device (`\"cpu\"` or `\"metal\"`). If `None`, defaults\nto the source device or `\"cpu\"` for host data.",
+          "default": "None"
+        },
+        {
+          "name": "requires_grad",
+          "annotation": "bool",
+          "description": "Whether to record operations on this tensor for autograd.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A freshly constructed tensor whose storage is owned by the\nengine."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.Tensor([1.0, 2.0, 3.0])\ntensor([1., 2., 3.])\n>>> lucid.Tensor([[1, 2], [3, 4]], dtype=lucid.int64).shape\n(2, 2)\n>>> x = lucid.Tensor(3.14, requires_grad=True)\n>>> x.requires_grad\nTrue"
+      ],
+      "notes": [
+        "Constructor is one of the six sanctioned host-to-engine bridge\nboundaries (rule **H4**). NumPy arrays cross the bridge exactly\nonce here; afterwards the data is owned by Lucid's engine. The\nresulting layout is C-contiguous row-major:\n\n$$\n\\text{stride}[i] = e \\cdot \\prod_{j=i+1}^{d-1} s_j\n$$\nwhere $e$ is the element size in bytes and $s_j$ are\nthe dimension sizes."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "impl",
+      "path": "lucid._tensor.tensor.Tensor.impl",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "impl: _C_engine.TensorImpl",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L183",
+      "summary": "Access the underlying C++ `TensorImpl` object.",
+      "extended": "Provides read-only access to the engine-side tensor that backs this\nPython wrapper. Used by ops and the autograd engine to fetch the\nnative handle without going through Python-level conversions.",
+      "parameters": [],
+      "returns": {
+        "annotation": "lucid._C.engine.TensorImpl",
+        "description": "The engine tensor object. Lifetime is tied to `self`; do not\nretain references beyond `self`'s lifetime."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> type(x.impl).__name__\n'TensorImpl'"
+      ],
+      "notes": [
+        "This is an internal accessor exposed for advanced use cases such as\nwriting custom ops that bind directly against the engine. Public\nAPIs should compose existing `Tensor` operations instead.\nLogically the identity projection\n$\\pi: \\text{Tensor} \\to \\text{TensorImpl}$ with\n$\\pi(t) = t.\\_impl$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "shape",
+      "path": "lucid._tensor.tensor.Tensor.shape",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "shape: tuple[int, ...]",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L217",
+      "summary": "Shape of the tensor as a tuple of integers.",
+      "extended": "Each element gives the size of the corresponding dimension, with\n`shape[0]` being the outermost (batch) dimension.  A scalar tensor\n(0-d) has `shape == ()`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "tuple[int, ...]",
+        "description": "Immutable tuple of dimension sizes."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3, 4, 5)\n>>> x.shape\n(3, 4, 5)\n>>> lucid.tensor(1.0).shape\n()"
+      ],
+      "notes": [
+        "For a tensor with $N$ elements arranged in $d$ dimensions\n$(s_0, s_1, \\ldots, s_{d-1})$, the total element count satisfies:\n\n$$\n\\prod_{i=0}^{d-1} s_i = N\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "dtype",
+      "path": "lucid._tensor.tensor.Tensor.dtype",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "dtype: _dtype_cls",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L250",
+      "summary": "Data type of the tensor elements.",
+      "extended": "Reflects the numeric format used to store each element in memory.\nLucid supports the following dtypes:\n\n* `lucid.float32` (default for floating-point)\n* `lucid.float64`\n* `lucid.float16`\n* `lucid.bfloat16`\n* `lucid.int8`, `lucid.int16`, `lucid.int32`, `lucid.int64`\n* `lucid.bool_`\n* `lucid.complex64`",
+      "parameters": [],
+      "returns": {
+        "annotation": "lucid.dtype",
+        "description": "The element type of this tensor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3).dtype\nlucid.float32\n>>> lucid.zeros(3, dtype=lucid.int64).dtype\nlucid.int64"
+      ],
+      "notes": [
+        "The memory footprint of a tensor is $N \\times e$ bytes, where\n$N$ is the total number of elements and $e$ is\n`dtype.itemsize`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "device",
+      "path": "lucid._tensor.tensor.Tensor.device",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "device: _device_cls",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L286",
+      "summary": "Device on which this tensor is stored.",
+      "extended": "Lucid tensors reside on one of two devices:\n\n* `cpu` — Apple Accelerate (vDSP / vForce / BLAS / LAPACK).\n* `metal` — Apple Metal GPU via the MLX backend.",
+      "parameters": [],
+      "returns": {
+        "annotation": "lucid.device",
+        "description": "The device object for this tensor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.device\ndevice(type='cpu')\n>>> x.metal().device\ndevice(type='metal')"
+      ],
+      "notes": [
+        "On Apple Silicon the CPU and GPU share the same physical DRAM\n(unified memory architecture).  Moving a tensor between devices\ncopies the *logical* dispatch target, not physical bytes, unless\nthe tensor is in a non-shared Metal buffer. The dispatch routing\nrule is\n\n$$\n\\text{backend}(t) = \\begin{cases}\n    \\text{Accelerate} & \\text{if } t.\\text{device} = \\text{cpu} \\\\\n    \\text{MLX/Metal} & \\text{if } t.\\text{device} = \\text{metal}.\n\\end{cases}\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ndim",
+      "path": "lucid._tensor.tensor.Tensor.ndim",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "ndim: int",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L326",
+      "summary": "Number of dimensions (rank) of the tensor.",
+      "extended": "Equivalent to `len(tensor.shape)`.  A scalar tensor has `ndim == 0`,\na vector has `ndim == 1`, a matrix has `ndim == 2`, and so on.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "The number of dimensions."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.tensor(3.14).ndim\n0\n>>> lucid.zeros(5).ndim\n1\n>>> lucid.zeros(2, 3).ndim\n2"
+      ],
+      "notes": [
+        "For a shape tuple $(s_0, \\ldots, s_{d-1})$ the rank is simply\n\n$$\n\\text{ndim} = d = |\\text{shape}|.\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "T",
+      "path": "lucid._tensor.tensor.Tensor.T",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "T: Self",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L358",
+      "summary": "Tensor with all dimensions reversed.",
+      "extended": "For a 2-D tensor this is the standard matrix transpose.  For tensors\nwith more than two dimensions, the axis order is fully reversed:\naxis `i` maps to axis `ndim - 1 - i`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A view (or copy) with reversed dimension order."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.arange(6).reshape(2, 3)\n>>> x.shape\n(2, 3)\n>>> x.T.shape\n(3, 2)\n>>> lucid.arange(24).reshape(2, 3, 4).T.shape\n(4, 3, 2)"
+      ],
+      "notes": [
+        "For a tensor of shape $(s_0, s_1, \\ldots, s_{d-1})$, the\ntransposed tensor has shape $(s_{d-1}, \\ldots, s_1, s_0)$.\nThis differs from `mT`, which only transposes the final two axes."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "mT",
+      "path": "lucid._tensor.tensor.Tensor.mT",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "mT: Self",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L390",
+      "summary": "Tensor with the last two dimensions transposed.",
+      "extended": "Equivalent to calling `lucid.swapaxes(x, -2, -1)`.  Useful for\nbatched linear-algebra operations where the batch dimensions should\nremain untouched.",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A view (or copy) with axes `-2` and `-1` swapped."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(4, 3, 5)\n>>> x.mT.shape\n(4, 5, 3)"
+      ],
+      "notes": [
+        "For a tensor of shape $(\\ldots, m, n)$ the result has shape\n$(\\ldots, n, m)$.  The leading batch dimensions are unchanged."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_metal",
+      "path": "lucid._tensor.tensor.Tensor.is_metal",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "is_metal: bool",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L417",
+      "summary": "Whether this tensor resides on the Metal (GPU) device.",
+      "extended": "On Apple Silicon the GPU backend is Apple Metal accessed through the\nMLX library.  CPU tensors use Apple Accelerate instead.",
+      "parameters": [],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` if the tensor is on the Metal device, `False` for CPU."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.is_metal\nFalse\n>>> x.metal().is_metal\nTrue"
+      ],
+      "notes": [
+        "Equivalent predicate $\\text{is\\_metal}(t) = (t.\\text{device} = \\text{GPU})$.\nOn Apple Silicon the Metal backend dispatches via MLX, which lazily\nbuilds a graph and evaluates on the GPU when results are observed."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_shared",
+      "path": "lucid._tensor.tensor.Tensor.is_shared",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "is_shared: bool",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L446",
+      "summary": "True when backed by a Metal `MTLResourceStorageModeShared` buffer.",
+      "extended": "Shared-memory tensors live in Apple Silicon unified DRAM and are\nsimultaneously accessible from CPU and GPU without a `memcpy`.\nCreate them with `lucid.metal.shared_tensor()` or promote an\nexisting tensor with `lucid.metal.to_shared()`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` if the tensor's storage uses Metal's shared storage\nmode, `False` otherwise (including all pure-CPU tensors and\nprivate-mode Metal buffers)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.is_shared\nFalse\n>>> y = lucid.metal.shared_tensor((3,))\n>>> y.is_shared\nTrue"
+      ],
+      "notes": [
+        "On Apple Silicon, shared storage permits zero-copy hand-off between\nCPU and GPU code paths because both engines see the same physical\nDRAM page. The trade-off is that Metal's GPU caches cannot be used\nas aggressively as with private storage; for compute-bound GPU\nkernels, private mode is often preferable. Predicate:\n$\\text{is\\_shared}(t) = \\mathbf{1}\\{\\text{storage\\_mode}(t) = \\text{Shared}\\}$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_leaf",
+      "path": "lucid._tensor.tensor.Tensor.is_leaf",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "is_leaf: bool",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L483",
+      "summary": "Whether this tensor is a leaf in the autograd computation graph.",
+      "extended": "A tensor is a leaf if it was created directly by the user (not as the\nresult of an operation) or if it does not require gradients.  Only\nleaf tensors accumulate gradients into their `.grad` attribute during\n`backward`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` for leaf tensors, `False` for intermediate results."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> x.is_leaf\nTrue\n>>> y = x * 2          # result of an op — not a leaf\n>>> y.is_leaf\nFalse"
+      ],
+      "notes": [
+        "In the computation graph, leaf nodes are the \"inputs\" to the\nforward pass.  All tensors created with `requires_grad=False`\nare leaves by definition.  Tensors created with\n`requires_grad=True` directly by the user are also leaves.\nTensors produced by differentiable operations on\n`requires_grad=True` inputs are *not* leaves — they are\nintermediate nodes and their `.grad` is not retained unless\n`retain_grad` is called. Predicate:\n\n$$\n\\text{is\\_leaf}(t) = \\mathbf{1}\\{\\text{grad\\_fn}(t) = \\bot\\}.\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "requires_grad",
+      "path": "lucid._tensor.tensor.Tensor.requires_grad",
+      "kind": "function",
+      "labels": [
+        "property",
+        "writable"
+      ],
+      "signature": "requires_grad: bool",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L524",
+      "summary": "Whether gradient computation is enabled for this tensor.",
+      "extended": "When `True`, operations involving this tensor are recorded in the\ncomputation graph so that `backward` can propagate gradients\nback through them.\n\nSetting this attribute on a leaf tensor promotes or demotes it from\nthe autograd graph.  Calling `requires_grad = True` on an\nintermediate (non-leaf) tensor raises a `RuntimeError` because\nthose tensors are not user-controlled inputs.",
+      "parameters": [],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` if gradients are tracked for this tensor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0])\n>>> x.requires_grad\nFalse\n>>> x.requires_grad = True\n>>> x.requires_grad\nTrue"
+      ],
+      "notes": [
+        "Tensors with `requires_grad=True` become nodes in the autograd DAG.\nOperations consuming them produce non-leaf tensors that also require\ngradients (transitive closure of the flag along the forward graph)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "dim",
+      "path": "lucid._tensor.tensor.Tensor.dim",
+      "kind": "function",
+      "labels": [],
+      "signature": "dim()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L622",
+      "subcategory": "tensor",
+      "summary": "Return the number of dimensions (rank) of the tensor.",
+      "extended": "This is identical to the `ndim` property.  It exists as a\nmethod for API compatibility with code that calls `tensor.dim()`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "Number of dimensions."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(2, 3, 4).dim()\n3\n>>> lucid.tensor(1.0).dim()\n0"
+      ],
+      "notes": [
+        "Equivalent to `len(tensor.shape)`; matches the conventional rank\n$d$ such that $\\text{shape} \\in \\mathbb{N}^d$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "size",
+      "path": "lucid._tensor.tensor.Tensor.size",
+      "kind": "function",
+      "labels": [],
+      "signature": "size(dim: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L658",
+      "subcategory": "tensor",
+      "summary": "Return the size of a specific dimension, or the full shape tuple.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Dimension index to query.  Supports negative indexing.\nIf omitted, the full shape tuple is returned.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "int",
+        "description": "Size of the requested dimension (when `dim` is given)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3, 4, 5)\n>>> x.size()\n(3, 4, 5)\n>>> x.size(0)\n3\n>>> x.size(-1)\n5"
+      ],
+      "notes": [
+        "The full shape and the element count are related by\n\n$$\n\\text{numel} = \\prod_{i=0}^{d-1} \\text{size}(i).\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_contiguous",
+      "path": "lucid._tensor.tensor.Tensor.is_contiguous",
+      "kind": "function",
+      "labels": [],
+      "signature": "is_contiguous()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L698",
+      "subcategory": "tensor",
+      "summary": "Return `True` if the tensor's data is stored contiguously in memory.",
+      "extended": "A contiguous tensor stores its elements in a single unbroken block of\nmemory in C (row-major) order — i.e. the stride of each dimension equals\nthe product of all *later* dimension sizes times the element size.\n\nNon-contiguous tensors can arise from operations such as slicing,\ntransposing, or permuting axes.  Many C++ kernel paths require\ncontiguous input; call `contiguous` to get a contiguous copy\nwhen needed.",
+      "parameters": [],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` if the tensor uses a single contiguous memory block in\nC-order, `False` otherwise."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3, 4)\n>>> x.is_contiguous()\nTrue\n>>> x.T.is_contiguous()   # transpose is not contiguous\nFalse"
+      ],
+      "notes": [
+        "A tensor of shape $(s_0, \\ldots, s_{d-1})$ is contiguous iff\nits strides satisfy the C-order recurrence\n\n$$\n\\text{stride}[d-1] = 1, \\quad\n\\text{stride}[i] = \\text{stride}[i+1] \\cdot s_{i+1}\n$$\n(in element units). Many Accelerate/MLX kernels require contiguous\ninputs; if not, call `contiguous` first."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "grad",
+      "path": "lucid._tensor.tensor.Tensor.grad",
+      "kind": "function",
+      "labels": [
+        "property",
+        "writable"
+      ],
+      "signature": "grad: Self | None",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L743",
+      "summary": "Accumulated gradient tensor, or `None` if not yet computed.",
+      "extended": "After calling `backward`, this attribute holds the gradient of\nthe scalar loss with respect to this tensor — i.e.\n$\\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{x}}$ where\n$\\mathbf{x}$ is this tensor.\n\nGradients are **accumulated** (added) across multiple `backward`\ncalls.  Zero the gradient before each optimisation step with\n`tensor.grad = None` or `tensor.grad.zero_()`, or use an optimiser\nthat calls `zero_grad()` automatically.\n\nOnly **leaf** tensors (those created directly by user code with\n`requires_grad=True`) populate this attribute by default.\nNon-leaf (intermediate) tensors discard their gradient after the\nbackward pass unless `retain_grad` was called.",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor or None",
+        "description": "The accumulated gradient, or `None` if `backward` has not\nbeen called yet or if this tensor does not require gradients."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)\n>>> y = (x ** 2).sum()\n>>> y.backward()\n>>> x.grad          # d(sum(x^2))/dx = 2x\ntensor([2., 4., 6.])"
+      ],
+      "notes": [
+        "The gradient has the same shape as the tensor itself:\n\n$$\n\\text{grad.shape} = \\text{self.shape}\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "grad_fn",
+      "path": "lucid._tensor.tensor.Tensor.grad_fn",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "grad_fn: _C_engine.Node | None",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L844",
+      "summary": "The autograd graph node that created this tensor, or `None`.",
+      "extended": "Every tensor produced by a differentiable operation holds a reference\nto the C++ `Node` (gradient function) that can propagate gradients\nback through that operation.  The graph is a directed acyclic graph\n(DAG) of such nodes; `backward` traverses it in reverse\ntopological order.\n\nLeaf tensors (created directly, not via ops) always have\n`grad_fn = None`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "lucid._C.engine.Node or None",
+        "description": "The gradient-computing node, or `None` for leaf tensors or\ntensors that do not require gradients."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> x.grad_fn is None      # leaf — no grad_fn\nTrue\n>>> y = x * 3\n>>> y.grad_fn is None      # result of an op — has a grad_fn\nFalse"
+      ],
+      "notes": [
+        "The graph forms the chain-rule factorisation used by `backward`:\n\n$$\n\\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{x}}\n= \\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{y}}\n  \\cdot \\frac{\\partial \\mathbf{y}}{\\partial \\mathbf{x}},\n$$\nwhere $\\mathbf{y} = f(\\mathbf{x})$ and `grad_fn` carries the\nJacobian-vector product $v \\mapsto v \\cdot J_f$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "requires_grad_",
+      "path": "lucid._tensor.tensor.Tensor.requires_grad_",
+      "kind": "function",
+      "labels": [],
+      "signature": "requires_grad_(requires_grad: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L887",
+      "subcategory": "tensor",
+      "summary": "Enable or disable gradient tracking for this tensor, in-place.",
+      "extended": "Unlike the `requires_grad` property setter, this method\nreturns `self` so it can be chained inline:\n\n.. code-block:: python\n\nx = lucid.randn(3, 4).requires_grad_(True)",
+      "parameters": [
+        {
+          "name": "requires_grad",
+          "annotation": "bool",
+          "description": "New value for gradient tracking.  Defaults to `True`.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self` with the updated `requires_grad` flag."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.requires_grad_(True).requires_grad\nTrue"
+      ],
+      "notes": [
+        "In-place flag flip: the underlying storage is preserved, but the\n`TensorImpl` is replaced with one whose autograd flag is\n$\\text{requires\\_grad} \\in \\{\\text{True}, \\text{False}\\}$.\nOnly valid on **leaf** tensors; non-leaf tensors inherit the flag\nfrom their producing op and cannot be flipped on directly."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "retain_grad",
+      "path": "lucid._tensor.tensor.Tensor.retain_grad",
+      "kind": "function",
+      "labels": [],
+      "signature": "retain_grad()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L925",
+      "subcategory": "tensor",
+      "summary": "Retain the gradient on this non-leaf tensor after `backward`.",
+      "extended": "By default, gradients are only stored on **leaf** tensors.  Intermediate\n(non-leaf) results in the computation graph have their `.grad`\ndiscarded after the backward pass to save memory.  Calling\n`retain_grad()` on an intermediate tensor before the forward pass\ninstructs the engine to keep that gradient so it can be inspected\nafterwards.",
+      "parameters": [],
+      "returns": {
+        "annotation": "None",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)\n>>> y = x * 2          # intermediate — grad normally discarded\n>>> y.retain_grad()\n>>> y.sum().backward()\n>>> y.grad             # now available: d(sum(y))/dy = [1., 1., 1.]\ntensor([1., 1., 1.])"
+      ],
+      "notes": [
+        "This method must be called **before** the forward computation whose\ngradient you want to inspect.  Calling it after `backward` has\nno effect. Conceptually retains\n$\\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{y}}$ for\nthe intermediate node $\\mathbf{y}$ instead of discarding it\nafter its parents have consumed it."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "register_hook",
+      "path": "lucid._tensor.tensor.Tensor.register_hook",
+      "kind": "function",
+      "labels": [],
+      "signature": "register_hook(hook: Callable[[Tensor], Tensor | None])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L957",
+      "subcategory": "tensor",
+      "summary": "Register a hook that fires when this tensor's gradient is computed.",
+      "extended": "The hook receives the accumulated gradient tensor.  If it returns a\nnon-`None` `lucid.Tensor`, that value replaces the gradient.",
+      "parameters": [
+        {
+          "name": "hook",
+          "annotation": "callable",
+          "description": "`hook(grad: Tensor) -> Tensor | None`",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "RemovableHandle",
+        "description": "Call `.remove()` to de-register the hook, or use it as a\ncontext manager."
+      },
+      "raises": [],
+      "examples": [
+        ">>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)\n>>> grads = []\n>>> h = x.register_hook(lambda g: grads.append(g.clone()))\n>>> (x * 2).sum().backward()\n>>> grads[0]          # tensor([2., 2., 2.])\n>>> h.remove()        # de-register"
+      ],
+      "notes": [
+        "* For leaf tensors the hook fires after `backward` accumulates\n  the gradient, which is the common use case (gradient clipping,\n  logging).\n* For non-leaf tensors, call `retain_grad` before the forward\n  pass so the gradient is preserved and available when hooks fire.\n* The hook must be registered **before** the forward computation for\n  non-leaf tensors; for leaf tensors any timing works.\n\nChain-rule effect: if the hook returns a tensor $\\tilde g$,\nthe engine substitutes $\\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{x}} \\leftarrow \\tilde g$ before continuing backward propagation.\nA returned `None` leaves the gradient untouched."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "backward",
+      "path": "lucid._tensor.tensor.Tensor.backward",
+      "kind": "function",
+      "labels": [],
+      "signature": "backward(gradient: Tensor | None = None, retain_graph: bool = False, create_graph: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1009",
+      "subcategory": "tensor",
+      "summary": "Compute gradients via reverse-mode automatic differentiation.",
+      "extended": "Traverses the computation graph in reverse topological order, applying\nthe chain rule at each node to accumulate\n$\\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{x}}$ into the\n`.grad` attribute of every leaf tensor that has\n`requires_grad=True`.",
+      "parameters": [
+        {
+          "name": "gradient",
+          "annotation": "Tensor",
+          "description": "The seed gradient — the gradient of some external scalar with\nrespect to `self`.  Must have the same shape as `self`.\n\n* For **scalar** tensors (`numel() == 1`) this may be omitted;\n  Lucid uses an implicit seed of `1.0`.\n* For **non-scalar** tensors it is **required**.  Pass the upstream\n  gradient explicitly (e.g. when differentiating through a loss\n  that is itself a vector).",
+          "default": "None"
+        },
+        {
+          "name": "retain_graph",
+          "annotation": "bool",
+          "description": "If `False` (default), intermediate tensors and gradient functions\nstored in the computation graph are freed immediately after the\nbackward pass to reclaim memory.  Set to `True` if you need to\ncall `backward()` again on the same graph (e.g. to compute\nmultiple gradient signals or to inspect intermediate values).",
+          "default": "False"
+        },
+        {
+          "name": "create_graph",
+          "annotation": "bool",
+          "description": "Reserved for higher-order differentiation.  When `True` the\nbackward pass itself is differentiable, enabling gradients of\ngradients.  Not yet fully supported; accepted for API\ncompatibility.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": ""
+      },
+      "raises": [
+        {
+          "annotation": "RuntimeError",
+          "description": "If `self` has more than one element and `gradient` is not\nprovided."
+        },
+        {
+          "annotation": "RuntimeError",
+          "description": "If `gradient.shape != self.shape`."
+        }
+      ],
+      "examples": [
+        "Scalar output — no explicit gradient seed needed:\n>>> import lucid\n>>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)\n>>> loss = (x ** 2).sum()   # scalar\n>>> loss.backward()\n>>> x.grad                  # d(sum(x^2))/dx = 2x\ntensor([2., 4., 6.])\nNon-scalar output — must supply a gradient seed:\n>>> import lucid\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> y = x * 3               # shape (2,) — not a scalar\n>>> y.backward(lucid.ones(2))\n>>> x.grad                  # d(3x)/dx = 3 for each element\ntensor([3., 3.])\nMultiple backward passes with ``retain_graph=True``:\n>>> import lucid\n>>> x = lucid.tensor([2.0], requires_grad=True)\n>>> y = x ** 3\n>>> y.backward(retain_graph=True)   # first pass\n>>> y.backward()                    # second pass — accumulates\n>>> x.grad                          # 3*x^2 + 3*x^2 = 2 * 12 = 24\ntensor([24.])"
+      ],
+      "notes": [
+        "**The chain rule and reverse-mode AD**\n\nGiven a scalar loss $\\mathcal{L}$ and a sequence of operations\n$\\mathbf{z} = f_n(\\cdots f_2(f_1(\\mathbf{x})) \\cdots)$,\nthe chain rule gives:\n\n$$\n\\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{x}}\n= \\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{z}}\n  \\cdot \\frac{\\partial \\mathbf{z}}{\\partial \\mathbf{x}}\n= \\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{z}}\n  \\cdot J_{f_n} \\cdots J_{f_1}\n$$\nwhere $J_{f_i}$ is the Jacobian of the $i$-th operation.\nReverse-mode AD (backpropagation) evaluates this product right-to-left,\nstarting from the scalar output with seed gradient\n$\\frac{\\partial \\mathcal{L}}{\\partial \\mathcal{L}} = 1$, so\nit computes gradients for *all* inputs in a single backward pass —\n$\\mathcal{O}(1)$ passes regardless of the number of parameters.\n\n**Gradient accumulation**\n\nGradients are *added* to `tensor.grad` rather than overwritten.\nThis is intentional: it supports patterns like accumulated gradient\nsteps.  Zero gradients explicitly before each optimisation step:\n\n.. code-block:: python\n\n    for param in model.parameters():\n        param.grad = None   # or param.grad.zero_()\n\n**Metal flush**\n\nOn Metal devices Lucid calls `TensorImpl::eval()` before the\nbackward pass.  This forces MLX to evaluate the forward graph eagerly\nso that the backward kernel sees concrete values rather than deferred\nMLX computations.  In practice this yields roughly 2× faster\nbackward passes for typical model sizes."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "clamp_min_",
+      "path": "lucid._tensor.tensor.Tensor.clamp_min_",
+      "kind": "function",
+      "labels": [],
+      "signature": "clamp_min_(min: float)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1291",
+      "subcategory": "tensor",
+      "summary": "Raise all elements below `min` to `min`, in-place.",
+      "extended": "Shorthand for `clamp_(min=min)`.",
+      "parameters": [
+        {
+          "name": "min",
+          "annotation": "float",
+          "description": "Lower bound.  Elements strictly less than `min` are set to\n`min`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self` after clamping."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([-1.0, 0.0, 1.0])\n>>> x.clamp_min_(0.0)\ntensor([0., 0., 1.])"
+      ],
+      "notes": [
+        "Pointwise rectification:\n\n$$\nx_i \\leftarrow \\max(\\text{min}, x_i).\n$$\nThe non-smooth point at $x = \\text{min}$ has subgradient\n$[0, 1]$; autograd selects `1` for $x > \\text{min}$\nand `0` otherwise."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "clamp_max_",
+      "path": "lucid._tensor.tensor.Tensor.clamp_max_",
+      "kind": "function",
+      "labels": [],
+      "signature": "clamp_max_(max: float)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1328",
+      "subcategory": "tensor",
+      "summary": "Lower all elements above `max` to `max`, in-place.",
+      "extended": "Shorthand for `clamp_(max=max)`.",
+      "parameters": [
+        {
+          "name": "max",
+          "annotation": "float",
+          "description": "Upper bound.  Elements strictly greater than `max` are set to\n`max`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self` after clamping."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([0.5, 1.5, 2.5])\n>>> x.clamp_max_(2.0)\ntensor([0.5, 1.5, 2. ])"
+      ],
+      "notes": [
+        "Pointwise saturation:\n\n$$\nx_i \\leftarrow \\min(\\text{max}, x_i).\n$$\nThe gradient is the indicator $\\mathbf{1}\\{x_i < \\text{max}\\}$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "item",
+      "path": "lucid._tensor.tensor.Tensor.item",
+      "kind": "function",
+      "labels": [],
+      "signature": "item()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1405",
+      "subcategory": "tensor",
+      "summary": "Return the value of a single-element tensor as a Python scalar.",
+      "extended": "Delegates to the engine's `TensorImpl::item` which performs the\nsingle-element extraction (including IEEE-754 binary16 to float\ndecoding) without going through numpy.",
+      "parameters": [],
+      "returns": {
+        "annotation": "float or int or bool",
+        "description": "The unboxed Python scalar. Floating-point dtypes (including\n`float16` / `bfloat16`) return `float`; integer dtypes\nreturn `int`; `bool_` returns `bool`."
+      },
+      "raises": [
+        {
+          "annotation": "RuntimeError",
+          "description": "If the tensor has more than one element (`numel() != 1`)."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> lucid.tensor(3.14).item()\n3.140000104904175\n>>> lucid.tensor(7, dtype=lucid.int64).item()\n7"
+      ],
+      "notes": [
+        "Triggers a device-to-host synchronisation when called on a Metal\ntensor — the value cannot be inspected until any pending MLX\ncomputation has completed. Avoid calling in tight loops on GPU\ntensors; prefer `tensor.cpu().tolist()` for batch extraction.\n\nDefined only when $\\text{numel} = \\prod_i s_i = 1$. `item`\nis one of the sanctioned engine-to-host bridge points (rule **H4**)\nand detaches from autograd: the returned Python scalar carries no\ngradient information."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "numpy",
+      "path": "lucid._tensor.tensor.Tensor.numpy",
+      "kind": "function",
+      "labels": [],
+      "signature": "numpy()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1446",
+      "subcategory": "tensor",
+      "summary": "Return the tensor as a NumPy array (CPU only).",
+      "extended": "Imports numpy lazily — the rest of Lucid stays numpy-free unless\nthe user explicitly bridges through this method. When numpy is\nnot installed, raises an `ImportError` pointing at\n`pip install lucid[numpy]`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "numpy.ndarray",
+        "description": "A NumPy view (or copy) of the tensor's data. Shape and dtype\nmirror the source; the array lives in host memory."
+      },
+      "raises": [
+        {
+          "annotation": "ImportError",
+          "description": "If NumPy is not installed."
+        },
+        {
+          "annotation": "RuntimeError",
+          "description": "If the tensor lives on the Metal device and cannot be evaluated\nto host memory."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])\n>>> arr = x.numpy()\n>>> arr.shape\n(2, 2)\n>>> arr.dtype\ndtype('float32')"
+      ],
+      "notes": [
+        "This is one of the sanctioned bridge points between Lucid and the\noutside world (see project rule **H4**). The returned `ndarray`\ndoes **not** participate in autograd; downstream NumPy operations\nwill not produce gradients.\n\nLayout is C-contiguous; for a tensor of shape $(s_0, \\ldots, s_{d-1})$\nand itemsize $e$, the NumPy strides equal\n\n$$\n\\text{nstride}[i] = e \\cdot \\prod_{j=i+1}^{d-1} s_j.\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "tolist",
+      "path": "lucid._tensor.tensor.Tensor.tolist",
+      "kind": "function",
+      "labels": [],
+      "signature": "tolist()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1599",
+      "subcategory": "tensor",
+      "summary": "Return the tensor contents as a nested Python list (or scalar).",
+      "extended": "Converts the tensor to a standard Python object:\n\n* 0-d tensor → a Python scalar (`int`, `float`, `bool`, or\n  `complex`).\n* 1-d tensor → a flat `list`.\n* N-d tensor → a nested `list` of depth `N`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "list or int or float or bool or complex",
+        "description": "Nested Python representation of the tensor data."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.tensor([[1, 2], [3, 4]]).tolist()\n[[1, 2], [3, 4]]\n>>> lucid.tensor(3.14).tolist()\n3.14"
+      ],
+      "notes": [
+        "Numpy-free for every supported dtype (F16 / F32 / F64 / I8 / I16 /\nI32 / I64 / Bool / C64).  Delegates to the engine-side\n`TensorImpl.tolist()`, which mirrors `item()`'s dtype dispatch\nbut walks the full shape recursively and yields Python `complex`\nfor C64 leaves.  Forces a device-to-host synchronisation for\nMetal tensors via the underlying `to_bytes()` snapshot.\nAutograd information is dropped — the returned Python objects are\npure value copies."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "unfold",
+      "path": "lucid._tensor.tensor.Tensor.unfold",
+      "kind": "function",
+      "labels": [],
+      "signature": "unfold(dimension: int, size: int, step: int)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1674",
+      "subcategory": "tensor",
+      "summary": "Return a view with an extra dimension containing sliding-window slices.",
+      "extended": "Extracts non-overlapping or overlapping windows of length `size`\nalong `dimension`, advancing by `step` elements between windows.\nThe output has one extra trailing dimension compared to the input.",
+      "parameters": [
+        {
+          "name": "dimension",
+          "annotation": "int",
+          "description": "The axis along which to slide the window.",
+          "default": null
+        },
+        {
+          "name": "size",
+          "annotation": "int",
+          "description": "Number of elements in each window.",
+          "default": null
+        },
+        {
+          "name": "step",
+          "annotation": "int",
+          "description": "Gap between the start positions of successive windows.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Tensor of shape\n$(\\ldots,\\, L,\\, \\text{size})$ where\n$L = \\lfloor (s_{\\text{dim}} - \\text{size}) / \\text{step} \\rfloor + 1$\nand $s_{\\text{dim}}$ is the original size along\n`dimension`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.arange(8, dtype=lucid.float32)\n>>> x.unfold(0, size=3, step=2).shape\n(3, 3)\n>>> # windows: [0,1,2], [2,3,4], [4,5,6]"
+      ],
+      "notes": [
+        "Unfold is the fundamental primitive behind 1-D convolution and\nsliding-window aggregations.  The windows may overlap when\n`step < size`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "data",
+      "path": "lucid._tensor.tensor.Tensor.data",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "data: Self",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1766",
+      "summary": "The tensor's underlying data, detached from gradient tracking.",
+      "extended": "Returns a view of the same storage as `self` but with\n`requires_grad=False` and no `grad_fn`.  Assigning to\n`tensor.data` replaces the underlying storage in-place without\naffecting the autograd graph — useful for in-place weight updates\nthat should not be tracked.",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A non-differentiable view of the same data."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> x.data.requires_grad\nFalse\n>>> x.data\ntensor([1., 2.])"
+      ],
+      "notes": [
+        "Aliases the same storage as `self` with the gradient flag\ncleared. Mathematically the same identity as `detach` —\nequal values, zero Jacobian — but unlike `detach` writes\nthrough `data` propagate back to `self`'s underlying buffer\nwithout participating in autograd. Prefer `detach` for new\ncode; `data` is retained for API compatibility."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__len__",
+      "path": "lucid._tensor.tensor.Tensor.__len__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__len__()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1805",
+      "subcategory": "tensor",
+      "summary": "Return the size of the first dimension (`shape[0]`).",
+      "extended": "Implements the standard Python `len()` protocol. Mirrors\nsequence semantics: the length is the number of top-level elements\n(rows) the tensor iterates over.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "`self.shape[0]` — the size of the outermost dimension."
+      },
+      "raises": [
+        {
+          "annotation": "TypeError",
+          "description": "If the tensor is 0-d (scalar). Python forbids `len()` on\nsized-zero scalar objects."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> len(lucid.zeros(5, 3))\n5\n>>> len(lucid.zeros(7))\n7"
+      ],
+      "notes": [
+        "Mirrors NumPy/sequence semantics: $\\text{len}(t) = s_0$.\nIterating with `__iter__` yields exactly $s_0$ slices."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__bool__",
+      "path": "lucid._tensor.tensor.Tensor.__bool__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__bool__()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1840",
+      "subcategory": "tensor",
+      "summary": "Convert a single-element tensor to a Python `bool`.",
+      "extended": "Implements the truthiness protocol used by `if t:`, `while t:`,\nand `bool(t)`. Only defined for single-element tensors because\nthe truth value of a multi-element tensor is ambiguous: \"is any\nelement true?\" (`.any()`) versus \"are all elements true?\"\n(`.all()`) are different reductions.",
+      "parameters": [],
+      "returns": {
+        "annotation": "bool",
+        "description": "The unboxed value of the single element interpreted as a\nPython `bool` (non-zero numerics map to `True`)."
+      },
+      "raises": [
+        {
+          "annotation": "RuntimeError",
+          "description": "If `numel() != 1`. Use `any` / `all` explicitly\non multi-element tensors."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> bool(lucid.tensor(1.0))\nTrue\n>>> bool(lucid.tensor(0))\nFalse\nMathematically: defined only when :math:`\\prod_i s_i = 1`. The\nsingle element :math:`x` maps to :math:`\\text{bool}(x) = (x \\neq 0)`.\n>>> bool(lucid.tensor([1.0, 0.0]))\nTraceback (most recent call last):\n    ...\nRuntimeError: Boolean value of Tensor with more than one element is ambiguous"
+      ],
+      "notes": [
+        "This matches the convention adopted by every mainstream tensor\nframework. The error guards against subtle bugs such as\n`if pred_tensor:` silently truncating to the first element."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__repr__",
+      "path": "lucid._tensor.tensor.Tensor.__repr__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__repr__()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1888",
+      "subcategory": "tensor",
+      "summary": "Return a string representation suitable for debugging.",
+      "extended": "Delegates to the formatted printer in `lucid._tensor._repr`,\nwhich renders shape, dtype, and (truncated) element values in a\nreadable layout.",
+      "parameters": [],
+      "returns": {
+        "annotation": "str",
+        "description": "Multi-line repr showing element values with appropriate\nprecision, plus shape and dtype metadata when non-default."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> repr(lucid.zeros(2, 3))\n'tensor([[0., 0., 0.],\\n        [0., 0., 0.]])'"
+      ],
+      "notes": [
+        "Display only — does **not** participate in autograd and is one of\nthe bridge boundaries permitted by rule **H4** (`_repr.py`).\nFor Metal-resident tensors this forces a host synchronisation to\nmaterialise element values for printing."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__iter__",
+      "path": "lucid._tensor.tensor.Tensor.__iter__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__iter__()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1921",
+      "subcategory": "tensor",
+      "summary": "Iterate over the first dimension of the tensor.",
+      "extended": "Yields successive slices `self[i]` for `i` in `range(shape[0])`,\nso iterating an $N$-d tensor produces $(N-1)$-d slices.\nImplements the standard Python iterator protocol.",
+      "parameters": [],
+      "returns": {
+        "annotation": "Iterator[Self]",
+        "description": ""
+      },
+      "raises": [
+        {
+          "annotation": "TypeError",
+          "description": "If the tensor is 0-d (scalar). Scalars have no first dimension\nto iterate over."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> for row in lucid.arange(6).reshape(3, 2):\n...     print(row.tolist())\n[0, 1]\n[2, 3]\n[4, 5]"
+      ],
+      "notes": [
+        "Yields $s_0$ slices each of shape $(s_1, \\ldots, s_{d-1})$.\nFor very large leading axes prefer chunked iteration via\n`lucid.split` to amortise per-slice overhead."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "new_empty",
+      "path": "lucid._tensor.tensor.Tensor.new_empty",
+      "kind": "function",
+      "labels": [],
+      "signature": "new_empty(size: int = (), dtype: _dtype_cls | None = None, device: _device_cls | str | None = None, requires_grad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L1997",
+      "subcategory": "tensor",
+      "summary": "Return an uninitialized tensor of the given shape.",
+      "extended": "The returned tensor inherits this tensor's `dtype` and `device`\nunless overridden.  The contents are **undefined** — do not read\nvalues without first writing them.",
+      "parameters": [
+        {
+          "name": "*size",
+          "annotation": "int",
+          "description": "Dimensions of the output tensor.",
+          "default": "()"
+        },
+        {
+          "name": "dtype",
+          "annotation": "lucid.dtype",
+          "description": "Element type.  Defaults to `self.dtype`.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "str or lucid.device",
+          "description": "Target device.  Defaults to `self.device`.",
+          "default": "None"
+        },
+        {
+          "name": "requires_grad",
+          "annotation": "bool",
+          "description": "Enable gradient tracking on the result.  Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Uninitialized tensor of shape `size`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(2, 3, dtype=lucid.float64)\n>>> y = x.new_empty(4, 5)\n>>> y.shape, y.dtype\n((4, 5), lucid.float64)"
+      ],
+      "notes": [
+        "Allocates $\\prod_i s_i \\cdot e$ bytes of uninitialised\nmemory where $e$ is `dtype.itemsize`. Faster than\n`new_zeros` because the engine skips the zero-fill kernel.\nMust be followed by a write before any read."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "new_zeros",
+      "path": "lucid._tensor.tensor.Tensor.new_zeros",
+      "kind": "function",
+      "labels": [],
+      "signature": "new_zeros(size: int = (), dtype: _dtype_cls | None = None, device: _device_cls | str | None = None, requires_grad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2050",
+      "subcategory": "tensor",
+      "summary": "Return a zero-filled tensor of the given shape.",
+      "extended": "The returned tensor inherits this tensor's `dtype` and `device`\nunless overridden.  All elements are initialised to `0`.",
+      "parameters": [
+        {
+          "name": "*size",
+          "annotation": "int",
+          "description": "Dimensions of the output tensor.",
+          "default": "()"
+        },
+        {
+          "name": "dtype",
+          "annotation": "lucid.dtype",
+          "description": "Element type.  Defaults to `self.dtype`.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "str or lucid.device",
+          "description": "Target device.  Defaults to `self.device`.",
+          "default": "None"
+        },
+        {
+          "name": "requires_grad",
+          "annotation": "bool",
+          "description": "Enable gradient tracking on the result.  Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Zero tensor of shape `size`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.ones(2, dtype=lucid.int32)\n>>> x.new_zeros(3, 3)\ntensor([[0, 0, 0],\n        [0, 0, 0],\n        [0, 0, 0]])"
+      ],
+      "notes": [
+        "Initialises every element to the additive identity $0$. The\nzero-fill is delegated to a fused engine kernel — Accelerate\n`catlas_*set` on CPU and MLX broadcast-fill on Metal."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "new_ones",
+      "path": "lucid._tensor.tensor.Tensor.new_ones",
+      "kind": "function",
+      "labels": [],
+      "signature": "new_ones(size: int = (), dtype: _dtype_cls | None = None, device: _device_cls | str | None = None, requires_grad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2102",
+      "subcategory": "tensor",
+      "summary": "Return an all-ones tensor of the given shape.",
+      "extended": "The returned tensor inherits this tensor's `dtype` and `device`\nunless overridden.  All elements are initialised to `1`.",
+      "parameters": [
+        {
+          "name": "*size",
+          "annotation": "int",
+          "description": "Dimensions of the output tensor.",
+          "default": "()"
+        },
+        {
+          "name": "dtype",
+          "annotation": "lucid.dtype",
+          "description": "Element type.  Defaults to `self.dtype`.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "str or lucid.device",
+          "description": "Target device.  Defaults to `self.device`.",
+          "default": "None"
+        },
+        {
+          "name": "requires_grad",
+          "annotation": "bool",
+          "description": "Enable gradient tracking on the result.  Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "All-ones tensor of shape `size`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(2, dtype=lucid.float16)\n>>> x.new_ones(2, 4)\ntensor([[1., 1., 1., 1.],\n        [1., 1., 1., 1.]])"
+      ],
+      "notes": [
+        "Initialises every element to the multiplicative identity $1$.\nFor arbitrary fill values use `new_full`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "new_full",
+      "path": "lucid._tensor.tensor.Tensor.new_full",
+      "kind": "function",
+      "labels": [],
+      "signature": "new_full(size: tuple[int, ...], fill_value: float, dtype: _dtype_cls | None = None, device: _device_cls | str | None = None, requires_grad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2152",
+      "subcategory": "tensor",
+      "summary": "Return a tensor of the given shape filled with a constant value.",
+      "extended": "The returned tensor inherits this tensor's `dtype` and `device`\nunless overridden.  Every element is set to `fill_value`.",
+      "parameters": [
+        {
+          "name": "size",
+          "annotation": "tuple[int, ...]",
+          "description": "Shape of the output tensor.",
+          "default": null
+        },
+        {
+          "name": "fill_value",
+          "annotation": "float",
+          "description": "Scalar value to fill the tensor with.",
+          "default": null
+        },
+        {
+          "name": "dtype",
+          "annotation": "lucid.dtype",
+          "description": "Element type.  Defaults to `self.dtype`.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "str or lucid.device",
+          "description": "Target device.  Defaults to `self.device`.",
+          "default": "None"
+        },
+        {
+          "name": "requires_grad",
+          "annotation": "bool",
+          "description": "Enable gradient tracking on the result.  Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Constant-filled tensor of shape `size`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(1)\n>>> x.new_full((2, 3), fill_value=7.0)\ntensor([[7., 7., 7.],\n        [7., 7., 7.]])"
+      ],
+      "notes": [
+        "Constant tensor $f \\cdot \\mathbf{1}$ where $f$ is\n`fill_value` and $\\mathbf{1}$ is the all-ones tensor of\nthe given shape. `fill_value` is promoted to `dtype` before\nthe broadcast fill."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "new_tensor",
+      "path": "lucid._tensor.tensor.Tensor.new_tensor",
+      "kind": "function",
+      "labels": [],
+      "signature": "new_tensor(data: np.ndarray | list[object] | int | float | bool | Tensor, dtype: _dtype_cls | None = None, device: _device_cls | str | None = None, requires_grad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2208",
+      "subcategory": "tensor",
+      "summary": "Return a new tensor constructed from `data`, inheriting dtype/device.",
+      "extended": "Creates a fresh tensor from the provided data, using this tensor's\n`dtype` and `device` as defaults.  The data is always **copied**;\nthe result does not share storage with `data` even if `data` is\nalready a `Tensor`.",
+      "parameters": [
+        {
+          "name": "data",
+          "annotation": "array_like or Tensor",
+          "description": "Input data — nested Python lists, scalars, or an existing tensor.",
+          "default": null
+        },
+        {
+          "name": "dtype",
+          "annotation": "lucid.dtype",
+          "description": "Element type.  Defaults to `self.dtype`.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "str or lucid.device",
+          "description": "Target device.  Defaults to `self.device`.",
+          "default": "None"
+        },
+        {
+          "name": "requires_grad",
+          "annotation": "bool",
+          "description": "Enable gradient tracking on the result.  Default `False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "New tensor containing a copy of `data`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> proto = lucid.zeros(1, dtype=lucid.float64)\n>>> t = proto.new_tensor([[1, 2], [3, 4]])\n>>> t.dtype\nlucid.float64"
+      ],
+      "notes": [
+        "Always copies — never aliases `data`'s storage even when `data`\nis already a `Tensor`. Routes through the same\n`_to_impl` bridge boundary as the public constructor (rule **H4**)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "element_size",
+      "path": "lucid._tensor.tensor.Tensor.element_size",
+      "kind": "function",
+      "labels": [],
+      "signature": "element_size()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2263",
+      "subcategory": "tensor",
+      "summary": "Return the size in bytes of a single element.",
+      "extended": "Determined entirely by `dtype`.  Common values:\n\n* `float32` / `int32` → 4 bytes\n* `float64` / `int64` → 8 bytes\n* `float16` / `bfloat16` / `int16` → 2 bytes\n* `int8` / `bool_` → 1 byte\n* `complex64` → 8 bytes (two 32-bit floats)",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "Number of bytes per element."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3, dtype=lucid.float32).element_size()\n4\n>>> lucid.zeros(3, dtype=lucid.float64).element_size()\n8"
+      ],
+      "notes": [
+        "The total memory footprint of the tensor is:\n\n$$\n\\text{nbytes} = \\text{numel()} \\times \\text{element\\_size()}\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "itemsize",
+      "path": "lucid._tensor.tensor.Tensor.itemsize",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "itemsize: int",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2298",
+      "summary": "Bytes per element — alias for `element_size`.",
+      "extended": "Provided as a property (rather than a method) for NumPy-style\nattribute access:  `tensor.itemsize` instead of\n`tensor.element_size()`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "Number of bytes per element."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(5, dtype=lucid.int16).itemsize\n2"
+      ],
+      "notes": [
+        "Total footprint of the tensor satisfies\n$\\text{nbytes} = \\text{numel} \\cdot \\text{itemsize}$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "nbytes",
+      "path": "lucid._tensor.tensor.Tensor.nbytes",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "nbytes: int",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2324",
+      "summary": "Total number of bytes occupied by the tensor's data buffer.",
+      "extended": "Equals `numel() * element_size()`.  Useful for estimating memory\nusage and for setting buffer sizes when interoperating with C or\nMetal shaders.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "Total byte count of the data storage."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(4, 4, dtype=lucid.float32).nbytes\n64\n>>> lucid.zeros(4, 4, dtype=lucid.float64).nbytes\n128"
+      ],
+      "notes": [
+        "$$\n\\text{nbytes} = \\prod_{i} s_i \\times e\n$$\nwhere $s_i$ are the dimension sizes and $e$ is the\nelement size in bytes."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "stride",
+      "path": "lucid._tensor.tensor.Tensor.stride",
+      "kind": "function",
+      "labels": [],
+      "signature": "stride(dim: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2355",
+      "subcategory": "tensor",
+      "summary": "Return the strides of the tensor in *element* counts.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "If given, return the stride along that dimension only.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple[int, ...] or int",
+        "description": "Element-count strides (same semantics as the reference framework)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3, 4).stride()\n(4, 1)\n>>> lucid.zeros(3, 4).stride(0)\n4"
+      ],
+      "notes": [
+        "For a C-contiguous tensor of shape $(s_0, \\ldots, s_{d-1})$\nthe element strides satisfy the row-major recurrence\n\n$$\n\\text{stride}[d-1] = 1, \\quad\n\\text{stride}[i] = \\text{stride}[i+1] \\cdot s_{i+1}.\n$$\nNon-contiguous tensors (e.g. transposed or sliced views) may have\narbitrary strides; the address of element `[i_0, \\ldots, i_{d-1}]`\nis `base + \\sum_k i_k \\cdot \\text{stride}[k]`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "data_ptr",
+      "path": "lucid._tensor.tensor.Tensor.data_ptr",
+      "kind": "function",
+      "labels": [],
+      "signature": "data_ptr()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2397",
+      "subcategory": "tensor",
+      "summary": "Return the address of the first element as an integer.",
+      "extended": "On Apple Silicon the tensor lives in unified memory; this method\nreturns a best-effort identifier derived from the storage object.\nUse `numpy` + `ndarray.ctypes.data` for interop that\nrequires the actual pointer.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "A stable, process-unique integer suitable for aliasing checks\n(e.g. \"do these two tensors share storage?\"). Not guaranteed\nto be the raw memory address."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> y = x\n>>> x.data_ptr() == y.data_ptr()\nTrue\n>>> z = lucid.zeros(3)\n>>> x.data_ptr() != z.data_ptr()\nTrue"
+      ],
+      "notes": [
+        "On Apple Silicon CPU and GPU share unified DRAM, so the same\n$\\text{data\\_ptr}(t)$ identifies a buffer addressable from\nboth backends. The value is stable for the lifetime of `self`;\nequality is the canonical aliasing predicate\n$t_1 \\sim t_2 \\iff \\text{data\\_ptr}(t_1) = \\text{data\\_ptr}(t_2)$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "storage_offset",
+      "path": "lucid._tensor.tensor.Tensor.storage_offset",
+      "kind": "function",
+      "labels": [],
+      "signature": "storage_offset()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2436",
+      "subcategory": "tensor",
+      "summary": "Return the offset (in elements) of the first element in storage.",
+      "extended": "Contiguous tensors always return `0`. Non-contiguous view tensors\nmay return a non-zero offset in frameworks that support strided\nviews; Lucid currently represents all tensors as contiguous so\nthis always returns `0`.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "The element offset into the underlying storage where `self`\nbegins. Always `0` in the current Lucid implementation."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3, 4).storage_offset()\n0"
+      ],
+      "notes": [
+        "In Lucid every tensor owns a fresh contiguous storage, so the\noffset is identically zero: $\\text{offset}(t) \\equiv 0$.\nFrameworks that support sub-views over a shared buffer use this\nfor pointer arithmetic; for Lucid it is provided purely for API\ncompatibility."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "H",
+      "path": "lucid._tensor.tensor.Tensor.H",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "H: Tensor",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2467",
+      "summary": "Conjugate (Hermitian) transpose of the last two axes.",
+      "extended": "For real-valued tensors this is identical to `mT`. For\ncomplex tensors the elements are conjugated before transposing,\nproducing the Hermitian adjoint $A^{\\mathsf{H}}$ familiar\nfrom linear algebra:\n\n$$\n(A^{\\mathsf{H}})_{ij} = \\overline{A_{ji}}\n$$",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A tensor of shape $(\\ldots, n, m)$ for an input of\nshape $(\\ldots, m, n)$. Real inputs round-trip through\n`mT`; complex inputs are first conjugated by\n`lucid._ops.composite.conj`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.arange(6).reshape(2, 3)\n>>> x.H.shape\n(3, 2)"
+      ],
+      "notes": [
+        "Equivalent to `x.conj().mT` for complex tensors. For batched\nlinear algebra the leading dimensions are untouched."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "type",
+      "path": "lucid._tensor.tensor.Tensor.type",
+      "kind": "function",
+      "labels": [],
+      "signature": "type(dtype: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2505",
+      "subcategory": "tensor",
+      "summary": "Return or cast the tensor type using legacy type strings.",
+      "extended": "* `t.type()` — return a string like `'lucid.FloatTensor'`.\n* `t.type('lucid.DoubleTensor')` — cast and return the new tensor.\n\nSupported type strings: `FloatTensor`, `DoubleTensor`,\n`HalfTensor`, `IntTensor`, `LongTensor`, `BoolTensor`,\n`ShortTensor`, `ByteTensor`.",
+      "parameters": [
+        {
+          "name": "dtype",
+          "annotation": "str",
+          "description": "Lucid legacy type string. If `None`, returns the type string\nof `self`; otherwise casts to the corresponding dtype.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "str",
+        "description": "When `dtype is None` — the legacy type label."
+      },
+      "raises": [
+        {
+          "annotation": "TypeError",
+          "description": "If `dtype` is not one of the supported legacy strings."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3).type()\n'lucid.FloatTensor'\n>>> lucid.zeros(3).type('lucid.LongTensor').dtype\nlucid.int64"
+      ],
+      "notes": [
+        "Provided purely for API compatibility with code that uses legacy\ntype strings. New code should use `dtype` for inspection and\n`to` for casting — both avoid stringly-typed dispatch."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "get_device",
+      "path": "lucid._tensor.tensor.Tensor.get_device",
+      "kind": "function",
+      "labels": [],
+      "signature": "get_device()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2568",
+      "subcategory": "tensor",
+      "summary": "Return the device index.",
+      "extended": "Returns `0` for Metal (GPU) tensors and `-1` for CPU tensors,\nfollowing the convention adopted by the reference framework.",
+      "parameters": [],
+      "returns": {
+        "annotation": "int",
+        "description": "`0` for Metal-resident tensors; `-1` for CPU-resident tensors."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3).get_device()\n-1\n>>> lucid.zeros(3).metal().get_device()\n0"
+      ],
+      "notes": [
+        "Indicator-style encoding:\n$\\text{idx}(t) = 0 \\cdot \\mathbf{1}\\{\\text{is\\_metal}\\} + (-1) \\cdot \\mathbf{1}\\{\\text{is\\_cpu}\\}$.\nLucid only supports a single Metal device on Apple Silicon, so a\npositive index is always `0`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "pin_memory",
+      "path": "lucid._tensor.tensor.Tensor.pin_memory",
+      "kind": "function",
+      "labels": [],
+      "signature": "pin_memory(device: object = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2596",
+      "subcategory": "tensor",
+      "summary": "Return `self` — pinned memory is a no-op on Apple Silicon.",
+      "extended": "Apple Silicon uses unified memory: CPU and GPU share the same\nphysical DRAM, so the \"page-lock host memory to accelerate\nhost-to-device DMA\" concept from discrete-GPU frameworks does not\napply. This method exists for API compatibility and simply\nreturns the tensor unchanged.",
+      "parameters": [
+        {
+          "name": "device",
+          "annotation": "object",
+          "description": "Accepted but ignored. Present for signature compatibility.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self`, untouched."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.pin_memory() is x\nTrue"
+      ],
+      "notes": [
+        "See also `is_pinned` (always `False`) and\n`share_memory_` (also a no-op). The function is the\nidentity: $\\text{pin\\_memory}(t) \\equiv t$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_pinned",
+      "path": "lucid._tensor.tensor.Tensor.is_pinned",
+      "kind": "function",
+      "labels": [],
+      "signature": "is_pinned(device: object = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2630",
+      "subcategory": "tensor",
+      "summary": "Return `False` — pinned memory is not applicable on Apple Silicon.",
+      "extended": "Apple Silicon's unified-memory architecture makes the distinction\nbetween \"pageable\" and \"page-locked\" host memory irrelevant: CPU\nand GPU already see the same DRAM. This predicate is provided for\nAPI compatibility and always reports `False`.",
+      "parameters": [
+        {
+          "name": "device",
+          "annotation": "object",
+          "description": "Accepted but ignored.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "bool",
+        "description": "Always `False`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3).is_pinned()\nFalse"
+      ],
+      "notes": [
+        "Identically false: $\\text{is\\_pinned}(t) \\equiv \\text{False}$.\nUnified memory makes the concept moot — all host buffers are\nalready DMA-accessible to the GPU without page-locking."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_cuda",
+      "path": "lucid._tensor.tensor.Tensor.is_cuda",
+      "kind": "function",
+      "labels": [
+        "property"
+      ],
+      "signature": "is_cuda: bool",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2663",
+      "summary": "Return `False` — Lucid does not target NVIDIA GPUs.",
+      "extended": "Lucid is Apple-Silicon-exclusive: the GPU stream is MLX-on-Metal,\nnot NVIDIA's discrete GPU stack. Use `is_metal` to detect\nGPU-resident tensors. This property exists purely for API\ncompatibility with code paths that probe for the legacy attribute.",
+      "parameters": [],
+      "returns": {
+        "annotation": "bool",
+        "description": "Always `False`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3).is_cuda\nFalse"
+      ],
+      "notes": [
+        "Identically false: $\\text{is\\_cuda}(t) \\equiv \\text{False}$.\nUse `is_metal` to query GPU residency on Apple Silicon."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "reshape_as",
+      "path": "lucid._tensor.tensor.Tensor.reshape_as",
+      "kind": "function",
+      "labels": [],
+      "signature": "reshape_as(other: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2689",
+      "subcategory": "tensor",
+      "summary": "Return a tensor with the same data reshaped to `other.shape`.",
+      "extended": "Convenience wrapper around `reshape` that takes the target\nshape from another tensor instead of as a tuple. Element count\nmust agree:\n\n$$\n\\prod_i \\text{self.shape}[i] = \\prod_j \\text{other.shape}[j]\n$$",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor",
+          "description": "Tensor whose shape will be adopted. Only `other.shape` is\nconsulted; the values and dtype of `other` are ignored.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A view (or copy if storage layout requires) of `self` with\nshape `other.shape`."
+      },
+      "raises": [
+        {
+          "annotation": "RuntimeError",
+          "description": "If `self.numel() != other.numel()`."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.arange(12)\n>>> proto = lucid.zeros(3, 4)\n>>> x.reshape_as(proto).shape\n(3, 4)"
+      ],
+      "notes": [
+        "Reshape preserves element order under row-major (C) traversal;\nthe element at flat index $k = \\sum_i i_k \\cdot \\prod_{j>k} s_j$\nin `self` becomes the element at the same flat index in the\nresult. A view is returned when the source is contiguous;\notherwise a contiguous copy is materialised first."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "untyped_storage",
+      "path": "lucid._tensor.tensor.Tensor.untyped_storage",
+      "kind": "function",
+      "labels": [],
+      "signature": "untyped_storage()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2766",
+      "subcategory": "tensor",
+      "summary": "Return a minimal storage view of the underlying data buffer.",
+      "extended": "The returned object exposes `data_ptr`, `size`,\nand `nbytes` — the subset needed for common introspection\npatterns (aliasing checks, memory-footprint accounting, debug\nprinting).",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor._UntypedStorage",
+        "description": "Lightweight storage handle whose `__len__` and `size`\nreport the byte count of the buffer."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(4, dtype=lucid.float32)\n>>> s = x.untyped_storage()\n>>> s.size()\n16\n>>> len(s)\n16"
+      ],
+      "notes": [
+        "Lucid does not currently expose a fully-featured `Storage` type;\n`untyped_storage` is the introspection-only minimum. Mutating\nthrough this handle is not supported. The reported size satisfies\n$|\\text{storage}| = \\text{numel} \\cdot \\text{itemsize}$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "share_memory_",
+      "path": "lucid._tensor.tensor.Tensor.share_memory_",
+      "kind": "function",
+      "labels": [],
+      "signature": "share_memory_()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2859",
+      "subcategory": "tensor",
+      "summary": "Mark storage as shareable across processes — a no-op on Apple Silicon.",
+      "extended": "On platforms with separate CPU and GPU address spaces this method\nmoves the storage into a shared-memory segment so that worker\nprocesses (e.g. DataLoader workers) can read it without copying.\nApple Silicon's unified-memory architecture makes this unnecessary:\nall tensors are already addressable from every process that holds\na reference to the buffer. Returns `self` for chaining.",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self`, unchanged."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.share_memory_() is x\nTrue"
+      ],
+      "notes": [
+        "Provided for API compatibility. See also `is_pinned` and\n`pin_memory`, which are no-ops for the same reason. The\noperation is the identity:\n$\\text{share\\_memory\\_}(t) \\equiv t$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fill_",
+      "path": "lucid._tensor.tensor.Tensor.fill_",
+      "kind": "function",
+      "labels": [],
+      "signature": "fill_(value: float)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2892",
+      "subcategory": "tensor",
+      "summary": "Fill the tensor with a scalar value in-place.",
+      "extended": "Mutates the tensor's storage so every element becomes `value`.\nImplemented by materialising a constant tensor with\n`_C_engine.full` and copying it into `self`'s storage; the\noriginal `TensorImpl` (and thus identity) is preserved.",
+      "parameters": [
+        {
+          "name": "value",
+          "annotation": "float",
+          "description": "Scalar value to broadcast into every position. Promoted to the\ntensor's dtype on copy.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self` (in-place); useful for method chaining."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.empty(3)\n>>> _ = x.fill_(0.5)\n>>> x.tolist()\n[0.5, 0.5, 0.5]"
+      ],
+      "notes": [
+        "In-place operations bypass autograd's view tracking for\nperformance. Calling `fill_` on a leaf tensor with\n`requires_grad=True` may raise a runtime error from the\nautograd engine.\n\nMathematically the result is the constant tensor\n$v \\cdot \\mathbf{1}$ with the same shape as `self`;\nevery entry satisfies $x_i \\leftarrow v$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "copy_",
+      "path": "lucid._tensor.tensor.Tensor.copy_",
+      "kind": "function",
+      "labels": [],
+      "signature": "copy_(other: Self)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L2936",
+      "subcategory": "tensor",
+      "summary": "Copy data from `other` into `self` in-place.",
+      "extended": "Overwrites `self`'s storage with `other`'s values. Broadcasting\nis permitted: `other` may have a shape that broadcasts to\n`self.shape`. The dtype of `self` is preserved; `other`\nvalues are cast as necessary.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor",
+          "description": "Source tensor. Made contiguous before the copy to guarantee\na stride-compatible memory layout.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self` after the copy."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.zeros(3)\n>>> b = lucid.tensor([1.0, 2.0, 3.0])\n>>> _ = a.copy_(b)\n>>> a.tolist()\n[1.0, 2.0, 3.0]"
+      ],
+      "notes": [
+        "Unlike `clone`, `copy_` does not allocate a new tensor —\nonly `self`'s storage is written. The autograd graph is not\nextended by this operation. Element-wise:\n\n$$\n\\text{self}_i \\leftarrow \\text{cast}_{\\text{self.dtype}}(\\text{other}_i),\n$$\nwith standard right-aligned broadcasting from `other.shape` to\n`self.shape`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "expand_as",
+      "path": "lucid._tensor.tensor.Tensor.expand_as",
+      "kind": "function",
+      "labels": [],
+      "signature": "expand_as(other: Self)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L3084",
+      "subcategory": "tensor",
+      "summary": "Broadcast `self` to match `other.shape` without copying data.",
+      "extended": "Convenience wrapper around `broadcast_to` that takes the target\nshape from another tensor. The expansion is **view-like**: the\nunderlying storage is not duplicated, and the broadcast dimensions\nare realised by zero-stride entries in the resulting tensor.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor",
+          "description": "Tensor whose shape will be adopted. Only `other.shape` is\nconsulted.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A view of `self` with shape `other.shape`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0, 3.0]).reshape(1, 3)\n>>> proto = lucid.zeros(4, 3)\n>>> x.expand_as(proto).shape\n(4, 3)"
+      ],
+      "notes": [
+        "Broadcasting rules follow the standard right-aligned semantics:\neach dimension of `self.shape` must either equal the\ncorresponding entry of `other.shape` or be `1`. Size-1 axes\nare stretched by setting the corresponding stride to zero, so the\nresulting view aliases the source storage. Formally, for each axis\n\n$$\ns'_i = \\begin{cases}\n    s_i & \\text{if } s_i = t_i \\\\\n    t_i & \\text{if } s_i = 1\n\\end{cases}\n$$\nwith stride $0$ on stretched axes."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "view_as",
+      "path": "lucid._tensor.tensor.Tensor.view_as",
+      "kind": "function",
+      "labels": [],
+      "signature": "view_as(other: Self)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L3132",
+      "subcategory": "tensor",
+      "summary": "Reinterpret strides to match `other.shape`.",
+      "extended": "Convenience wrapper around `reshape` that adopts the shape\nof another tensor. When the source is contiguous the result is a\ntrue view (zero copy); otherwise the engine may have to\nmaterialise a contiguous copy first.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor",
+          "description": "Tensor whose shape will be adopted. Only `other.shape` is\nconsulted.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "A reshaped view (or copy) of `self` with shape `other.shape`."
+      },
+      "raises": [
+        {
+          "annotation": "RuntimeError",
+          "description": "If `self.numel() != other.numel()`."
+        }
+      ],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.arange(6)\n>>> proto = lucid.zeros(2, 3)\n>>> x.view_as(proto).shape\n(2, 3)"
+      ],
+      "notes": [
+        "For a contiguous tensor the new strides are computed as\n\n$$\n\\text{stride}[i] = \\prod_{j > i} \\text{shape}[j]\n$$\nso the layout is row-major with no data motion."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "type_as",
+      "path": "lucid._tensor.tensor.Tensor.type_as",
+      "kind": "function",
+      "labels": [],
+      "signature": "type_as(other: Self)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L3178",
+      "subcategory": "tensor",
+      "summary": "Cast `self` to the dtype of `other`.",
+      "extended": "Convenience wrapper around `to` that adopts the dtype of\nanother tensor. Useful when two tensors must have matching\nprecision before a fused op.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor",
+          "description": "Tensor whose `dtype` will be adopted.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self` cast to `other.dtype`. If the dtype already\nmatches, the call is a no-op."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3, dtype=lucid.int32)\n>>> y = lucid.zeros(1, dtype=lucid.float64)\n>>> x.type_as(y).dtype\nlucid.float64"
+      ],
+      "notes": [
+        "Values are cast element-wise:\n$x_i \\leftarrow \\text{cast}_{\\tau}(x_i)$ where\n$\\tau = \\text{other.dtype}$. Casts between floating-point\ntypes preserve gradients; integer→float→integer round-trips lose\ninformation in the integer truncation step."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "zero_",
+      "path": "lucid._tensor.tensor.Tensor.zero_",
+      "kind": "function",
+      "labels": [],
+      "signature": "zero_()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L3494",
+      "subcategory": "tensor",
+      "summary": "Fill the tensor with zeros in-place.",
+      "extended": "Mutates `self`'s storage so every element becomes `0`,\nwithout allocating a new tensor. Equivalent to `self.fill_(0.0)`\nbut routed through a multiply-by-zero kernel for clarity.",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self`, after zeroing."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.ones(3)\n>>> _ = x.zero_()\n>>> x.tolist()\n[0.0, 0.0, 0.0]"
+      ],
+      "notes": [
+        "As with `fill_`, in-place mutation bypasses autograd's\nview tracking. Calling `zero_` on a leaf tensor with\n`requires_grad=True` may raise a runtime error from the\nautograd engine.\n\nElement-wise: $x_i \\leftarrow 0$ for every position. The\nresult is the additive identity of the tensor algebra at the\nsame shape and dtype."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__add__",
+      "path": "lucid._tensor.tensor.Tensor.__add__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__add__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L163",
+      "subcategory": "tensor",
+      "summary": "Element-wise addition: `self + other` with broadcasting and dtype promotion.",
+      "extended": "Forwards to the engine `add` op.  The right operand may be another\nTensor (broadcast-compatible) or a Python scalar (auto-promoted to\nthe tensor's dtype and broadcast across the shape).",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Sum with shape `broadcast(self.shape, other.shape)` and dtype\n`promote_types(self.dtype, other.dtype)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> b = lucid.tensor([10.0, 20.0, 30.0])\n>>> a + b\nTensor([11., 22., 33.])\n>>> a + 5\nTensor([6., 7., 8.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\text{self}_i + \\text{other}_i\n$$\nMixed-dtype operands are promoted to their common type before the\nadd.  Both operands receive gradient flow with unit Jacobian\n($\\partial \\text{out} / \\partial \\text{self} = 1$,\n$\\partial \\text{out} / \\partial \\text{other} = 1$)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__radd__",
+      "path": "lucid._tensor.tensor.Tensor.__radd__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__radd__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L164",
+      "subcategory": "tensor",
+      "summary": "Reflected addition: `other + self`.",
+      "extended": "Triggered when the left operand does not implement `__add__` with\na Tensor right operand (typically when `other` is a plain Python\nscalar).  Addition is commutative so the result equals\n`__add__`.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Left-hand operand of the original expression.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Sum with broadcast shape and promoted dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> 5 + a\nTensor([6., 7., 8.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\text{other}_i + \\text{self}_i\n$$\nOrder is preserved for symmetry with `__rsub__` even though\naddition commutes.  Dtype promotion and broadcasting follow the\nsame rules as `__add__`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__iadd__",
+      "path": "lucid._tensor.tensor.Tensor.__iadd__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__iadd__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L165",
+      "subcategory": "tensor",
+      "summary": "In-place addition: `self += other`.",
+      "extended": "Mutates `self._impl` to hold the sum and returns `self` so the\nexpression can be chained.  Useful for memory-tight loops; for\nleaves that participate in autograd prefer the out-of-place\n`__add__`.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "`self` after mutation."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> a += 10\n>>> a\nTensor([11., 12., 13.])"
+      ],
+      "notes": [
+        "Math (in place):\n\n$$\n\\text{self}_i \\leftarrow \\text{self}_i + \\text{other}_i\n$$\nPerforming an in-place add on a leaf tensor with\n`requires_grad=True` is typically rejected by autograd because it\nwould destroy the value needed for the backward pass.  Use the\nnon-in-place form there."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__sub__",
+      "path": "lucid._tensor.tensor.Tensor.__sub__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__sub__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L166",
+      "subcategory": "tensor",
+      "summary": "Element-wise subtraction: `self - other` with broadcasting.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Difference with broadcast shape and promoted dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([10.0, 20.0, 30.0])\n>>> b = lucid.tensor([1.0, 2.0, 3.0])\n>>> a - b\nTensor([9., 18., 27.])\n>>> a - 1\nTensor([9., 19., 29.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\text{self}_i - \\text{other}_i\n$$\nDtype promotion follows the standard kind/width rules.  Gradients\nflow with Jacobian `+1` for `self` and `-1` for `other`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__rsub__",
+      "path": "lucid._tensor.tensor.Tensor.__rsub__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__rsub__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L167",
+      "subcategory": "tensor",
+      "summary": "Reflected subtraction: `other - self`.",
+      "extended": "Triggered when the left operand does not implement `__sub__` with\na Tensor right operand.  Subtraction is **not** commutative, so the\norder of operands matters.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Left-hand operand of the original expression.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Difference with broadcast shape and promoted dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> 10 - a\nTensor([9., 8., 7.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\text{other}_i - \\text{self}_i\n$$\nJacobians are `+1` for `other` and `-1` for `self`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__mul__",
+      "path": "lucid._tensor.tensor.Tensor.__mul__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__mul__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L169",
+      "subcategory": "tensor",
+      "summary": "Element-wise multiplication: `self * other` (Hadamard product).",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Product with broadcast shape and promoted dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> b = lucid.tensor([4.0, 5.0, 6.0])\n>>> a * b\nTensor([4., 10., 18.])\n>>> a * 2\nTensor([2., 4., 6.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\text{self}_i \\cdot \\text{other}_i\n$$\nThis is the **element-wise** product; for matrix multiplication\nuse `__matmul__` (`@` operator).  Jacobians are\n$\\partial \\text{out}_i / \\partial \\text{self}_i = \\text{other}_i$\nand\n$\\partial \\text{out}_i / \\partial \\text{other}_i = \\text{self}_i$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__rmul__",
+      "path": "lucid._tensor.tensor.Tensor.__rmul__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__rmul__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L170",
+      "subcategory": "tensor",
+      "summary": "Reflected multiplication: `other * self`.",
+      "extended": "Triggered when the left operand does not implement `__mul__`\nwith a Tensor right operand (e.g. plain scalar on the left).\nMultiplication is commutative, so the result equals\n`__mul__`.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Left-hand operand of the original expression.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Product with broadcast shape and promoted dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> 3 * a\nTensor([3., 6., 9.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\text{other}_i \\cdot \\text{self}_i\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__truediv__",
+      "path": "lucid._tensor.tensor.Tensor.__truediv__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__truediv__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L172",
+      "subcategory": "tensor",
+      "summary": "Element-wise true division: `self / other`.",
+      "extended": "Always produces a floating-point result.  Integer operands are\npromoted to float before the division.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Quotient with broadcast shape and a float dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([10.0, 20.0, 30.0])\n>>> b = lucid.tensor([2.0, 4.0, 5.0])\n>>> a / b\nTensor([5., 5., 6.])\n>>> a / 10\nTensor([1., 2., 3.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\frac{\\text{self}_i}{\\text{other}_i}\n$$\nDivision by zero follows IEEE 754: positive / 0 -> `+inf`,\n0 / 0 -> `nan`.  Jacobians are\n$\\partial \\text{out}_i / \\partial \\text{self}_i = 1 / \\text{other}_i$\nand\n$\\partial \\text{out}_i / \\partial \\text{other}_i = -\\text{self}_i / \\text{other}_i^2$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__floordiv__",
+      "path": "lucid._tensor.tensor.Tensor.__floordiv__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__floordiv__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L175",
+      "subcategory": "tensor",
+      "summary": "Element-wise floor division: `self // other`.",
+      "extended": "Computes the largest integer less than or equal to the true\nquotient, broadcast element-wise.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Floor-divided result with broadcast shape and promoted dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([7.0, 8.0, 9.0])\n>>> a // 2\nTensor([3., 4., 4.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\left\\lfloor \\frac{\\text{self}_i}{\\text{other}_i} \\right\\rfloor\n$$\nFor integer operands the result is integer; for float operands\nthe result is float but takes integral values.  Floor division by\nzero follows the engine's convention (typically raises or\nproduces NaN/inf depending on dtype).  Not differentiable at\ninteger-quotient boundaries."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__pow__",
+      "path": "lucid._tensor.tensor.Tensor.__pow__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__pow__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L177",
+      "subcategory": "tensor",
+      "summary": "Element-wise exponentiation: `self ** other`.",
+      "extended": "Raises `self` to the `other` power element-by-element with\nbroadcasting and dtype promotion.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Exponent.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Powered result with broadcast shape and promoted dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> a ** 2\nTensor([1., 4., 9.])\n>>> a ** lucid.tensor([3.0, 2.0, 1.0])\nTensor([1., 4., 3.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\text{self}_i^{\\text{other}_i}\n$$\nGradients are\n$\\partial \\text{out}_i / \\partial \\text{self}_i = \\text{other}_i \\cdot \\text{self}_i^{\\text{other}_i - 1}$\nand\n$\\partial \\text{out}_i / \\partial \\text{other}_i = \\text{self}_i^{\\text{other}_i} \\cdot \\ln(\\text{self}_i)$.\nNegative base with non-integer exponent produces NaN under IEEE\n754 unless complex dtype is used."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__matmul__",
+      "path": "lucid._tensor.tensor.Tensor.__matmul__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__matmul__(other: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L180",
+      "subcategory": "tensor",
+      "summary": "Matrix multiplication: `self @ other` with batched semantics.",
+      "extended": "Supports 2-D (matrix) and N-D (batched) inputs.  For 1-D vectors\nthe usual NumPy/BLAS dot-product semantics apply (1-D @ 1-D is\nscalar, 1-D @ 2-D is a row vector, 2-D @ 1-D is a column vector).\nFor N-D operands the trailing two dimensions are matrix-multiplied\nwhile leading dimensions broadcast.",
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor",
+          "description": "Right-hand operand; inner dimension must equal `self`'s last\ndimension.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Matrix product with shape determined by broadcasting batch\ndims and contracting the inner dimension."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> A = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])\n>>> B = lucid.tensor([[5.0, 6.0], [7.0, 8.0]])\n>>> A @ B\nTensor([[19., 22.], [43., 50.]])"
+      ],
+      "notes": [
+        "Math (2-D case):\n\n$$\n\\text{out}_{ij} = \\sum_k \\text{self}_{ik} \\cdot \\text{other}_{kj}\n$$\nFor N-D inputs the same contraction is applied to the last two\naxes:\n\n$$\n\\text{out}_{\\dots ij} = \\sum_k \\text{self}_{\\dots ik} \\cdot \\text{other}_{\\dots kj}\n$$\nBackward passes both matmuls' transposes through the chain rule.\nUse `__mul__` (`*`) for element-wise multiplication."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__neg__",
+      "path": "lucid._tensor.tensor.Tensor.__neg__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__neg__()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L182",
+      "subcategory": "tensor",
+      "summary": "Unary negation: `-self`.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Element-wise negation with the same shape and dtype as\n`self`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, -2.0, 3.0])\n>>> -a\nTensor([-1., 2., -3.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = -\\text{self}_i\n$$\nDefined for all signed numeric dtypes.  Applied to an unsigned\ninteger dtype the engine raises `TypeError` because the result\nwould not be representable.  Jacobian is `-1`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__abs__",
+      "path": "lucid._tensor.tensor.Tensor.__abs__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__abs__()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L183",
+      "subcategory": "tensor",
+      "summary": "Element-wise absolute value: `abs(self)`.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Magnitude tensor with the same shape as `self`.  For complex\ninput the result has the corresponding real float dtype."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([-1.0, 2.0, -3.0])\n>>> abs(a)\nTensor([1., 2., 3.])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\lvert \\text{self}_i \\rvert\n$$\nFor complex input $\\lvert z \\rvert = \\sqrt{\\Re(z)^2 + \\Im(z)^2}$.\nThe derivative is $\\operatorname{sign}(\\text{self}_i)$ and is\nundefined at zero (the engine returns `0` there)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__eq__",
+      "path": "lucid._tensor.tensor.Tensor.__eq__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__eq__(other: object)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L188",
+      "subcategory": "tensor",
+      "summary": "Element-wise equality comparison: `self == other`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand; broadcast against `self`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Boolean tensor with broadcast shape; `True` where the\ncorresponding elements match."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> b = lucid.tensor([1.0, 5.0, 3.0])\n>>> a == b\nTensor([True, False, True])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\mathbb{1}\\!\\left[\\text{self}_i = \\text{other}_i\\right]\n$$\nComparison with NaN follows IEEE 754 — `NaN == NaN` is always\n`False`.  Not differentiable; the output tensor never carries\ngradient.\n\nReturns an element-wise boolean Tensor when `other` is a Tensor\nor numeric scalar (broadcast against `self`).  For arguments\nthat are neither (e.g. `None`, lists, arbitrary objects),\nPython's `==` falls back to object identity and yields a plain\n`bool` rather than a Tensor."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__ne__",
+      "path": "lucid._tensor.tensor.Tensor.__ne__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__ne__(other: object)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L189",
+      "subcategory": "tensor",
+      "summary": "Element-wise inequality comparison: `self != other`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand; broadcast against `self`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Boolean tensor with broadcast shape."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> b = lucid.tensor([1.0, 5.0, 3.0])\n>>> a != b\nTensor([False, True, False])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\mathbb{1}\\!\\left[\\text{self}_i \\neq \\text{other}_i\\right]\n$$\nUnder IEEE 754, `NaN != NaN` evaluates to `True` — this is the\nonly comparison operator that is \"true\" against NaN.  Not\ndifferentiable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__lt__",
+      "path": "lucid._tensor.tensor.Tensor.__lt__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__lt__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L190",
+      "subcategory": "tensor",
+      "summary": "Element-wise less-than comparison: `self < other`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand; broadcast against `self`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Boolean tensor with broadcast shape."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> a < 2.5\nTensor([True, True, False])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\mathbb{1}\\!\\left[\\text{self}_i < \\text{other}_i\\right]\n$$\nAny comparison involving NaN returns `False` per IEEE 754.  Not\ndifferentiable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__le__",
+      "path": "lucid._tensor.tensor.Tensor.__le__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__le__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L191",
+      "subcategory": "tensor",
+      "summary": "Element-wise less-than-or-equal comparison: `self <= other`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand; broadcast against `self`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Boolean tensor with broadcast shape."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> a <= 2.0\nTensor([True, True, False])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\mathbb{1}\\!\\left[\\text{self}_i \\leq \\text{other}_i\\right]\n$$\nAny comparison involving NaN returns `False` per IEEE 754.  Not\ndifferentiable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__gt__",
+      "path": "lucid._tensor.tensor.Tensor.__gt__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__gt__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L192",
+      "subcategory": "tensor",
+      "summary": "Element-wise greater-than comparison: `self > other`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand; broadcast against `self`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Boolean tensor with broadcast shape."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> a > 1.5\nTensor([False, True, True])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\mathbb{1}\\!\\left[\\text{self}_i > \\text{other}_i\\right]\n$$\nAny comparison involving NaN returns `False` per IEEE 754.  Not\ndifferentiable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__ge__",
+      "path": "lucid._tensor.tensor.Tensor.__ge__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__ge__(other: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L193",
+      "subcategory": "tensor",
+      "summary": "Element-wise greater-than-or-equal comparison: `self >= other`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "other",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand operand; broadcast against `self`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Boolean tensor with broadcast shape."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0])\n>>> a >= 2.0\nTensor([False, True, True])"
+      ],
+      "notes": [
+        "Math:\n\n$$\n\\text{out}_i = \\mathbb{1}\\!\\left[\\text{self}_i \\geq \\text{other}_i\\right]\n$$\nAny comparison involving NaN returns `False` per IEEE 754.  Not\ndifferentiable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__getitem__",
+      "path": "lucid._tensor.tensor.Tensor.__getitem__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__getitem__(idx: _IndexType)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L194",
+      "subcategory": "tensor",
+      "summary": "Tensor indexing: `self[idx]`.",
+      "extended": "Dispatches to `lucid._tensor._indexing._getitem`, which\nsupports both basic and advanced indexing semantics.",
+      "parameters": [
+        {
+          "name": "idx",
+          "annotation": "int, slice, None, Ellipsis, Tensor, or tuple of these",
+          "description": "Index specification.  Supported atoms:\n\n* `int` — pick a single position along an axis (reduces rank\n  by 1).\n* `slice` — Python `start:stop:step` window (preserves\n  rank).\n* `None` — insert a new axis of length 1.\n* `...` (Ellipsis) — fill in remaining axes with full slices.\n* integer Tensor — gather along an axis (advanced indexing).\n* boolean Tensor — mask selection (advanced indexing).\n* tuple — combine the above across multiple axes.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "View or gather result.  Basic indexing produces a view that\nshares storage with `self`; advanced indexing copies."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])\n>>> a[0]\nTensor([1., 2., 3.])\n>>> a[:, 1]\nTensor([2., 5.])\n>>> a[a > 3]\nTensor([4., 5., 6.])"
+      ],
+      "notes": [
+        "Math (basic case, single axis):\n\n$$\n\\text{out}_{j_1 \\dots j_{k}} = \\text{self}_{j_1 \\dots j_{r-1} \\, i \\, j_{r+1} \\dots}\n$$\nAdvanced indexing follows NumPy's gather semantics: integer\ntensors are broadcast against one another and used to fetch\nelements; boolean masks select a flat 1-D subset along the masked\naxes.  Indexing participates in autograd via a sparse scatter in\nthe backward pass."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "__setitem__",
+      "path": "lucid._tensor.tensor.Tensor.__setitem__",
+      "kind": "function",
+      "labels": [],
+      "signature": "__setitem__(idx: _IndexType, value: TensorOrScalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L195",
+      "subcategory": "tensor",
+      "summary": "In-place indexed assignment: `self[idx] = value`.",
+      "extended": "Dispatches to `lucid._tensor._indexing._setitem`.  Supports\nthe same index forms as `__getitem__`.",
+      "parameters": [
+        {
+          "name": "idx",
+          "annotation": "int, slice, None, Ellipsis, Tensor, or tuple of these",
+          "description": "Index specification — see `__getitem__` for the full\nlist.",
+          "default": null
+        },
+        {
+          "name": "value",
+          "annotation": "Tensor or scalar",
+          "description": "Right-hand value to assign.  Broadcast against the shape of\nthe selected region and promoted to `self.dtype`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": "The assignment mutates `self` in place."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.tensor([1.0, 2.0, 3.0, 4.0])\n>>> a[1:3] = 0\n>>> a\nTensor([1., 0., 0., 4.])"
+      ],
+      "notes": [
+        "Math (basic case):\n\n$$\n\\text{self}_{j_1 \\dots j_{r-1} \\, i \\, j_{r+1} \\dots} \\leftarrow \\text{value}_{j_1 \\dots}\n$$\nThe mutated region is disconnected from the autograd graph for\nthe previous values — subsequent backward passes will see only\nthe new values.  Assigning into a leaf tensor with\n`requires_grad=True` raises because it would invalidate saved\nactivations."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "to",
+      "path": "lucid._tensor.tensor.Tensor.to",
+      "kind": "function",
+      "labels": [],
+      "signature": "to(device: DeviceLike | DTypeLike | Tensor | None = None, dtype: DTypeLike | None = None, copy: _bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L198",
+      "subcategory": "tensor",
+      "summary": "Move and/or cast tensor.",
+      "extended": "Overloads:\n  .to(device)                  → device conversion\n  .to(dtype)                   → dtype conversion\n  .to(device, dtype)           → both\n  .to(other_tensor)            → match other's device & dtype\n  .to(device=, dtype=, copy=)",
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.to(lucid.float64).dtype\nlucid.float64\n>>> x.to(\"metal\").device\ndevice(type='metal')"
+      ],
+      "notes": [
+        "No-op when the source already matches the target device and dtype,\nunless `copy=True`; in that case the same Tensor instance is\nreturned without allocation.  Apple Silicon's unified memory means\ndevice transfers between CPU and Metal copy the dispatch label but\nshare physical DRAM when the underlying buffer is a SharedStorage."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "metal",
+      "path": "lucid._tensor.tensor.Tensor.metal",
+      "kind": "function",
+      "labels": [],
+      "signature": "metal()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L199",
+      "subcategory": "tensor",
+      "summary": "Move this tensor to Apple Metal GPU.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3)\n>>> x.metal().device\ndevice(type='metal')"
+      ],
+      "notes": [
+        "No-op when the tensor is already on Metal.  Under Apple Silicon's\nunified memory architecture the physical DRAM is shared with the\nCPU; this call only updates the dispatch target so subsequent ops\nrun through the MLX/Metal backend."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "cpu",
+      "path": "lucid._tensor.tensor.Tensor.cpu",
+      "kind": "function",
+      "labels": [],
+      "signature": "cpu()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L200",
+      "subcategory": "tensor",
+      "summary": "Move this tensor to CPU.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.zeros(3).metal()\n>>> x.cpu().device\ndevice(type='cpu')"
+      ],
+      "notes": [
+        "No-op when the tensor is already on CPU.  On Apple Silicon both\nCPU and Metal share the same physical DRAM (unified memory); this\ncall relabels the dispatch target so subsequent ops route through\nApple Accelerate (vDSP / vForce / BLAS / LAPACK)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "float",
+      "path": "lucid._tensor.tensor.Tensor.float",
+      "kind": "function",
+      "labels": [],
+      "signature": "float()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L201",
+      "subcategory": "tensor",
+      "summary": "Cast to float32.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3, dtype=lucid.int64).float().dtype\nlucid.float32"
+      ],
+      "notes": [
+        "Returns `self` unchanged when the source dtype is already\n`float32`.  Otherwise performs a copy-cast via the engine's\n`astype` op; the device is preserved."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "double",
+      "path": "lucid._tensor.tensor.Tensor.double",
+      "kind": "function",
+      "labels": [],
+      "signature": "double()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L202",
+      "subcategory": "tensor",
+      "summary": "Cast to float64.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3).double().dtype\nlucid.float64"
+      ],
+      "notes": [
+        "Returns `self` unchanged when the source dtype is already\n`float64`.  Otherwise allocates a new tensor with widened\nprecision; device is preserved."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "half",
+      "path": "lucid._tensor.tensor.Tensor.half",
+      "kind": "function",
+      "labels": [],
+      "signature": "half()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L203",
+      "subcategory": "tensor",
+      "summary": "Cast to float16.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.zeros(3).half().dtype\nlucid.float16"
+      ],
+      "notes": [
+        "Returns `self` unchanged when the source dtype is already\n`float16`.  Lossy narrowing from float32/float64 may overflow to\n`inf` for magnitudes above ~65504 and underflow to 0 for\nmagnitudes below ~6e-5."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "int",
+      "path": "lucid._tensor.tensor.Tensor.int",
+      "kind": "function",
+      "labels": [],
+      "signature": "int()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L204",
+      "subcategory": "tensor",
+      "summary": "Cast to int32.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.tensor([1.7, 2.3]).int().dtype\nlucid.int32"
+      ],
+      "notes": [
+        "Returns `self` unchanged when the source dtype is already\n`int32`.  Casts from floating point truncate toward zero;\nvalues outside `[-2**31, 2**31 - 1]` produce undefined results."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "long",
+      "path": "lucid._tensor.tensor.Tensor.long",
+      "kind": "function",
+      "labels": [],
+      "signature": "long()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L205",
+      "subcategory": "tensor",
+      "summary": "Cast to int64.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.tensor([1.7, 2.3]).long().dtype\nlucid.int64"
+      ],
+      "notes": [
+        "Returns `self` unchanged when the source dtype is already\n`int64`.  Casts from floating point truncate toward zero.\nTypically used for index tensors (e.g. `gather` / `scatter`)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "bool",
+      "path": "lucid._tensor.tensor.Tensor.bool",
+      "kind": "function",
+      "labels": [],
+      "signature": "bool()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/_tensor/tensor.py#L206",
+      "subcategory": "tensor",
+      "summary": "Cast to bool.",
+      "extended": null,
+      "parameters": [],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> lucid.tensor([0.0, 1.5, -2.0]).bool()\nTensor([False, True, True])"
+      ],
+      "notes": [
+        "Returns `self` unchanged when the source dtype is already\n`bool`.  Otherwise each element is reduced to `True` if\nnonzero and `False` if zero."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "Multi-dimensional array with automatic differentiation support.",
+  "extended": "The central data structure of the Lucid framework. Wraps a C++ `TensorImpl`\nvia composition. Tensors live on either `cpu` (Apple Accelerate) or\n`metal` (Apple Metal GPU) devices.",
+  "parameters": [
+    {
+      "name": "data",
+      "annotation": "array_like",
+      "description": "Input data. Accepts nested Python lists, NumPy arrays, or scalars.",
+      "default": null
+    },
+    {
+      "name": "dtype",
+      "annotation": "lucid.dtype",
+      "description": "Desired data type. Defaults to `lucid.float32`.",
+      "default": "None"
+    },
+    {
+      "name": "device",
+      "annotation": "str or lucid.device",
+      "description": "Target device (`\"cpu\"` or `\"metal\"`). Defaults to the global default.",
+      "default": "None"
+    },
+    {
+      "name": "requires_grad",
+      "annotation": "bool",
+      "description": "If `True`, operations on this tensor are recorded for autograd.\nDefault is `False`.",
+      "default": "False"
+    }
+  ],
+  "returns": null,
+  "raises": [],
+  "examples": [
+    ">>> import lucid\n>>> x = lucid.Tensor([[1.0, 2.0], [3.0, 4.0]])\n>>> x.shape\n(2, 2)\n>>> x.dtype\nlucid.float32"
+  ],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

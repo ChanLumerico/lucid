@@ -1,12 +1,16 @@
 name: Docs
 
+# ``web/public/api-data/`` is built locally and committed (the pre-commit
+# hook re-stages it whenever ``lucid/**/*.{py,pyi}`` changes), so this
+# workflow only runs the cheap post-process scripts (cross-links /
+# used-by / citations / meta) plus ``next build`` against the pre-baked
+# JSON tree. No Griffe, no smoke-test duplicate.
+
 on:
   push:
     branches: [main]
     paths:
       - "web/**"
-      - "lucid/**/*.py"
-      - "lucid/**/*.pyi"
   workflow_dispatch:
 
 permissions:
@@ -26,26 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Python — Griffe API data ───────────────────────────────────────────
+      # Post-process scripts (cross-links / used-by / link-citations /
+      # build-bibtex / build-meta) all run during ``pnpm prebuild`` and
+      # need Python — but not Griffe, and not Lucid itself.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: "3.14"
+          cache: pip
 
-      # Griffe parses Python source statically — we don't need to install
-      # Lucid (and can't, since setup.py enforces Apple Silicon). PYTHONPATH
-      # in the next step exposes the source tree to Griffe.
-      - name: Install Griffe
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install griffe
-
-      - name: Generate API data (Griffe → JSON)
-        run: python web/scripts/build-api-data.py
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      # ── Node.js — Next.js static export ───────────────────────────────────
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -69,12 +61,20 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile
 
+      # ── Next.js build cache — incremental compile / image opt artifacts ───
+      - uses: actions/cache@v4
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-${{ hashFiles('web/src/**/*.ts', 'web/src/**/*.tsx', 'web/public/api-data/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-
+
       - name: Build (Next.js static export)
         working-directory: web
-        run: pnpm build
         env:
           NODE_ENV: production
-          SKIP_API_BUILD: "1"   # already generated above
+          SKIP_API_BUILD: "1"   # JSON tree is committed; never rebuild on CI
+        run: pnpm build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -1,0 +1,4219 @@
+{
+  "slug": "lucid.models.text.bert",
+  "name": "bert",
+  "path": "lucid.models.text.bert",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/__init__.py#L1",
+  "members": [
+    {
+      "name": "BertConfig",
+      "path": "lucid.models.text.bert._config.BertConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "LanguageModelConfig"
+      ],
+      "labels": [],
+      "signature": "BertConfig(vocab_size: int = 30522, hidden_size: int = 768, num_hidden_layers: int = 12, num_attention_heads: int = 12, intermediate_size: int = 3072, hidden_act: TextActivation = 'gelu', max_position_embeddings: int = 512, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, type_vocab_size: int = 2, position_embedding_type: Literal['absolute'] = 'absolute', num_labels: int = 2, classifier_dropout: float | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_config.py#L15",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._config.BertConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(vocab_size: int = 30522, hidden_size: int = 768, num_hidden_layers: int = 12, num_attention_heads: int = 12, intermediate_size: int = 3072, hidden_act: TextActivation = 'gelu', max_position_embeddings: int = 512, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, type_vocab_size: int = 2, position_embedding_type: Literal['absolute'] = 'absolute', num_labels: int = 2, classifier_dropout: float | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration dataclass for every BERT variant.",
+      "extended": "Frozen dataclass inheriting all common text-model fields from\n`LanguageModelConfig` (`hidden_act`, `hidden_dropout`,\n`attention_dropout`, `layer_norm_eps`, `initializer_range`,\n`tie_word_embeddings`, ...) and adding the two knobs unique to the BERT\nfamily.  Field names and defaults mirror the reference-framework\n`BertConfig` so existing tokenizers and checkpoints map one-to-one onto\nLucid weights.  Defaults match the original `bert-base-uncased` release\n(L=12, H=768, A=12, 30,522 WordPiece vocab) from Devlin et al., 2018.",
+      "parameters": [
+        {
+          "name": "vocab_size",
+          "annotation": "int",
+          "description": "Size of the WordPiece token vocabulary.  Both BERT-Base and BERT-Large\nuse 30,522 cased/uncased WordPieces from Devlin et al. 2018.",
+          "default": "30522"
+        },
+        {
+          "name": "hidden_size",
+          "annotation": "int",
+          "description": "Dimensionality $H$ of every transformer hidden state.  Must be\ndivisible by `num_attention_heads`.",
+          "default": "768"
+        },
+        {
+          "name": "num_hidden_layers",
+          "annotation": "int",
+          "description": "Number $L$ of transformer encoder layers stacked in the trunk.",
+          "default": "12"
+        },
+        {
+          "name": "num_attention_heads",
+          "annotation": "int",
+          "description": "Number $A$ of parallel attention heads per layer.  Per-head\ndimension is `hidden_size // num_attention_heads`.",
+          "default": "12"
+        },
+        {
+          "name": "intermediate_size",
+          "annotation": "int",
+          "description": "Width of the position-wise feed-forward inner projection (typically\n`4 * hidden_size`).",
+          "default": "3072"
+        },
+        {
+          "name": "max_position_embeddings",
+          "annotation": "int",
+          "description": "Maximum sequence length supported by the absolute position-embedding\ntable.  Inputs longer than this raise a shape error at lookup.",
+          "default": "512"
+        },
+        {
+          "name": "pad_token_id",
+          "annotation": "int or None",
+          "description": "Token id treated as padding.  When set, the `Embedding` layer zeroes\nout that row (no gradient).",
+          "default": "0"
+        },
+        {
+          "name": "type_vocab_size",
+          "annotation": "int",
+          "description": "Size of the segment-id vocabulary used by the next-sentence objective.\n`2` corresponds to the canonical BERT (segment A / B) setup;\nsingle-segment fine-tunes still use the full table but only ever feed\nzeros.",
+          "default": "2"
+        },
+        {
+          "name": "position_embedding_type",
+          "annotation": "absolute",
+          "description": "Position encoding flavour.  `\"absolute\"` is the only one shipped\ntoday — relative-position variants (T5-style, RoFormer-style) live in\ntheir own families.",
+          "default": "\"absolute\""
+        },
+        {
+          "name": "num_labels",
+          "annotation": "int",
+          "description": "Number of output classes for downstream classification heads\n(`BertForSequenceClassification` / `BertForTokenClassification`).",
+          "default": "2"
+        },
+        {
+          "name": "classifier_dropout",
+          "annotation": "float or None",
+          "description": "Optional dropout probability inserted before the task-specific\nclassifier.  When `None`, the head falls back to `hidden_dropout`.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.text.bert import BertConfig\n>>> cfg = BertConfig()          # BERT-Base defaults\n>>> cfg.hidden_size, cfg.num_hidden_layers, cfg.num_attention_heads\n(768, 12, 12)\n>>> large = BertConfig(\n...     hidden_size=1024,\n...     num_hidden_layers=24,\n...     num_attention_heads=16,\n...     intermediate_size=4096,\n... )\n>>> large.vocab_size\n30522"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nValidation runs in `__post_init__` and raises `ValueError` for\n`type_vocab_size <= 0`, `num_labels <= 0`, or\n`classifier_dropout` outside $[0, 1)$."
+      ],
+      "attributes": [
+        {
+          "name": "model_type",
+          "annotation": "str",
+          "description": "Class-level identifier `\"bert\"` used by the model registry to look\nup the matching factory at load time."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForCausalLM",
+      "path": "lucid.models.text.bert._model.BertForCausalLM",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "BertForCausalLM(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L1086",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForCausalLM.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L1155",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertForCausalLM.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L1183",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "CausalLMOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT trunk repurposed as a left-to-right (causal) language model.",
+      "extended": "Standard BERT attends bidirectionally; this wrapper injects a\nlower-triangular causal mask on top of the existing additive\nattention/padding mask so the same encoder weights behave as a decoder.\nThe LM head is the same tied projection used by\n`BertForMaskedLM`.  Use this class when you want to apply\npre-trained BERT weights to a generative or sequence-continuation task.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "BERT hyperparameters.  `config.tie_word_embeddings` (default True)\nties the LM decoder weight to the input embedding matrix.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForCausalLM\n>>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForCausalLM(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, V=30522)\n(1, 4, 30522)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)); causal adaptation follows the standard left-to-right\nLM masking scheme.\n\nThe additive causal mask $M \\in \\mathbb{R}^{T \\times T}$ satisfies\n\n$$\nM_{ij} =\n\\begin{cases}\n    0, & j \\le i \\\\\n    -10^{4}, & j > i\n\\end{cases}\n$$\nand is broadcast against a padding mask when present.  Loss (when\n`labels` is supplied) uses the standard next-token shift:\n\n$$\n\\mathcal{L}_{\\mathrm{CLM}}\n    = -\\frac{1}{B(T-1)} \\sum_{b,t}\n      \\log p_{\\theta}(y_{b, t+1} \\mid x_{b,\\le t}),\n$$\nwith positions labelled `-100` excluded."
+      ],
+      "attributes": [
+        {
+          "name": "bert",
+          "annotation": "BertModel",
+          "description": "Underlying transformer trunk; only `embeddings` and `encoder` are\ninvoked in `forward` (the pooler is bypassed)."
+        },
+        {
+          "name": "cls",
+          "annotation": "nn.Module",
+          "description": "Tied LM prediction head — same architecture as\n`BertForMaskedLM`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForMaskedLM",
+      "path": "lucid.models.text.bert._model.BertForMaskedLM",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "MaskedLMMixin"
+      ],
+      "labels": [],
+      "signature": "BertForMaskedLM(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L424",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForMaskedLM.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L482",
+          "subcategory": "model",
+          "summary": "Initialise the module and validate the supplied config.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "config",
+              "annotation": "ModelConfig",
+              "description": "Must be an instance of the subclass's declared\n`config_class`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "TypeError",
+              "description": "If `config_class` has not been set on the concrete subclass,\nor if `config` is not an instance of `config_class`."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertForMaskedLM.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L496",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "MaskedLMOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT with a tied masked-language-modeling head.",
+      "extended": "Implements the masked-LM half of the [Devlin et al. (2018)](https://arxiv.org/abs/1810.04805) pre-training\nobjective.  A two-layer projection (dense + GELU + LayerNorm) maps each\nhidden state to vocabulary logits via a decoder whose weight matrix is\ntied to the input `word_embeddings` table when\n`config.tie_word_embeddings` is True.  Use for pre-training from\nscratch, continued pre-training on domain corpora, or fill-in-the-blank\ninference.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "BERT hyperparameters.  `config.tie_word_embeddings` (default True)\ncontrols whether the decoder weight is bound to the input embedding\nmatrix to halve the parameter count.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForMaskedLM\n>>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForMaskedLM(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, V=30522)\n(1, 4, 30522)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)), section 3.1 Task #1.\n\nWhen `labels` is supplied the head computes\n\n$$\n\\mathcal{L}_{\\mathrm{MLM}} = -\\frac{1}{|M|}\n    \\sum_{i \\in M} \\log p_{\\theta}(x_i \\mid x_{\\setminus M})\n$$\nover the set $M$ of masked positions, with positions where the\nlabel equals `-100` excluded from the sum."
+      ],
+      "attributes": [
+        {
+          "name": "bert",
+          "annotation": "BertModel",
+          "description": "Underlying bidirectional encoder trunk."
+        },
+        {
+          "name": "cls",
+          "annotation": "nn.Module",
+          "description": "Masked-LM prediction head with its own dense + LayerNorm transform\nand an output decoder of shape `(hidden_size, vocab_size)`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForNextSentencePrediction",
+      "path": "lucid.models.text.bert._model.BertForNextSentencePrediction",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "BertForNextSentencePrediction(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L999",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForNextSentencePrediction.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L1057",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertForNextSentencePrediction.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L1062",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "MaskedLMOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT with the standalone next-sentence-prediction head.",
+      "extended": "Wraps the bidirectional encoder with a single binary linear classifier\noperating on the pooled `[CLS]` embedding.  This is pre-training task 2\nof Devlin et al., 2018 §3.1 in isolation — useful for reproducing\nhistorical experiments or as a sanity check for sentence-pair coherence.\n\nNSP was abandoned by RoBERTa, ALBERT, and DeBERTa as offering no\ndownstream value, so prefer `BertForMaskedLM` (MLM-only) or\n`BertForSequenceClassification` for new work.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "BERT hyperparameters.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForNextSentencePrediction\n>>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForNextSentencePrediction(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])\n>>> token_type_ids = lucid.tensor([[0, 0, 0, 1, 1]])\n>>> out = model(input_ids, token_type_ids=token_type_ids)\n>>> out.logits.shape   # (B=1, 2)\n(1, 2)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1 (task #2).\n\nWhen `labels` is provided, the loss is the binary cross-entropy\n\n$$\n\\mathcal{L}_{\\mathrm{NSP}}\n    = -\\frac{1}{B}\\sum_{b=1}^{B}\n      \\log p_{\\theta}(y_b \\mid x_b^{(A)}, x_b^{(B)}),\n$$\nwhere $y_b \\in \\{0, 1\\}$ denotes IsNext vs. NotNext."
+      ],
+      "attributes": [
+        {
+          "name": "bert",
+          "annotation": "BertModel",
+          "description": "Underlying bidirectional encoder trunk."
+        },
+        {
+          "name": "cls",
+          "annotation": "nn.Module",
+          "description": "NSP head — a single `Linear(hidden_size, 2)` over the pooled\nembedding."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForPreTraining",
+      "path": "lucid.models.text.bert._model.BertForPreTraining",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "MaskedLMMixin"
+      ],
+      "labels": [],
+      "signature": "BertForPreTraining(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L883",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForPreTraining.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L945",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertForPreTraining.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None, next_sentence_label: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L954",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "BertForPreTrainingOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT with the original joint MLM + NSP pre-training objective.",
+      "extended": "Combines the masked-language-modeling head (decoder weight tied to input\nembeddings when `config.tie_word_embeddings` is True) with the\nnext-sentence-prediction head on top of the pooled `[CLS]` embedding.\nThis is the exact head configuration used in Devlin et al., 2018 to\ntrain BERT-Base and BERT-Large from scratch.\n\nSupply `labels` (MLM targets) and/or `next_sentence_label` (binary\nNSP target) to compute the corresponding losses; their sum is exposed as\n`output.loss`.  Use this class only when reproducing the original\npre-training recipe — newer encoder-only LMs typically drop NSP and use\n`BertForMaskedLM` directly.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "BERT hyperparameters.  `config.tie_word_embeddings` (default True)\ncontrols whether the MLM decoder weight is tied to the input\nembedding matrix.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForPreTraining\n>>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForPreTraining(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.prediction_logits.shape    # MLM logits  (B=1, T=6, V=30522)\n(1, 6, 30522)\n>>> out.seq_relationship_logits.shape   # NSP logits  (B=1, 2)\n(1, 2)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1.\n\nThe combined loss when both objectives are supplied is\n\n$$\n\\mathcal{L}_{\\mathrm{pretrain}}\n    = \\mathcal{L}_{\\mathrm{MLM}} + \\mathcal{L}_{\\mathrm{NSP}}.\n$$"
+      ],
+      "attributes": [
+        {
+          "name": "bert",
+          "annotation": "BertModel",
+          "description": "Underlying bidirectional encoder trunk."
+        },
+        {
+          "name": "cls",
+          "annotation": "nn.Module",
+          "description": "Combined head holding both the MLM prediction projection\n(`cls.predictions`) and the NSP binary linear\n(`cls.seq_relationship`)."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForPreTrainingOutput",
+      "path": "lucid.models.text.bert._model.BertForPreTrainingOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "BertForPreTrainingOutput(prediction_logits: Tensor, seq_relationship_logits: Tensor, loss: Tensor | None = None, mlm_loss: Tensor | None = None, nsp_loss: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L806",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForPreTrainingOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(prediction_logits: Tensor, seq_relationship_logits: Tensor, loss: Tensor | None = None, mlm_loss: Tensor | None = None, nsp_loss: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Combined output for `BertForPreTraining`.",
+      "extended": "Aggregates the masked-LM logits, next-sentence-prediction logits, and\noptional per-objective and combined losses produced by the full BERT\npre-training pipeline of Devlin et al., 2018.",
+      "parameters": [
+        {
+          "name": "prediction_logits",
+          "annotation": "Tensor",
+          "description": "MLM head logits of shape `(B, T, vocab_size)` — one distribution\nover the WordPiece vocabulary per input position.",
+          "default": null
+        },
+        {
+          "name": "seq_relationship_logits",
+          "annotation": "Tensor",
+          "description": "NSP head logits of shape `(B, 2)` — binary IsNext / NotNext scores\nderived from the pooled `[CLS]` embedding.",
+          "default": null
+        },
+        {
+          "name": "loss",
+          "annotation": "Tensor or None",
+          "description": "Sum of `mlm_loss` and `nsp_loss` when both are available;\notherwise the single available loss, or `None` if neither label\nset was supplied.",
+          "default": "None"
+        },
+        {
+          "name": "mlm_loss",
+          "annotation": "Tensor or None",
+          "description": "Cross-entropy on masked positions when `labels` was supplied.",
+          "default": "None"
+        },
+        {
+          "name": "nsp_loss",
+          "annotation": "Tensor or None",
+          "description": "Binary cross-entropy on the NSP head when `next_sentence_label`\nwas supplied.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForPreTraining\n>>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForPreTraining(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.prediction_logits.shape, out.seq_relationship_logits.shape\n((1, 5, 30522), (1, 2))"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForQuestionAnswering",
+      "path": "lucid.models.text.bert._model.BertForQuestionAnswering",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "BertForQuestionAnswering(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L704",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForQuestionAnswering.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L762",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertForQuestionAnswering.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, start_positions: Tensor | None = None, end_positions: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L767",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "MaskedLMOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT with a 2-way span head for extractive question answering.",
+      "extended": "Wraps the bidirectional encoder with a single linear of output width 2,\nproducing start- and end-position logits over each token in the input.\nThis is the SQuAD v1.1 / v2.0 fine-tuning recipe of Devlin et al., 2018\n§4.2 — given a `(question, context)` pair concatenated with `[SEP]`,\nthe model predicts the answer span inside the context.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "BERT hyperparameters.  The QA head is always 2-way; `num_labels`\nis ignored here.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForQuestionAnswering\n>>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForQuestionAnswering(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=7, 2)\n(1, 7, 2)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nWhen both `start_positions` and `end_positions` are provided, the\nloss is the symmetric average of two cross-entropies:\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\!\\left(\n    \\mathrm{CE}(z^{\\mathrm{start}}, y^{\\mathrm{start}})\n  + \\mathrm{CE}(z^{\\mathrm{end}},   y^{\\mathrm{end}})\n\\right).\n$$\nThe returned `logits` tensor has shape `(B, T, 2)`; index `[..., 0]`\nfor start scores and `[..., 1]` for end scores."
+      ],
+      "attributes": [
+        {
+          "name": "bert",
+          "annotation": "BertModel",
+          "description": "Underlying bidirectional encoder trunk."
+        },
+        {
+          "name": "qa_outputs",
+          "annotation": "nn.Linear",
+          "description": "Final linear of shape `(hidden_size, 2)` mapping each token's\nhidden state to `(start_logit, end_logit)`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForSequenceClassification",
+      "path": "lucid.models.text.bert._model.BertForSequenceClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "BertForSequenceClassification(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L520",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForSequenceClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L572",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertForSequenceClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L583",
+          "subcategory": "model",
+          "summary": "Full encode + decode pass.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "input_ids",
+              "annotation": null,
+              "description": "`(B, S)` source token ids.",
+              "default": null
+            },
+            {
+              "name": "decoder_input_ids",
+              "annotation": null,
+              "description": "`(B, T)` target token ids (right-shifted).",
+              "default": null
+            },
+            {
+              "name": "attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, S)` HF-style padding mask.",
+              "default": null
+            },
+            {
+              "name": "decoder_attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, T)` HF-style padding mask.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "MaskedLMOutput",
+            "description": "class:`Seq2SeqLMOutput` carrying decoder hidden states as"
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT with a pooled-CLS linear classifier for sequence-level tasks.",
+      "extended": "Wraps the bidirectional encoder with a dropout-regularised linear head\noperating on the `[CLS]` pooled embedding.  This is the standard\nfine-tuning recipe for GLUE-style sentence/sentence-pair tasks (SST-2,\nMNLI, QQP, RTE, ...) introduced in Devlin et al., 2018 §4.1.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "BERT hyperparameters.  `config.num_labels` sets the output\ndimension; `config.classifier_dropout` (falling back to\n`hidden_dropout`) sets the dropout applied before the linear.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForSequenceClassification\n>>> cfg = BertConfig(num_labels=3, num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForSequenceClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, num_labels=3)\n(1, 3)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nThe pooled representation is\n$p = \\tanh(W_{\\mathrm{pool}}\\, h_{[\\mathrm{CLS}]} + b_{\\mathrm{pool}})$,\nand the final logits are $z = W_{\\mathrm{cls}}\\,\\mathrm{Dropout}(p) + b_{\\mathrm{cls}}$.\nWhen `labels` is provided, cross-entropy over `num_labels` classes is\ncomputed and exposed as `output.loss`."
+      ],
+      "attributes": [
+        {
+          "name": "bert",
+          "annotation": "BertModel",
+          "description": "Underlying bidirectional encoder trunk."
+        },
+        {
+          "name": "dropout",
+          "annotation": "nn.Dropout",
+          "description": "Dropout layer applied to the pooled `[CLS]` embedding."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Linear",
+          "description": "Final linear of shape `(hidden_size, num_labels)` producing logits."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertForTokenClassification",
+      "path": "lucid.models.text.bert._model.BertForTokenClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "MaskedLMMixin"
+      ],
+      "labels": [],
+      "signature": "BertForTokenClassification(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L611",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertForTokenClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L668",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertForTokenClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L679",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "MaskedLMOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT with a per-token linear classifier for tagging tasks.",
+      "extended": "Wraps the bidirectional encoder with a dropout-regularised linear head\napplied independently at every sequence position.  Used for token-level\nfine-tunes such as named-entity recognition (CoNLL-2003), part-of-speech\ntagging, and chunking — see Devlin et al., 2018 §4.3.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "BERT hyperparameters.  `config.num_labels` sets the per-position\noutput dimension; `config.classifier_dropout` (falling back to\n`hidden_dropout`) sets the dropout applied before the linear.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertForTokenClassification\n>>> cfg = BertConfig(num_labels=9, num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BertForTokenClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, num_labels=9)\n(1, 4, 9)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nThe loss (when `labels` is provided) is the masked cross-entropy\ninherited from `MaskedLMMixin`:\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|}\n    \\sum_{(b, t) \\in V} \\log p_{\\theta}\\!\\left(y_{b,t} \\mid x_b\\right),\n$$\nwhere $V$ is the set of positions with `label != -100`."
+      ],
+      "attributes": [
+        {
+          "name": "bert",
+          "annotation": "BertModel",
+          "description": "Underlying bidirectional encoder trunk."
+        },
+        {
+          "name": "dropout",
+          "annotation": "nn.Dropout",
+          "description": "Dropout applied to the full sequence hidden states."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Linear",
+          "description": "Final linear of shape `(hidden_size, num_labels)` mapping each\ntoken's hidden state to per-class logits."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertModel",
+      "path": "lucid.models.text.bert._model.BertModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "BertModel(config: BertConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L258",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._model.BertModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: BertConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L334",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_input_embeddings",
+          "path": "lucid.models.text.bert._model.BertModel.get_input_embeddings",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_input_embeddings()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L340",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "nn.Module",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "set_input_embeddings",
+          "path": "lucid.models.text.bert._model.BertModel.set_input_embeddings",
+          "kind": "function",
+          "labels": [],
+          "signature": "set_input_embeddings(value: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L343",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.bert._model.BertModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_model.py#L350",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "BaseModelOutputWithPooling",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Bare BERT encoder returning hidden states and pooled CLS embedding.",
+      "extended": "Implements the bidirectional transformer encoder of Devlin et al., 2018.\nToken, position, and segment embeddings are summed, LayerNormed, and\ndropout-regularised, then passed through $L$ transformer blocks of\nmulti-head self-attention plus position-wise feed-forward.  A single\ntanh-activated linear (\"pooler\") on the first `[CLS]` token produces a\nsentence-level embedding used by classification heads.\n\nUse this class as the trunk when you want raw hidden states; the\ntask-specific subclasses (`BertFor*`) wrap it with appropriate heads.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "BertConfig",
+          "description": "Hyperparameters controlling vocabulary, depth, width, head count, and\nregularisation.  See `BertConfig` for the full field list.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import BertConfig, BertModel\n>>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128, num_attention_heads=2,\n...                  intermediate_size=512)\n>>> model = BertModel(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape   # (B=1, T=4, H=128)\n(1, 4, 128)\n>>> out.pooler_output.shape       # (B=1, H=128)\n(1, 128)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nSelf-attention follows the scaled dot-product form\n\n$$\n\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\!\\left(\n    \\frac{Q K^{\\top}}{\\sqrt{d_k}}\n\\right) V\n$$\nwith $d_k = H / A$.  Each layer applies multi-head attention,\nfollowed by a feed-forward block\n\n$$\n\\mathrm{FFN}(x) = \\mathrm{GELU}(x W_1 + b_1) W_2 + b_2,\n$$\neach wrapped by a residual connection and post-LayerNorm."
+      ],
+      "attributes": [
+        {
+          "name": "embeddings",
+          "annotation": "nn.Module",
+          "description": "Token + position + token-type embedding block followed by LayerNorm\nand dropout."
+        },
+        {
+          "name": "encoder",
+          "annotation": "nn.Module",
+          "description": "Stack of `config.num_hidden_layers` transformer encoder layers."
+        },
+        {
+          "name": "pooler",
+          "annotation": "nn.Module",
+          "description": "Dense + tanh projection of the `[CLS]` hidden state."
+        },
+        {
+          "name": "config_class",
+          "annotation": "type[BertConfig]",
+          "description": "Class-level pointer used by the registry to instantiate a matching\nconfig from disk."
+        },
+        {
+          "name": "base_model_prefix",
+          "annotation": "str",
+          "description": "Prefix (`\"bert\"`) under which sub-module checkpoints are nested in\ntask-head variants — used during weight loading."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "BertTokenizer",
+      "path": "lucid.models.text.bert._tokenizer.BertTokenizer",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WordPieceTokenizer"
+      ],
+      "labels": [],
+      "signature": "BertTokenizer(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_tokenizer.py#L69",
+      "subcategory": "tokenizer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._tokenizer.BertTokenizer.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_tokenizer.py#L125",
+          "subcategory": "tokenizer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT tokenizer — pure-Python reference.",
+      "extended": "A thin convenience subclass of\n`lucid.utils.tokenizer.WordPieceTokenizer` with BERT's\ncanonical `[UNK]/[CLS]/[SEP]/[PAD]/[MASK]` registry, the\n`lucid.utils.tokenizer.normalizers.BertNormalizer`\n(lowercase + accent-strip + Chinese-char split + clean-text), and\n`lucid.utils.tokenizer.pre_tokenizers.WhitespacePunctuationSplit`\npre-tokenizer baked in as defaults.\n\nLoads any published HF BERT-family `vocab.txt` checkpoint\nunchanged.",
+      "parameters": [
+        {
+          "name": "vocab",
+          "annotation": "dict[str, int]",
+          "description": "BERT-style vocab.  Continuation subwords prefixed with `##`.\nPass `{}` and call `WordPieceTokenizer.train` to\ntrain a fresh vocab from a corpus.",
+          "default": null
+        },
+        {
+          "name": "unk_token",
+          "annotation": "str",
+          "description": "Token emitted when no valid longest-match prefix is found.\nMust be present in `vocab` for the id to materialise.",
+          "default": "``\"[UNK]\"``"
+        },
+        {
+          "name": "continuing_prefix",
+          "annotation": "str",
+          "description": "Marker for non-initial subwords (BERT convention).",
+          "default": "``\"##\"``"
+        },
+        {
+          "name": "max_chars_per_word",
+          "annotation": "int",
+          "description": "Words longer than this skip the longest-match loop and emit\n`unk_token` directly (mirrors BERT `BasicTokenizer`).",
+          "default": "100"
+        },
+        {
+          "name": "do_lower_case",
+          "annotation": "bool",
+          "description": "Forwarded to `BertNormalizer`.  Set to `False` for\ncased checkpoints (`bert-base-cased`, multilingual models).\nIgnored if `normalizer` is given explicitly.",
+          "default": "``True``"
+        },
+        {
+          "name": "normalizer",
+          "annotation": "Normalizer",
+          "description": "Override the default `BertNormalizer`.",
+          "default": "None"
+        },
+        {
+          "name": "pre_tokenizer",
+          "annotation": "PreTokenizer",
+          "description": "Override the default `WhitespacePunctuationSplit`.",
+          "default": "None"
+        },
+        {
+          "name": "special_tokens",
+          "annotation": "SpecialTokens",
+          "description": "Override the default BERT registry.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Train a small BERT-style tokenizer from a corpus, then round-trip:\n>>> from lucid.models.text.bert import BertTokenizer\n>>> tok = BertTokenizer(vocab={})\n>>> tok.train([\"hello world\", \"hello bert\"] * 8, vocab_size=60)\n>>> ids = tok.encode(\"Hello World\", add_special_tokens=False)\n>>> # default do_lower_case=True → \"Hello\" and \"hello\" share ids.\n>>> tok.decode(ids, skip_special_tokens=False)\n'hello world'"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "BertTokenizerFast",
+          "description": "C++-backed variant with identical output."
+        }
+      ]
+    },
+    {
+      "name": "BertTokenizerFast",
+      "path": "lucid.models.text.bert._tokenizer.BertTokenizerFast",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WordPieceTokenizerFast"
+      ],
+      "labels": [],
+      "signature": "BertTokenizerFast(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_tokenizer.py#L158",
+      "subcategory": "tokenizer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.bert._tokenizer.BertTokenizerFast.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_tokenizer.py#L171",
+          "subcategory": "tokenizer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "BERT tokenizer — C++-backed.",
+      "extended": "Bit-identical to `BertTokenizer`: same vocab format, same\nspecial-token registry, same encode output.  The greedy\nlongest-match loop runs in C++ via\n`lucid._C.engine.utils.tokenizer.WordPiece`, typically\n20-30× faster than the pure-Python flavour on large corpora.\n\nConstructor parameters mirror `BertTokenizer` exactly —\nsee that class for the full reference.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "bert_base",
+      "path": "lucid.models.text.bert._pretrained.bert_base",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_base(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L240",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Base encoder.",
+      "extended": "Canonical mid-size variant from Devlin et al., 2018 Table 1:\n$L=12$ transformer layers, $H=768$ hidden, $A=12$\nattention heads, intermediate width 3072 — roughly 110M parameters.\nUses the 30,522-piece WordPiece vocabulary and a maximum sequence length\nof 512.  This is the default starting point for most BERT fine-tuning\nwork.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration.  Returns a randomly\ninitialised model today.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides (e.g. `vocab_size=...`,\n`max_position_embeddings=...`) forwarded into the underlying\nconfig.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertModel",
+        "description": "Encoder trunk configured with the BERT-Base size and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_base\n>>> model = bert_base().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 768), (1, 768))"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)), Table 1 (BERT\\ :sub:`BASE`)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 109482240,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 23837184,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 23440896,
+                "own_params": 23440896,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 393216,
+                "own_params": 393216,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 2363904,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 1771776,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 592128,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 2361600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_base_cls",
+      "path": "lucid.models.text.bert._pretrained.bert_base_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_base_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L440",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Base model with a sequence-classification head.",
+      "extended": "Same trunk as `bert_base` (L=12, H=768, A=12), augmented with a\npooled-CLS linear classifier of output width `config.num_labels`.  The\ncanonical fine-tuning recipe for GLUE-style single-sentence and\nsentence-pair tasks (SST-2, MNLI, QQP, RTE, MRPC, STS-B).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the number of\nclasses (default 2).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertForSequenceClassification",
+        "description": "BERT-Base wrapped with the pooled classifier head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_cls\n>>> model = bert_base_cls(num_labels=3).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, num_labels=3)\n(1, 3)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForSequenceClassification",
+        "type": "BertForSequenceClassification",
+        "params": 109483778,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1538,
+            "own_params": 1538,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_base_mlm",
+      "path": "lucid.models.text.bert._pretrained.bert_base_mlm",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_base_mlm(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L343",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Base model with a tied masked-LM head.",
+      "extended": "Same trunk as `bert_base` (L=12, H=768, A=12, ~110M parameters),\naugmented with the masked-language-modeling prediction head used at\npre-training time.  Suitable for continued pre-training on domain\ncorpora, mask-filling inference, and reproducing the MLM half of the\n[Devlin et al. (2018)](https://arxiv.org/abs/1810.04805) pre-training recipe.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertForMaskedLM",
+        "description": "BERT-Base wrapped with the tied MLM head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_mlm\n>>> model = bert_base_mlm().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, 4, vocab_size=30522)\n(1, 4, 30522)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1 (task #1)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForMaskedLM",
+        "type": "BertForMaskedLM",
+        "params": 110104890,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "cls",
+            "type": "_BertOnlyMLMHead",
+            "params": 24063546,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictions",
+                "type": "_BertLMPredictionHead",
+                "params": 24063546,
+                "own_params": 30522,
+                "children": [
+                  {
+                    "name": "transform",
+                    "type": "_BertPredictionHeadTransform",
+                    "params": 592128,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dense",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "LayerNorm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "Linear",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_base_qa",
+      "path": "lucid.models.text.bert._pretrained.bert_base_qa",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_base_qa(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L589",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Base model with an extractive-QA span head.",
+      "extended": "Same trunk as `bert_base` (L=12, H=768, A=12), augmented with a\n2-way linear head producing start- and end-position logits over each\ninput token.  The canonical fine-tuning recipe for SQuAD v1.1 and v2.0.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.  `num_labels` is ignored by this head.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertForQuestionAnswering",
+        "description": "BERT-Base wrapped with the span-prediction head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_qa\n>>> model = bert_base_qa().eval()\n>>> # question + context (CLS q [SEP] c [SEP]) ids\n>>> input_ids = lucid.tensor([[101, 2040, 102, 1045, 2572, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, T=6, 2) — last dim is (start, end)\n(1, 6, 2)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.2."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForQuestionAnswering",
+        "type": "BertForQuestionAnswering",
+        "params": 109483778,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "qa_outputs",
+            "type": "Linear",
+            "params": 1538,
+            "own_params": 1538,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_base_token_cls",
+      "path": "lucid.models.text.bert._pretrained.bert_base_token_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_base_token_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L540",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Base model with a per-token classification head.",
+      "extended": "Same trunk as `bert_base` (L=12, H=768, A=12), augmented with a\nper-position linear classifier of output width `config.num_labels`.\nThe canonical fine-tuning recipe for sequence-labelling tasks: named-\nentity recognition (CoNLL-2003), part-of-speech tagging, chunking.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the tag set size.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertForTokenClassification",
+        "description": "BERT-Base wrapped with the per-token classifier head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_token_cls\n>>> model = bert_base_token_cls(num_labels=9).eval()   # e.g. CoNLL-2003 BIO tag set\n>>> input_ids = lucid.tensor([[101, 2198, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, T=4, num_labels=9)\n(1, 4, 9)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.3."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForTokenClassification",
+        "type": "BertForTokenClassification",
+        "params": 109483778,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1538,
+            "own_params": 1538,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_large",
+      "path": "lucid.models.text.bert._pretrained.bert_large",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_large(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L291",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Large encoder.",
+      "extended": "Larger of the two original variants from Devlin et al., 2018 Table 1:\n$L=24$ transformer layers, $H=1024$ hidden, $A=16$\nattention heads, intermediate width 4096 — roughly 340M parameters.\nUses the 30,522-piece WordPiece vocabulary and a maximum sequence length\nof 512.  Achieved SOTA on every GLUE task and SQuAD v1.1/v2.0 at release.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration.  Returns a randomly\ninitialised model today.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertModel",
+        "description": "Encoder trunk configured with the BERT-Large size and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_large\n>>> model = bert_large().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 1024), (1, 1024))"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)), Table 1 (BERT\\ :sub:`LARGE`)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 335141888,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 31782912,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 31254528,
+                "own_params": 31254528,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 524288,
+                "own_params": 524288,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 4200448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 3148800,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 1051648,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 4197376,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 1049600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_large_cls",
+      "path": "lucid.models.text.bert._pretrained.bert_large_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_large_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L490",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Large model with a sequence-classification head.",
+      "extended": "Same trunk as `bert_large` (L=24, H=1024, A=16, ~340M parameters),\naugmented with a pooled-CLS linear classifier of output width\n`config.num_labels`.  Use for high-accuracy GLUE-style fine-tunes when\ncompute permits.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the number of\nclasses (default 2).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertForSequenceClassification",
+        "description": "BERT-Large wrapped with the pooled classifier head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_large_cls\n>>> model = bert_large_cls(num_labels=2).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, 2)\n(1, 2)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForSequenceClassification",
+        "type": "BertForSequenceClassification",
+        "params": 335143938,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 335141888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 31782912,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 31254528,
+                    "own_params": 31254528,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 524288,
+                    "own_params": 524288,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 4200448,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 3148800,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 1051648,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 2048,
+                                    "own_params": 2048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 4197376,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 1049600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 2050,
+            "own_params": 2050,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_large_mlm",
+      "path": "lucid.models.text.bert._pretrained.bert_large_mlm",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_large_mlm(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L391",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Large model with a tied masked-LM head.",
+      "extended": "Same trunk as `bert_large` (L=24, H=1024, A=16, ~340M parameters),\naugmented with the masked-language-modeling prediction head used at\npre-training time.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertForMaskedLM",
+        "description": "BERT-Large wrapped with the tied MLM head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_large_mlm\n>>> model = bert_large_mlm().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, 4, 30522)\n(1, 4, 30522)"
+      ],
+      "notes": [
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1 (task #1)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForMaskedLM",
+        "type": "BertForMaskedLM",
+        "params": 336224058,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 335141888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 31782912,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 31254528,
+                    "own_params": 31254528,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 524288,
+                    "own_params": 524288,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 4200448,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 3148800,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 1051648,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 2048,
+                                    "own_params": 2048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 4197376,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 1049600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "cls",
+            "type": "_BertOnlyMLMHead",
+            "params": 32336698,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictions",
+                "type": "_BertLMPredictionHead",
+                "params": 32336698,
+                "own_params": 30522,
+                "children": [
+                  {
+                    "name": "transform",
+                    "type": "_BertPredictionHeadTransform",
+                    "params": 1051648,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dense",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "LayerNorm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "Linear",
+                    "params": 31254528,
+                    "own_params": 31254528,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_medium",
+      "path": "lucid.models.text.bert._pretrained.bert_medium",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_medium(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L195",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Medium encoder.",
+      "extended": "Largest of the Turc et al., 2019 distillation sizes: $L=8$ layers,\n$H=512$ hidden, $A=8$ heads, intermediate width 2048.\nRoughly 41M parameters — closest in depth to Base while keeping the\nSmall width.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertModel",
+        "description": "Encoder trunk configured with the BERT-Medium size and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_medium\n>>> model = bert_medium().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 512)\n(1, 3, 512)"
+      ],
+      "notes": [
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 41373184,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 15891456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 15627264,
+                "own_params": 15627264,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 262144,
+                "own_params": 262144,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 25219072,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 25219072,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 1051648,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 787968,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 263680,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 1050112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 262656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 262656,
+                "own_params": 262656,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_mini",
+      "path": "lucid.models.text.bert._pretrained.bert_mini",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_mini(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L107",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Mini encoder.",
+      "extended": "Second-smallest of the Turc et al., 2019 distillation sizes:\n$L=4$ layers, $H=256$ hidden, $A=4$ heads, intermediate\nwidth 1024.  Roughly 11M parameters.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertModel",
+        "description": "Encoder trunk configured with the BERT-Mini size and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_mini\n>>> model = bert_mini().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 256)\n(1, 3, 256)"
+      ],
+      "notes": [
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 11170560,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 7945728,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 7813632,
+                "own_params": 7813632,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 131072,
+                "own_params": 131072,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 3159040,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 3159040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 789760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 263680,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 197376,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 66304,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 263168,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 263168,
+                            "own_params": 263168,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 262912,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 262400,
+                            "own_params": 262400,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 65792,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_small",
+      "path": "lucid.models.text.bert._pretrained.bert_small",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_small(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L151",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Small encoder.",
+      "extended": "Distillation-targeted variant from Turc et al., 2019: $L=4$ layers,\n$H=512$ hidden, $A=8$ heads, intermediate width 2048.\nRoughly 29M parameters — a useful mid-point between Mini and Base.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertModel",
+        "description": "Encoder trunk configured with the BERT-Small size and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_small\n>>> model = bert_small().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 512)\n(1, 3, 512)"
+      ],
+      "notes": [
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 28763648,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 15891456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 15627264,
+                "own_params": 15627264,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 262144,
+                "own_params": 262144,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 12609536,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 12609536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 1051648,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 787968,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 263680,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 1050112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 262656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 262656,
+                "own_params": 262656,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bert_tiny",
+      "path": "lucid.models.text.bert._pretrained.bert_tiny",
+      "kind": "function",
+      "labels": [],
+      "signature": "bert_tiny(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/bert/_pretrained.py#L57",
+      "subcategory": "pretrained",
+      "summary": "Construct a BERT-Tiny encoder.",
+      "extended": "Smallest of the four distillation-targeted variants from Turc, Chang,\nLee, and Toutanova, *\"Well-Read Students Learn Better\"*, 2019\n([arXiv:1908.08962](https://arxiv.org/abs/1908.08962)): $L=2$ transformer layers, $H=128$ hidden,\n$A=2$ heads, intermediate width 512.  Roughly 4M parameters — use\nfor CPU/edge inference, latency-bound demos, or unit tests of the BERT\npipeline.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration.  No checkpoints are wired up\nyet, so the model is always returned with random initialisation.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `BertConfig` field overrides (e.g. `vocab_size=...`,\n`num_labels=...`).  Forwarded into a fresh `BertConfig` whose\ndefaults match the Tiny size table above.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "BertModel",
+        "description": "Encoder trunk configured with the BERT-Tiny size and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.bert import bert_tiny\n>>> model = bert_tiny().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 128)\n(1, 3, 128)"
+      ],
+      "notes": [
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter: On the Importance of Pre-training Compact Models\"*, 2019\n([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 4385920,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 3972864,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 3906816,
+                "own_params": 3906816,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 65536,
+                "own_params": 65536,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 396544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 396544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 198272,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 66304,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 49536,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 16512,
+                                "own_params": 16512,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 16768,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 16512,
+                                "own_params": 16512,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 66048,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 66048,
+                            "own_params": 66048,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 65920,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 65664,
+                            "own_params": 65664,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 16512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 16512,
+                "own_params": 16512,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "BERT family — Devlin et al., 2018 (encoder-only transformer).",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "BERT",
+  "citation": "Devlin, Jacob, et al. \"BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.\" Proceedings of NAACL-HLT, 2019, pp. 4171–4186.",
+  "theory": "BERT — *Bidirectional Encoder Representations from Transformers* —\nis a transformer **encoder** pre-trained on two unsupervised\nobjectives over raw text:\n\n1. **Masked Language Modelling (MLM).**  A random 15% of input\n   tokens are replaced with a ``[MASK]`` placeholder; the model\n   must predict the original token from its bidirectional\n   context.  Formally, for masked positions $\\mathcal{M}$,\n\n\n\n$$\n\\mathcal{L}_{\\text{MLM}}\n    = -\\,\\mathbb{E}_{x}\\!\\left[\\;\n        \\sum_{i \\in \\mathcal{M}}\n            \\log p_\\theta\\!\\bigl(x_i \\mid x_{\\setminus \\mathcal{M}}\\bigr)\n    \\right].\n$$\n\n   Unlike the left-to-right LMs that preceded it, every token's\n   prediction conditions on **both** left and right context — hence\n   *bidirectional*.\n\n2. **Next-Sentence Prediction (NSP).**  Two segments $A$ and\n   $B$ are concatenated with separator tokens; the model\n   reads the pooled ``[CLS]`` representation and predicts whether\n   $B$ was the actual next sentence in the corpus or a\n   random other sentence.  This objective gives the model a\n   coarse notion of inter-sentence coherence used by downstream\n   sentence-pair tasks (QA, NLI).\n\nAfter pre-training on BookCorpus + English Wikipedia, the same\nencoder is fine-tuned on individual downstream tasks by adding a\nthin task-specific head on top of either the ``[CLS]`` token\nrepresentation (classification) or all per-token representations\n(tagging, span prediction).  This \"pre-train once, fine-tune\neverywhere\" recipe defined the post-2018 NLP landscape and set\nnew state-of-the-art on the GLUE, SQuAD, and SWAG benchmarks at\npublication time.",
+  "tasks": [
+    "text-generation",
+    "fill-mask",
+    "next-sentence-prediction",
+    "pretraining",
+    "question-answering",
+    "text-classification",
+    "token-classification"
+  ]
+}

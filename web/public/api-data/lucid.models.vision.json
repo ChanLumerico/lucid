@@ -1,0 +1,184 @@
+{
+  "slug": "lucid.models.vision",
+  "name": "vision",
+  "path": "lucid.models.vision",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/__init__.py#L1",
+  "members": [],
+  "summary": "Vision model families — chronological order of publication.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "family_groups": [
+    {
+      "slug": "lucid.models.vision.alexnet",
+      "label": "alexnet"
+    },
+    {
+      "slug": "lucid.models.vision.attention_unet",
+      "label": "attention_unet"
+    },
+    {
+      "slug": "lucid.models.vision.coatnet",
+      "label": "coatnet"
+    },
+    {
+      "slug": "lucid.models.vision.convnext",
+      "label": "convnext"
+    },
+    {
+      "slug": "lucid.models.vision.crossvit",
+      "label": "crossvit"
+    },
+    {
+      "slug": "lucid.models.vision.cspnet",
+      "label": "cspnet"
+    },
+    {
+      "slug": "lucid.models.vision.cvt",
+      "label": "cvt"
+    },
+    {
+      "slug": "lucid.models.vision.densenet",
+      "label": "densenet"
+    },
+    {
+      "slug": "lucid.models.vision.detr",
+      "label": "detr"
+    },
+    {
+      "slug": "lucid.models.vision.efficientdet",
+      "label": "efficientdet"
+    },
+    {
+      "slug": "lucid.models.vision.efficientformer",
+      "label": "efficientformer"
+    },
+    {
+      "slug": "lucid.models.vision.efficientnet",
+      "label": "efficientnet"
+    },
+    {
+      "slug": "lucid.models.vision.fast_rcnn",
+      "label": "fast_rcnn"
+    },
+    {
+      "slug": "lucid.models.vision.faster_rcnn",
+      "label": "faster_rcnn"
+    },
+    {
+      "slug": "lucid.models.vision.fcn",
+      "label": "fcn"
+    },
+    {
+      "slug": "lucid.models.vision.googlenet",
+      "label": "googlenet"
+    },
+    {
+      "slug": "lucid.models.vision.inception",
+      "label": "inception"
+    },
+    {
+      "slug": "lucid.models.vision.inception_next",
+      "label": "inception_next"
+    },
+    {
+      "slug": "lucid.models.vision.inception_resnet",
+      "label": "inception_resnet"
+    },
+    {
+      "slug": "lucid.models.vision.lenet",
+      "label": "lenet"
+    },
+    {
+      "slug": "lucid.models.vision.mask2former",
+      "label": "mask2former"
+    },
+    {
+      "slug": "lucid.models.vision.mask_rcnn",
+      "label": "mask_rcnn"
+    },
+    {
+      "slug": "lucid.models.vision.maskformer",
+      "label": "maskformer"
+    },
+    {
+      "slug": "lucid.models.vision.maxvit",
+      "label": "maxvit"
+    },
+    {
+      "slug": "lucid.models.vision.mobilenet",
+      "label": "mobilenet"
+    },
+    {
+      "slug": "lucid.models.vision.mobilenet_v2",
+      "label": "mobilenet_v2"
+    },
+    {
+      "slug": "lucid.models.vision.mobilenet_v3",
+      "label": "mobilenet_v3"
+    },
+    {
+      "slug": "lucid.models.vision.pvt",
+      "label": "pvt"
+    },
+    {
+      "slug": "lucid.models.vision.rcnn",
+      "label": "rcnn"
+    },
+    {
+      "slug": "lucid.models.vision.resnest",
+      "label": "resnest"
+    },
+    {
+      "slug": "lucid.models.vision.resnet",
+      "label": "resnet"
+    },
+    {
+      "slug": "lucid.models.vision.resnext",
+      "label": "resnext"
+    },
+    {
+      "slug": "lucid.models.vision.senet",
+      "label": "senet"
+    },
+    {
+      "slug": "lucid.models.vision.sknet",
+      "label": "sknet"
+    },
+    {
+      "slug": "lucid.models.vision.swin",
+      "label": "swin"
+    },
+    {
+      "slug": "lucid.models.vision.unet",
+      "label": "unet"
+    },
+    {
+      "slug": "lucid.models.vision.vgg",
+      "label": "vgg"
+    },
+    {
+      "slug": "lucid.models.vision.vit",
+      "label": "vit"
+    },
+    {
+      "slug": "lucid.models.vision.xception",
+      "label": "xception"
+    },
+    {
+      "slug": "lucid.models.vision.yolo",
+      "label": "yolo"
+    },
+    {
+      "slug": "lucid.models.vision.zfnet",
+      "label": "zfnet"
+    }
+  ]
+}

@@ -1,0 +1,2597 @@
+{
+  "slug": "lucid.models.vision.unet",
+  "name": "unet",
+  "path": "lucid.models.vision.unet",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/__init__.py#L1",
+  "members": [
+    {
+      "name": "UNetConfig",
+      "path": "lucid.models.vision.unet._config.UNetConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "UNetConfig(num_classes: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False, dropout: float = 0.0, dim: Literal[2, 3] = 2, block: Literal['basic', 'res'] = 'basic')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.unet._config.UNetConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False, dropout: float = 0.0, dim: Literal[2, 3] = 2, block: Literal['basic', 'res'] = 'basic')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for U-Net.",
+      "extended": "U-Net is a fully convolutional encoder-decoder architecture with skip\nconnections between corresponding encoder and decoder stages.  The\narchitecture was originally proposed for biomedical image segmentation.\n\nChannel schedule (base_channels=64, depth=4):\n  Encoder: 64 → 128 → 256 → 512\n  Bottleneck: 1024\n  Decoder: 512 → 256 → 128 → 64",
+      "parameters": [
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Number of output segmentation classes.",
+          "default": "2"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Number of input image channels.",
+          "default": "1"
+        },
+        {
+          "name": "base_channels",
+          "annotation": "int",
+          "description": "Feature channels at the first encoder stage.\n           Doubles at each depth level.",
+          "default": "64"
+        },
+        {
+          "name": "depth",
+          "annotation": "int",
+          "description": "Number of encoder/decoder stages (excluding bottleneck).",
+          "default": "4"
+        },
+        {
+          "name": "bilinear",
+          "annotation": "bool",
+          "description": "If True, use bilinear upsampling + Conv2d;\n           otherwise use ConvTranspose2d for learned upsampling.",
+          "default": "False"
+        },
+        {
+          "name": "dropout",
+          "annotation": "float",
+          "description": "Dropout probability applied in DoubleConv blocks.",
+          "default": "0.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Encoder: depth × (DoubleConv + MaxPool2d) — halves spatial resolution.\nBottleneck: DoubleConv at the deepest level.\nDecoder: depth × (Upsample + skip-cat + DoubleConv).\nHead: Conv2d(base_channels, num_classes, 1)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "UNetForSemanticSegmentation",
+      "path": "lucid.models.vision.unet._model.UNetForSemanticSegmentation",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "UNetForSemanticSegmentation(config: UNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_model.py#L227",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.unet._model.UNetForSemanticSegmentation.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: UNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_model.py#L315",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.unet._model.UNetForSemanticSegmentation.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, targets: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_model.py#L365",
+          "subcategory": "model",
+          "summary": "Run U-Net forward pass.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "SemanticSegmentationOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "U-Net encoder-decoder for semantic segmentation (Ronneberger et al., MICCAI 2015).",
+      "extended": "The canonical encoder-decoder segmentation architecture.  A contracting\npath (encoder) halves the spatial resolution and doubles the channel\ncount at every stage; an expanding path (decoder) inverts this, with\n**skip connections** concatenating each encoder feature map onto the\ncorresponding decoder stage to preserve fine localisation detail that\nwould otherwise be lost during downsampling.\n\nEach stage uses a *DoubleConv* block (two 3x3 convolutions with\nBatchNorm and ReLU); the optional `block=\"res\"` ResUNet variant\nadds an identity shortcut inside each DoubleConv to ease gradient\nflow.  Switching `config.dim` to 3 swaps every Conv2d / BatchNorm2d\n/ MaxPool2d for its 3-D counterpart, yielding the volumetric U-Net\nused in biomedical 3-D segmentation (Cicek et al., 2016).",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "UNetConfig",
+          "description": "Frozen architecture spec.  Use the factories (`unet`,\n`res_unet_2d`, `unet_3d`, `res_unet_3d`) for\nstandard variants.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Standard 2-D U-Net for 2-class biomedical segmentation:\n>>> import lucid\n>>> from lucid.models.vision.unet import unet\n>>> model = unet()\n>>> x = lucid.randn(1, 1, 256, 256)\n>>> out = model(x)\n>>> out.logits.shape   # (B, num_classes, H, W)\n(1, 2, 256, 256)\n3-D U-Net on a volumetric input:\n>>> from lucid.models.vision.unet import unet_3d\n>>> model = unet_3d()\n>>> x = lucid.randn(1, 1, 64, 64, 64)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 2, 64, 64, 64)"
+      ],
+      "notes": [
+        "See Ronneberger et al., \"U-Net: Convolutional Networks for Biomedical\nImage Segmentation\", MICCAI 2015 ([arXiv:1505.04597](https://arxiv.org/abs/1505.04597)).  The defining\nskip-connection update at decoder stage $s$ is\n\n$$\nd_s = \\mathrm{DoubleConv}\\!\\bigl(\n        \\mathrm{Concat}\\bigl(\\mathrm{Up}(d_{s+1}),\\; e_s\\bigr)\n      \\bigr),\n$$\nwith $e_s$ the encoder feature at the same spatial scale.\nThe original paper applies the network at 572x572 input and outputs\n388x388 unpadded; this implementation uses padding throughout so\nthe output spatial size matches the input.  ResUNet (Zhang et al.,\n2018) and 3-D U-Net (Cicek et al., 2016) are covered by the\n`block` and `dim` config switches respectively."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "UNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "encoders",
+          "annotation": "list[_EncoderBlock]",
+          "description": "`config.depth` encoder stages, each producing one downsampled\nfeature and one skip feature.  Channel widths follow\n`base_channels * 2 ** i` for i in 0 .. depth - 1."
+        },
+        {
+          "name": "bottleneck",
+          "annotation": "_DoubleConv",
+          "description": "DoubleConv at the bottom of the U with `base_channels * 2 ** depth`\nchannels."
+        },
+        {
+          "name": "decoders",
+          "annotation": "list[_DecoderBlock]",
+          "description": "`config.depth` decoder stages applied bottom-up; each\nupsamples (transpose conv or trilinear/bilinear interpolation\nwhen `bilinear=True`), concatenates the matching skip feature,\nand runs another DoubleConv."
+        },
+        {
+          "name": "head",
+          "annotation": "nn.Conv2d or nn.Conv3d",
+          "description": "Final 1x1 (or 1x1x1) convolution mapping the topmost decoder\nfeature to `num_classes` channels."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "unet",
+      "path": "lucid.models.vision.unet._pretrained.unet",
+      "kind": "function",
+      "labels": [],
+      "signature": "unet(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_pretrained.py#L56",
+      "subcategory": "pretrained",
+      "summary": "U-Net (Ronneberger et al., MICCAI 2015).",
+      "extended": "Builds the canonical 2-D U-Net: 4-level encoder / decoder with\n`base_channels = 64` (channel schedule 64 -> 128 -> 256 -> 512 ->\n1024), `in_channels = 1` (single-channel biomedical default), and\n`num_classes = 2`.  ConvTranspose2d upsampling in the decoder\n(set `bilinear=True` to use bilinear interpolation instead).\nApproximately 31M parameters.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `UNetConfig` —\n`num_classes`, `in_channels` (e.g. 3 for RGB), `base_channels`,\n`depth`, `bilinear`, `dropout`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "UNetForSemanticSegmentation",
+        "description": "Segmentation model with the U-Net configuration applied (or\nwith `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.unet import unet\n>>> model = unet(num_classes=4, in_channels=3)\n>>> x = lucid.randn(1, 3, 256, 256)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 4, 256, 256)"
+      ],
+      "notes": [
+        "See Ronneberger et al., \"U-Net: Convolutional Networks for Biomedical\nImage Segmentation\", MICCAI 2015 ([arXiv:1505.04597](https://arxiv.org/abs/1505.04597)).  The skip\nconnections that copy the encoder feature maps onto the decoder are\nthe architectural key idea."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "UNetForSemanticSegmentation",
+        "type": "UNetForSemanticSegmentation",
+        "params": 31036546,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_0",
+            "type": "_EncoderBlock",
+            "params": 37696,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 37696,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 37696,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_1",
+            "type": "_EncoderBlock",
+            "params": 221696,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 221696,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 221696,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 73728,
+                        "own_params": 73728,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_2",
+            "type": "_EncoderBlock",
+            "params": 885760,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 885760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 885760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 294912,
+                        "own_params": 294912,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_3",
+            "type": "_EncoderBlock",
+            "params": 3540992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 3540992,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 3540992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1179648,
+                        "own_params": 1179648,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bottleneck",
+            "type": "_DoubleConv",
+            "params": 14159872,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "body",
+                "type": "Sequential",
+                "params": 14159872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 4718592,
+                    "own_params": 4718592,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 9437184,
+                    "own_params": 9437184,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_3",
+            "type": "_DecoderBlock",
+            "params": 9177600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 2097664,
+                "own_params": 2097664,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 7079936,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 7079936,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 4718592,
+                        "own_params": 4718592,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_2",
+            "type": "_DecoderBlock",
+            "params": 2295040,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 1770496,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 1770496,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1179648,
+                        "own_params": 1179648,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_1",
+            "type": "_DecoderBlock",
+            "params": 574080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 131200,
+                "own_params": 131200,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 442880,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 442880,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 294912,
+                        "own_params": 294912,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_0",
+            "type": "_DecoderBlock",
+            "params": 143680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 32832,
+                "own_params": 32832,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 110848,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 110848,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 73728,
+                        "own_params": 73728,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Conv2d",
+            "params": 130,
+            "own_params": 130,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "res_unet_2d",
+      "path": "lucid.models.vision.unet._pretrained.res_unet_2d",
+      "kind": "function",
+      "labels": [],
+      "signature": "res_unet_2d(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_pretrained.py#L111",
+      "subcategory": "pretrained",
+      "summary": "ResUNet — U-Net with residual DoubleConv blocks, 2-D (Zhang et al., 2018).",
+      "extended": "Builds a 2-D U-Net with the standard channel / depth schedule but\nevery DoubleConv block wraps an identity shortcut around its two\n3x3 convs.  This residual variant trains more reliably at greater\ndepth and is a common drop-in upgrade for medical-imaging U-Nets.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `UNetConfig` (`num_classes`,\n`in_channels`, `base_channels`, `depth`, ...).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "UNetForSemanticSegmentation",
+        "description": "Segmentation model with the 2-D ResUNet configuration applied\n(or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.unet import res_unet_2d\n>>> model = res_unet_2d()\n>>> x = lucid.randn(1, 1, 256, 256)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 2, 256, 256)"
+      ],
+      "notes": [
+        "See Zhang, Liu, Wang, \"Road Extraction by Deep Residual U-Net\",\nIEEE Geosci. Remote Sens. Lett. 2018 ([arXiv:1711.10684](https://arxiv.org/abs/1711.10684)).  The\nDoubleConv update with residual shortcut is\n\n$$\ny = \\mathrm{ReLU}(F(x; W) + W_s x),\n$$\nmatching the He et al. residual formulation but applied at every\nencoder / decoder stage rather than only inside the backbone."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "UNetForSemanticSegmentation",
+        "type": "UNetForSemanticSegmentation",
+        "params": 32429250,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_0",
+            "type": "_EncoderBlock",
+            "params": 37760,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 37760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 37696,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 64,
+                    "own_params": 64,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_1",
+            "type": "_EncoderBlock",
+            "params": 229888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 229888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 221696,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 73728,
+                        "own_params": 73728,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 8192,
+                    "own_params": 8192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_2",
+            "type": "_EncoderBlock",
+            "params": 918528,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 918528,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 885760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 294912,
+                        "own_params": 294912,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 32768,
+                    "own_params": 32768,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_3",
+            "type": "_EncoderBlock",
+            "params": 3672064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 3672064,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 3540992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1179648,
+                        "own_params": 1179648,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 131072,
+                    "own_params": 131072,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bottleneck",
+            "type": "_DoubleConv",
+            "params": 14684160,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "body",
+                "type": "Sequential",
+                "params": 14159872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 4718592,
+                    "own_params": 4718592,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 9437184,
+                    "own_params": 9437184,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "shortcut",
+                "type": "Conv2d",
+                "params": 524288,
+                "own_params": 524288,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "decoder_3",
+            "type": "_DecoderBlock",
+            "params": 9701888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 2097664,
+                "own_params": 2097664,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 7604224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 7079936,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 4718592,
+                        "own_params": 4718592,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 524288,
+                    "own_params": 524288,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_2",
+            "type": "_DecoderBlock",
+            "params": 2426112,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 1901568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 1770496,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1179648,
+                        "own_params": 1179648,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 131072,
+                    "own_params": 131072,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_1",
+            "type": "_DecoderBlock",
+            "params": 606848,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 131200,
+                "own_params": 131200,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 475648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 442880,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 294912,
+                        "own_params": 294912,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 32768,
+                    "own_params": 32768,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_0",
+            "type": "_DecoderBlock",
+            "params": 151872,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 32832,
+                "own_params": 32832,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 119040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 110848,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 73728,
+                        "own_params": 73728,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv2d",
+                    "params": 8192,
+                    "own_params": 8192,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Conv2d",
+            "params": 130,
+            "own_params": 130,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "unet_3d",
+      "path": "lucid.models.vision.unet._pretrained.unet_3d",
+      "kind": "function",
+      "labels": [],
+      "signature": "unet_3d(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_pretrained.py#L169",
+      "subcategory": "pretrained",
+      "summary": "3-D U-Net for volumetric segmentation (Cicek et al., MICCAI 2016).",
+      "extended": "Builds the volumetric U-Net variant: all Conv2d / BatchNorm2d /\nMaxPool2d ops are replaced with their 3-D counterparts; \"bilinear\"\nupsampling becomes \"trilinear\".  Default `base_channels = 32` and\n`depth = 3` to keep memory tractable on volumetric inputs.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `UNetConfig` (`num_classes`,\n`in_channels`, `base_channels`, `depth`, `bilinear`, ...).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "UNetForSemanticSegmentation",
+        "description": "Segmentation model with the 3-D U-Net configuration applied (or\nwith `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.unet import unet_3d\n>>> model = unet_3d()\n>>> x = lucid.randn(1, 1, 64, 64, 64)   # (B, C, D, H, W)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 2, 64, 64, 64)"
+      ],
+      "notes": [
+        "See Cicek et al., \"3D U-Net: Learning Dense Volumetric Segmentation\nfrom Sparse Annotation\", MICCAI 2016 ([arXiv:1606.06650](https://arxiv.org/abs/1606.06650)).  Volumetric\nconvolutions add a depth axis, so memory cost scales linearly with\nthe input depth — keep depth and base_channels modest."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "UNetForSemanticSegmentation",
+        "type": "UNetForSemanticSegmentation",
+        "params": 5601154,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_0",
+            "type": "_EncoderBlock",
+            "params": 28640,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 28640,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 28640,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 864,
+                        "own_params": 864,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 27648,
+                        "own_params": 27648,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool3d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_1",
+            "type": "_EncoderBlock",
+            "params": 166144,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 166144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 166144,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 55296,
+                        "own_params": 55296,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 110592,
+                        "own_params": 110592,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool3d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_2",
+            "type": "_EncoderBlock",
+            "params": 664064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 664064,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 664064,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 221184,
+                        "own_params": 221184,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 442368,
+                        "own_params": 442368,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool3d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bottleneck",
+            "type": "_DoubleConv",
+            "params": 2655232,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "body",
+                "type": "Sequential",
+                "params": 2655232,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv3d",
+                    "params": 884736,
+                    "own_params": 884736,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm3d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv3d",
+                    "params": 1769472,
+                    "own_params": 1769472,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm3d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_2",
+            "type": "_DecoderBlock",
+            "params": 1589888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose3d",
+                "params": 262272,
+                "own_params": 262272,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 1327616,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 1327616,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 884736,
+                        "own_params": 884736,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 442368,
+                        "own_params": 442368,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_1",
+            "type": "_DecoderBlock",
+            "params": 397632,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose3d",
+                "params": 65600,
+                "own_params": 65600,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 332032,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 332032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 221184,
+                        "own_params": 221184,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 110592,
+                        "own_params": 110592,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_0",
+            "type": "_DecoderBlock",
+            "params": 99488,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose3d",
+                "params": 16416,
+                "own_params": 16416,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 83072,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 83072,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 55296,
+                        "own_params": 55296,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 27648,
+                        "own_params": 27648,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Conv3d",
+            "params": 66,
+            "own_params": 66,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "res_unet_3d",
+      "path": "lucid.models.vision.unet._pretrained.res_unet_3d",
+      "kind": "function",
+      "labels": [],
+      "signature": "res_unet_3d(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/unet/_pretrained.py#L221",
+      "subcategory": "pretrained",
+      "summary": "3-D ResUNet — volumetric residual U-Net.",
+      "extended": "Builds a 3-D U-Net with residual DoubleConv blocks: the volumetric\ncounterpart to `res_unet_2d`.  Useful for deeper variants on\nbiomedical volumes where the residual shortcut materially helps\noptimisation stability.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `UNetConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "UNetForSemanticSegmentation",
+        "description": "Segmentation model with the 3-D ResUNet configuration applied\n(or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.unet import res_unet_3d\n>>> model = res_unet_3d()\n>>> x = lucid.randn(1, 1, 64, 64, 64)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 2, 64, 64, 64)"
+      ],
+      "notes": [
+        "Combines the 3-D U-Net topology of Cicek et al. (MICCAI 2016) with\nthe residual DoubleConv blocks of Zhang et al. (2018)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "UNetForSemanticSegmentation",
+        "type": "UNetForSemanticSegmentation",
+        "params": 5687202,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_0",
+            "type": "_EncoderBlock",
+            "params": 28672,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 28672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 28640,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 864,
+                        "own_params": 864,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 27648,
+                        "own_params": 27648,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv3d",
+                    "params": 32,
+                    "own_params": 32,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool3d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_1",
+            "type": "_EncoderBlock",
+            "params": 168192,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 168192,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 166144,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 55296,
+                        "own_params": 55296,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 110592,
+                        "own_params": 110592,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv3d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool3d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_2",
+            "type": "_EncoderBlock",
+            "params": 672256,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 672256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 664064,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 221184,
+                        "own_params": 221184,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 442368,
+                        "own_params": 442368,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv3d",
+                    "params": 8192,
+                    "own_params": 8192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool3d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bottleneck",
+            "type": "_DoubleConv",
+            "params": 2688000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "body",
+                "type": "Sequential",
+                "params": 2655232,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv3d",
+                    "params": 884736,
+                    "own_params": 884736,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm3d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv3d",
+                    "params": 1769472,
+                    "own_params": 1769472,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm3d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "shortcut",
+                "type": "Conv3d",
+                "params": 32768,
+                "own_params": 32768,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "decoder_2",
+            "type": "_DecoderBlock",
+            "params": 1622656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose3d",
+                "params": 262272,
+                "own_params": 262272,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 1360384,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 1327616,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 884736,
+                        "own_params": 884736,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 442368,
+                        "own_params": 442368,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv3d",
+                    "params": 32768,
+                    "own_params": 32768,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_1",
+            "type": "_DecoderBlock",
+            "params": 405824,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose3d",
+                "params": 65600,
+                "own_params": 65600,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 340224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 332032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 221184,
+                        "own_params": 221184,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 110592,
+                        "own_params": 110592,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv3d",
+                    "params": 8192,
+                    "own_params": 8192,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_0",
+            "type": "_DecoderBlock",
+            "params": 101536,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose3d",
+                "params": 16416,
+                "own_params": 16416,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 85120,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 83072,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 55296,
+                        "own_params": 55296,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 27648,
+                        "own_params": 27648,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Conv3d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Conv3d",
+            "params": 66,
+            "own_params": 66,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "U-Net (Ronneberger et al., MICCAI 2015).",
+  "extended": "Paper: \"U-Net: Convolutional Networks for Biomedical Image Segmentation\"",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "U-Net",
+  "citation": "Ronneberger, Olaf, et al. \"U-Net: Convolutional Networks for Biomedical Image Segmentation.\" Medical Image Computing and Computer-Assisted Intervention, 2015, pp. 234–241.",
+  "theory": "U-Net is a symmetric **encoder–decoder** architecture with dense\nskip connections, designed for biomedical segmentation where\ntraining data is scarce and every pixel matters.\n\nThe encoder (\"contracting path\") follows the FCN philosophy of a\nclassification CNN: pairs of $3 \\times 3$ convolutions\n(with ReLU) followed by $2 \\times 2$ max-pooling, doubling\nchannel depth at every spatial halving:\n\n\n\n$$\nC_\\ell = 2 \\cdot C_{\\ell - 1}, \\quad\n(H, W)_\\ell = (H, W)_{\\ell - 1} / 2.\n$$\n\nThe decoder (\"expansive path\") mirrors this structure: each\nstage performs a $2 \\times 2$ *up-convolution* (transposed\nconv) that halves the channel count and doubles spatial size,\n**concatenates** the corresponding encoder feature map along the\nchannel axis, and applies two $3 \\times 3$ convs:\n\n\n\n$$\nx_\\ell^{\\mathrm{dec}} = \\phi\\!\\bigl(\n    [\\, \\mathrm{upconv}(x_{\\ell+1}^{\\mathrm{dec}}); \\,\n    x_\\ell^{\\mathrm{enc}} \\,]\n\\bigr).\n$$\n\nThe crucial design choice is the **skip connection by\nconcatenation** (not addition): it forwards the encoder's\nhigh-resolution but semantically shallow features directly into\nthe decoder, letting the convs combine them with the deeper,\nsemantically rich up-sampled features.  This is what allows the\nnetwork to produce crisp pixel-level boundaries with very few\ntraining images (the paper trains on 30 cell images via heavy\nelastic augmentation).\n\nThe final layer is a $1 \\times 1$ convolution mapping to\n$K$ classes (softmax + per-pixel cross-entropy).\nWeighted-pixel loss is recommended in the paper to emphasise\nthin separating boundaries between touching cells — a small but\npractically important detail for cell segmentation.  U-Net's\nskip-connection pattern has since become the default starting\npoint for almost every dense-prediction task, from natural\nimages to volumetric medical scans (3-D U-Net, V-Net, …).",
+  "tasks": [
+    "semantic-segmentation"
+  ]
+}

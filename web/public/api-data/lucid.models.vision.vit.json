@@ -1,0 +1,2135 @@
+{
+  "slug": "lucid.models.vision.vit",
+  "name": "vit",
+  "path": "lucid.models.vision.vit",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/__init__.py#L1",
+  "members": [
+    {
+      "name": "ViTConfig",
+      "path": "lucid.models.vision.vit._config.ViTConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "ViTConfig(image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, in_channels: int = 3, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, dropout: float = 0.0, attention_dropout: float = 0.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vit._config.ViTConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, in_channels: int = 3, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, dropout: float = 0.0, attention_dropout: float = 0.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration dataclass for every Vision Transformer (ViT) variant.",
+      "extended": "`ViTConfig` is an immutable container that fully specifies the\narchitecture of a Vision Transformer.  It is consumed by both\n`ViT` (backbone) and `ViTForImageClassification`\n(classifier head on top of the CLS token).  All canonical variants\ndescribed in [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929) — Base / Large / Huge at patch\nsizes 14, 16, and 32 — can be expressed by choosing different values for\n`dim`, `depth`, `num_heads`, and `patch_size`.\n\nThe number of input tokens fed into the transformer encoder is\n$N + 1$, where $N = (\\text{image\\_size} / \\text{patch\\_size})^2$\nis the number of non-overlapping patches and the extra token is a\nlearnable `[CLS]` embedding prepended to the sequence.",
+      "parameters": [
+        {
+          "name": "image_size",
+          "annotation": "int",
+          "description": "Spatial side length (in pixels) of the square input image.\n`image_size` must be divisible by `patch_size`.  Defaults to\n`224`, matching the ImageNet recipe in the original paper.",
+          "default": "224"
+        },
+        {
+          "name": "patch_size",
+          "annotation": "int",
+          "description": "Side length of the non-overlapping square patches extracted by the\npatch-embedding convolution.  Common values are `16`, `32`\n(Base / Large) or `14` (Huge).  Defaults to `16`.",
+          "default": "16"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Number of output logits produced by the classification head.\nOnly used by `ViTForImageClassification`.  Defaults to\n`1000` (ImageNet-1k).",
+          "default": "1000"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Number of input image channels.  Defaults to `3` (RGB).",
+          "default": "3"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Hidden width $D$ of every transformer block — also the\ndimensionality of the patch embedding and of the CLS token.\nDefaults to `768` (ViT-Base).",
+          "default": "768"
+        },
+        {
+          "name": "depth",
+          "annotation": "int",
+          "description": "Number of stacked transformer encoder blocks $L$.\nDefaults to `12` (ViT-Base).",
+          "default": "12"
+        },
+        {
+          "name": "num_heads",
+          "annotation": "int",
+          "description": "Number of attention heads inside each multi-head self-attention\nblock.  `dim` must be divisible by `num_heads`.  Defaults to\n`12`.",
+          "default": "12"
+        },
+        {
+          "name": "mlp_ratio",
+          "annotation": "float",
+          "description": "Expansion ratio of the MLP block.  The hidden width of the MLP is\n`int(dim * mlp_ratio)`; the standard recipe is `4.0` (i.e. a\n4x expansion).  Defaults to `4.0`.",
+          "default": "4.0"
+        },
+        {
+          "name": "dropout",
+          "annotation": "float",
+          "description": "Dropout probability applied (i) after the patch embedding +\npositional embedding sum and (ii) inside the MLP feed-forward\nsub-layer.  Defaults to `0.0`.",
+          "default": "0.0"
+        },
+        {
+          "name": "attention_dropout",
+          "annotation": "float",
+          "description": "Dropout probability applied to the post-softmax attention weights\ninside every multi-head self-attention block.  Defaults to `0.0`.",
+          "default": "0.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Build a custom ViT-Base/16 configuration for CIFAR-10 (10 classes,\n32x32 inputs, patch size 4 — yields 64 tokens):\n>>> from lucid.models.vision.vit import ViTConfig\n>>> cfg = ViTConfig(\n...     image_size=32,\n...     patch_size=4,\n...     num_classes=10,\n...     dim=768,\n...     depth=12,\n...     num_heads=12,\n... )\n>>> cfg.image_size, cfg.patch_size, cfg.num_classes\n(32, 4, 10)\nReuse a canonical variant and override only the number of classes:\n>>> from lucid.models.vision.vit._pretrained import _CFG_B16\n>>> from dataclasses import replace\n>>> cfg = replace(_CFG_B16, num_classes=100)\n>>> cfg.dim, cfg.depth, cfg.num_classes\n(768, 12, 100)"
+      ],
+      "notes": [
+        "The canonical variants registered as factory functions in\n`lucid.models.vision.vit` are (see Table 1 of the paper):\n\n============== ===== ====== ======= ===========\nVariant        dim   depth  heads   patch sizes\n============== ===== ====== ======= ===========\nViT-Base       768   12     12      16, 32\nViT-Large      1024  24     16      16, 32\nViT-Huge       1280  32     16      14\n============== ===== ====== ======= ===========\n\nReference: Alexey Dosovitskiy *et al.*, *\"An Image is Worth 16x16\nWords: Transformers for Image Recognition at Scale\"*, ICLR 2021,\n`[arXiv:2010.11929](https://arxiv.org/abs/2010.11929) <https://arxiv.org/abs/2010.11929>`_."
+      ],
+      "attributes": [
+        {
+          "name": "model_type",
+          "annotation": "ClassVar[str]",
+          "description": "Constant string `\"vit\"` used by the model registry to associate\nconfig instances with the ViT model class."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ViT",
+      "path": "lucid.models.vision.vit._model.ViT",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "ViT(config: ViTConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L301",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vit._model.ViT.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: ViTConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L393",
+          "subcategory": "model",
+          "summary": "Initialise the Flatten module. See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.vit._model.ViT.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L408",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.vit._model.ViT.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L411",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vit._model.ViT.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L422",
+          "subcategory": "model",
+          "summary": "Update src CLS token using cross-attention over tgt tokens.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "src",
+              "annotation": null,
+              "description": "(B, N_src, dim_src) — source branch tokens (CLS at index 0)",
+              "default": null
+            },
+            {
+              "name": "tgt",
+              "annotation": null,
+              "description": "(B, N_tgt, dim_tgt) — target branch tokens",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "BaseModelOutput",
+            "description": "Updated (B, N_src, dim_src) source tokens."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Vision Transformer backbone (Dosovitskiy et al., 2020).",
+      "extended": "A ViT first splits the input image into a sequence of non-overlapping\npatches and linearly projects each patch into a $D$-dimensional\nembedding.  A learnable `[CLS]` token is prepended, a learnable\npositional embedding is added, and the resulting sequence is processed\nby `depth` stacked pre-norm transformer encoder blocks.  The final\nrepresentation returned by `forward_features` is the CLS token\nembedding after a final LayerNorm — the standard feature used for\nclassification or transfer learning.\n\nConcretely, the input sequence fed to the encoder is\n\n$$\nz_0 = [\\,x_{\\text{class}};\\, x_p^1 E;\\, x_p^2 E;\\, \\dots;\\,\n          x_p^N E\\,] + E_{\\text{pos}},\n$$\nwhere $x_p^i \\in \\mathbb{R}^{P^2 C}$ is the $i$-th flattened\npatch, $E \\in \\mathbb{R}^{P^2 C \\times D}$ is the patch projection,\n$E_{\\text{pos}} \\in \\mathbb{R}^{(N+1) \\times D}$ is the learnable\npositional embedding, and $N = (\\text{image\\_size} / \\text{patch\\_size})^2$.\n\nUse this backbone when you want features rather than logits — e.g.\nfine-tuning on a custom downstream head, contrastive pretraining, or\nfeature extraction for retrieval.  For end-to-end image classification,\nuse `ViTForImageClassification` instead.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "ViTConfig",
+          "description": "Frozen dataclass specifying `image_size`, `patch_size`, `dim`,\n`depth`, `num_heads`, `mlp_ratio`, `dropout`,\n`attention_dropout`, and `in_channels`.  See `ViTConfig`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Build a ViT-Base/16 backbone and run a single forward pass:\n>>> import lucid\n>>> from lucid.models.vision.vit import ViT, ViTConfig\n>>> cfg = ViTConfig()              # ViT-Base/16 defaults\n>>> model = ViT(cfg)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape                     # (B, dim)\n(1, 768)\n>>> out = model(x)\n>>> out.last_hidden_state.shape    # (B, 1, dim)\n(1, 1, 768)"
+      ],
+      "notes": [
+        "The classification head is **not** included in this class — only the\nbackbone trunk.  `forward_features` returns a flat\n$(B, D)$ feature tensor, whereas `forward` wraps it in a\n`BaseModelOutput` whose `last_hidden_state` has shape\n$(B, 1, D)$ for spatial consistency with other vision models.\n\nReference: Alexey Dosovitskiy *et al.*, *\"An Image is Worth 16x16\nWords: Transformers for Image Recognition at Scale\"*, ICLR 2021,\n`[arXiv:2010.11929](https://arxiv.org/abs/2010.11929) <https://arxiv.org/abs/2010.11929>`_."
+      ],
+      "attributes": [
+        {
+          "name": "patch_embed",
+          "annotation": "_PatchEmbed",
+          "description": "Patch-extraction convolution producing the initial token sequence."
+        },
+        {
+          "name": "cls_token",
+          "annotation": "Tensor",
+          "description": "Learnable `[CLS]` token, shape `(1, 1, dim)`.  Initialized with\ntruncated normal $\\mathcal{N}(0, 0.02^2)$."
+        },
+        {
+          "name": "pos_embed",
+          "annotation": "Tensor",
+          "description": "Learnable positional embedding, shape `(1, num_patches + 1, dim)`.\nInitialized with truncated normal $\\mathcal{N}(0, 0.02^2)$."
+        },
+        {
+          "name": "pos_drop",
+          "annotation": "nn.Dropout",
+          "description": "Dropout applied right after adding positional embeddings."
+        },
+        {
+          "name": "blocks",
+          "annotation": "nn.ModuleList",
+          "description": "`config.depth` stacked `_ViTBlock` encoder layers."
+        },
+        {
+          "name": "norm",
+          "annotation": "nn.LayerNorm",
+          "description": "Final LayerNorm applied before extracting the CLS token."
+        },
+        {
+          "name": "feature_info",
+          "annotation": "list[FeatureInfo]",
+          "description": "Single-stage feature description with channel count equal to\n`config.dim` and spatial reduction equal to `config.patch_size`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ViTForImageClassification",
+      "path": "lucid.models.vision.vit._model.ViTForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "ViTForImageClassification(config: ViTConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L433",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vit._model.ViTForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: ViTConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L516",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vit._model.ViTForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_model.py#L528",
+          "subcategory": "model",
+          "summary": "Update src CLS token using cross-attention over tgt tokens.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "src",
+              "annotation": null,
+              "description": "(B, N_src, dim_src) — source branch tokens (CLS at index 0)",
+              "default": null
+            },
+            {
+              "name": "tgt",
+              "annotation": null,
+              "description": "(B, N_tgt, dim_tgt) — target branch tokens",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": "Updated (B, N_src, dim_src) source tokens."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Vision Transformer with a linear classification head on the CLS token.",
+      "extended": "Wraps the same trunk as `ViT` (patch embedding -> positional\nembedding -> `depth` transformer blocks -> final LayerNorm) and adds\na single `nn.Linear` classification head that maps the final\nCLS-token feature of dimension $D$ to `config.num_classes`\nlogits:\n\n$$\n\\text{logits} = W_{\\text{head}}\\, z_L^{[0]} + b_{\\text{head}},\n\\qquad W_{\\text{head}} \\in \\mathbb{R}^{C \\times D}\n$$\nwhere $z_L^{[0]}$ is the post-LayerNorm CLS token at the final\nlayer and $C$ is the number of classes.  This is the standard\nImageNet recipe described in the original ViT paper.\n\nPass `labels` to `forward` to compute the cross-entropy loss\nin the same pass — handy for HuggingFace-style training loops.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "ViTConfig",
+          "description": "Architecture specification.  Must set `num_classes` to the\ndesired number of output categories (default 1000 for ImageNet-1k).\nSee `ViTConfig`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "End-to-end inference with the default ViT-Base/16 classifier:\n>>> import lucid\n>>> from lucid.models.vision.vit import (\n...     ViTConfig, ViTForImageClassification\n... )\n>>> cfg = ViTConfig(num_classes=1000)\n>>> model = ViTForImageClassification(cfg)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)\nPass labels for joint loss computation during training:\n>>> labels = lucid.tensor([0])\n>>> out = model(x, labels=labels)\n>>> out.loss.shape\n()"
+      ],
+      "notes": [
+        "Reference: Alexey Dosovitskiy *et al.*, *\"An Image is Worth 16x16\nWords: Transformers for Image Recognition at Scale\"*, ICLR 2021,\n`[arXiv:2010.11929](https://arxiv.org/abs/2010.11929) <https://arxiv.org/abs/2010.11929>`_."
+      ],
+      "attributes": [
+        {
+          "name": "patch_embed",
+          "annotation": "_PatchEmbed",
+          "description": "Patch-extraction convolution producing the initial token sequence."
+        },
+        {
+          "name": "cls_token",
+          "annotation": "Tensor",
+          "description": "Learnable CLS token, shape `(1, 1, dim)`."
+        },
+        {
+          "name": "pos_embed",
+          "annotation": "Tensor",
+          "description": "Learnable positional embedding, shape `(1, num_patches + 1, dim)`."
+        },
+        {
+          "name": "pos_drop",
+          "annotation": "nn.Dropout",
+          "description": "Dropout applied right after adding positional embeddings."
+        },
+        {
+          "name": "blocks",
+          "annotation": "nn.ModuleList",
+          "description": "Stacked transformer encoder blocks."
+        },
+        {
+          "name": "norm",
+          "annotation": "nn.LayerNorm",
+          "description": "Final LayerNorm applied before extracting the CLS token."
+        },
+        {
+          "name": "head",
+          "annotation": "nn.Linear",
+          "description": "Classification head with shape `(num_classes, dim)`.  The\nattribute is intentionally named `head` so pretrained\nstate-dicts using the standard `head.weight` / `head.bias` key\nnames load directly."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vit_base_16",
+      "path": "lucid.models.vision.vit._pretrained.vit_base_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_base_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L25",
+      "subcategory": "pretrained",
+      "summary": "ViT-Base/16 backbone (Dosovitskiy et al., 2020).",
+      "extended": "Builds the canonical *ViT-Base* configuration with patch size 16:\n`dim=768`, `depth=12`, `num_heads=12`, `mlp_ratio=4.0`.  With\nthe default 224x224 input this yields $(224/16)^2 = 196$ patch\ntokens plus one CLS token, for an input sequence length of `197` to\nthe transformer encoder.  Approximately **86M parameters**.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights when available\nin the model zoo.  Defaults to `False` (random initialization).",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides applied on top of the canonical ViT-Base/16\nconfig — e.g. `image_size=384`, `in_channels=1`, or\n`dropout=0.1`.  Each override must match a field of\n`ViTConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViT",
+        "description": "A `ViT` backbone instance returning a flat `(B, 768)` CLS\nfeature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_16\n>>> model = vit_base_16()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape\n(1, 768)"
+      ],
+      "notes": [
+        "ViT-Base/16 was pretrained on JFT-300M / ImageNet-21k and reported\n**84.15% top-1 / 97.20% top-5 on ImageNet-1k** after fine-tuning at\n384x384 in [Dosovitskiy et al. (2020, Table 5)](https://arxiv.org/abs/2010.11929).  See\n`[arXiv:2010.11929](https://arxiv.org/abs/2010.11929) <https://arxiv.org/abs/2010.11929>`_."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 85798656,
+        "own_params": 152064,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_base_16_cls",
+      "path": "lucid.models.vision.vit._pretrained.vit_base_16_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_base_16_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L269",
+      "subcategory": "pretrained",
+      "summary": "ViT-Base/16 image classifier (Dosovitskiy et al., 2020).",
+      "extended": "Combines the `vit_base_16` backbone with a single\n`nn.Linear` classification head on the CLS token.  Default\noutput is `num_classes=1000` (ImageNet-1k); override via\n`num_classes=...`.  Approximately **86M parameters** for the\n1000-class head.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights for the trunk\n(and fine-tuned head when available).  Defaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Base/16 config.\nCommonly used: `num_classes` to switch label space,\n`image_size` to fine-tune at higher resolution.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViTForImageClassification",
+        "description": "Classifier returning `ImageClassificationOutput` whose\n`logits` has shape `(B, num_classes)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_16_cls\n>>> model = vit_base_16_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [
+        "Standard ImageNet recipe: backbone returns the CLS token after the\nfinal LayerNorm, head applies a single affine map to produce class\nlogits.  See `[arXiv:2010.11929](https://arxiv.org/abs/2010.11929) <https://arxiv.org/abs/2010.11929>`_."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 86567656,
+        "own_params": 152064,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_base_32",
+      "path": "lucid.models.vision.vit._pretrained.vit_base_32",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_base_32(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L78",
+      "subcategory": "pretrained",
+      "summary": "ViT-Base/32 backbone (Dosovitskiy et al., 2020).",
+      "extended": "Same ViT-Base trunk as `vit_base_16` (`dim=768`, `depth=12`,\n`num_heads=12`) but with patch size 32, which reduces the sequence\nlength to $(224/32)^2 = 49$ patch tokens (+1 CLS = 50).  The\nlarger patches trade fine-grained spatial detail for ~4x cheaper\nself-attention and ~88M parameters in total.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights when available.\nDefaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Base/32 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViT",
+        "description": "A `ViT` backbone returning a flat `(B, 768)` CLS feature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_32\n>>> model = vit_base_32()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 768)"
+      ],
+      "notes": [
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  The `/32` variant\nis most useful when latency / FLOPs dominate over absolute accuracy."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 87455232,
+        "own_params": 39168,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 2360064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 2360064,
+                "own_params": 2360064,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_base_32_cls",
+      "path": "lucid.models.vision.vit._pretrained.vit_base_32_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_base_32_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L322",
+      "subcategory": "pretrained",
+      "summary": "ViT-Base/32 image classifier (Dosovitskiy et al., 2020).",
+      "extended": "Combines the `vit_base_32` backbone (`dim=768`, `depth=12`,\n`num_heads=12`, patch size 32) with a linear classification head on\nthe CLS token.  The `/32` patching yields a 49-token sequence,\nmaking this the cheapest ViT-Base classifier.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights when available.\nDefaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Base/32 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViTForImageClassification",
+        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_32_cls\n>>> model = vit_base_32_cls(num_classes=10)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 10)"
+      ],
+      "notes": [
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 88224232,
+        "own_params": 39168,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 2360064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 2360064,
+                "own_params": 2360064,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_large_16",
+      "path": "lucid.models.vision.vit._pretrained.vit_large_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_large_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L124",
+      "subcategory": "pretrained",
+      "summary": "ViT-Large/16 backbone (Dosovitskiy et al., 2020).",
+      "extended": "The canonical *ViT-Large* configuration with patch size 16:\n`dim=1024`, `depth=24`, `num_heads=16`, `mlp_ratio=4.0`.  With\na 224x224 input it produces 197 tokens (196 patches + CLS) feeding 24\npre-norm transformer blocks of width 1024.  Approximately\n**307M parameters**.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights when available.\nDefaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Large/16 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViT",
+        "description": "A `ViT` backbone returning a flat `(B, 1024)` CLS feature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_16\n>>> model = vit_large_16()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 1024)"
+      ],
+      "notes": [
+        "ViT-Large/16 reaches **85.30% top-1 on ImageNet-1k** when fine-tuned\nat 384x384 after ImageNet-21k pretraining (Dosovitskiy et al., 2020,\nTable 5).  Best accuracy/cost trade-off among the Large variants."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 303301632,
+        "own_params": 202752,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 787456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 787456,
+                "own_params": 787456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_large_16_cls",
+      "path": "lucid.models.vision.vit._pretrained.vit_large_16_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_large_16_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L368",
+      "subcategory": "pretrained",
+      "summary": "ViT-Large/16 image classifier (Dosovitskiy et al., 2020).",
+      "extended": "Combines the `vit_large_16` backbone (`dim=1024`,\n`depth=24`, `num_heads=16`, patch size 16) with a linear\nclassification head on the CLS token.  Approximately\n**307M parameters**.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights when available.\nDefaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Large/16 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViTForImageClassification",
+        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_16_cls\n>>> model = vit_large_16_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
+      ],
+      "notes": [
+        "Reaches **85.30% top-1 on ImageNet-1k** at 384x384 fine-tune\nresolution after ImageNet-21k pretraining (Dosovitskiy et al., 2020,\nTable 5)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 304326632,
+        "own_params": 202752,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 787456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 787456,
+                "own_params": 787456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_large_32",
+      "path": "lucid.models.vision.vit._pretrained.vit_large_32",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_large_32(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L171",
+      "subcategory": "pretrained",
+      "summary": "ViT-Large/32 backbone (Dosovitskiy et al., 2020).",
+      "extended": "Same ViT-Large trunk as `vit_large_16` (`dim=1024`,\n`depth=24`, `num_heads=16`) but with patch size 32, producing only\n$(224/32)^2 = 49$ patch tokens (+1 CLS).  Approximately\n**307M parameters** with substantially reduced attention cost.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights when available.\nDefaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Large/32 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViT",
+        "description": "A `ViT` backbone returning a flat `(B, 1024)` CLS feature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_32\n>>> model = vit_large_32()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 1024)"
+      ],
+      "notes": [
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  Useful when Large\ncapacity is desired but the `/16` token count is too expensive."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 305510400,
+        "own_params": 52224,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 3146752,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 3146752,
+                "own_params": 3146752,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_large_32_cls",
+      "path": "lucid.models.vision.vit._pretrained.vit_large_32_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_large_32_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L416",
+      "subcategory": "pretrained",
+      "summary": "ViT-Large/32 image classifier (Dosovitskiy et al., 2020).",
+      "extended": "Combines the `vit_large_32` backbone (`dim=1024`,\n`depth=24`, `num_heads=16`, patch size 32) with a linear\nclassification head on the CLS token.  The `/32` patching gives a\n49-token sequence and substantially lowers self-attention cost.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads ImageNet-21k pretrained weights when available.\nDefaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Large/32 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViTForImageClassification",
+        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_32_cls\n>>> model = vit_large_32_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
+      ],
+      "notes": [
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 306535400,
+        "own_params": 52224,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 3146752,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 3146752,
+                "own_params": 3146752,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_huge_14",
+      "path": "lucid.models.vision.vit._pretrained.vit_huge_14",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_huge_14(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L216",
+      "subcategory": "pretrained",
+      "summary": "ViT-Huge/14 backbone (Dosovitskiy et al., 2020).",
+      "extended": "The canonical *ViT-Huge* configuration with patch size 14:\n`dim=1280`, `depth=32`, `num_heads=16`, `mlp_ratio=4.0`.  With\na 224x224 input it produces $(224/14)^2 = 256$ patch tokens\n(+1 CLS = 257 total) feeding 32 transformer blocks of width 1280.\nApproximately **632M parameters** — the largest variant in the\npaper.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads JFT-300M / ImageNet-21k pretrained weights when\navailable.  Defaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Huge/14 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViT",
+        "description": "A `ViT` backbone returning a flat `(B, 1280)` CLS feature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_huge_14\n>>> model = vit_huge_14()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 1280)"
+      ],
+      "notes": [
+        "ViT-Huge/14 achieves **88.55% top-1 on ImageNet-1k** when fine-tuned\nat 518x518 after JFT-300M pretraining (Dosovitskiy et al., 2020,\nTable 2) — the state-of-the-art result reported in the paper at\nrelease.  Training from scratch on ImageNet-1k alone is impractical\nat this scale; pretrained weights are strongly recommended."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 630764800,
+        "own_params": 330240,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 753920,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 753920,
+                "own_params": 753920,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 629678080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 19677440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 6558720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 13113600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 6558720,
+                        "own_params": 6558720,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 6554880,
+                        "own_params": 6554880,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 32
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vit_huge_14_cls",
+      "path": "lucid.models.vision.vit._pretrained.vit_huge_14_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vit_huge_14_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vit/_pretrained.py#L462",
+      "subcategory": "pretrained",
+      "summary": "ViT-Huge/14 image classifier (Dosovitskiy et al., 2020).",
+      "extended": "Combines the `vit_huge_14` backbone (`dim=1280`, `depth=32`,\n`num_heads=16`, patch size 14) with a linear classification head on\nthe CLS token.  Approximately **632M parameters** — the largest ViT\nvariant in the paper.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "If `True`, loads JFT-300M / ImageNet-21k pretrained weights when\navailable.  Defaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides on top of the canonical ViT-Huge/14 config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ViTForImageClassification",
+        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vit import vit_huge_14_cls\n>>> model = vit_huge_14_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
+      ],
+      "notes": [
+        "Achieves **88.55% top-1 on ImageNet-1k** at 518x518 fine-tune\nresolution after JFT-300M pretraining (Dosovitskiy et al., 2020,\nTable 2) — the headline result of the paper."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 632045800,
+        "own_params": 330240,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 753920,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 753920,
+                "own_params": 753920,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 629678080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 19677440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 6558720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 13113600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 6558720,
+                        "own_params": 6558720,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 6554880,
+                        "own_params": 6554880,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 32
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1281000,
+            "own_params": 1281000,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "Vision Transformer (ViT) model family — Dosovitskiy et al., 2020.",
+  "extended": "This sub-package exposes the canonical Vision Transformer architecture\nintroduced in *\"An Image is Worth 16x16 Words: Transformers for Image\nRecognition at Scale\"* (ICLR 2021, `[arXiv:2010.11929](https://arxiv.org/abs/2010.11929)\n<https://arxiv.org/abs/2010.11929>`_).\n\nThe architecture splits an image into non-overlapping square patches,\nlinearly projects each patch into a $D$-dimensional embedding,\nprepends a learnable `[CLS]` token, adds a learnable positional\nembedding, and processes the resulting sequence with a stack of pre-norm\ntransformer encoder blocks.  The final CLS-token representation is used\nas the global image feature.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [
+    "Configuration:\n\n* `ViTConfig` — immutable dataclass describing any ViT variant.\n\nModules:\n\n* `ViT` — feature-extractor backbone (returns `(B, dim)` CLS).\n* `ViTForImageClassification` — backbone + linear head producing\n  classification logits.\n\nBackbone factories:\n\n* `vit_base_16`, `vit_base_32`\n* `vit_large_16`, `vit_large_32`\n* `vit_huge_14`\n\nClassifier factories (CLS-token linear head):\n\n* `vit_base_16_cls`, `vit_base_32_cls`\n* `vit_large_16_cls`, `vit_large_32_cls`\n* `vit_huge_14_cls`"
+  ],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "ViT",
+  "citation": "Dosovitskiy, Alexey, et al. \"An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale.\" International Conference on Learning Representations, 2021.",
+  "theory": "The Vision Transformer (ViT) shows that convolutions are *not*\nrequired for state-of-the-art image classification given enough\ndata.  An input image\n$x \\in \\mathbb{R}^{H \\times W \\times C}$ is reshaped into\na sequence of non-overlapping square patches\n$x_p \\in \\mathbb{R}^{N \\times (P^2 C)}$ with\n$N = HW / P^2$, each patch flattened and projected to a\n$D$-dimensional token by a single linear map.  A learnable\nclass token $x_{\\text{cls}}$ is prepended, and learnable\npositional embeddings $E_{\\text{pos}}$ are added:\n\n\n\n$$\nz_0 = [\\,x_{\\text{cls}};\\; x_p^1 E;\\; \\dots;\\; x_p^N E\\,] + E_{\\text{pos}}.\n$$\n\nThe sequence then flows through $L$ stacked transformer\nencoder blocks — multi-head self-attention plus an MLP, each\nwrapped by LayerNorm and residual connections.  Classification\nreads the final state of the class token through a single linear\nhead.\n\nThe paper's central empirical claim is that the inductive biases\nconvolutions provide (locality, translation equivariance) become\n*unnecessary* once pre-training data is large enough — ViT\npre-trained on ImageNet-21k or JFT-300M matches or beats the best\nResNet/EfficientNet baselines on downstream benchmarks while\nusing fewer FLOPs.  Three canonical variants from Table 1 (Base /\nLarge / Huge) trade compute for accuracy by scaling\n$(D, L, H)$ — the hidden width, depth, and number of\nattention heads.",
+  "tasks": [
+    "image-classification"
+  ]
+}

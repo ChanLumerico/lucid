@@ -1,0 +1,3147 @@
+{
+  "slug": "lucid.models.vision.googlenet",
+  "name": "googlenet",
+  "path": "lucid.models.vision.googlenet",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/__init__.py#L1",
+  "members": [
+    {
+      "name": "GoogLeNetConfig",
+      "path": "lucid.models.vision.googlenet._config.GoogLeNetConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "GoogLeNetConfig(num_classes: int = 1000, in_channels: int = 3, aux_logits: bool = True, dropout: float = 0.4, aux_dropout: float = 0.7)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.googlenet._config.GoogLeNetConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, aux_logits: bool = True, dropout: float = 0.4, aux_dropout: float = 0.7)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for GoogLeNet (Inception v1).",
+      "extended": "`aux_logits` enables the two auxiliary classifiers that were used\nduring training in the original paper.  They are ignored at inference\n(eval mode); the auxiliary loss is typically weighted 0.3 in the total\ntraining objective.\n\n`dropout` — main classifier dropout rate (0.4 in the paper).\n`aux_dropout` — auxiliary classifier dropout rate (0.7 in the paper).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "GoogLeNet",
+      "path": "lucid.models.vision.googlenet._model.GoogLeNet",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "GoogLeNet(config: GoogLeNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L223",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.googlenet._model.GoogLeNet.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: GoogLeNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L303",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.googlenet._model.GoogLeNet.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L330",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.googlenet._model.GoogLeNet.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L333",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.googlenet._model.GoogLeNet.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L348",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "GoogLeNetOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "GoogLeNet (Inception v1) feature-extracting backbone.",
+      "extended": "Implements the 22-layer Inception v1 network from Szegedy et al.,\n\"Going Deeper with Convolutions\", CVPR 2015: a five-block stem\n(Conv $7\\times7$ stride-2 → MaxPool → $1\\times1$ →\n$3\\times3$ → MaxPool) followed by nine\n`_InceptionModule` blocks grouped into three stages\n(Inception 3a-3b → MaxPool → 4a-4e → MaxPool → 5a-5b) and a final\n`lucid.nn.AdaptiveAvgPool2d` to a $1\\times1$ spatial\nmap.  The two auxiliary classifiers attached at Inception 4a and\n4d in the original paper are part of the classifier variant only,\nnot the backbone.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "GoogLeNetConfig",
+          "description": "Frozen architecture spec.  Use `googlenet` for the\npaper-cited configuration; pass a custom config to switch input\nchannel count.  `aux_logits` is irrelevant for the backbone.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Build a GoogLeNet backbone and run a single forward pass:\n>>> import lucid\n>>> from lucid.models.vision.googlenet import googlenet\n>>> backbone = googlenet()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = backbone(x)\n>>> out.logits.shape   # (B, 1024, 1, 1)\n(2, 1024, 1, 1)"
+      ],
+      "notes": [
+        "Each `_InceptionModule` computes four parallel branches in a\nsingle layer:\n\n$$\ny = \\mathrm{concat}\\bigl(\n    f_{1\\times1}(x),\\; f_{3\\times3}(g_{1\\times1}(x)),\\;\n    f_{5\\times5}(h_{1\\times1}(x)),\\;\n    p_{1\\times1}(\\mathrm{pool}(x))\n\\bigr).\n$$\nThe $1\\times1$ bottlenecks before the larger spatial\nconvolutions keep the parameter count manageable: GoogLeNet has\nonly ≈6.8 M parameters compared with ≈60 M for AlexNet, despite\nbeing substantially deeper and reaching a top-5 ImageNet validation\nerror of 6.67%.  This was the ILSVRC-2014 classification winner."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "GoogLeNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "stem",
+          "annotation": "nn.Sequential",
+          "description": "The pre-Inception conv stack."
+        },
+        {
+          "name": "inception3a, inception3b",
+          "annotation": "_InceptionModule",
+          "description": "First Inception stage, producing a $28\\times28$ spatial\nmap with 256 and 480 channels respectively."
+        },
+        {
+          "name": "inception4a … inception4e",
+          "annotation": "_InceptionModule",
+          "description": "Second Inception stage at $14\\times14$ resolution; widths\nramp 512 → 512 → 512 → 528 → 832."
+        },
+        {
+          "name": "inception5a, inception5b",
+          "annotation": "_InceptionModule",
+          "description": "Third Inception stage at $7\\times7$ resolution, producing\nthe final 1024-channel feature map."
+        },
+        {
+          "name": "maxpool3, maxpool4",
+          "annotation": "nn.MaxPool2d",
+          "description": "$3\\times3$ stride-2 max-pools between Inception stages."
+        },
+        {
+          "name": "avgpool",
+          "annotation": "nn.AdaptiveAvgPool2d",
+          "description": "Final global average pool collapsing the $7\\times7$\nfeature map to $1\\times1$."
+        },
+        {
+          "name": "feature_info",
+          "annotation": "list[FeatureInfo]",
+          "description": "Per-stage descriptor (channels + reduction factor) exposed via\n`BackboneMixin`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "GoogLeNetForImageClassification",
+      "path": "lucid.models.vision.googlenet._model.GoogLeNetForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "GoogLeNetForImageClassification(config: GoogLeNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L357",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.googlenet._model.GoogLeNetForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: GoogLeNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L439",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.googlenet._model.GoogLeNetForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L474",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "GoogLeNetOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "GoogLeNet image classifier with optional auxiliary classifiers.",
+      "extended": "Combines the GoogLeNet backbone with a global-average-pool +\n`lucid.nn.Dropout` (`config.dropout`, default 0.4) +\n`lucid.nn.Linear` head producing `config.num_classes`\nlogits, plus two optional auxiliary classifiers attached at\nInception 4a (512-channel feature map) and Inception 4d\n(528-channel feature map).  Auxiliary heads are evaluated only in\ntraining mode and only when `config.aux_logits=True`; their\ncontributions to the loss are weighted 0.3 each, following the\noriginal paper.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "GoogLeNetConfig",
+          "description": "Architecture spec.  Use `googlenet_cls` for the\npaper-cited configuration (auxiliary heads enabled).  Pass\n`aux_logits=False` for an inference-only variant.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Inference path (no labels, auxiliary heads inactive):\n>>> import lucid\n>>> from lucid.models.vision.googlenet import googlenet_cls\n>>> model = googlenet_cls().eval()\n>>> x = lucid.randn(4, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)\n>>> out.aux_logits1 is None\nTrue\nTraining path (auxiliary heads active, labels provided):\n>>> model = model.train()\n>>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)\n>>> out = model(x, labels=labels)\n>>> out.aux_logits1.shape   # available during training\n(4, 1000)"
+      ],
+      "notes": [
+        "From Szegedy et al., \"Going Deeper with Convolutions\", CVPR 2015,\n§5.  The full training loss with auxiliary heads is\n\n$$\n\\mathcal{L} = \\mathcal{L}_{\\text{main}}\n    + 0.3 \\cdot \\mathcal{L}_{\\text{aux1}}\n    + 0.3 \\cdot \\mathcal{L}_{\\text{aux2}},\n$$\neach term being the standard categorical cross-entropy\n$-\\frac{1}{N} \\sum_n \\log \\operatorname{softmax}(\\cdot)_{y_n}$.\nThe $0.3$ weighting compensates for the auxiliary heads being\nmuch shallower than the main classifier; at inference only the main\nbranch is evaluated."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "GoogLeNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "stem, inception3a, ..., inception5b, maxpool3, maxpool4",
+          "annotation": null,
+          "description": "Same backbone components as on `GoogLeNet`."
+        },
+        {
+          "name": "avgpool",
+          "annotation": "nn.AdaptiveAvgPool2d",
+          "description": "Final global average pool to $1\\times1$."
+        },
+        {
+          "name": "drop",
+          "annotation": "nn.Dropout",
+          "description": "Dropout applied before the main classifier\n(`p=config.dropout`, 0.4 in the paper)."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Module",
+          "description": "Final linear projection 1024 → `num_classes`, built by\n`ClassificationHeadMixin._build_classifier`."
+        },
+        {
+          "name": "aux1, aux2",
+          "annotation": "nn.Module",
+          "description": "Auxiliary classifiers (instances of `_AuxClassifier`)\nwhen `config.aux_logits=True`; otherwise\n`lucid.nn.Identity` placeholders."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "GoogLeNetOutput",
+      "path": "lucid.models.vision.googlenet._model.GoogLeNetOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [],
+      "labels": [],
+      "signature": "GoogLeNetOutput(logits: Tensor, aux_logits1: Tensor | None = None, aux_logits2: Tensor | None = None, loss: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L117",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.googlenet._model.GoogLeNetOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(logits: Tensor, aux_logits1: Tensor | None = None, aux_logits2: Tensor | None = None, loss: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Structured forward output for `GoogLeNetForImageClassification`.",
+      "extended": "Carries the main classifier logits plus the optional auxiliary\nclassifier logits emitted during training.  Auxiliary heads attach\nat Inception 4a and 4d in the original paper and are evaluated\n*only* in training mode when `config.aux_logits=True`; at\ninference both auxiliary fields are `None`.",
+      "parameters": [
+        {
+          "name": "logits",
+          "annotation": "Tensor",
+          "description": "Main classifier output of shape `(B, num_classes)`.",
+          "default": null
+        },
+        {
+          "name": "aux_logits1",
+          "annotation": "Tensor or None",
+          "description": "Logits from the first auxiliary classifier (attached at\nInception 4a) of shape `(B, num_classes)`; `None` at\ninference or when `aux_logits=False`.",
+          "default": "None"
+        },
+        {
+          "name": "aux_logits2",
+          "annotation": "Tensor or None",
+          "description": "Logits from the second auxiliary classifier (attached at\nInception 4d) of shape `(B, num_classes)`; `None` at\ninference or when `aux_logits=False`.",
+          "default": "None"
+        },
+        {
+          "name": "loss",
+          "annotation": "Tensor or None",
+          "description": "Cross-entropy loss including auxiliary terms when labels were\npassed to `GoogLeNetForImageClassification.forward`;\n`None` otherwise.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.googlenet import googlenet_cls\n>>> model = googlenet_cls().eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)\n>>> out.aux_logits1 is None\nTrue"
+      ],
+      "notes": [
+        "From Szegedy et al., \"Going Deeper with Convolutions\", CVPR 2015,\n§5.  When auxiliary heads are active the training loss combines\nthe main and auxiliary cross-entropies as\n\n$$\n\\mathcal{L} = \\mathcal{L}_{\\text{main}}\n    + 0.3 \\cdot \\mathcal{L}_{\\text{aux1}}\n    + 0.3 \\cdot \\mathcal{L}_{\\text{aux2}},\n$$\na weighting taken directly from the paper that compensates for the\nauxiliary heads' shallower position in the network."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "googlenet",
+      "path": "lucid.models.vision.googlenet._pretrained.googlenet",
+      "kind": "function",
+      "labels": [],
+      "signature": "googlenet(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_pretrained.py#L14",
+      "subcategory": "pretrained",
+      "summary": "GoogLeNet (Inception v1) feature-extracting backbone.",
+      "extended": "Builds a `GoogLeNet` with the paper-cited Szegedy 2015\ntopology: a Conv-MaxPool stem followed by nine\n`_InceptionModule` blocks at three resolutions\n(28×28 → 14×14 → 7×7) and a final\n`lucid.nn.AdaptiveAvgPool2d` to $1\\times1$.\nApproximately 6.8 M parameters in the backbone — roughly **12×\nfewer** than AlexNet despite being substantially deeper.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored — the returned model is randomly initialised.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `GoogLeNetConfig`\n(`in_channels`, etc.).  Auxiliary-classifier fields are\nirrelevant for the backbone.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "GoogLeNet",
+        "description": "Backbone with the GoogLeNet configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.googlenet import googlenet\n>>> model = googlenet()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape   # (B, 1024, 1, 1)\n(1, 1024, 1, 1)"
+      ],
+      "notes": [
+        "See Szegedy et al., \"Going Deeper with Convolutions\", CVPR 2015 —\nthe ILSVRC-2014 classification winner with a top-5 ImageNet\nvalidation error of 6.67%.  Single architecture; no paper-cited\n\"tiny / large\" variants (H11)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "GoogLeNet",
+        "type": "GoogLeNet",
+        "params": 5973552,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 124416,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 9472,
+                "own_params": 9472,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 4160,
+                "own_params": 4160,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 110784,
+                "own_params": 110784,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "inception3a",
+            "type": "_InceptionModule",
+            "params": 163696,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 12352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12352,
+                    "own_params": 12352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 129248,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 18528,
+                    "own_params": 18528,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 110720,
+                    "own_params": 110720,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 15920,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 3088,
+                    "own_params": 3088,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 12832,
+                    "own_params": 12832,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 6176,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 6176,
+                    "own_params": 6176,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception3b",
+            "type": "_InceptionModule",
+            "params": 388736,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 32896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 254272,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 221376,
+                    "own_params": 221376,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 85120,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 8224,
+                    "own_params": 8224,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 76896,
+                    "own_params": 76896,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 16448,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 16448,
+                    "own_params": 16448,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "maxpool3",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "inception4a",
+            "type": "_InceptionModule",
+            "params": 376176,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 92352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 92352,
+                    "own_params": 92352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 226096,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 46176,
+                    "own_params": 46176,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 179920,
+                    "own_params": 179920,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 26944,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 7696,
+                    "own_params": 7696,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 19248,
+                    "own_params": 19248,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 30784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 30784,
+                    "own_params": 30784,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4b",
+            "type": "_InceptionModule",
+            "params": 449160,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 82080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 82080,
+                    "own_params": 82080,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 283472,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 57456,
+                    "own_params": 57456,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 226016,
+                    "own_params": 226016,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 50776,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12312,
+                    "own_params": 12312,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 38464,
+                    "own_params": 38464,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 32832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4c",
+            "type": "_InceptionModule",
+            "params": 510104,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 65664,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 360832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 295168,
+                    "own_params": 295168,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 50776,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12312,
+                    "own_params": 12312,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 38464,
+                    "own_params": 38464,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 32832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4d",
+            "type": "_InceptionModule",
+            "params": 605376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 57456,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 57456,
+                    "own_params": 57456,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 447408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 73872,
+                    "own_params": 73872,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 373536,
+                    "own_params": 373536,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 67680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 16416,
+                    "own_params": 16416,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 51264,
+                    "own_params": 51264,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 32832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4e",
+            "type": "_InceptionModule",
+            "params": 868352,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 135424,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 135424,
+                    "own_params": 135424,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 545760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 84640,
+                    "own_params": 84640,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 461120,
+                    "own_params": 461120,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 119456,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 16928,
+                    "own_params": 16928,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 102528,
+                    "own_params": 102528,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 67712,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 67712,
+                    "own_params": 67712,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "maxpool4",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "inception5a",
+            "type": "_InceptionModule",
+            "params": 1043456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 213248,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 213248,
+                    "own_params": 213248,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 594400,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 133280,
+                    "own_params": 133280,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 461120,
+                    "own_params": 461120,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 129184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 26656,
+                    "own_params": 26656,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 102528,
+                    "own_params": 102528,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 106624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 106624,
+                    "own_params": 106624,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception5b",
+            "type": "_InceptionModule",
+            "params": 1444080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 319872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 319872,
+                    "own_params": 319872,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 823872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 159936,
+                    "own_params": 159936,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 663936,
+                    "own_params": 663936,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 193712,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 39984,
+                    "own_params": 39984,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 153728,
+                    "own_params": 153728,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 106624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 106624,
+                    "own_params": 106624,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "googlenet_cls",
+      "path": "lucid.models.vision.googlenet._pretrained.googlenet_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "googlenet_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/googlenet/_pretrained.py#L69",
+      "subcategory": "pretrained",
+      "summary": "GoogLeNet (Inception v1) image classifier with auxiliary heads.",
+      "extended": "Builds a `GoogLeNetForImageClassification` with the\npaper-cited Szegedy 2015 configuration: 22-layer Inception backbone\n+ global-average-pool + dropout (`p=0.4`) + linear projection to\n`config.num_classes`, plus two auxiliary classifiers attached at\nInception 4a and 4d (enabled by default via `aux_logits=True`).\nApproximately 13 M parameters total when auxiliary heads are\nincluded, ≈6.8 M without.  Achieves a top-5 ImageNet-1k validation\nerror of 6.67%.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `GoogLeNetConfig`.  Use\n`aux_logits=False` to disable auxiliary classifiers for\ncheaper inference graphs, `num_classes=N` to retarget the\nhead, or `dropout=p` / `aux_dropout=p` to adjust\nregularisation.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "GoogLeNetForImageClassification",
+        "description": "Classifier with the GoogLeNet configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.googlenet import googlenet_cls\n>>> model = googlenet_cls().eval()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)"
+      ],
+      "notes": [
+        "See Szegedy et al., \"Going Deeper with Convolutions\", CVPR 2015,\n§5.  Auxiliary classifiers were introduced specifically to combat\nvanishing gradients in this 22-layer network without the benefit of\nresidual connections; they contribute to the loss with weight\n$0.3$ each during training and are discarded at inference."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "GoogLeNetForImageClassification",
+        "type": "GoogLeNetForImageClassification",
+        "params": 13378280,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 124416,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 9472,
+                "own_params": 9472,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 4160,
+                "own_params": 4160,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 110784,
+                "own_params": 110784,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "inception3a",
+            "type": "_InceptionModule",
+            "params": 163696,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 12352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12352,
+                    "own_params": 12352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 129248,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 18528,
+                    "own_params": 18528,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 110720,
+                    "own_params": 110720,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 15920,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 3088,
+                    "own_params": 3088,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 12832,
+                    "own_params": 12832,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 6176,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 6176,
+                    "own_params": 6176,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception3b",
+            "type": "_InceptionModule",
+            "params": 388736,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 32896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 254272,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 221376,
+                    "own_params": 221376,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 85120,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 8224,
+                    "own_params": 8224,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 76896,
+                    "own_params": 76896,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 16448,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 16448,
+                    "own_params": 16448,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "maxpool3",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "inception4a",
+            "type": "_InceptionModule",
+            "params": 376176,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 92352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 92352,
+                    "own_params": 92352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 226096,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 46176,
+                    "own_params": 46176,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 179920,
+                    "own_params": 179920,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 26944,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 7696,
+                    "own_params": 7696,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 19248,
+                    "own_params": 19248,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 30784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 30784,
+                    "own_params": 30784,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4b",
+            "type": "_InceptionModule",
+            "params": 449160,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 82080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 82080,
+                    "own_params": 82080,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 283472,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 57456,
+                    "own_params": 57456,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 226016,
+                    "own_params": 226016,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 50776,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12312,
+                    "own_params": 12312,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 38464,
+                    "own_params": 38464,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 32832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4c",
+            "type": "_InceptionModule",
+            "params": 510104,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 65664,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 360832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 295168,
+                    "own_params": 295168,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 50776,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12312,
+                    "own_params": 12312,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 38464,
+                    "own_params": 38464,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 32832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4d",
+            "type": "_InceptionModule",
+            "params": 605376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 57456,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 57456,
+                    "own_params": 57456,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 447408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 73872,
+                    "own_params": 73872,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 373536,
+                    "own_params": 373536,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 67680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 16416,
+                    "own_params": 16416,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 51264,
+                    "own_params": 51264,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 32832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception4e",
+            "type": "_InceptionModule",
+            "params": 868352,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 135424,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 135424,
+                    "own_params": 135424,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 545760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 84640,
+                    "own_params": 84640,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 461120,
+                    "own_params": 461120,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 119456,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 16928,
+                    "own_params": 16928,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 102528,
+                    "own_params": 102528,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 67712,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 67712,
+                    "own_params": 67712,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "maxpool4",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "inception5a",
+            "type": "_InceptionModule",
+            "params": 1043456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 213248,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 213248,
+                    "own_params": 213248,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 594400,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 133280,
+                    "own_params": 133280,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 461120,
+                    "own_params": 461120,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 129184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 26656,
+                    "own_params": 26656,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 102528,
+                    "own_params": 102528,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 106624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 106624,
+                    "own_params": 106624,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "inception5b",
+            "type": "_InceptionModule",
+            "params": 1444080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 319872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 319872,
+                    "own_params": 319872,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 823872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 159936,
+                    "own_params": 159936,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 663936,
+                    "own_params": 663936,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 193712,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 39984,
+                    "own_params": 39984,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 153728,
+                    "own_params": 153728,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch4",
+                "type": "Sequential",
+                "params": 106624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 106624,
+                    "own_params": 106624,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          },
+          {
+            "name": "aux1",
+            "type": "_AuxClassifier",
+            "params": 3188840,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "avgpool",
+                "type": "AdaptiveAvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 65664,
+                "own_params": 65664,
+                "children": []
+              },
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 2098176,
+                "own_params": 2098176,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 1025000,
+                "own_params": 1025000,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "aux2",
+            "type": "_AuxClassifier",
+            "params": 3190888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "avgpool",
+                "type": "AdaptiveAvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 67712,
+                "own_params": 67712,
+                "children": []
+              },
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 2098176,
+                "own_params": 2098176,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 1025000,
+                "own_params": 1025000,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "GoogLeNet (Inception v1) family — Szegedy et al., 2014.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "GoogLeNet",
+  "citation": "Szegedy, Christian, et al. \"Going Deeper with Convolutions.\" Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2015, pp. 1–9.",
+  "theory": "GoogLeNet (Inception v1) is the ILSVRC-2014 classification winner\nand introduced the *Inception module* — a multi-branch building\nblock that lets a single layer apply convolutions at several\nreceptive-field scales in parallel and concatenate their outputs.\nThe motivation is that natural images contain salient structure at\nmultiple sizes, and forcing the network to commit to a single\nkernel per layer wastes capacity.\n\nEach Inception module computes, in parallel, a $1\\times1$\nconvolution, a $3\\times3$ convolution, a $5\\times5$\nconvolution, and a $3\\times3$ max-pool branch.  To keep the\ncomputation tractable, *cheap* $1\\times1$ bottlenecks are\nplaced before the larger spatial convolutions and after the\npooling branch.  Concatenating along the channel axis gives the\nnext layer an enriched, multi-scale feature representation.\nFormally, an Inception block produces\n\n\n\n$$\ny = \\mathrm{concat}\\bigl(\n    f_{1\\times1}(x),\\; f_{3\\times3}(g_{1\\times1}(x)),\\;\n    f_{5\\times5}(h_{1\\times1}(x)),\\; p_{1\\times1}(\\mathrm{pool}(x))\n\\bigr),\n$$\n\nwhere each $f$ is a learned convolution and each\n$g, h, p_{1\\times1}$ is a dimensionality-reducing\n$1\\times1$ projection.\n\nGoogLeNet stacks nine such modules into a 22-layer network with\nonly 5 M parameters — roughly **12×** fewer than AlexNet — while\nachieving a top-5 error of 6.67%.  Two auxiliary classifiers were\nattached to intermediate layers during training to combat\nvanishing gradients and add a regularising effect; they are\ndiscarded at inference.  The Inception family launched here led to\nInception v2/v3 (factorised convolutions, label smoothing) and\neventually Inception-ResNet.",
+  "tasks": [
+    "image-classification"
+  ]
+}

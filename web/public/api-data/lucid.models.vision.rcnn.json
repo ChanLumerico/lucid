@@ -1,0 +1,456 @@
+{
+  "slug": "lucid.models.vision.rcnn",
+  "name": "rcnn",
+  "path": "lucid.models.vision.rcnn",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/__init__.py#L1",
+  "members": [
+    {
+      "name": "RCNNConfig",
+      "path": "lucid.models.vision.rcnn._config.RCNNConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "RCNNConfig(num_classes: int = 80, in_channels: int = 3, roi_size: int = 227, dropout: float = 0.5, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.rcnn._config.RCNNConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 80, in_channels: int = 3, roi_size: int = 227, dropout: float = 0.5, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for R-CNN.",
+      "extended": "R-CNN (Girshick et al., CVPR 2014) applies a CNN independently to each\nregion proposal (warped to a fixed `roi_size × roi_size` crop), then\nfeeds the flattened pool5 features through two FC layers before the\nclassification and bounding-box regression heads.\n\nOriginal paper uses AlexNet (5 conv + 3 FC) as the backbone.  The\neffective output of pool5 for a 227 × 227 input is 6 × 6 × 256 = 9 216.",
+      "parameters": [
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Number of foreground object classes.\n             Background is automatically added as class 0,\n             giving (num_classes + 1) output logits.",
+          "default": "80"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Number of input image channels (3 for RGB).",
+          "default": "3"
+        },
+        {
+          "name": "roi_size",
+          "annotation": "int",
+          "description": "Each region proposal is warped to this square size\n             before being forwarded through the backbone.\n             Original paper: 227.",
+          "default": "227"
+        },
+        {
+          "name": "dropout",
+          "annotation": "float",
+          "description": "Dropout probability applied after fc6 and fc7.",
+          "default": "0.5"
+        },
+        {
+          "name": "score_thresh",
+          "annotation": "float",
+          "description": "Minimum class-score threshold applied during\n             post-processing (after softmax).  Boxes whose\n             max class score is below this value are discarded.",
+          "default": "0.05"
+        },
+        {
+          "name": "nms_thresh",
+          "annotation": "float",
+          "description": "IoU threshold for per-class NMS at inference time.",
+          "default": "0.5"
+        },
+        {
+          "name": "max_detections",
+          "annotation": "int",
+          "description": "Maximum number of detections returned per image\n             after NMS.",
+          "default": "300"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "RCNNForObjectDetection",
+      "path": "lucid.models.vision.rcnn._model.RCNNForObjectDetection",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "RCNNForObjectDetection(config: RCNNConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/_model.py#L141",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.rcnn._model.RCNNForObjectDetection.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: RCNNConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/_model.py#L224",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.rcnn._model.RCNNForObjectDetection.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, proposals: list[Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/_model.py#L329",
+          "subcategory": "model",
+          "summary": "Run R-CNN on a batch of images.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "(B, C, H, W) image batch.",
+              "default": null
+            },
+            {
+              "name": "proposals",
+              "annotation": "list[Tensor] | None",
+              "description": "list of B tensors, each (N_i, 4) xyxy region proposals.\n       Pass `None` to return empty detections.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "ObjectDetectionOutput",
+            "description": "`ObjectDetectionOutput` with:\n`logits`     : (Σ N_i, num_classes + 1) raw class logits.\n`pred_boxes` : (Σ N_i, 4) decoded xyxy boxes (top class)."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "postprocess",
+          "path": "lucid.models.vision.rcnn._model.RCNNForObjectDetection.postprocess",
+          "kind": "function",
+          "labels": [],
+          "signature": "postprocess(output: ObjectDetectionOutput, proposals: list[Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/_model.py#L406",
+          "subcategory": "model",
+          "summary": "Apply score threshold + per-class NMS to raw R-CNN output.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "output",
+              "annotation": "ObjectDetectionOutput",
+              "description": "`ObjectDetectionOutput` from `forward()`.",
+              "default": null
+            },
+            {
+              "name": "proposals",
+              "annotation": "list[Tensor] | None",
+              "description": "Same proposal list passed to `forward()`.  When\n       omitted, falls back to `output.proposals`.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "list[dict[str, Tensor]]",
+            "description": "List of per-image result dicts, each with:\n`\"boxes\"`  : (K, 4) xyxy kept detections\n`\"scores\"` : (K,)   class confidence scores\n`\"labels\"` : (K,)   integer class indices (1-based, 0=bg)"
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "R-CNN object detector (Girshick et al., CVPR 2014).",
+      "extended": "The first deep-learning detector to demonstrate that ImageNet-pretrained\nCNN features transfer to localisation.  At inference the pipeline runs an\nexternally-supplied region-proposal set (typically from selective search)\nthrough an AlexNet-style convolutional trunk *per proposal*, then feeds\nthe flattened pool5 features into a two-layer FC trunk with sibling\nclassification (`cls_head`) and bounding-box regression (`bbox_head`)\noutputs.  This module covers the CNN + heads — proposals must be supplied\nby the caller; `postprocess()` applies score thresholding and per-class\nNMS to recover final detections.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "RCNNConfig",
+          "description": "Frozen architecture spec.  Use the `rcnn` factory for the\npaper-cited AlexNet configuration (227x227 RoIs, 80 COCO classes);\noverride individual fields via `**kwargs` on the factory.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Run inference on a single image with three external proposals:\n>>> import lucid\n>>> from lucid.models.vision.rcnn import rcnn\n>>> model = rcnn(num_classes=80)\n>>> x = lucid.randn(1, 3, 600, 600)\n>>> proposals = [lucid.tensor(\n...     [[10.0,  10.0, 200.0, 200.0],\n...      [50.0,  60.0, 300.0, 280.0],\n...      [100.0, 80.0, 450.0, 400.0]])]\n>>> out = model(x, proposals)\n>>> out.logits.shape, out.pred_boxes.shape\n((3, 81), (3, 4))\nApply post-processing (score threshold + per-class NMS) on the raw\noutput to obtain final per-image detections:\n>>> detections = model.postprocess(out, proposals)\n>>> set(detections[0].keys()) == {\"boxes\", \"scores\", \"labels\"}\nTrue"
+      ],
+      "notes": [
+        "See Girshick et al., \"Rich Feature Hierarchies for Accurate Object\nDetection and Semantic Segmentation\", CVPR 2014 ([arXiv:1311.2524](https://arxiv.org/abs/1311.2524)).\nFor each proposal $P$ with centre $(P_x, P_y)$ and size\n$(P_w, P_h)$, the bounding-box regressor predicts a\nparameterised offset $(t_x, t_y, t_w, t_h)$ so that the\nrefined box centre and size are\n\n$$\n\\begin{aligned}\n    \\hat{G}_x &= P_w t_x + P_x, & \\hat{G}_y &= P_h t_y + P_y, \\\\\n    \\hat{G}_w &= P_w e^{t_w},   & \\hat{G}_h &= P_h e^{t_h}.\n\\end{aligned}\n$$\nThe original paper trains per-class linear SVMs on top of frozen CNN\nfeatures; this implementation follows the more common modern\nsoftmax-end-to-end form (matching the Caffe reference code).  Cost\nis dominated by the redundant per-proposal CNN forward — the main\nmotivation for the Fast R-CNN successor's shared feature map."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "RCNNConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "conv_features",
+          "annotation": "_ConvFeatures",
+          "description": "AlexNet conv1-conv5 trunk applied to each warped RoI crop.  Output\nis a 9216-dim vector for the default `roi_size=227`."
+        },
+        {
+          "name": "fc_head",
+          "annotation": "_FCHead",
+          "description": "Two-layer FC trunk (`fc6`, `fc7`) followed by sibling\n`lucid.nn.Linear` heads:\n`cls_head` produces $(N, K+1)$ class logits (background +\n`num_classes` foreground classes) and `bbox_head` produces\n$(N, 4K)$ class-specific bounding-box deltas."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "rcnn",
+      "path": "lucid.models.vision.rcnn._pretrained.rcnn",
+      "kind": "function",
+      "labels": [],
+      "signature": "rcnn(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/rcnn/_pretrained.py#L36",
+      "subcategory": "pretrained",
+      "summary": "R-CNN with AlexNet backbone (Girshick et al., CVPR 2014).",
+      "extended": "Builds a `RCNNForObjectDetection` with the paper-cited AlexNet\ntopology: five-conv trunk applied to each region proposal warped to\n$227 \\times 227$, followed by two FC layers and sibling\nclassification (`num_classes + 1`) and class-specific bounding-box\nregression (`4 \\cdot num_classes`) heads.  Original PASCAL VOC 2010\ntest mAP of 53.3% (paper Table 9) — a ~20-point jump over the prior\nDPM state of the art.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored\n— the returned model is randomly initialised.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `RCNNConfig` (e.g.\n`num_classes=20` for PASCAL VOC, `score_thresh=0.3` for a\ntighter inference threshold, `roi_size=224` to match a\nnon-default backbone receptive field).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "RCNNForObjectDetection",
+        "description": "Detector with the AlexNet R-CNN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.rcnn import rcnn\n>>> model = rcnn(num_classes=20)   # PASCAL VOC\n>>> x = lucid.randn(1, 3, 600, 600)\n>>> proposals = [lucid.tensor(\n...     [[10.0, 10.0, 200.0, 200.0],\n...      [50.0, 60.0, 300.0, 280.0]])]\n>>> out = model(x, proposals)\n>>> out.logits.shape\n(2, 21)"
+      ],
+      "notes": [
+        "See Girshick et al., \"Rich Feature Hierarchies for Accurate Object\nDetection and Semantic Segmentation\", CVPR 2014 ([arXiv:1311.2524](https://arxiv.org/abs/1311.2524)).\nRegion proposals must be supplied externally to `forward` —\nthe original paper uses selective search (~2000 proposals per image),\nbut any class-agnostic proposal method works.  At inference, classes\nare scored via softmax over the $K + 1$ logits and bounding\nboxes are refined per top-class delta:\n\n$$\n\\hat{G}_w = P_w \\exp(t_w),\\quad\n\\hat{G}_x = P_w t_x + P_x.\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "RCNNForObjectDetection",
+        "type": "RCNNForObjectDetection",
+        "params": 59924241,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv_features",
+            "type": "_ConvFeatures",
+            "params": 3747200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "features",
+                "type": "Sequential",
+                "params": 3747200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 34944,
+                    "own_params": 34944,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 614656,
+                    "own_params": 614656,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "Conv2d",
+                    "params": 885120,
+                    "own_params": 885120,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "8",
+                    "type": "Conv2d",
+                    "params": 1327488,
+                    "own_params": 1327488,
+                    "children": []
+                  },
+                  {
+                    "name": "9",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "10",
+                    "type": "Conv2d",
+                    "params": 884992,
+                    "own_params": 884992,
+                    "children": []
+                  },
+                  {
+                    "name": "11",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "12",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "fc_head",
+            "type": "_FCHead",
+            "params": 56177041,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc6",
+                "type": "Linear",
+                "params": 37752832,
+                "own_params": 37752832,
+                "children": []
+              },
+              {
+                "name": "fc7",
+                "type": "Linear",
+                "params": 16781312,
+                "own_params": 16781312,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "cls_head",
+                "type": "Linear",
+                "params": 331857,
+                "own_params": 331857,
+                "children": []
+              },
+              {
+                "name": "bbox_head",
+                "type": "Linear",
+                "params": 1311040,
+                "own_params": 1311040,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "R-CNN — object detection (Girshick et al., CVPR 2014).",
+  "extended": "Paper: \"Rich feature hierarchies for accurate object detection\n        and semantic segmentation\"",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "R-CNN",
+  "citation": "Girshick, Ross, et al. \"Rich Feature Hierarchies for Accurate Object Detection and Semantic Segmentation.\" Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2014, pp. 580–587.",
+  "theory": "R-CNN (Regions with CNN features) is the first deep-learning\ndetector to demonstrate that ImageNet-pretrained CNN features\ntransfer to localisation.  The pipeline is deliberately modular:\n\n1. **Region proposals.**  An external method (selective search in\n   the original paper) yields $\\sim 2000$ class-agnostic\n   candidate windows per image.\n2. **CNN feature extraction.**  Each proposal is *warped* to a\n   fixed $227 \\times 227$ patch and forwarded through an\n   ImageNet-pretrained CNN (AlexNet).  The ``pool5`` activations\n   (effectively $6 \\times 6 \\times 256 = 9216$ features) are\n   flattened and passed through two fully-connected layers.\n3. **Per-class linear SVMs** score each region; a class-specific\n   bounding-box regressor refines the proposal coordinates with\n   a parameterised $(t_x, t_y, t_w, t_h)$ offset.\n\nThe cost is dominated by **redundant CNN forward passes** — one\nper proposal — because no feature sharing across overlapping\nregions exists.  Despite that inefficiency, R-CNN jumped mean\naverage precision on PASCAL VOC 2012 from $\\sim 35\\%$\n(DPM) to $53.3\\%$, making CNNs the dominant detection\nparadigm and motivating every successor in the family\n(Fast R-CNN, Faster R-CNN, Mask R-CNN).",
+  "tasks": [
+    "object-detection"
+  ]
+}

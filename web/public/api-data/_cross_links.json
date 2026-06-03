@@ -1,0 +1,4499 @@
+{
+  "python_to_cpp": {
+    "lucid.ops.abs": [
+      {
+        "name": "AbsBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "abs_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.acos": [
+      {
+        "name": "AcosBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.ops.add": [
+      {
+        "name": "AddBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "add_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.affine_grid": [
+      {
+        "name": "AffineGridBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "affine_grid_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.AlphaDropout": [
+      {
+        "name": "AlphaDropoutBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.alpha_dropout": [
+      {
+        "name": "AlphaDropoutBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "alpha_dropout_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.asin": [
+      {
+        "name": "AsinBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.ops.atan": [
+      {
+        "name": "AtanBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.AvgPool1d": [
+      {
+        "name": "AvgPoolNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.avg_pool1d": [
+      {
+        "name": "AvgPoolNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "avg_pool1d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.AvgPool2d": [
+      {
+        "name": "AvgPoolNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.avg_pool2d": [
+      {
+        "name": "AvgPoolNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "avg_pool2d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.AvgPool3d": [
+      {
+        "name": "AvgPoolNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.avg_pool3d": [
+      {
+        "name": "AvgPoolNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "avg_pool3d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.BCELoss": [
+      {
+        "name": "BCELossBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.BatchNorm1d": [
+      {
+        "name": "BatchNormNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.BatchNorm2d": [
+      {
+        "name": "BatchNormNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.BatchNorm3d": [
+      {
+        "name": "BatchNormNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.ops.ceil": [
+      {
+        "name": "CeilBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "ceil_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.clip": [
+      {
+        "name": "ClipBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "clip_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.contiguous": [
+      {
+        "name": "ContiguousBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "contiguous_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Conv1d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.conv1d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "conv1d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Conv2d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.conv2d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "conv2d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Conv3d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.conv3d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "conv3d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.ConvTranspose1d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.conv_transpose1d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "conv_transpose1d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.ConvTranspose2d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.conv_transpose2d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "conv_transpose2d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.ConvTranspose3d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.conv_transpose3d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "conv_transpose3d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.cos": [
+      {
+        "name": "CosBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "cos_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.cosh": [
+      {
+        "name": "CoshBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "cosh_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.cross_entropy": [
+      {
+        "name": "CrossEntropyBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "cross_entropy_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.det": [
+      {
+        "name": "DetBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "det_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.div": [
+      {
+        "name": "DivBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "div_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Dropout": [
+      {
+        "name": "DropoutBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.dropout": [
+      {
+        "name": "DropoutBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "dropout_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Dropout1d": [
+      {
+        "name": "DropoutNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.dropout1d": [
+      {
+        "name": "DropoutNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.Dropout2d": [
+      {
+        "name": "DropoutNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.dropout2d": [
+      {
+        "name": "DropoutNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.Dropout3d": [
+      {
+        "name": "DropoutNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.dropout3d": [
+      {
+        "name": "DropoutNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.elu": [
+      {
+        "name": "EluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "elu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Embedding": [
+      {
+        "name": "EmbeddingBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.embedding": [
+      {
+        "name": "EmbeddingBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "embedding_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.erf": [
+      {
+        "name": "ErfBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "erf_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.erfinv": [
+      {
+        "name": "ErfinvBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "erfinv_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.exp": [
+      {
+        "name": "ExpBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "exp_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.floor": [
+      {
+        "name": "FloorBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "floor_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.gelu": [
+      {
+        "name": "GeluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "gelu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.grid_sample": [
+      {
+        "name": "GridSampleBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "grid_sample_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.GroupNorm": [
+      {
+        "name": "GroupNormBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.group_norm": [
+      {
+        "name": "GroupNormBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "group_norm_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.HuberLoss": [
+      {
+        "name": "HuberLossBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.huber_loss": [
+      {
+        "name": "HuberLossBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "huber_loss_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.inv": [
+      {
+        "name": "InvBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "inv_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.LayerNorm": [
+      {
+        "name": "LayerNormBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.layer_norm": [
+      {
+        "name": "LayerNormBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "layer_norm_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.leaky_relu": [
+      {
+        "name": "LeakyReluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "leaky_relu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Linear": [
+      {
+        "name": "LinearBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.linear": [
+      {
+        "name": "LinearBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "linear_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.log2": [
+      {
+        "name": "Log2Backward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "log2_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.log": [
+      {
+        "name": "LogBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "log_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.LogSoftmax": [
+      {
+        "name": "LogSoftmaxBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.log_softmax": [
+      {
+        "name": "LogSoftmaxBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "log_softmax_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.composite.log_softmax": [
+      {
+        "name": "LogSoftmaxBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "log_softmax_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.matmul": [
+      {
+        "name": "MatmulBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "matmul_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.max": [
+      {
+        "name": "MaxBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "max_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.MaxPool1d": [
+      {
+        "name": "MaxPoolNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.max_pool1d": [
+      {
+        "name": "MaxPoolNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "max_pool1d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.MaxPool2d": [
+      {
+        "name": "MaxPoolNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.max_pool2d": [
+      {
+        "name": "MaxPoolNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "max_pool2d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.MaxPool3d": [
+      {
+        "name": "MaxPoolNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.max_pool3d": [
+      {
+        "name": "MaxPoolNdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "max_pool3d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.maximum": [
+      {
+        "name": "MaximumBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "maximum_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.mean": [
+      {
+        "name": "MeanBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "mean_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.min": [
+      {
+        "name": "MinBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "min_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.minimum": [
+      {
+        "name": "MinimumBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "minimum_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Mish": [
+      {
+        "name": "MishBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.mish": [
+      {
+        "name": "MishBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "mish_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.mse_loss": [
+      {
+        "name": "MseLossBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "mse_loss_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.mul": [
+      {
+        "name": "MulBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "mul_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.NLLLoss": [
+      {
+        "name": "NLLLossBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.ops.neg": [
+      {
+        "name": "NegBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "neg_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.norm": [
+      {
+        "name": "NormBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "norm_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.permute": [
+      {
+        "name": "PermuteBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "permute_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.pow": [
+      {
+        "name": "PowBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "pow_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.prod": [
+      {
+        "name": "ProdBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "prod_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.RMSNorm": [
+      {
+        "name": "RMSNormBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.ops.reciprocal": [
+      {
+        "name": "ReciprocalBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "reciprocal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.relu6": [
+      {
+        "name": "Relu6Backward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "relu6_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.relu": [
+      {
+        "name": "ReluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "relu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.relu": [
+      {
+        "name": "ReluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "relu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.round": [
+      {
+        "name": "RoundBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "round_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.rsqrt": [
+      {
+        "name": "RsqrtBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "rsqrt_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.scaled_dot_product_attention": [
+      {
+        "name": "ScaledDotProductAttentionBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "scaled_dot_product_attention_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.selu": [
+      {
+        "name": "SeluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "selu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Sigmoid": [
+      {
+        "name": "SigmoidBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.sigmoid": [
+      {
+        "name": "SigmoidBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sigmoid_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sigmoid": [
+      {
+        "name": "SigmoidBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sigmoid_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sign": [
+      {
+        "name": "SignBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sign_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.silu": [
+      {
+        "name": "SiluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "silu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sin": [
+      {
+        "name": "SinBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sin_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sinh": [
+      {
+        "name": "SinhBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sinh_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Softmax": [
+      {
+        "name": "SoftmaxBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.softmax": [
+      {
+        "name": "SoftmaxBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "softmax_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.composite.softmax": [
+      {
+        "name": "SoftmaxBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "softmax_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Softplus": [
+      {
+        "name": "SoftplusBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.softplus": [
+      {
+        "name": "SoftplusBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "softplus_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.solve": [
+      {
+        "name": "SolveBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "solve_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sqrt": [
+      {
+        "name": "SqrtBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sqrt_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.square": [
+      {
+        "name": "SquareBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "square_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sub": [
+      {
+        "name": "SubBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sub_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sum": [
+      {
+        "name": "SumBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "sum_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.tan": [
+      {
+        "name": "TanBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "tan_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Tanh": [
+      {
+        "name": "TanhBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.tanh": [
+      {
+        "name": "TanhBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "tanh_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.tanh": [
+      {
+        "name": "TanhBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "tanh_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.Unfold": [
+      {
+        "name": "UnfoldBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.unfold": [
+      {
+        "name": "UnfoldBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "unfold_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.view": [
+      {
+        "name": "ViewBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.adaptive_avg_pool1d": [
+      {
+        "name": "adaptive_avg_pool1d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.adaptive_avg_pool2d": [
+      {
+        "name": "adaptive_avg_pool2d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.adaptive_avg_pool3d": [
+      {
+        "name": "adaptive_avg_pool3d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.adaptive_max_pool1d": [
+      {
+        "name": "adaptive_max_pool1d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.adaptive_max_pool2d": [
+      {
+        "name": "adaptive_max_pool2d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.adaptive_max_pool3d": [
+      {
+        "name": "adaptive_max_pool3d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.all": [
+      {
+        "name": "all_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.any": [
+      {
+        "name": "any_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.arange": [
+      {
+        "name": "arange_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.arccos": [
+      {
+        "name": "arccos_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.arcsin": [
+      {
+        "name": "arcsin_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.arctan": [
+      {
+        "name": "arctan_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.argmax": [
+      {
+        "name": "argmax_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.argmin": [
+      {
+        "name": "argmin_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.argsort": [
+      {
+        "name": "argsort_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.atan2": [
+      {
+        "name": "atan2_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.batch_norm": [
+      {
+        "name": "batch_norm_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.bernoulli": [
+      {
+        "name": "bernoulli_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.bitwise_and": [
+      {
+        "name": "bitwise_and_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.bitwise_left_shift": [
+      {
+        "name": "bitwise_left_shift_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.bitwise_or": [
+      {
+        "name": "bitwise_or_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.bitwise_right_shift": [
+      {
+        "name": "bitwise_right_shift_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.bitwise_xor": [
+      {
+        "name": "bitwise_xor_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.bmm": [
+      {
+        "name": "bmm_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.broadcast_to": [
+      {
+        "name": "broadcast_to_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.bucketize": [
+      {
+        "name": "bucketize_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.cartesian_prod": [
+      {
+        "name": "cartesian_prod_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.cholesky": [
+      {
+        "name": "cholesky_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.chunk": [
+      {
+        "name": "chunk_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.complex": [
+      {
+        "name": "complex_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.conj": [
+      {
+        "name": "conj_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.ctc_loss": [
+      {
+        "name": "ctc_loss_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.cummax": [
+      {
+        "name": "cummax_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.cummin": [
+      {
+        "name": "cummin_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.cumprod": [
+      {
+        "name": "cumprod_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.cumsum": [
+      {
+        "name": "cumsum_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.diagonal": [
+      {
+        "name": "diagonal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.diagonal": [
+      {
+        "name": "diagonal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.dot": [
+      {
+        "name": "dot_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.eig": [
+      {
+        "name": "eig_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.eigh": [
+      {
+        "name": "eigh_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.einops.einsum": [
+      {
+        "name": "einsum_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.embedding_bag": [
+      {
+        "name": "embedding_bag_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.empty_like": [
+      {
+        "name": "empty_like_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.empty": [
+      {
+        "name": "empty_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.equal": [
+      {
+        "name": "equal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.exp2": [
+      {
+        "name": "exp2_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.expand": [
+      {
+        "name": "expand_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.eye": [
+      {
+        "name": "eye_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.init.eye": [
+      {
+        "name": "eye_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.fft.fftn": [
+      {
+        "name": "fftn_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.flatten": [
+      {
+        "name": "flatten_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.flip": [
+      {
+        "name": "flip_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.fmod": [
+      {
+        "name": "fmod_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.fold": [
+      {
+        "name": "fold_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.frac": [
+      {
+        "name": "frac_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.full_like": [
+      {
+        "name": "full_like_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.full": [
+      {
+        "name": "full_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.gather": [
+      {
+        "name": "gather_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.greater_equal": [
+      {
+        "name": "greater_equal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.greater": [
+      {
+        "name": "greater_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.histc": [
+      {
+        "name": "histc_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.composite.histogram2d": [
+      {
+        "name": "histogram2d_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.composite.histogram": [
+      {
+        "name": "histogram_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.composite.histogramdd": [
+      {
+        "name": "histogramdd_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.householder_product": [
+      {
+        "name": "householder_product_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.hstack": [
+      {
+        "name": "hstack_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.hypot": [
+      {
+        "name": "hypot_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.fft.ifftn": [
+      {
+        "name": "ifftn_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.imag": [
+      {
+        "name": "imag_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.index_select": [
+      {
+        "name": "index_select_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.inner": [
+      {
+        "name": "inner_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.fft.irfftn": [
+      {
+        "name": "irfftn_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.isclose": [
+      {
+        "name": "isclose_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.isfinite": [
+      {
+        "name": "isfinite_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.isinf": [
+      {
+        "name": "isinf_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.isnan": [
+      {
+        "name": "isnan_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.kron": [
+      {
+        "name": "kron_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.kthvalue": [
+      {
+        "name": "kthvalue_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.ldl_factor": [
+      {
+        "name": "ldl_factor_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.less_equal": [
+      {
+        "name": "less_equal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.less": [
+      {
+        "name": "less_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.linspace": [
+      {
+        "name": "linspace_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.log10": [
+      {
+        "name": "log10_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.log1p": [
+      {
+        "name": "log1p_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.logaddexp": [
+      {
+        "name": "logaddexp_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.logical_and": [
+      {
+        "name": "logical_and_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.logical_not": [
+      {
+        "name": "logical_not_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.logical_or": [
+      {
+        "name": "logical_or_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.logical_xor": [
+      {
+        "name": "logical_xor_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.logspace": [
+      {
+        "name": "logspace_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.logsumexp": [
+      {
+        "name": "logsumexp_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.lstsq": [
+      {
+        "name": "lstsq_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.lu_factor": [
+      {
+        "name": "lu_factor_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.lu_solve": [
+      {
+        "name": "lu_solve_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.masked_fill": [
+      {
+        "name": "masked_fill_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.masked_select": [
+      {
+        "name": "masked_select_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.matrix_power": [
+      {
+        "name": "matrix_power_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.meshgrid": [
+      {
+        "name": "meshgrid_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.mm": [
+      {
+        "name": "mm_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.movedim": [
+      {
+        "name": "movedim_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.nan_to_num": [
+      {
+        "name": "nan_to_num_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.narrow": [
+      {
+        "name": "narrow_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.nextafter": [
+      {
+        "name": "nextafter_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.nll_loss": [
+      {
+        "name": "nll_loss_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.nonzero": [
+      {
+        "name": "nonzero_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.normal": [
+      {
+        "name": "normal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.init.normal": [
+      {
+        "name": "normal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.not_equal": [
+      {
+        "name": "not_equal_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.one_hot": [
+      {
+        "name": "one_hot_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.ones_like": [
+      {
+        "name": "ones_like_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.ones": [
+      {
+        "name": "ones_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.outer": [
+      {
+        "name": "outer_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.pad": [
+      {
+        "name": "pad_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.pad": [
+      {
+        "name": "pad_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.pinv": [
+      {
+        "name": "pinv_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.qr": [
+      {
+        "name": "qr_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.rand": [
+      {
+        "name": "rand_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.randint": [
+      {
+        "name": "randint_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.randn": [
+      {
+        "name": "randn_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.real": [
+      {
+        "name": "real_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.relu_": [
+      {
+        "name": "relu_inplace_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.remainder": [
+      {
+        "name": "remainder_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.einops.repeat": [
+      {
+        "name": "repeat_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.repeat": [
+      {
+        "name": "repeat_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.reshape": [
+      {
+        "name": "reshape_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.fft.rfftn": [
+      {
+        "name": "rfftn_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.functional.rms_norm": [
+      {
+        "name": "rms_norm_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.roll": [
+      {
+        "name": "roll_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.scatter_add": [
+      {
+        "name": "scatter_add_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.scatter": [
+      {
+        "name": "scatter_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.searchsorted": [
+      {
+        "name": "searchsorted_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.solve_triangular": [
+      {
+        "name": "solve_triangular_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.sort": [
+      {
+        "name": "sort_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.split": [
+      {
+        "name": "split_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.squeeze": [
+      {
+        "name": "squeeze_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.stack": [
+      {
+        "name": "stack_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.std": [
+      {
+        "name": "std_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.linalg.svd": [
+      {
+        "name": "svd_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.composite.swapaxes": [
+      {
+        "name": "swapaxes_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.take": [
+      {
+        "name": "take_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.tensordot": [
+      {
+        "name": "tensordot_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.tile": [
+      {
+        "name": "tile_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.topk": [
+      {
+        "name": "topk_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.trace": [
+      {
+        "name": "trace_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.transpose": [
+      {
+        "name": "transpose_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.tril": [
+      {
+        "name": "tril_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.triu": [
+      {
+        "name": "triu_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.trunc": [
+      {
+        "name": "trunc_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.unbind": [
+      {
+        "name": "unbind_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.unflatten": [
+      {
+        "name": "unflatten_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.nn.init.uniform": [
+      {
+        "name": "uniform_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.unique": [
+      {
+        "name": "unique_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.unsqueeze": [
+      {
+        "name": "unsqueeze_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.var": [
+      {
+        "name": "var_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.vstack": [
+      {
+        "name": "vstack_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.ops.where": [
+      {
+        "name": "where_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.zeros_like": [
+      {
+        "name": "zeros_like_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.creation.zeros": [
+      {
+        "name": "zeros_op",
+        "kind": "free_function"
+      }
+    ]
+  },
+  "cpp_to_python": {
+    "AbsBackward": [
+      {
+        "path": "lucid.ops.abs",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "AcosBackward": [
+      {
+        "path": "lucid.ops.acos",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "AddBackward": [
+      {
+        "path": "lucid.ops.add",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "AffineGridBackward": [
+      {
+        "path": "lucid.nn.functional.affine_grid",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "AlphaDropoutBackward": [
+      {
+        "path": "lucid.nn.AlphaDropout",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.alpha_dropout",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "AsinBackward": [
+      {
+        "path": "lucid.ops.asin",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "AtanBackward": [
+      {
+        "path": "lucid.ops.atan",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "AvgPoolNdBackward": [
+      {
+        "path": "lucid.nn.AvgPool1d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.avg_pool1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.AvgPool2d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.avg_pool2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.AvgPool3d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.avg_pool3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "BCELossBackward": [
+      {
+        "path": "lucid.nn.BCELoss",
+        "module": "lucid.nn",
+        "kind": "class"
+      }
+    ],
+    "BatchNormNdBackward": [
+      {
+        "path": "lucid.nn.BatchNorm1d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.BatchNorm2d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.BatchNorm3d",
+        "module": "lucid.nn",
+        "kind": "class"
+      }
+    ],
+    "CeilBackward": [
+      {
+        "path": "lucid.ops.ceil",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ClipBackward": [
+      {
+        "path": "lucid.ops.clip",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ContiguousBackward": [
+      {
+        "path": "lucid.ops.contiguous",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ConvNdBackward": [
+      {
+        "path": "lucid.nn.Conv1d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.conv1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.Conv2d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.conv2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.Conv3d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.conv3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "ConvTransposeNdBackward": [
+      {
+        "path": "lucid.nn.ConvTranspose1d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.conv_transpose1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.ConvTranspose2d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.conv_transpose2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.ConvTranspose3d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.conv_transpose3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "CosBackward": [
+      {
+        "path": "lucid.ops.cos",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "CoshBackward": [
+      {
+        "path": "lucid.ops.cosh",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "CrossEntropyBackward": [
+      {
+        "path": "lucid.nn.functional.cross_entropy",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "DetBackward": [
+      {
+        "path": "lucid.linalg.det",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "DivBackward": [
+      {
+        "path": "lucid.ops.div",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "DropoutBackward": [
+      {
+        "path": "lucid.nn.Dropout",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.dropout",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "DropoutNdBackward": [
+      {
+        "path": "lucid.nn.Dropout1d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.dropout1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.Dropout2d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.dropout2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.Dropout3d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.dropout3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "EluBackward": [
+      {
+        "path": "lucid.nn.functional.elu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "EmbeddingBackward": [
+      {
+        "path": "lucid.nn.Embedding",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.embedding",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "ErfBackward": [
+      {
+        "path": "lucid.ops.erf",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ErfinvBackward": [
+      {
+        "path": "lucid.ops.erfinv",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ExpBackward": [
+      {
+        "path": "lucid.ops.exp",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "FloorBackward": [
+      {
+        "path": "lucid.ops.floor",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "GeluBackward": [
+      {
+        "path": "lucid.nn.functional.gelu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "GridSampleBackward": [
+      {
+        "path": "lucid.nn.functional.grid_sample",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "GroupNormBackward": [
+      {
+        "path": "lucid.nn.GroupNorm",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.group_norm",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "HuberLossBackward": [
+      {
+        "path": "lucid.nn.HuberLoss",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.huber_loss",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "InvBackward": [
+      {
+        "path": "lucid.linalg.inv",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "LayerNormBackward": [
+      {
+        "path": "lucid.nn.LayerNorm",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.layer_norm",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "LeakyReluBackward": [
+      {
+        "path": "lucid.nn.functional.leaky_relu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "LinearBackward": [
+      {
+        "path": "lucid.nn.Linear",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.linear",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "Log2Backward": [
+      {
+        "path": "lucid.ops.log2",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "LogBackward": [
+      {
+        "path": "lucid.ops.log",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "LogSoftmaxBackward": [
+      {
+        "path": "lucid.nn.LogSoftmax",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.log_softmax",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.composite.log_softmax",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "MatmulBackward": [
+      {
+        "path": "lucid.ops.matmul",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "MaxBackward": [
+      {
+        "path": "lucid.ops.max",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "MaxPoolNdBackward": [
+      {
+        "path": "lucid.nn.MaxPool1d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.max_pool1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.MaxPool2d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.max_pool2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.MaxPool3d",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.max_pool3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "MaximumBackward": [
+      {
+        "path": "lucid.ops.maximum",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "MeanBackward": [
+      {
+        "path": "lucid.ops.mean",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "MinBackward": [
+      {
+        "path": "lucid.ops.min",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "MinimumBackward": [
+      {
+        "path": "lucid.ops.minimum",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "MishBackward": [
+      {
+        "path": "lucid.nn.Mish",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.mish",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "MseLossBackward": [
+      {
+        "path": "lucid.nn.functional.mse_loss",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "MulBackward": [
+      {
+        "path": "lucid.ops.mul",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "NLLLossBackward": [
+      {
+        "path": "lucid.nn.NLLLoss",
+        "module": "lucid.nn",
+        "kind": "class"
+      }
+    ],
+    "NegBackward": [
+      {
+        "path": "lucid.ops.neg",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "NormBackward": [
+      {
+        "path": "lucid.linalg.norm",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "PermuteBackward": [
+      {
+        "path": "lucid.ops.permute",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "PowBackward": [
+      {
+        "path": "lucid.ops.pow",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ProdBackward": [
+      {
+        "path": "lucid.ops.prod",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "RMSNormBackward": [
+      {
+        "path": "lucid.nn.RMSNorm",
+        "module": "lucid.nn",
+        "kind": "class"
+      }
+    ],
+    "ReciprocalBackward": [
+      {
+        "path": "lucid.ops.reciprocal",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "Relu6Backward": [
+      {
+        "path": "lucid.nn.functional.relu6",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "ReluBackward": [
+      {
+        "path": "lucid.nn.functional.relu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.relu",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "RoundBackward": [
+      {
+        "path": "lucid.ops.round",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "RsqrtBackward": [
+      {
+        "path": "lucid.ops.rsqrt",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ScaledDotProductAttentionBackward": [
+      {
+        "path": "lucid.nn.functional.scaled_dot_product_attention",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "SeluBackward": [
+      {
+        "path": "lucid.nn.functional.selu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "SigmoidBackward": [
+      {
+        "path": "lucid.nn.Sigmoid",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.sigmoid",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.sigmoid",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "SignBackward": [
+      {
+        "path": "lucid.ops.sign",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "SiluBackward": [
+      {
+        "path": "lucid.nn.functional.silu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "SinBackward": [
+      {
+        "path": "lucid.ops.sin",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "SinhBackward": [
+      {
+        "path": "lucid.ops.sinh",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "SoftmaxBackward": [
+      {
+        "path": "lucid.nn.Softmax",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.softmax",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.composite.softmax",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "SoftplusBackward": [
+      {
+        "path": "lucid.nn.Softplus",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.softplus",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "SolveBackward": [
+      {
+        "path": "lucid.linalg.solve",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "SqrtBackward": [
+      {
+        "path": "lucid.ops.sqrt",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "SquareBackward": [
+      {
+        "path": "lucid.ops.square",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "SubBackward": [
+      {
+        "path": "lucid.ops.sub",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "SumBackward": [
+      {
+        "path": "lucid.ops.sum",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "TanBackward": [
+      {
+        "path": "lucid.ops.tan",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "TanhBackward": [
+      {
+        "path": "lucid.nn.Tanh",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.tanh",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.tanh",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "UnfoldBackward": [
+      {
+        "path": "lucid.nn.Unfold",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.unfold",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "ViewBackward": [
+      {
+        "path": "lucid.ops.view",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "abs_op": [
+      {
+        "path": "lucid.ops.abs",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "adaptive_avg_pool1d_op": [
+      {
+        "path": "lucid.nn.functional.adaptive_avg_pool1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "adaptive_avg_pool2d_op": [
+      {
+        "path": "lucid.nn.functional.adaptive_avg_pool2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "adaptive_avg_pool3d_op": [
+      {
+        "path": "lucid.nn.functional.adaptive_avg_pool3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "adaptive_max_pool1d_op": [
+      {
+        "path": "lucid.nn.functional.adaptive_max_pool1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "adaptive_max_pool2d_op": [
+      {
+        "path": "lucid.nn.functional.adaptive_max_pool2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "adaptive_max_pool3d_op": [
+      {
+        "path": "lucid.nn.functional.adaptive_max_pool3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "add_op": [
+      {
+        "path": "lucid.ops.add",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "affine_grid_op": [
+      {
+        "path": "lucid.nn.functional.affine_grid",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "all_op": [
+      {
+        "path": "lucid.ops.all",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "alpha_dropout_op": [
+      {
+        "path": "lucid.nn.functional.alpha_dropout",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "any_op": [
+      {
+        "path": "lucid.ops.any",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "arange_op": [
+      {
+        "path": "lucid.creation.arange",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "arccos_op": [
+      {
+        "path": "lucid.ops.arccos",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "arcsin_op": [
+      {
+        "path": "lucid.ops.arcsin",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "arctan_op": [
+      {
+        "path": "lucid.ops.arctan",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "argmax_op": [
+      {
+        "path": "lucid.ops.argmax",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "argmin_op": [
+      {
+        "path": "lucid.ops.argmin",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "argsort_op": [
+      {
+        "path": "lucid.ops.argsort",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "atan2_op": [
+      {
+        "path": "lucid.ops.atan2",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "avg_pool1d_op": [
+      {
+        "path": "lucid.nn.functional.avg_pool1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "avg_pool2d_op": [
+      {
+        "path": "lucid.nn.functional.avg_pool2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "avg_pool3d_op": [
+      {
+        "path": "lucid.nn.functional.avg_pool3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "batch_norm_op": [
+      {
+        "path": "lucid.nn.functional.batch_norm",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "bernoulli_op": [
+      {
+        "path": "lucid.creation.bernoulli",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "bitwise_and_op": [
+      {
+        "path": "lucid.ops.bitwise_and",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "bitwise_left_shift_op": [
+      {
+        "path": "lucid.ops.bitwise_left_shift",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "bitwise_or_op": [
+      {
+        "path": "lucid.ops.bitwise_or",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "bitwise_right_shift_op": [
+      {
+        "path": "lucid.ops.bitwise_right_shift",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "bitwise_xor_op": [
+      {
+        "path": "lucid.ops.bitwise_xor",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "bmm_op": [
+      {
+        "path": "lucid.ops.bmm",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "broadcast_to_op": [
+      {
+        "path": "lucid.ops.broadcast_to",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "bucketize_op": [
+      {
+        "path": "lucid.ops.bucketize",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "cartesian_prod_op": [
+      {
+        "path": "lucid.ops.cartesian_prod",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ceil_op": [
+      {
+        "path": "lucid.ops.ceil",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "cholesky_op": [
+      {
+        "path": "lucid.linalg.cholesky",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "chunk_op": [
+      {
+        "path": "lucid.ops.chunk",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "clip_op": [
+      {
+        "path": "lucid.ops.clip",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "complex_op": [
+      {
+        "path": "lucid.ops.complex",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "conj_op": [
+      {
+        "path": "lucid.ops.conj",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "contiguous_op": [
+      {
+        "path": "lucid.ops.contiguous",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "conv1d_op": [
+      {
+        "path": "lucid.nn.functional.conv1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "conv2d_op": [
+      {
+        "path": "lucid.nn.functional.conv2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "conv3d_op": [
+      {
+        "path": "lucid.nn.functional.conv3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "conv_transpose1d_op": [
+      {
+        "path": "lucid.nn.functional.conv_transpose1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "conv_transpose2d_op": [
+      {
+        "path": "lucid.nn.functional.conv_transpose2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "conv_transpose3d_op": [
+      {
+        "path": "lucid.nn.functional.conv_transpose3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "cos_op": [
+      {
+        "path": "lucid.ops.cos",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "cosh_op": [
+      {
+        "path": "lucid.ops.cosh",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "cross_entropy_op": [
+      {
+        "path": "lucid.nn.functional.cross_entropy",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "ctc_loss_op": [
+      {
+        "path": "lucid.nn.functional.ctc_loss",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "cummax_op": [
+      {
+        "path": "lucid.ops.cummax",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "cummin_op": [
+      {
+        "path": "lucid.ops.cummin",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "cumprod_op": [
+      {
+        "path": "lucid.ops.cumprod",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "cumsum_op": [
+      {
+        "path": "lucid.ops.cumsum",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "det_op": [
+      {
+        "path": "lucid.linalg.det",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "diagonal_op": [
+      {
+        "path": "lucid.linalg.diagonal",
+        "module": "lucid.linalg",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.diagonal",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "div_op": [
+      {
+        "path": "lucid.ops.div",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "dot_op": [
+      {
+        "path": "lucid.linalg.dot",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "dropout_op": [
+      {
+        "path": "lucid.nn.functional.dropout",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "eig_op": [
+      {
+        "path": "lucid.linalg.eig",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "eigh_op": [
+      {
+        "path": "lucid.linalg.eigh",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "einsum_op": [
+      {
+        "path": "lucid.einops.einsum",
+        "module": "lucid.einops",
+        "kind": "function"
+      }
+    ],
+    "elu_op": [
+      {
+        "path": "lucid.nn.functional.elu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "embedding_bag_op": [
+      {
+        "path": "lucid.nn.functional.embedding_bag",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "embedding_op": [
+      {
+        "path": "lucid.nn.functional.embedding",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "empty_like_op": [
+      {
+        "path": "lucid.creation.empty_like",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "empty_op": [
+      {
+        "path": "lucid.creation.empty",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "equal_op": [
+      {
+        "path": "lucid.ops.equal",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "erf_op": [
+      {
+        "path": "lucid.ops.erf",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "erfinv_op": [
+      {
+        "path": "lucid.ops.erfinv",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "exp2_op": [
+      {
+        "path": "lucid.ops.exp2",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "exp_op": [
+      {
+        "path": "lucid.ops.exp",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "expand_op": [
+      {
+        "path": "lucid.ops.expand",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "eye_op": [
+      {
+        "path": "lucid.creation.eye",
+        "module": "lucid.creation",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.init.eye",
+        "module": "lucid.nn.init",
+        "kind": "function"
+      }
+    ],
+    "fftn_op": [
+      {
+        "path": "lucid.fft.fftn",
+        "module": "lucid.fft",
+        "kind": "function"
+      }
+    ],
+    "flatten_op": [
+      {
+        "path": "lucid.ops.flatten",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "flip_op": [
+      {
+        "path": "lucid.ops.flip",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "floor_op": [
+      {
+        "path": "lucid.ops.floor",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "fmod_op": [
+      {
+        "path": "lucid.ops.fmod",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "fold_op": [
+      {
+        "path": "lucid.nn.functional.fold",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "frac_op": [
+      {
+        "path": "lucid.ops.frac",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "full_like_op": [
+      {
+        "path": "lucid.creation.full_like",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "full_op": [
+      {
+        "path": "lucid.creation.full",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "gather_op": [
+      {
+        "path": "lucid.ops.gather",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "gelu_op": [
+      {
+        "path": "lucid.nn.functional.gelu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "greater_equal_op": [
+      {
+        "path": "lucid.ops.greater_equal",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "greater_op": [
+      {
+        "path": "lucid.ops.greater",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "grid_sample_op": [
+      {
+        "path": "lucid.nn.functional.grid_sample",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "group_norm_op": [
+      {
+        "path": "lucid.nn.functional.group_norm",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "histc_op": [
+      {
+        "path": "lucid.ops.histc",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "histogram2d_op": [
+      {
+        "path": "lucid.ops.composite.histogram2d",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "histogram_op": [
+      {
+        "path": "lucid.ops.composite.histogram",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "histogramdd_op": [
+      {
+        "path": "lucid.ops.composite.histogramdd",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "householder_product_op": [
+      {
+        "path": "lucid.linalg.householder_product",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "hstack_op": [
+      {
+        "path": "lucid.ops.hstack",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "huber_loss_op": [
+      {
+        "path": "lucid.nn.functional.huber_loss",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "hypot_op": [
+      {
+        "path": "lucid.ops.hypot",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "ifftn_op": [
+      {
+        "path": "lucid.fft.ifftn",
+        "module": "lucid.fft",
+        "kind": "function"
+      }
+    ],
+    "imag_op": [
+      {
+        "path": "lucid.ops.imag",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "index_select_op": [
+      {
+        "path": "lucid.ops.index_select",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "inner_op": [
+      {
+        "path": "lucid.linalg.inner",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "inv_op": [
+      {
+        "path": "lucid.linalg.inv",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "irfftn_op": [
+      {
+        "path": "lucid.fft.irfftn",
+        "module": "lucid.fft",
+        "kind": "function"
+      }
+    ],
+    "isclose_op": [
+      {
+        "path": "lucid.ops.isclose",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "isfinite_op": [
+      {
+        "path": "lucid.ops.isfinite",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "isinf_op": [
+      {
+        "path": "lucid.ops.isinf",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "isnan_op": [
+      {
+        "path": "lucid.ops.isnan",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "kron_op": [
+      {
+        "path": "lucid.ops.kron",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "kthvalue_op": [
+      {
+        "path": "lucid.ops.kthvalue",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "layer_norm_op": [
+      {
+        "path": "lucid.nn.functional.layer_norm",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "ldl_factor_op": [
+      {
+        "path": "lucid.linalg.ldl_factor",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "leaky_relu_op": [
+      {
+        "path": "lucid.nn.functional.leaky_relu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "less_equal_op": [
+      {
+        "path": "lucid.ops.less_equal",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "less_op": [
+      {
+        "path": "lucid.ops.less",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "linear_op": [
+      {
+        "path": "lucid.nn.functional.linear",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "linspace_op": [
+      {
+        "path": "lucid.creation.linspace",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "log10_op": [
+      {
+        "path": "lucid.ops.log10",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "log1p_op": [
+      {
+        "path": "lucid.ops.log1p",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "log2_op": [
+      {
+        "path": "lucid.ops.log2",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "log_op": [
+      {
+        "path": "lucid.ops.log",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "log_softmax_op": [
+      {
+        "path": "lucid.nn.functional.log_softmax",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.composite.log_softmax",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "logaddexp_op": [
+      {
+        "path": "lucid.ops.logaddexp",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "logical_and_op": [
+      {
+        "path": "lucid.ops.logical_and",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "logical_not_op": [
+      {
+        "path": "lucid.ops.logical_not",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "logical_or_op": [
+      {
+        "path": "lucid.ops.logical_or",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "logical_xor_op": [
+      {
+        "path": "lucid.ops.logical_xor",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "logspace_op": [
+      {
+        "path": "lucid.creation.logspace",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "logsumexp_op": [
+      {
+        "path": "lucid.ops.logsumexp",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "lstsq_op": [
+      {
+        "path": "lucid.linalg.lstsq",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "lu_factor_op": [
+      {
+        "path": "lucid.linalg.lu_factor",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "lu_solve_op": [
+      {
+        "path": "lucid.linalg.lu_solve",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "masked_fill_op": [
+      {
+        "path": "lucid.ops.masked_fill",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "masked_select_op": [
+      {
+        "path": "lucid.ops.masked_select",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "matmul_op": [
+      {
+        "path": "lucid.ops.matmul",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "matrix_power_op": [
+      {
+        "path": "lucid.linalg.matrix_power",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "max_op": [
+      {
+        "path": "lucid.ops.max",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "max_pool1d_op": [
+      {
+        "path": "lucid.nn.functional.max_pool1d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "max_pool2d_op": [
+      {
+        "path": "lucid.nn.functional.max_pool2d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "max_pool3d_op": [
+      {
+        "path": "lucid.nn.functional.max_pool3d",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "maximum_op": [
+      {
+        "path": "lucid.ops.maximum",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "mean_op": [
+      {
+        "path": "lucid.ops.mean",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "meshgrid_op": [
+      {
+        "path": "lucid.ops.meshgrid",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "min_op": [
+      {
+        "path": "lucid.ops.min",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "minimum_op": [
+      {
+        "path": "lucid.ops.minimum",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "mish_op": [
+      {
+        "path": "lucid.nn.functional.mish",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "mm_op": [
+      {
+        "path": "lucid.ops.mm",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "movedim_op": [
+      {
+        "path": "lucid.ops.movedim",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "mse_loss_op": [
+      {
+        "path": "lucid.nn.functional.mse_loss",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "mul_op": [
+      {
+        "path": "lucid.ops.mul",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "nan_to_num_op": [
+      {
+        "path": "lucid.ops.nan_to_num",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "narrow_op": [
+      {
+        "path": "lucid.ops.narrow",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "neg_op": [
+      {
+        "path": "lucid.ops.neg",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "nextafter_op": [
+      {
+        "path": "lucid.ops.nextafter",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "nll_loss_op": [
+      {
+        "path": "lucid.nn.functional.nll_loss",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "nonzero_op": [
+      {
+        "path": "lucid.ops.nonzero",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "norm_op": [
+      {
+        "path": "lucid.linalg.norm",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "normal_op": [
+      {
+        "path": "lucid.creation.normal",
+        "module": "lucid.creation",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.nn.init.normal",
+        "module": "lucid.nn.init",
+        "kind": "function"
+      }
+    ],
+    "not_equal_op": [
+      {
+        "path": "lucid.ops.not_equal",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "one_hot_op": [
+      {
+        "path": "lucid.nn.functional.one_hot",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "ones_like_op": [
+      {
+        "path": "lucid.creation.ones_like",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "ones_op": [
+      {
+        "path": "lucid.creation.ones",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "outer_op": [
+      {
+        "path": "lucid.linalg.outer",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "pad_op": [
+      {
+        "path": "lucid.nn.functional.pad",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.pad",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "permute_op": [
+      {
+        "path": "lucid.ops.permute",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "pinv_op": [
+      {
+        "path": "lucid.linalg.pinv",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "pow_op": [
+      {
+        "path": "lucid.ops.pow",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "prod_op": [
+      {
+        "path": "lucid.ops.prod",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "qr_op": [
+      {
+        "path": "lucid.linalg.qr",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "rand_op": [
+      {
+        "path": "lucid.creation.rand",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "randint_op": [
+      {
+        "path": "lucid.creation.randint",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "randn_op": [
+      {
+        "path": "lucid.creation.randn",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "real_op": [
+      {
+        "path": "lucid.ops.real",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "reciprocal_op": [
+      {
+        "path": "lucid.ops.reciprocal",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "relu6_op": [
+      {
+        "path": "lucid.nn.functional.relu6",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "relu_inplace_op": [
+      {
+        "path": "lucid.nn.functional.relu_",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "relu_op": [
+      {
+        "path": "lucid.nn.functional.relu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.relu",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "remainder_op": [
+      {
+        "path": "lucid.ops.remainder",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "repeat_op": [
+      {
+        "path": "lucid.einops.repeat",
+        "module": "lucid.einops",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.repeat",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "reshape_op": [
+      {
+        "path": "lucid.ops.reshape",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "rfftn_op": [
+      {
+        "path": "lucid.fft.rfftn",
+        "module": "lucid.fft",
+        "kind": "function"
+      }
+    ],
+    "rms_norm_op": [
+      {
+        "path": "lucid.nn.functional.rms_norm",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "roll_op": [
+      {
+        "path": "lucid.ops.roll",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "round_op": [
+      {
+        "path": "lucid.ops.round",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "rsqrt_op": [
+      {
+        "path": "lucid.ops.rsqrt",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "scaled_dot_product_attention_op": [
+      {
+        "path": "lucid.nn.functional.scaled_dot_product_attention",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "scatter_add_op": [
+      {
+        "path": "lucid.ops.scatter_add",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "scatter_op": [
+      {
+        "path": "lucid.ops.scatter",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "searchsorted_op": [
+      {
+        "path": "lucid.ops.searchsorted",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "selu_op": [
+      {
+        "path": "lucid.nn.functional.selu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "sigmoid_op": [
+      {
+        "path": "lucid.nn.functional.sigmoid",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.sigmoid",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "sign_op": [
+      {
+        "path": "lucid.ops.sign",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "silu_op": [
+      {
+        "path": "lucid.nn.functional.silu",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "sin_op": [
+      {
+        "path": "lucid.ops.sin",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "sinh_op": [
+      {
+        "path": "lucid.ops.sinh",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "softmax_op": [
+      {
+        "path": "lucid.nn.functional.softmax",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.composite.softmax",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "softplus_op": [
+      {
+        "path": "lucid.nn.functional.softplus",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "solve_op": [
+      {
+        "path": "lucid.linalg.solve",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "solve_triangular_op": [
+      {
+        "path": "lucid.linalg.solve_triangular",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "sort_op": [
+      {
+        "path": "lucid.ops.sort",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "split_op": [
+      {
+        "path": "lucid.ops.split",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "sqrt_op": [
+      {
+        "path": "lucid.ops.sqrt",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "square_op": [
+      {
+        "path": "lucid.ops.square",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "squeeze_op": [
+      {
+        "path": "lucid.ops.squeeze",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "stack_op": [
+      {
+        "path": "lucid.ops.stack",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "std_op": [
+      {
+        "path": "lucid.ops.std",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "sub_op": [
+      {
+        "path": "lucid.ops.sub",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "sum_op": [
+      {
+        "path": "lucid.ops.sum",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "svd_op": [
+      {
+        "path": "lucid.linalg.svd",
+        "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "swapaxes_op": [
+      {
+        "path": "lucid.ops.composite.swapaxes",
+        "module": "lucid.ops.composite",
+        "kind": "function"
+      }
+    ],
+    "take_op": [
+      {
+        "path": "lucid.ops.take",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "tan_op": [
+      {
+        "path": "lucid.ops.tan",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "tanh_op": [
+      {
+        "path": "lucid.nn.functional.tanh",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.tanh",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "tensordot_op": [
+      {
+        "path": "lucid.ops.tensordot",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "tile_op": [
+      {
+        "path": "lucid.ops.tile",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "topk_op": [
+      {
+        "path": "lucid.ops.topk",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "trace_op": [
+      {
+        "path": "lucid.ops.trace",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "transpose_op": [
+      {
+        "path": "lucid.ops.transpose",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "tril_op": [
+      {
+        "path": "lucid.ops.tril",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "triu_op": [
+      {
+        "path": "lucid.ops.triu",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "trunc_op": [
+      {
+        "path": "lucid.ops.trunc",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "unbind_op": [
+      {
+        "path": "lucid.ops.unbind",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "unflatten_op": [
+      {
+        "path": "lucid.ops.unflatten",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "unfold_op": [
+      {
+        "path": "lucid.nn.functional.unfold",
+        "module": "lucid.nn.functional",
+        "kind": "function"
+      }
+    ],
+    "uniform_op": [
+      {
+        "path": "lucid.nn.init.uniform",
+        "module": "lucid.nn.init",
+        "kind": "function"
+      }
+    ],
+    "unique_op": [
+      {
+        "path": "lucid.ops.unique",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "unsqueeze_op": [
+      {
+        "path": "lucid.ops.unsqueeze",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "var_op": [
+      {
+        "path": "lucid.ops.var",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "vstack_op": [
+      {
+        "path": "lucid.ops.vstack",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "where_op": [
+      {
+        "path": "lucid.ops.where",
+        "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "zeros_like_op": [
+      {
+        "path": "lucid.creation.zeros_like",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ],
+    "zeros_op": [
+      {
+        "path": "lucid.creation.zeros",
+        "module": "lucid.creation",
+        "kind": "function"
+      }
+    ]
+  }
+}

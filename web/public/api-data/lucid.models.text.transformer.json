@@ -1,0 +1,2030 @@
+{
+  "slug": "lucid.models.text.transformer",
+  "name": "transformer",
+  "path": "lucid.models.text.transformer",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/__init__.py#L1",
+  "members": [
+    {
+      "name": "TransformerConfig",
+      "path": "lucid.models.text.transformer._config.TransformerConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "LanguageModelConfig"
+      ],
+      "labels": [],
+      "signature": "TransformerConfig(vocab_size: int = 37000, hidden_size: int = 512, num_hidden_layers: int = 6, num_attention_heads: int = 8, intermediate_size: int = 2048, hidden_act: TextActivation = 'gelu', max_position_embeddings: int = 5000, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, decoder_vocab_size: int | None = None, num_decoder_layers: int = 6, share_embeddings: bool = False, num_labels: int = 2, classifier_dropout: float | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_config.py#L23",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "effective_decoder_vocab_size",
+          "path": "lucid.models.text.transformer._config.TransformerConfig.effective_decoder_vocab_size",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "effective_decoder_vocab_size: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_config.py#L138",
+          "summary": "Resolved target-side vocabulary (handles `decoder_vocab_size=None`).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.transformer._config.TransformerConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(vocab_size: int = 37000, hidden_size: int = 512, num_hidden_layers: int = 6, num_attention_heads: int = 8, intermediate_size: int = 2048, hidden_act: TextActivation = 'gelu', max_position_embeddings: int = 5000, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, decoder_vocab_size: int | None = None, num_decoder_layers: int = 6, share_embeddings: bool = False, num_labels: int = 2, classifier_dropout: float | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for every Vaswani-style Transformer variant.",
+      "extended": "The bare paper specifies a single 65 537-token shared BPE vocabulary for\nWMT En-De and separate vocabularies for some tasks; we make this\nconfigurable via `decoder_vocab_size` / `share_embeddings` so callers\ncan match whichever checkpoint they're porting.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TransformerForSeq2SeqLM",
+      "path": "lucid.models.text.transformer._model.TransformerForSeq2SeqLM",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "TransformerForSeq2SeqLM(config: TransformerConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L284",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.transformer._model.TransformerForSeq2SeqLM.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: TransformerConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L346",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.transformer._model.TransformerForSeq2SeqLM.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, decoder_input_ids: Tensor, attention_mask: Tensor | None = None, decoder_attention_mask: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L354",
+          "subcategory": "model",
+          "summary": "Full encode + decode pass.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "input_ids",
+              "annotation": null,
+              "description": "`(B, S)` source token ids.",
+              "default": null
+            },
+            {
+              "name": "decoder_input_ids",
+              "annotation": null,
+              "description": "`(B, T)` target token ids (right-shifted).",
+              "default": null
+            },
+            {
+              "name": "attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, S)` HF-style padding mask.",
+              "default": null
+            },
+            {
+              "name": "decoder_attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, T)` HF-style padding mask.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Seq2SeqLMOutput",
+            "description": "class:`Seq2SeqLMOutput` carrying decoder hidden states as"
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "generate",
+          "path": "lucid.models.text.transformer._model.TransformerForSeq2SeqLM.generate",
+          "kind": "function",
+          "labels": [],
+          "signature": "generate(input_ids: Tensor, max_length: int = 32, bos_token_id: int | None = None, eos_token_id: int | None = None, pad_token_id: int | None = None, attention_mask: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L388",
+          "subcategory": "model",
+          "summary": "Greedy seq2seq decoding.",
+          "extended": "Encodes `input_ids` once, then unrolls the decoder one greedy\nargmax token at a time until `max_length` (or every batch row hits\n`eos_token_id`).  Encoder-decoder generation deliberately doesn't\nreuse `GenerationMixin` because that mixin is decoder-only.",
+          "parameters": [
+            {
+              "name": "input_ids",
+              "annotation": "Tensor",
+              "description": "`(B, S)` source token ids.",
+              "default": null
+            },
+            {
+              "name": "max_length",
+              "annotation": "int",
+              "description": "Cap on generated target length (incl. BOS).",
+              "default": "32"
+            },
+            {
+              "name": "bos_token_id",
+              "annotation": "int | None",
+              "description": "Start-of-sequence id; defaults to\n           `config.bos_token_id` then 0.",
+              "default": "None"
+            },
+            {
+              "name": "eos_token_id",
+              "annotation": "int | None",
+              "description": "End-of-sequence id; defaults to\n           `config.eos_token_id`.",
+              "default": "None"
+            },
+            {
+              "name": "pad_token_id",
+              "annotation": "int | None",
+              "description": "Right-padding for finished rows; defaults to\n           `config.pad_token_id` then 0.",
+              "default": "None"
+            },
+            {
+              "name": "attention_mask",
+              "annotation": "Tensor | None",
+              "description": "Optional source padding mask.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, T_out)` int Tensor of generated target tokens."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Encoder-decoder Transformer with a tied seq2seq language-modeling head.",
+      "extended": "Wraps `TransformerModel` with a linear LM head projecting decoder\nhidden states to the target vocabulary.  The head weight is tied to\n`tgt_tok_emb.weight` when `config.tie_word_embeddings` is `True`,\nmatching the Vaswani 2017 §3.4 convention that halves the parameter cost\nof the output softmax.  Standard interface for translation and\nsummarisation — pass `input_ids` (the source) and\n`decoder_input_ids` (the right-shifted target); supply `labels` to\nalso compute the shift-loss for training.  Greedy inference is exposed\nthrough `generate`.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "TransformerConfig",
+          "description": "Hyperparameters.  `config.tie_word_embeddings` (default True)\ncontrols the LM-head weight tying.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import TransformerConfig, TransformerForSeq2SeqLM\n>>> cfg = TransformerConfig(num_hidden_layers=2, num_decoder_layers=2,\n...                         hidden_size=64, num_attention_heads=2,\n...                         intermediate_size=128, vocab_size=1000)\n>>> model = TransformerForSeq2SeqLM(cfg).eval()\n>>> src = lucid.tensor([[1, 234, 567, 2]])\n>>> tgt = lucid.tensor([[1, 100, 200]])\n>>> out = model(src, decoder_input_ids=tgt)\n>>> out.logits.shape   # (B=1, T_tgt=3, vocab=1000)\n(1, 3, 1000)"
+      ],
+      "notes": [
+        "Reference: Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser,\nand Polosukhin, *\"Attention Is All You Need\"*, NeurIPS, 2017\n([arXiv:1706.03762](https://arxiv.org/abs/1706.03762)).\n\nLoss when `labels` is supplied is the per-token cross-entropy over\nthe right-shifted target sequence:\n\n$$\n\\mathcal{L}_{\\mathrm{S2S}}\n    = -\\frac{1}{BT} \\sum_{b, t}\n      \\log p_\\theta(y_{b, t} \\mid x_b, y_{b, < t}),\n$$\nwith positions labelled `-100` excluded."
+      ],
+      "attributes": [
+        {
+          "name": "transformer",
+          "annotation": "TransformerModel",
+          "description": "Underlying encoder-decoder trunk."
+        },
+        {
+          "name": "lm_head",
+          "annotation": "nn.Linear",
+          "description": "Output projection of shape `(d_model, effective_decoder_vocab_size)`\nmapping decoder hidden states to target-vocabulary logits."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TransformerForSequenceClassification",
+      "path": "lucid.models.text.transformer._model.TransformerForSequenceClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "TransformerForSequenceClassification(config: TransformerConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L463",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.transformer._model.TransformerForSequenceClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: TransformerConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L522",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.transformer._model.TransformerForSequenceClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L533",
+          "subcategory": "model",
+          "summary": "Full encode + decode pass.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "input_ids",
+              "annotation": null,
+              "description": "`(B, S)` source token ids.",
+              "default": null
+            },
+            {
+              "name": "decoder_input_ids",
+              "annotation": null,
+              "description": "`(B, T)` target token ids (right-shifted).",
+              "default": null
+            },
+            {
+              "name": "attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, S)` HF-style padding mask.",
+              "default": null
+            },
+            {
+              "name": "decoder_attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, T)` HF-style padding mask.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "MaskedLMOutput",
+            "description": "class:`Seq2SeqLMOutput` carrying decoder hidden states as"
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Encoder-only sentence classifier — pools the first source-side token.",
+      "extended": "Wraps `TransformerModel` and runs only the encoder half during\n`forward`; the first source-side token's hidden state is\ndropout-regularised and projected through a linear of output width\n`config.num_labels`.  Pattern mirrors\n`BertForSequenceClassification` — the decoder half of the trunk\nis unused so this head trains the same encoder weights efficiently for\nGLUE-style fine-tunes on the Vaswani backbone.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "TransformerConfig",
+          "description": "Hyperparameters.  `config.num_labels` sets the output dimension;\n`config.classifier_dropout` (falling back to `hidden_dropout`)\nsets the dropout applied before the linear.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import (\n...     TransformerConfig, TransformerForSequenceClassification,\n... )\n>>> cfg = TransformerConfig(num_labels=3, num_hidden_layers=2,\n...                         hidden_size=64, num_attention_heads=2,\n...                         intermediate_size=128, vocab_size=1000)\n>>> model = TransformerForSequenceClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[1, 234, 567, 2]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, num_labels=3)\n(1, 3)"
+      ],
+      "notes": [
+        "Reference: Vaswani et al., *\"Attention Is All You Need\"*, NeurIPS, 2017\n([arXiv:1706.03762](https://arxiv.org/abs/1706.03762)).\n\nWhen `labels` is supplied, the loss is the standard cross-entropy:\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\log p_\\theta(y_b \\mid x_b).\n$$"
+      ],
+      "attributes": [
+        {
+          "name": "transformer",
+          "annotation": "TransformerModel",
+          "description": "Underlying encoder-decoder trunk; only `encode` is invoked here."
+        },
+        {
+          "name": "dropout",
+          "annotation": "nn.Dropout",
+          "description": "Dropout layer applied to the pooled first-token embedding."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Linear",
+          "description": "Final linear of shape `(d_model, num_labels)` producing per-class\nlogits."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TransformerForTokenClassification",
+      "path": "lucid.models.text.transformer._model.TransformerForTokenClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "MaskedLMMixin"
+      ],
+      "labels": [],
+      "signature": "TransformerForTokenClassification(config: TransformerConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L551",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.transformer._model.TransformerForTokenClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: TransformerConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L609",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.transformer._model.TransformerForTokenClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L620",
+          "subcategory": "model",
+          "summary": "Full encode + decode pass.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "input_ids",
+              "annotation": null,
+              "description": "`(B, S)` source token ids.",
+              "default": null
+            },
+            {
+              "name": "decoder_input_ids",
+              "annotation": null,
+              "description": "`(B, T)` target token ids (right-shifted).",
+              "default": null
+            },
+            {
+              "name": "attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, S)` HF-style padding mask.",
+              "default": null
+            },
+            {
+              "name": "decoder_attention_mask",
+              "annotation": null,
+              "description": "Optional `(B, T)` HF-style padding mask.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "MaskedLMOutput",
+            "description": "class:`Seq2SeqLMOutput` carrying decoder hidden states as"
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Encoder-only per-token classifier — NER / POS / chunking heads.",
+      "extended": "Wraps `TransformerModel` and runs only the encoder half during\n`forward`; every source-side token's hidden state is\ndropout-regularised and projected through a linear of output width\n`config.num_labels`.  Uses `MaskedLMMixin` for the standard\nmasked `(B, T, V) → loss` reduction shared with BERT and RoFormer.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "TransformerConfig",
+          "description": "Hyperparameters.  `config.num_labels` sets the per-position output\ndimension; `config.classifier_dropout` (falling back to\n`hidden_dropout`) sets the dropout applied before the linear.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import (\n...     TransformerConfig, TransformerForTokenClassification,\n... )\n>>> cfg = TransformerConfig(num_labels=9, num_hidden_layers=2,\n...                         hidden_size=64, num_attention_heads=2,\n...                         intermediate_size=128, vocab_size=1000)\n>>> model = TransformerForTokenClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[1, 234, 567, 2]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, num_labels=9)\n(1, 4, 9)"
+      ],
+      "notes": [
+        "Reference: Vaswani et al., *\"Attention Is All You Need\"*, NeurIPS, 2017\n([arXiv:1706.03762](https://arxiv.org/abs/1706.03762)).\n\nLoss (when `labels` is provided) is the masked cross-entropy over\npositions whose label is not `-100`:\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|} \\sum_{(b, t) \\in V}\n    \\log p_\\theta(y_{b, t} \\mid x_b).\n$$"
+      ],
+      "attributes": [
+        {
+          "name": "transformer",
+          "annotation": "TransformerModel",
+          "description": "Underlying encoder-decoder trunk; only `encode` is invoked here."
+        },
+        {
+          "name": "dropout",
+          "annotation": "nn.Dropout",
+          "description": "Dropout layer applied to the full sequence hidden states."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Linear",
+          "description": "Final linear of shape `(d_model, num_labels)` mapping each token's\nhidden state to per-class logits."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TransformerModel",
+      "path": "lucid.models.text.transformer._model.TransformerModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "TransformerModel(config: TransformerConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L70",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.text.transformer._model.TransformerModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: TransformerConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L148",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_input_embeddings",
+          "path": "lucid.models.text.transformer._model.TransformerModel.get_input_embeddings",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_input_embeddings()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L182",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "nn.Module",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "set_input_embeddings",
+          "path": "lucid.models.text.transformer._model.TransformerModel.set_input_embeddings",
+          "kind": "function",
+          "labels": [],
+          "signature": "set_input_embeddings(value: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L185",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_output_embeddings",
+          "path": "lucid.models.text.transformer._model.TransformerModel.get_output_embeddings",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_output_embeddings()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L192",
+          "subcategory": "model",
+          "summary": "Target-side embedding — used to tie an LM head against.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "nn.Module",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.text.transformer._model.TransformerModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(src_ids: Tensor, src_attention_mask: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L208",
+          "subcategory": "model",
+          "summary": "Run only the encoder; returns memory `(B, S, d_model)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "decode",
+          "path": "lucid.models.text.transformer._model.TransformerModel.decode",
+          "kind": "function",
+          "labels": [],
+          "signature": "decode(tgt_ids: Tensor, memory: Tensor, tgt_attention_mask: Tensor | None = None, memory_attention_mask: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L221",
+          "subcategory": "model",
+          "summary": "Run only the decoder against precomputed encoder memory.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.text.transformer._model.TransformerModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(input_ids: Tensor, decoder_input_ids: Tensor, attention_mask: Tensor | None = None, decoder_attention_mask: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_model.py#L246",
+          "subcategory": "model",
+          "summary": "Full encode + decode pass.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "input_ids",
+              "annotation": "Tensor",
+              "description": "`(B, S)` source token ids.",
+              "default": null
+            },
+            {
+              "name": "decoder_input_ids",
+              "annotation": "Tensor",
+              "description": "`(B, T)` target token ids (right-shifted).",
+              "default": null
+            },
+            {
+              "name": "attention_mask",
+              "annotation": "Tensor | None",
+              "description": "Optional `(B, S)` HF-style padding mask.",
+              "default": "None"
+            },
+            {
+              "name": "decoder_attention_mask",
+              "annotation": "Tensor | None",
+              "description": "Optional `(B, T)` HF-style padding mask.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Seq2SeqLMOutput",
+            "description": "class:`Seq2SeqLMOutput` carrying decoder hidden states as"
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Bare Vaswani encoder-decoder Transformer trunk.",
+      "extended": "Implements the canonical seq2seq architecture of Vaswani, Shazeer,\nParmar, Uszkoreit, Jones, Gomez, Kaiser, and Polosukhin, 2017.  A\nstack of $N$ encoder layers (multi-head self-attention + FFN)\nprocesses the source `input_ids`; a stack of $N$ decoder\nlayers (masked self-attention + cross-attention + FFN) consumes the\nright-shifted `decoder_input_ids` and the encoder memory.  Token\nembeddings are scaled by $\\sqrt{d_{\\text{model}}}$ and combined\nwith sinusoidal positional encodings before the trunk.\n\nForward inputs / outputs follow the `Seq2SeqLMOutput` contract.\nFor task-specific outputs use the `TransformerForXxx` wrappers; this\nbare trunk is exposed so callers needing raw decoder hidden states\n(e.g. for custom heads) can skip the default LM projection.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "TransformerConfig",
+          "description": "Hyperparameters controlling vocabularies, depth, width, head count,\nmax sequence length, and the `share_embeddings` /\n`tie_word_embeddings` toggles.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import TransformerConfig, TransformerModel\n>>> cfg = TransformerConfig(num_hidden_layers=2, num_decoder_layers=2,\n...                         hidden_size=64, num_attention_heads=2,\n...                         intermediate_size=128, vocab_size=1000)\n>>> model = TransformerModel(cfg).eval()\n>>> src = lucid.tensor([[1, 234, 567, 2]])\n>>> tgt = lucid.tensor([[1, 100, 200]])\n>>> out = model(src, decoder_input_ids=tgt)\n>>> out.logits.shape   # decoder hidden (B=1, T_tgt=3, d_model=64)\n(1, 3, 64)\n>>> out.encoder_last_hidden_state.shape\n(1, 4, 64)"
+      ],
+      "notes": [
+        "Reference: Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser,\nand Polosukhin, *\"Attention Is All You Need\"*, NeurIPS, 2017\n([arXiv:1706.03762](https://arxiv.org/abs/1706.03762)).\n\nScaled dot-product attention:\n\n$$\n\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\!\\left(\n    \\frac{Q K^{\\top}}{\\sqrt{d_k}}\n\\right) V,\n$$\nwith $d_k = d_{\\text{model}} / h$.  The decoder applies an\nadditional lower-triangular causal mask on its self-attention so\nposition $t$ cannot attend to positions $> t$."
+      ],
+      "attributes": [
+        {
+          "name": "src_tok_emb",
+          "annotation": "nn.Embedding",
+          "description": "Source-side token embedding of shape `(vocab_size, d_model)`."
+        },
+        {
+          "name": "tgt_tok_emb",
+          "annotation": "nn.Embedding",
+          "description": "Target-side token embedding.  Identical object as `src_tok_emb`\nwhen `config.share_embeddings` is `True`."
+        },
+        {
+          "name": "positional_encoding",
+          "annotation": "nn.SinusoidalEmbedding",
+          "description": "Fixed sinusoidal positional encoding of size\n`(max_position_embeddings, d_model)` (Vaswani 2017 §3.5)."
+        },
+        {
+          "name": "dropout",
+          "annotation": "nn.Dropout",
+          "description": "Post-embedding dropout layer."
+        },
+        {
+          "name": "transformer",
+          "annotation": "nn.Transformer",
+          "description": "Underlying encoder-decoder stack built from\n`nn.TransformerEncoder` + `nn.TransformerDecoder`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "transformer_base",
+      "path": "lucid.models.text.transformer._pretrained.transformer_base",
+      "kind": "function",
+      "labels": [],
+      "signature": "transformer_base(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_pretrained.py#L31",
+      "subcategory": "pretrained",
+      "summary": "Construct a Vaswani-style Transformer \"base\" encoder-decoder.",
+      "extended": "Canonical seq2seq architecture from Vaswani, Shazeer, Parmar, Uszkoreit,\nJones, Gomez, Kaiser, and Polosukhin, 2017, Table 3 (\"base\" row):\n$N=6$ encoder + $N=6$ decoder layers, $d_{\\text{model}} = 512$, $h = 8$ heads, $d_{\\text{ff}} = 2048$, dropout 0.1.\nRoughly 65M parameters — the model that achieved SOTA on WMT 2014\nEn-De / En-Fr at a fraction of the training cost of prior recurrent\nseq2seq systems.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TransformerConfig` field overrides (e.g.\n`vocab_size=...`, `decoder_vocab_size=...`,\n`share_embeddings=True`) forwarded into the underlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TransformerModel",
+        "description": "Encoder-decoder trunk configured with the \"base\" size and any\noverrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import transformer_base\n>>> model = transformer_base().eval()\n>>> src = lucid.tensor([[1, 234, 567, 2]])\n>>> tgt = lucid.tensor([[1, 100, 200]])\n>>> out = model(src, decoder_input_ids=tgt)\n>>> out.logits.shape   # (B=1, T_tgt=3, d_model=512)\n(1, 3, 512)"
+      ],
+      "notes": [
+        "Reference: Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser,\nand Polosukhin, *\"Attention Is All You Need\"*, NeurIPS, 2017\n([arXiv:1706.03762](https://arxiv.org/abs/1706.03762)), Table 3.\n\nMulti-head attention:\n\n$$\n\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\!\\left(\n    \\frac{Q K^{\\top}}{\\sqrt{d_k}}\n\\right) V.\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerModel",
+        "type": "TransformerModel",
+        "params": 82028544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "src_tok_emb",
+            "type": "Embedding",
+            "params": 18944000,
+            "own_params": 18944000,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "positional_encoding",
+            "type": "SinusoidalEmbedding",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "Transformer",
+            "params": 44140544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "TransformerEncoder",
+                "params": 18915328,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerEncoderLayer",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "TransformerDecoder",
+                "params": 25225216,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerDecoderLayer",
+                    "params": 4204032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": [],
+                        "repeat": 3
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 4
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "transformer_base_cls",
+      "path": "lucid.models.text.transformer._pretrained.transformer_base_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "transformer_base_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_pretrained.py#L259",
+      "subcategory": "pretrained",
+      "summary": "Construct a Transformer \"base\" with a sequence-classification head.",
+      "extended": "Same trunk as `transformer_base` (N=6, d_model=512, h=8); only the\nencoder half is used in `forward`.  The first source-side token's\nencoder hidden state is dropout-regularised and projected through a\nlinear of output width `config.num_labels`.  Pattern mirrors\n`BertForSequenceClassification` and is appropriate for\nGLUE-style fine-tunes on the encoder-only half of the Vaswani trunk.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TransformerConfig` field overrides forwarded into\nthe underlying config.  Pass `num_labels=N` to set the number of\nclasses (default 2).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TransformerForSequenceClassification",
+        "description": "Encoder-only Transformer trunk wrapped with a pooled classifier\nhead."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import transformer_base_cls\n>>> model = transformer_base_cls(num_labels=3).eval()\n>>> input_ids = lucid.tensor([[1, 234, 567, 2]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, num_labels=3)\n(1, 3)"
+      ],
+      "notes": [
+        "Reference: Vaswani et al., *\"Attention Is All You Need\"*, NeurIPS, 2017."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForSequenceClassification",
+        "type": "TransformerForSequenceClassification",
+        "params": 82029570,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 82028544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 18944000,
+                "own_params": 18944000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 44140544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 18915328,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 25225216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1026,
+            "own_params": 1026,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "transformer_base_seq2seq",
+      "path": "lucid.models.text.transformer._pretrained.transformer_base_seq2seq",
+      "kind": "function",
+      "labels": [],
+      "signature": "transformer_base_seq2seq(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_pretrained.py#L147",
+      "subcategory": "pretrained",
+      "summary": "Construct a Transformer \"base\" with a tied seq2seq-LM head.",
+      "extended": "Same trunk as `transformer_base` (N=6, d_model=512, h=8),\naugmented with a linear LM head whose weight is tied to the target-side\nembedding when `config.tie_word_embeddings` is `True`.  Provides a\n`.generate(input_ids)` method for greedy seq2seq decoding (translation\n/ summarisation inference).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TransformerConfig` field overrides forwarded into\nthe underlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TransformerForSeq2SeqLM",
+        "description": "Encoder-decoder trunk wrapped with the tied LM head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import transformer_base_seq2seq\n>>> model = transformer_base_seq2seq().eval()\n>>> src = lucid.tensor([[1, 234, 567, 2]])\n>>> tgt = lucid.tensor([[1, 100, 200]])\n>>> out = model(src, decoder_input_ids=tgt)\n>>> out.logits.shape   # (B=1, T_tgt=3, vocab=37000)\n(1, 3, 37000)"
+      ],
+      "notes": [
+        "Reference: Vaswani et al., *\"Attention Is All You Need\"*, NeurIPS, 2017.\n\nTraining loss when `labels` is supplied is the standard seq2seq\ncross-entropy:\n\n$$\n\\mathcal{L}_{\\mathrm{S2S}}\n    = -\\frac{1}{BT} \\sum_{b, t}\n      \\log p_\\theta(y_{b, t} \\mid x_b, y_{b, < t}),\n$$\nwith positions labelled `-100` excluded."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForSeq2SeqLM",
+        "type": "TransformerForSeq2SeqLM",
+        "params": 82028544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 82028544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 18944000,
+                "own_params": 18944000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 44140544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 18915328,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 25225216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 18944000,
+            "own_params": 18944000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "transformer_base_token_cls",
+      "path": "lucid.models.text.transformer._pretrained.transformer_base_token_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "transformer_base_token_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_pretrained.py#L310",
+      "subcategory": "pretrained",
+      "summary": "Construct a Transformer \"base\" with a per-token classification head.",
+      "extended": "Same trunk as `transformer_base` (N=6, d_model=512, h=8); only the\nencoder half is used in `forward`.  Every source-side token's hidden\nstate is dropout-regularised and projected through a linear of output\nwidth `config.num_labels`, with the standard masked cross-entropy\ninherited from `MaskedLMMixin`.  Use for sequence-labelling\ntasks (NER, POS) when an encoder-only Vaswani trunk is preferred to\nBERT.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TransformerConfig` field overrides forwarded into\nthe underlying config.  Pass `num_labels=N` to set the tag set\nsize.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TransformerForTokenClassification",
+        "description": "Encoder-only Transformer trunk wrapped with a per-token classifier\nhead."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import transformer_base_token_cls\n>>> model = transformer_base_token_cls(num_labels=9).eval()\n>>> input_ids = lucid.tensor([[1, 234, 567, 2]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, T=4, num_labels=9)\n(1, 4, 9)"
+      ],
+      "notes": [
+        "Reference: Vaswani et al., *\"Attention Is All You Need\"*, NeurIPS, 2017.\n\nLoss (when `labels` is provided) is the masked cross-entropy over\npositions whose label is not `-100`:\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|} \\sum_{(b, t) \\in V}\n    \\log p_\\theta(y_{b, t} \\mid x_b).\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForTokenClassification",
+        "type": "TransformerForTokenClassification",
+        "params": 82029570,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 82028544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 18944000,
+                "own_params": 18944000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 44140544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 18915328,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 25225216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1026,
+            "own_params": 1026,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "transformer_large",
+      "path": "lucid.models.text.transformer._pretrained.transformer_large",
+      "kind": "function",
+      "labels": [],
+      "signature": "transformer_large(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_pretrained.py#L92",
+      "subcategory": "pretrained",
+      "summary": "Construct a Vaswani-style Transformer \"big\" encoder-decoder.",
+      "extended": "Larger of the two original variants from Vaswani et al., 2017, Table 3\n(\"big\" row): $N=6$ encoder + $N=6$ decoder layers,\n$d_{\\text{model}} = 1024$, $h = 16$ heads,\n$d_{\\text{ff}} = 4096$, dropout 0.3.  Roughly 213M parameters —\npushed BLEU on WMT 2014 En-De to 28.4 / En-Fr to 41.8 at release time.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TransformerConfig` field overrides forwarded into\nthe underlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TransformerModel",
+        "description": "Encoder-decoder trunk configured with the \"big\" size and any\noverrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import transformer_large\n>>> model = transformer_large().eval()\n>>> src = lucid.tensor([[1, 234, 567, 2]])\n>>> tgt = lucid.tensor([[1, 100, 200]])\n>>> out = model(src, decoder_input_ids=tgt)\n>>> out.logits.shape   # (B=1, T_tgt=3, d_model=1024)\n(1, 3, 1024)"
+      ],
+      "notes": [
+        "Reference: Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser,\nand Polosukhin, *\"Attention Is All You Need\"*, NeurIPS, 2017\n([arXiv:1706.03762](https://arxiv.org/abs/1706.03762)), Table 3."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerModel",
+        "type": "TransformerModel",
+        "params": 252137472,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "src_tok_emb",
+            "type": "Embedding",
+            "params": 37888000,
+            "own_params": 37888000,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "positional_encoding",
+            "type": "SinusoidalEmbedding",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "Transformer",
+            "params": 176361472,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "TransformerEncoder",
+                "params": 75579392,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerEncoderLayer",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "TransformerDecoder",
+                "params": 100782080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerDecoderLayer",
+                    "params": 16796672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": [],
+                        "repeat": 3
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 4
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "transformer_large_seq2seq",
+      "path": "lucid.models.text.transformer._pretrained.transformer_large_seq2seq",
+      "kind": "function",
+      "labels": [],
+      "signature": "transformer_large_seq2seq(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/text/transformer/_pretrained.py#L207",
+      "subcategory": "pretrained",
+      "summary": "Construct a Transformer \"big\" with a tied seq2seq-LM head.",
+      "extended": "Same trunk as `transformer_large` (N=6, d_model=1024, h=16),\naugmented with a linear LM head whose weight is tied to the target-side\nembedding when `config.tie_word_embeddings` is `True`.  Use for\nhigh-accuracy translation / summarisation fine-tunes when compute\npermits.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TransformerConfig` field overrides forwarded into\nthe underlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TransformerForSeq2SeqLM",
+        "description": "Encoder-decoder trunk wrapped with the tied LM head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.text.transformer import transformer_large_seq2seq\n>>> model = transformer_large_seq2seq().eval()\n>>> src = lucid.tensor([[1, 234, 567, 2]])\n>>> tgt = lucid.tensor([[1, 100, 200]])\n>>> out = model(src, decoder_input_ids=tgt)\n>>> out.logits.shape   # (B=1, T_tgt=3, vocab=37000)\n(1, 3, 37000)"
+      ],
+      "notes": [
+        "Reference: Vaswani et al., *\"Attention Is All You Need\"*, NeurIPS, 2017."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForSeq2SeqLM",
+        "type": "TransformerForSeq2SeqLM",
+        "params": 252137472,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 252137472,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 37888000,
+                "own_params": 37888000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 176361472,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 75579392,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 100782080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 16796672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 37888000,
+            "own_params": 37888000,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "Original Transformer family — Vaswani et al., 2017 (encoder-decoder seq2seq).",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "Transformer",
+  "citation": "Vaswani, Ashish, et al. \"Attention Is All You Need.\" Advances in Neural Information Processing Systems, 2017, pp. 5998–6008.",
+  "theory": "The Transformer replaces the recurrence of RNN-based seq2seq models\nwith **scaled dot-product attention**, enabling fully parallel\nsequence processing.  For query/key/value matrices\n$Q \\in \\mathbb{R}^{T_q \\times d_k}$,\n$K \\in \\mathbb{R}^{T_k \\times d_k}$, and\n$V \\in \\mathbb{R}^{T_k \\times d_v}$, attention is\n\n\n\n$$\n\\operatorname{Attention}(Q, K, V)\n    = \\operatorname{softmax}\\!\\left(\n        \\frac{Q K^\\top}{\\sqrt{d_k}}\n      \\right) V,\n$$\n\nwhere the $1/\\sqrt{d_k}$ factor counteracts the variance of\ndot products in high dimensions and keeps softmax gradients\nwell-conditioned.\n\n**Multi-head attention** runs $h$ parallel attention heads on\nlearned projections of $(Q, K, V)$ into $d_k = d_v =\nd_{\\text{model}} / h$ subspaces, concatenates the outputs, and\napplies a final linear:\n\n\n\n$$\n\\operatorname{MultiHead}(Q, K, V) =\n    \\operatorname{Concat}(\\text{head}_1, \\dots, \\text{head}_h)\\, W^O,\n\\qquad\n\\text{head}_i = \\operatorname{Attention}(Q W_i^Q, K W_i^K, V W_i^V).\n$$\n\nEach encoder layer stacks multi-head self-attention and a\nposition-wise feed-forward network (with hidden width\n$d_{\\text{ff}}=2048$), wrapped in residual connections and\npost-LayerNorm.  Each decoder layer adds **causal self-attention**\nover previously generated targets and **cross-attention** over the\nencoder output.\n\nPosition information is injected via **sinusoidal positional\nencodings** of fixed (untrained) frequencies, which generalise to\nsequence lengths unseen during training.  The paper's *base* model\n($N=6$ encoder/decoder layers, $d_{\\text{model}}=512$,\n$h=8$) achieves state-of-the-art WMT 2014 En-De / En-Fr BLEU\nwhile training in a fraction of the time of prior recurrent and\nconvolutional seq2seq systems — the architectural foundation for\nessentially every modern language model.",
+  "tasks": [
+    "text2text-generation",
+    "text-classification",
+    "token-classification"
+  ]
+}

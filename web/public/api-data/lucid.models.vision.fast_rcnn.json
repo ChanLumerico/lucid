@@ -1,0 +1,593 @@
+{
+  "slug": "lucid.models.vision.fast_rcnn",
+  "name": "fast_rcnn",
+  "path": "lucid.models.vision.fast_rcnn",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/__init__.py#L1",
+  "members": [
+    {
+      "name": "FastRCNNConfig",
+      "path": "lucid.models.vision.fast_rcnn._config.FastRCNNConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "FastRCNNConfig(num_classes: int = 80, in_channels: int = 3, roi_size: int = 7, spatial_scale: float = 1.0 / 16.0, dropout: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.fast_rcnn._config.FastRCNNConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 80, in_channels: int = 3, roi_size: int = 7, spatial_scale: float = 1.0 / 16.0, dropout: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for Fast R-CNN.",
+      "extended": "Fast R-CNN (Girshick, ICCV 2015) runs the CNN on the **full image once**,\nthen extracts per-proposal features with RoI Pooling on the shared feature\nmap.  This is the key advance over R-CNN (one forward pass vs one per\nproposal).\n\nDefault backbone: VGG16 conv layers (conv1_1 … conv5_3, pool5 removed).\nThe feature map stride is 16 (four max-pool layers before pool5).",
+      "parameters": [
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Foreground object classes.  Background is class 0,\n             giving (num_classes + 1) output logits.",
+          "default": "80"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Input image channels (3 for RGB).",
+          "default": "3"
+        },
+        {
+          "name": "roi_size",
+          "annotation": "int",
+          "description": "RoI Pool output spatial size (paper: 7 → 7×7).",
+          "default": "7"
+        },
+        {
+          "name": "spatial_scale",
+          "annotation": "float",
+          "description": "Ratio of feature-map size to input image size.\n             For VGG16 with pool5 removed: 1/16.",
+          "default": "1.0 / 16.0"
+        },
+        {
+          "name": "dropout",
+          "annotation": "float",
+          "description": "Dropout probability after fc6 and fc7.",
+          "default": "0.5"
+        },
+        {
+          "name": "bbox_reg_weights",
+          "annotation": "tuple[float, float, float, float]",
+          "description": "Per-component weight scaling for bbox regression\n              targets (tx, ty, tw, th).  Matches the paper's\n              normalisation by (0, 0, 0, 0) mean / (0.1, 0.1,\n              0.2, 0.2) std, encoded here as multiplicative\n              weights.",
+          "default": "(10.0, 10.0, 5.0, 5.0)"
+        },
+        {
+          "name": "score_thresh",
+          "annotation": "float",
+          "description": "Minimum class score at inference time.",
+          "default": "0.05"
+        },
+        {
+          "name": "nms_thresh",
+          "annotation": "float",
+          "description": "Per-class NMS IoU threshold.",
+          "default": "0.5"
+        },
+        {
+          "name": "max_detections",
+          "annotation": "int",
+          "description": "Maximum detections returned per image.",
+          "default": "300"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "FastRCNNForObjectDetection",
+      "path": "lucid.models.vision.fast_rcnn._model.FastRCNNForObjectDetection",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "FastRCNNForObjectDetection(config: FastRCNNConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/_model.py#L165",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.fast_rcnn._model.FastRCNNForObjectDetection.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: FastRCNNConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/_model.py#L253",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.fast_rcnn._model.FastRCNNForObjectDetection.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, proposals: list[Tensor] | None = None, targets: list[dict[str, Tensor]] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/_model.py#L438",
+          "subcategory": "model",
+          "summary": "Run Fast R-CNN on a batch of images.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "(B, C, H, W) image batch.",
+              "default": null
+            },
+            {
+              "name": "proposals",
+              "annotation": "list[Tensor] | None",
+              "description": "list of B tensors, each (N_i, 4) xyxy proposals.",
+              "default": "None"
+            },
+            {
+              "name": "targets",
+              "annotation": "list[dict[str, Tensor]] | None",
+              "description": "Optional training targets (list of dicts with\n       \"boxes\" and \"labels\").",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "ObjectDetectionOutput",
+            "description": "`ObjectDetectionOutput`:\n`logits`     : (Σ N_i, num_classes + 1) raw class logits.\n`pred_boxes` : (Σ N_i, 4) decoded xyxy top-class boxes.\n`loss`       : scalar multi-task loss (only with targets)."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "postprocess",
+          "path": "lucid.models.vision.fast_rcnn._model.FastRCNNForObjectDetection.postprocess",
+          "kind": "function",
+          "labels": [],
+          "signature": "postprocess(output: ObjectDetectionOutput, proposals: list[Tensor])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/_model.py#L531",
+          "subcategory": "model",
+          "summary": "Apply per-class NMS to raw Fast R-CNN output.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "output",
+              "annotation": "ObjectDetectionOutput",
+              "description": "`ObjectDetectionOutput` from `forward()`.",
+              "default": null
+            },
+            {
+              "name": "proposals",
+              "annotation": "list[Tensor]",
+              "description": "Proposal list passed to `forward()` (for shape info).",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "list[dict[str, Tensor]]",
+            "description": "Per-image list of result dicts:\n`\"boxes\"`  : (K_det, 4)  kept xyxy detections\n`\"scores\"` : (K_det,)    class confidence scores\n`\"labels\"` : (K_det,)    class indices (1-based)"
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Fast R-CNN object detector (Girshick, ICCV 2015).",
+      "extended": "The successor to R-CNN that fixes its main bottleneck: rather than running\nthe CNN once *per proposal*, the backbone is applied **once** to the whole\nimage, and per-proposal features are extracted via `roi_pool` over\nthe shared feature map (7x7 at stride 16 for the VGG16 default).  The\npooled tensor is flattened, passed through two FC layers\n(`fc6`, `fc7`), and split into sibling class (`cls_score`) and\nclass-specific bounding-box (`bbox_pred`) heads.  At training time the\nmodel computes the paper's multi-task loss\n\n$$\nL = L_{\\mathrm{cls}} + \\lambda\\, L_{\\mathrm{loc}},\n$$\nwith $L_{\\mathrm{cls}}$ the categorical cross-entropy and\n$L_{\\mathrm{loc}}$ the smooth-$L_1$ regression loss applied\nonly to foreground proposals.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "FastRCNNConfig",
+          "description": "Frozen architecture spec.  Use the `fast_rcnn` factory for\nthe paper-cited VGG16 configuration (RoI 7x7, stride-16 feature\nmap, 80 COCO classes).",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Inference with externally-supplied proposals:\n>>> import lucid\n>>> from lucid.models.vision.fast_rcnn import fast_rcnn\n>>> model = fast_rcnn(num_classes=20)\n>>> x = lucid.randn(1, 3, 600, 800)\n>>> proposals = [lucid.tensor(\n...     [[10.0, 10.0, 200.0, 200.0],\n...      [50.0, 60.0, 300.0, 280.0]])]\n>>> out = model(x, proposals)\n>>> out.logits.shape\n(2, 21)\n>>> out.loss is None\nTrue\nTraining with ground-truth targets to compute the multi-task loss:\n>>> targets = [{\n...     \"boxes\":  lucid.tensor([[20.0, 20.0, 180.0, 180.0]]),\n...     \"labels\": lucid.tensor([3], dtype=lucid.int64),\n... }]\n>>> out = model(x, proposals, targets=targets)\n>>> out.loss.shape\n()"
+      ],
+      "notes": [
+        "See Girshick, \"Fast R-CNN\", ICCV 2015 ([arXiv:1504.08083](https://arxiv.org/abs/1504.08083)).  Bounding-box\ntargets follow the paper's parameterisation\n\n$$\nt_x = w_x \\frac{G_x - P_x}{P_w},\\quad\nt_y = w_y \\frac{G_y - P_y}{P_h},\\quad\nt_w = w_w \\log\\!\\frac{G_w}{P_w},\\quad\nt_h = w_h \\log\\!\\frac{G_h}{P_h},\n$$\nwith the default normalisation weights $(w_x, w_y, w_w, w_h) = (10, 10, 5, 5)$ matching the Fast R-CNN Caffe reference.  RoI Pool (not\nRoI Align) is used to preserve faithfulness — see `MaskRCNNForObjectDetection`\nfor the RoI Align successor.  Per-class boxes are decoded for all classes\nand per-class NMS is applied by `postprocess`."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "FastRCNNConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "backbone",
+          "annotation": "_VGG16Features",
+          "description": "VGG16 conv1_1 .. conv5_3 trunk (pool5 omitted) producing a\n$(B, 512, H/16, W/16)$ feature map."
+        },
+        {
+          "name": "roi_head",
+          "annotation": "_FastRCNNHead",
+          "description": "RoI feature processor: flatten -> `fc6` (4096) -> `fc7` (4096)\n-> sibling `cls_score` (K + 1 logits) and `bbox_pred`\n(4K class-specific deltas)."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fast_rcnn",
+      "path": "lucid.models.vision.fast_rcnn._pretrained.fast_rcnn",
+      "kind": "function",
+      "labels": [],
+      "signature": "fast_rcnn(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/fast_rcnn/_pretrained.py#L26",
+      "subcategory": "pretrained",
+      "summary": "Fast R-CNN with VGG16 backbone (Girshick, ICCV 2015).",
+      "extended": "Builds a `FastRCNNForObjectDetection` with the paper-cited\nVGG16 topology: shared backbone applied once to the full image, then\n7x7 RoI Pool over the stride-16 feature map followed by two 4096-dim\nFC layers and sibling K+1 / 4K heads.  Approximately 138M parameters\n(most in the FC layers) and ~146x faster training than R-CNN while\nreaching the same VOC2007 mAP of 66.9% (paper Table 1).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `FastRCNNConfig`\n(`num_classes`, `score_thresh`, `nms_thresh`,\n`max_detections`, `bbox_reg_weights`, `dropout`, ...).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "FastRCNNForObjectDetection",
+        "description": "Detector with the Fast R-CNN VGG16 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.fast_rcnn import fast_rcnn\n>>> model = fast_rcnn(num_classes=80)\n>>> x = lucid.randn(1, 3, 600, 800)\n>>> proposals = [lucid.tensor(\n...     [[10.0, 10.0, 200.0, 200.0],\n...      [50.0, 60.0, 300.0, 280.0]])]\n>>> out = model(x, proposals)\n>>> out.logits.shape, out.pred_boxes.shape\n((2, 81), (2, 80, 4))"
+      ],
+      "notes": [
+        "See Girshick, \"Fast R-CNN\", ICCV 2015 ([arXiv:1504.08083](https://arxiv.org/abs/1504.08083)).  Region\nproposals must still be supplied externally — the Faster R-CNN\nsuccessor folds proposal generation into the network via the Region\nProposal Network (RPN).  The default `spatial_scale = 1/16` matches\nVGG16's four max-pool layers before pool5."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "FastRCNNForObjectDetection",
+        "type": "FastRCNNForObjectDetection",
+        "params": 135903441,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_VGG16Features",
+            "params": 14714688,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "features",
+                "type": "Sequential",
+                "params": 14714688,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 1792,
+                    "own_params": 1792,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 36928,
+                    "own_params": 36928,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "Conv2d",
+                    "params": 73856,
+                    "own_params": 73856,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "8",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "9",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "10",
+                    "type": "Conv2d",
+                    "params": 295168,
+                    "own_params": 295168,
+                    "children": []
+                  },
+                  {
+                    "name": "11",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "12",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "13",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "14",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "15",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "16",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "17",
+                    "type": "Conv2d",
+                    "params": 1180160,
+                    "own_params": 1180160,
+                    "children": []
+                  },
+                  {
+                    "name": "18",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "19",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "20",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "21",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "22",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "23",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "24",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "25",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "26",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "27",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "28",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "29",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "roi_head",
+            "type": "_FastRCNNHead",
+            "params": 121188753,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc6",
+                "type": "Linear",
+                "params": 102764544,
+                "own_params": 102764544,
+                "children": []
+              },
+              {
+                "name": "fc7",
+                "type": "Linear",
+                "params": 16781312,
+                "own_params": 16781312,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "cls_score",
+                "type": "Linear",
+                "params": 331857,
+                "own_params": 331857,
+                "children": []
+              },
+              {
+                "name": "bbox_pred",
+                "type": "Linear",
+                "params": 1311040,
+                "own_params": 1311040,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "Fast R-CNN — object detection (Girshick, ICCV 2015).",
+  "extended": "Paper: \"Fast R-CNN\"",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "Fast R-CNN",
+  "citation": "Girshick, Ross. \"Fast R-CNN.\" Proceedings of the IEEE International Conference on Computer Vision, 2015, pp. 1440–1448.",
+  "theory": "Fast R-CNN closes the dominant performance gap of R-CNN — the\none-CNN-forward-per-proposal cost — by sharing convolutional\ncomputation across all proposals in an image.\n\nThe CNN is run **once** on the full image, producing a feature\nmap at stride $s$ (e.g. $s = 16$ for VGG-16).  For\neach region proposal, **RoI Pooling** extracts a fixed-size\n$H \\times W$ (paper: $7 \\times 7$) sub-window from\nthe shared feature map by quantising the proposal coordinates to\nthe feature grid and max-pooling adaptively inside each cell.\n\nThe pooled features feed two FC layers and **two sibling output\nheads**:\n\n\n\n$$\nL(p, u, t^u, v) = L_{\\mathrm{cls}}(p, u)\n    + \\lambda \\, [u \\ge 1] \\, L_{\\mathrm{loc}}(t^u, v),\n$$\n\nwhere $L_{\\mathrm{cls}}$ is softmax log-loss over\n$K+1$ classes and $L_{\\mathrm{loc}}$ is the smooth\n$\\ell_1$ regression loss on the parameterised offsets\n$t^u$ for the predicted class $u$.  The Iverson\nbracket $[u \\ge 1]$ disables regression on background RoIs.\n\nBeyond the speedup (≈9× training, ≈213× inference over R-CNN),\nFast R-CNN replaces the SVM + post-hoc regressor with a single\nmulti-task network, which **improves accuracy** because gradients\nfrom both heads jointly tune the shared trunk.",
+  "tasks": [
+    "object-detection"
+  ]
+}

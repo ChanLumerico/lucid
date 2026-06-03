@@ -1,0 +1,199 @@
+{
+  "slug": "lucid.einops",
+  "name": "einops",
+  "path": "lucid.einops",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L1",
+  "members": [
+    {
+      "name": "rearrange",
+      "path": "lucid.einops.rearrange",
+      "kind": "function",
+      "labels": [],
+      "signature": "rearrange(tensor: Tensor, pattern: str, axes_lengths: int = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L14",
+      "subcategory": null,
+      "summary": "Rearrange axes of `tensor` according to an einops pattern.",
+      "extended": "Performs arbitrary axis manipulation — transpose, reshape,\ncomposition, and decomposition — expressed in a single readable\npattern string. The notation makes the intent explicit and removes\nthe chain of `transpose`/`view` calls that obscure dimensionality\ntransforms in raw tensor code.",
+      "parameters": [
+        {
+          "name": "tensor",
+          "annotation": "Tensor",
+          "description": "Input tensor to rearrange.",
+          "default": null
+        },
+        {
+          "name": "pattern",
+          "annotation": "str",
+          "description": "Einops pattern of the form `\"<lhs> -> <rhs>\"`. Parentheses\ngroup axes for composition or decomposition.",
+          "default": null
+        },
+        {
+          "name": "**axes_lengths",
+          "annotation": "int",
+          "description": "Named axis sizes used to disambiguate decomposed groups.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "The rearranged tensor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.rearrange(x, \"b h w -> b (h w)\").shape\n(2, 12)"
+      ],
+      "notes": [
+        "The transformation is purely a reshape and permutation — no data is\ncopied unless required by memory layout. Typical patterns include\n`\"b c h w -> b (h w) c\"` for flattening spatial dims into a token\nsequence, and `\"b (h w) c -> b c h w\"` for the inverse."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "reduce",
+      "path": "lucid.einops.reduce",
+      "kind": "function",
+      "labels": [],
+      "signature": "reduce(tensor: Tensor, pattern: str, reduction: str, axes_lengths: int = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L55",
+      "subcategory": null,
+      "summary": "Reduce `tensor` along axes implied by an einops pattern.",
+      "extended": "Generalises standard `sum` / `mean` / `max` / `min` /\n`prod` reductions to arbitrary axes selected by symbolic pattern.\nAny axis present on the left-hand side of `->` but absent on the\nright-hand side is collapsed by the chosen reduction.",
+      "parameters": [
+        {
+          "name": "tensor",
+          "annotation": "Tensor",
+          "description": "Input tensor to reduce.",
+          "default": null
+        },
+        {
+          "name": "pattern",
+          "annotation": "str",
+          "description": "Einops pattern such as `\"b h w -> b w\"`.",
+          "default": null
+        },
+        {
+          "name": "reduction",
+          "annotation": "str",
+          "description": "Reduction operation; one of `\"sum\"`, `\"mean\"`, `\"max\"`,\n`\"min\"`, `\"prod\"`.",
+          "default": null
+        },
+        {
+          "name": "**axes_lengths",
+          "annotation": "int",
+          "description": "Named axis sizes used to disambiguate decomposed groups.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "The reduced tensor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.reduce(x, \"b h w -> b w\", \"mean\").shape\n(2, 4)"
+      ],
+      "notes": [
+        "Conceptually equivalent to a permutation followed by a reduction\nalong contiguous trailing axes. For `reduction=\"mean\"` the result\nis\n\n$$\ny_{b w} = \\frac{1}{H} \\sum_{h=1}^{H} x_{b h w}.\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "repeat",
+      "path": "lucid.einops.repeat",
+      "kind": "function",
+      "labels": [],
+      "signature": "repeat(tensor: Tensor, pattern: str, axes_lengths: int = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L105",
+      "subcategory": null,
+      "summary": "Repeat `tensor` along new or existing axes via an einops pattern.",
+      "extended": "Provides a single notation for both tiling along existing axes and\nbroadcasting into entirely new axes. The pattern's right-hand side\nenumerates the desired output axes; any axis appearing on the right\nbut not on the left is introduced and must be given an explicit\nlength through `**axes_lengths`.",
+      "parameters": [
+        {
+          "name": "tensor",
+          "annotation": "Tensor",
+          "description": "Input tensor to repeat.",
+          "default": null
+        },
+        {
+          "name": "pattern",
+          "annotation": "str",
+          "description": "Einops pattern such as `\"b h w -> b h w c\"` (new axis `c`).",
+          "default": null
+        },
+        {
+          "name": "**axes_lengths",
+          "annotation": "int",
+          "description": "Sizes for every new axis introduced by the pattern.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "The repeated tensor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.repeat(x, \"b h w -> b h w c\", c=5).shape\n(2, 3, 4, 5)"
+      ],
+      "notes": [
+        "For an axis $c$ of size $C$ introduced via `repeat`,\n\n$$\ny_{b h w c} = x_{b h w}, \\quad c = 1, \\ldots, C.\n$$\nNo data is materialised until reading — internally the new axis is\nexpressed as a broadcast / stride manipulation when possible."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "einsum",
+      "path": "lucid.einops.einsum",
+      "kind": "function",
+      "labels": [],
+      "signature": "einsum(equation: str, operands: Tensor = ())",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L149",
+      "subcategory": null,
+      "summary": "Evaluate an Einstein-summation expression over the given tensors.",
+      "extended": "Implements the general tensor contraction operator: each input is\nindexed by labels declared in `equation` and the output retains\nonly the labels appearing on the right-hand side. Repeated labels\nare summed; matching labels broadcast.",
+      "parameters": [
+        {
+          "name": "equation",
+          "annotation": "str",
+          "description": "Einsum equation of the form `\"<lhs1>,<lhs2>,... -> <rhs>\"`.",
+          "default": null
+        },
+        {
+          "name": "*operands",
+          "annotation": "Tensor",
+          "description": "Tensors corresponding to the comma-separated factors on the\nleft-hand side.",
+          "default": "()"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Tensor whose axes correspond to the labels on the right-hand\nside of `equation`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> a = lucid.randn(2, 3)\n>>> b = lucid.randn(3, 4)\n>>> lucid.einops.einsum(\"ij,jk->ik\", a, b).shape\n(2, 4)"
+      ],
+      "notes": [
+        "Matrix multiplication is the canonical example: `\"ij,jk->ik\"`\nrealises\n\n$$\nC_{ik} = \\sum_{j} A_{ij} \\, B_{jk}.\n$$\nMore generally, einsum expresses traces (`\"ii->\"`), batched\ncontractions (`\"bij,bjk->bik\"`), and outer products\n(`\"i,j->ij\"`) within one consistent notation."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": null,
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

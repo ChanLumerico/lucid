@@ -1,0 +1,702 @@
+{
+  "slug": "lucid.models.vision.zfnet",
+  "name": "zfnet",
+  "path": "lucid.models.vision.zfnet",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/__init__.py#L1",
+  "members": [
+    {
+      "name": "ZFNetConfig",
+      "path": "lucid.models.vision.zfnet._config.ZFNetConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "ZFNetConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.zfnet._config.ZFNetConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for ZFNet (Zeiler & Fergus, 2013).",
+      "extended": "ZFNet is an AlexNet variant with modified first two conv layers:\n- Conv1: 7×7 stride=2 pad=1 (vs AlexNet's 11×11 stride=4)\n- Conv2: 5×5 stride=2 (vs AlexNet's 5×5 stride=1)",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ZFNet",
+      "path": "lucid.models.vision.zfnet._model.ZFNet",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "ZFNet(config: ZFNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L57",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.zfnet._model.ZFNet.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: ZFNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L122",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.zfnet._model.ZFNet.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L135",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.zfnet._model.ZFNet.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L138",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.zfnet._model.ZFNet.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L142",
+          "subcategory": "model",
+          "summary": "Run Faster R-CNN on a batch of images.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": null,
+              "description": "(B, C, H, W) image batch.",
+              "default": null
+            },
+            {
+              "name": "targets",
+              "annotation": null,
+              "description": "Optional training targets (list of dicts with\n     \"boxes\" and \"labels\").",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "BaseModelOutput",
+            "description": "`ObjectDetectionOutput`:\n`logits`     : (Σ proposals, num_classes+1) raw class logits.\n`pred_boxes` : (Σ proposals, 4) decoded xyxy boxes.\n`loss`       : total loss when targets provided."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "ZFNet feature-extracting backbone (no fully-connected head).",
+      "extended": "Implements the five-stage convolutional trunk from Zeiler & Fergus,\n\"Visualizing and Understanding Convolutional Networks\", ECCV 2014.\nZFNet is best understood as an AlexNet that was *retuned by\ninspecting what each filter had learned*: the deconvolutional-\nnetwork visualisation technique introduced in the same paper\nrevealed that AlexNet's $11\\times11$ stride-4 first\nconvolution was producing a mixture of extremely high-frequency\nand dead filters, and that its stride-2 second convolution was\nintroducing aliasing artefacts.  Both layers were tightened\naccordingly — Conv1 became $7\\times7$ stride-2, Conv2 kept\n$5\\times5$ but with stride 2 — while the remaining layers\nretain AlexNet's topology.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "ZFNetConfig",
+          "description": "Frozen architecture spec.  Use `zfnet` for the paper-cited\nconfiguration; pass a custom config to override input channel\ncount or dropout strength.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.zfnet import zfnet\n>>> backbone = zfnet()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape   # (B, 256, 6, 6)\n(2, 256, 6, 6)"
+      ],
+      "notes": [
+        "From Zeiler & Fergus, \"Visualizing and Understanding Convolutional\nNetworks\", ECCV 2014.  The paper reports a single-model top-5\nImageNet validation error of 11.7%, an improvement of roughly four\npercentage points over the published AlexNet number, achieved with\nessentially the same parameter and FLOP budget.  More important\nthan the accuracy gain was the *methodology*: ZFNet popularised\nusing interpretability tooling to diagnose and fix early-layer\nproblems, an idea that propagates directly to every later vision-\nsaliency / Grad-CAM-style analysis."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "ZFNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features",
+          "annotation": "nn.Sequential",
+          "description": "The five conv blocks with `lucid.nn.LocalResponseNorm`\nafter blocks 1 and 2 and $3\\times3$ max-pools after blocks\n1, 2, 5 — see `_build_features` for the exact layer chain."
+        },
+        {
+          "name": "avgpool",
+          "annotation": "nn.AdaptiveAvgPool2d",
+          "description": "Global pool down to a $6\\times6$ spatial map so the\nbackbone produces a fixed-size feature regardless of input\nresolution."
+        },
+        {
+          "name": "feature_info",
+          "annotation": "list[FeatureInfo]",
+          "description": "Per-stage descriptor (channels + reduction factor) exposed via\n`BackboneMixin`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ZFNetForImageClassification",
+      "path": "lucid.models.vision.zfnet._model.ZFNetForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "ZFNetForImageClassification(config: ZFNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L151",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.zfnet._model.ZFNetForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: ZFNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L205",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.zfnet._model.ZFNetForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L215",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "ZFNet with two 4096-dim fully-connected layers and a linear classifier.",
+      "extended": "Combines a `ZFNet` convolutional backbone with the\nAlexNet-style classifier head: FC6 (256·6·6 → 4096), FC7\n(4096 → 4096), and a final linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\n`lucid.nn.Dropout` with `config.dropout` (0.5 in the\npaper) is applied after both ReLU activations.  When `labels` are\nsupplied to `forward`, cross-entropy loss is returned\nalongside the logits.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "ZFNetConfig",
+          "description": "Architecture spec.  Use `zfnet_cls` for the paper-cited\nImageNet-1k configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.zfnet import zfnet_cls\n>>> model = zfnet_cls()\n>>> x = lucid.randn(4, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)"
+      ],
+      "notes": [
+        "From Zeiler & Fergus, \"Visualizing and Understanding Convolutional\nNetworks\", ECCV 2014, §3.  Top-5 ImageNet-1k validation error in\nthe paper is 11.7%.  The classifier head is identical to AlexNet's\nby design — ZFNet's contribution lives entirely in the first two\nconvolutional layers."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "ZFNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features, avgpool",
+          "annotation": null,
+          "description": "Same backbone components as on `ZFNet`."
+        },
+        {
+          "name": "fc6, fc7",
+          "annotation": "nn.Linear",
+          "description": "The two 4096-dim hidden fully-connected layers."
+        },
+        {
+          "name": "drop6, drop7",
+          "annotation": "nn.Dropout",
+          "description": "Dropout layers applied after each ReLU in the hidden stack,\ncontrolled by `config.dropout`."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Module",
+          "description": "Final linear projection 4096 → `num_classes`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "zfnet",
+      "path": "lucid.models.vision.zfnet._pretrained.zfnet",
+      "kind": "function",
+      "labels": [],
+      "signature": "zfnet(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_pretrained.py#L19",
+      "subcategory": "pretrained",
+      "summary": "ZFNet feature-extracting backbone (no fully-connected head).",
+      "extended": "Builds a `ZFNet` with the paper-cited Zeiler & Fergus 2014\ntopology: five convolutional blocks with a tightened\n$7\\times7$ stride-2 first convolution and a $5\\times5$\nstride-2 second convolution (versus AlexNet's $11\\times11$\nstride-4 and $5\\times5$ stride-1).  Approximately 62 M\nparameters in the full classifier variant — the topology difference\nversus AlexNet does not change the headline parameter count.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored — the returned model is randomly initialised.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `ZFNetConfig` (e.g.\n`in_channels=1` for grayscale inputs).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ZFNet",
+        "description": "Backbone with the ZFNet configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.zfnet import zfnet\n>>> model = zfnet()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 256, 6, 6)\n(1, 256, 6, 6)"
+      ],
+      "notes": [
+        "See Zeiler & Fergus, \"Visualizing and Understanding Convolutional\nNetworks\", ECCV 2014.  The paper reports a top-5 ImageNet validation\nerror of 11.7% — an improvement over AlexNet's 15.3% achieved with\nessentially the same parameter count by retuning the first two conv\nlayers based on deconvolutional-network visualisations.  ZFNet is a\nsingle architecture; there are no paper-cited size variants (H11)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ZFNet",
+        "type": "ZFNet",
+        "params": 3726464,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 3726464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 14208,
+                "own_params": 14208,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 614656,
+                "own_params": 614656,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 885120,
+                "own_params": 885120,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 1327488,
+                "own_params": 1327488,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 884992,
+                "own_params": 884992,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "zfnet_cls",
+      "path": "lucid.models.vision.zfnet._pretrained.zfnet_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "zfnet_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_pretrained.py#L80",
+      "subcategory": "pretrained",
+      "summary": "ZFNet image classifier (backbone + FC6 + FC7 + linear head).",
+      "extended": "Builds a `ZFNetForImageClassification` with the paper-cited\nZeiler & Fergus 2014 topology and the AlexNet-style two-layer\n4096-dim FC head.  Approximately 62 M parameters total.  Achieves\na top-5 ImageNet-1k validation error of 11.7% in the original\npaper.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `ZFNetConfig`.  Use\n`num_classes=N` to retarget the head and `dropout=p` to\nadjust regularisation.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ZFNetForImageClassification",
+        "description": "Classifier with the ZFNet configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.zfnet import zfnet_cls\n>>> model = zfnet_cls()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)"
+      ],
+      "notes": [
+        "See Zeiler & Fergus, \"Visualizing and Understanding Convolutional\nNetworks\", ECCV 2014, §3.  The classifier head is identical to\nAlexNet's by design."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "ZFNetForImageClassification",
+        "type": "ZFNetForImageClassification",
+        "params": 62357608,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 3726464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 14208,
+                "own_params": 14208,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 614656,
+                "own_params": 614656,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 885120,
+                "own_params": 885120,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 1327488,
+                "own_params": 1327488,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 884992,
+                "own_params": 884992,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 37752832,
+            "own_params": 37752832,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "ZFNet family — backbone + image classification.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "ZFNet",
+  "citation": "Zeiler, Matthew D., and Rob Fergus. \"Visualizing and Understanding Convolutional Networks.\" European Conference on Computer Vision (ECCV), 2014.",
+  "theory": "ZFNet is the ILSVRC-2013 winner and is best understood as an\nAlexNet that was *tuned by looking at what the network had\nlearned*.  Zeiler and Fergus introduced the *deconvolutional\nnetwork* visualisation technique — projecting individual feature-\nmap activations back to the input pixel space — and used the\nresulting diagnostic images to reshape the early layers of the\nnetwork.\n\nTwo specific changes distinguish ZFNet from AlexNet.  The first\nconvolution was reduced from an $11\\times11$ stride-4 kernel\nto a $7\\times7$ stride-2 kernel, addressing the observation\nthat AlexNet's first layer learned a mixture of extremely\nhigh-frequency and dead filters.  The second convolution's stride\nwas simultaneously dropped from 2 to a more moderate value, giving\ndenser low-level feature coverage and avoiding aliasing artefacts\nthat the visualisations had revealed.  The remaining layers retain\nAlexNet's topology.\n\nThese modest topological changes — together with the *methodology*\nof using visualisation to drive architectural choices — were\ninfluential out of proportion to their parameter cost.  ZFNet\nachieved a top-5 error of 11.7% on ImageNet, and the\ndeconvolutional-network analysis it popularised is the conceptual\nancestor of every later interpretability tool from Grad-CAM to\nfeature inversion.",
+  "tasks": [
+    "image-classification"
+  ]
+}

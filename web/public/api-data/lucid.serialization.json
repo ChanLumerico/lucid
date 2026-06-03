@@ -1,0 +1,289 @@
+{
+  "slug": "lucid.serialization",
+  "name": "serialization",
+  "path": "lucid.serialization",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/serialization/__init__.py#L1",
+  "members": [
+    {
+      "name": "save",
+      "path": "lucid.serialization.save",
+      "kind": "function",
+      "labels": [],
+      "signature": "save(obj: object, f: str | bytes | io.IOBase, pickle_protocol: int = 4)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/serialization/__init__.py#L103",
+      "subcategory": null,
+      "summary": "Serialise `obj` to a Lucid-format checkpoint file.",
+      "extended": "Writes a pickle stream augmented with a custom persistent-id\nprotocol that captures every embedded `Tensor` as a typed\nbyte blob rather than a numpy array. The resulting `.lucid` file\ncan be reloaded in environments without numpy installed.",
+      "parameters": [
+        {
+          "name": "obj",
+          "annotation": "object",
+          "description": "Object graph to serialise. `dict` / `OrderedDict` state\ndicts are the primary use case; arbitrary picklable objects are\nalso supported.",
+          "default": null
+        },
+        {
+          "name": "f",
+          "annotation": "str, bytes, or file-like",
+          "description": "Destination path or open binary file handle.",
+          "default": null
+        },
+        {
+          "name": "pickle_protocol",
+          "annotation": "int",
+          "description": "Pickle protocol version forwarded to the underlying\n`pickle.Pickler`. Default `4`.",
+          "default": "4"
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> sd = {\"w\": lucid.randn(3, 3)}\n>>> lucid.serialization.save(sd, \"ckpt.lucid\")"
+      ],
+      "notes": [
+        "State dicts produced by `Module.state_dict()` carry a hidden\n`_metadata` attribute storing version information per submodule.\nThat attribute is detected, packed alongside `obj` in the\ncontainer, and reattached on `load`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "load",
+      "path": "lucid.serialization.load",
+      "kind": "function",
+      "labels": [],
+      "signature": "load(f: str | bytes | io.IOBase, map_location: str | Callable[[str, str], str] | dict[str, str] | None = None, weights_only: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/serialization/__init__.py#L157",
+      "subcategory": null,
+      "summary": "Load an object saved by `save` or `save_safetensors`.",
+      "extended": "By default uses a restricted unpickler that only permits a small\nwhitelist of safe primitive types — sufficient for state dicts but\nnot for arbitrary objects. Disable this with `weights_only=False`\nonly for trusted files; arbitrary pickle deserialisation can execute\ncode.",
+      "parameters": [
+        {
+          "name": "f",
+          "annotation": "str, bytes, or file-like",
+          "description": "Source path or open binary file handle. Paths ending in\n`.safetensors` are delegated to `load_safetensors`.",
+          "default": null
+        },
+        {
+          "name": "map_location",
+          "annotation": "str, dict, callable, or None",
+          "description": "Device remapping applied to every loaded tensor. A bare string\nmoves all tensors to that device; a `dict` maps source device\nnames to targets; a callable receives `(tensor, source_device)`\nand returns the relocated tensor.",
+          "default": "None"
+        },
+        {
+          "name": "weights_only",
+          "annotation": "bool",
+          "description": "If `True` (default), restrict deserialisation to a safe type\nwhitelist. Set to `False` only for fully trusted checkpoints.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "object",
+        "description": "The deserialised object, with `_metadata` reattached for\nstate-dict round-trips."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> sd = lucid.serialization.load(\"ckpt.lucid\")"
+      ],
+      "notes": [
+        "Implements two formats: the current persistent-id format\n(`\"tensor_v3\"`) plus a backward-compatible path for v1/v2\ncheckpoints that previously round-tripped through numpy."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "save_sharded",
+      "path": "lucid.serialization.save_sharded",
+      "kind": "function",
+      "labels": [],
+      "signature": "save_sharded(obj: object, path: str | bytes, shard_size_mb: float = 1024.0, pickle_protocol: int = 4)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/serialization/__init__.py#L278",
+      "subcategory": null,
+      "summary": "Save `obj` as a sharded, self-describing checkpoint directory.",
+      "extended": "Splits a state dict across multiple shard files capped at\n`shard_size_mb` MiB each and emits a JSON index listing which keys\nlive in which shard. Useful for very large models where a single\nmonolithic file is impractical to host, partial-load, or\ndownload-resume.",
+      "parameters": [
+        {
+          "name": "obj",
+          "annotation": "object",
+          "description": "Object to save. `dict` / `OrderedDict` state dicts are\nsharded; other types are written as a single shard for\ncompatibility with `load_sharded`.",
+          "default": null
+        },
+        {
+          "name": "path",
+          "annotation": "str or bytes",
+          "description": "Destination *directory*. Created if it does not exist.",
+          "default": null
+        },
+        {
+          "name": "shard_size_mb",
+          "annotation": "float",
+          "description": "Soft cap on per-shard size in MiB. A tensor exceeding the cap\ngets its own shard. Default `1024.0`.",
+          "default": "1024.0"
+        },
+        {
+          "name": "pickle_protocol",
+          "annotation": "int",
+          "description": "Pickle protocol forwarded to every per-shard `save`.\nDefault `4`.",
+          "default": "4"
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> sd = {\"w\": lucid.randn(4096, 4096)}\n>>> lucid.serialization.save_sharded(sd, \"ckpt_dir\", shard_size_mb=64)"
+      ],
+      "notes": [
+        "The packing algorithm is a first-fit pass that never splits a\nsingle tensor across shards — preserving the property that any\ngiven key resolves to exactly one file. The index records the\noptional `_metadata` attribute when present on a state dict."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "load_sharded",
+      "path": "lucid.serialization.load_sharded",
+      "kind": "function",
+      "labels": [],
+      "signature": "load_sharded(path: str | bytes, map_location: str | Callable[[str, str], str] | dict[str, str] | None = None, weights_only: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/serialization/__init__.py#L385",
+      "subcategory": null,
+      "summary": "Load a sharded checkpoint directory written by `save_sharded`.",
+      "extended": "Reads `index.json`, then deserialises each shard with `load`\nand merges the results into a single `OrderedDict` preserving key\norder. The `_metadata` attribute, if stored in the index, is\nreattached to the merged dictionary.",
+      "parameters": [
+        {
+          "name": "path",
+          "annotation": "str or bytes",
+          "description": "Directory containing `index.json` and the per-shard files.",
+          "default": null
+        },
+        {
+          "name": "map_location",
+          "annotation": "str, dict, callable, or None",
+          "description": "Device remapping forwarded to each per-shard `load` call.",
+          "default": "None"
+        },
+        {
+          "name": "weights_only",
+          "annotation": "bool",
+          "description": "If `True` (default), restrict deserialisation to a safe type\nwhitelist.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "OrderedDict or object",
+        "description": "The merged state dict; for single-shard non-dict objects, the\nunderlying object as written."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> sd = lucid.serialization.load_sharded(\"ckpt_dir\")"
+      ],
+      "notes": [
+        "Shard order is taken from the index file — the function does not\nrely on filesystem listing order, so reproducibility is preserved\nacross hosts."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "save_safetensors",
+      "path": "lucid.serialization.save_safetensors",
+      "kind": "function",
+      "labels": [],
+      "signature": "save_safetensors(state_dict: dict[str, object], path: str, metadata: dict[str, str] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/serialization/__init__.py#L485",
+      "subcategory": null,
+      "summary": "Save a flat state dict as a SafeTensors file.",
+      "extended": "SafeTensors is the recommended interchange format for sharing model\nweights: the file layout is a small JSON header followed by raw\ntensor bytes, so loading is fast, zero-copy where possible, and free\nof pickle's code-execution surface area. Use this whenever a\ncheckpoint may be shared with untrusted parties.",
+      "parameters": [
+        {
+          "name": "state_dict",
+          "annotation": "dict of str to Tensor",
+          "description": "Flat mapping from parameter name to `Tensor`. Nested\ndicts or non-tensor values raise `TypeError`.",
+          "default": null
+        },
+        {
+          "name": "path",
+          "annotation": "str",
+          "description": "Destination file path; use a `.safetensors` suffix by\nconvention.",
+          "default": null
+        },
+        {
+          "name": "metadata",
+          "annotation": "dict of str to str",
+          "description": "Free-form string metadata stored in the file header (model\nversion, training framework, etc.).",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> sd = {\"w\": lucid.randn(3, 3)}\n>>> lucid.serialization.save_safetensors(sd, \"weights.safetensors\")"
+      ],
+      "notes": [
+        "Requires the optional `safetensors` Python package\n(`pip install safetensors`). The numpy backend used here does not\naccept bfloat16 — cast such tensors to float32 first. Zero-rank\nscalars are promoted to shape `(1,)` on write and squeezed back to\n`()` on load via a private metadata key."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "load_safetensors",
+      "path": "lucid.serialization.load_safetensors",
+      "kind": "function",
+      "labels": [],
+      "signature": "load_safetensors(path: str, device: str = 'cpu')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/serialization/__init__.py#L558",
+      "subcategory": null,
+      "summary": "Load a SafeTensors file into a flat state dict.",
+      "extended": "Reads the entire file lazily through the `safetensors` Python\npackage, converts each tensor to a Lucid `Tensor`, optionally\nrelocates to the requested device, and restores any zero-rank\nscalars that were promoted to shape `(1,)` during `save_safetensors`.",
+      "parameters": [
+        {
+          "name": "path",
+          "annotation": "str",
+          "description": "Path to a `.safetensors` file.",
+          "default": null
+        },
+        {
+          "name": "device",
+          "annotation": "str",
+          "description": "Target device for every loaded tensor: `\"cpu\"` (default) or\n`\"metal\"`.",
+          "default": "'cpu'"
+        }
+      ],
+      "returns": {
+        "annotation": "dict of str to Tensor",
+        "description": "Flat state dict suitable for `model.load_state_dict()`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> sd = lucid.serialization.load_safetensors(\"weights.safetensors\")"
+      ],
+      "notes": [
+        "Requires the optional `safetensors` Python package\n(`pip install safetensors`). The header metadata is consulted to\nrecover the original 0-d shape of scalar entries written through\n`save_safetensors`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "lucid.serialization: save and load tensors and modules.",
+  "extended": "The wire format goes through the engine's `to_bytes` / `from_bytes`\ncontract — no numpy round-trip, so checkpoints can be loaded in a\nnumpy-free environment.  Format version 3 records the dtype as the\ncanonical Lucid name (`\"float32\"`, `\"int64\"`, …) instead of the\nnumpy `str(arr.dtype)` it used in v1/v2.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

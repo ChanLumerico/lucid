@@ -1,0 +1,75 @@
+{
+  "slug": "lucid.utils",
+  "name": "utils",
+  "path": "lucid.utils",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/__init__.py#L1",
+  "members": [
+    {
+      "name": "checkpoint",
+      "path": "lucid.utils.checkpoint.checkpoint",
+      "kind": "function",
+      "labels": [],
+      "signature": "checkpoint(function: Callable[..., Tensor | tuple[Tensor, ...]], args: Tensor = (), use_reentrant: bool = False, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/checkpoint.py#L12",
+      "subcategory": "checkpoint",
+      "summary": "Run `function` without saving its intermediates; recompute them on backward.",
+      "extended": "Memory-for-compute tradeoff used to fit larger models / longer\nsequences in fixed VRAM.  In a normal forward pass autograd stashes\nevery intermediate activation needed by the backward pass — for a\ndeep transformer block this is the dominant memory cost.  Wrapping\nthe block in `checkpoint` runs forward under `no_grad`,\nsaves *only the inputs*, and re-executes the block from scratch\nduring backward to recompute the intermediates on demand.\n\nNet effect: peak memory drops from \"all activations\" to \"inputs +\none block's intermediates at backward time\"; wall-clock grows by\nroughly the cost of one extra forward pass per checkpointed block.",
+      "parameters": [
+        {
+          "name": "function",
+          "annotation": "callable",
+          "description": "The forward computation to checkpoint.  Must be deterministic\ngiven `(args, kwargs)` — if it consumes randomness (dropout,\nrandom init), seed it explicitly inside the callable, otherwise\nforward and re-forward will disagree.",
+          "default": null
+        },
+        {
+          "name": "*args",
+          "annotation": "Tensor",
+          "description": "Positional tensor inputs.  Saved by the autograd context and\npassed back to `function` on backward.",
+          "default": "()"
+        },
+        {
+          "name": "use_reentrant",
+          "annotation": "bool",
+          "description": "Accepted for API parity with reference frameworks; currently\nignored — Lucid always uses the non-reentrant strategy (a\ndedicated `Function` subclass with manual recompute).\nDefault `False`.",
+          "default": "False"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Non-tensor keyword arguments forwarded to `function`.  They\nare *not* differentiated through.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor or tuple[Tensor, ...]",
+        "description": "Whatever `function(*args, **kwargs)` returns — the gradient\ngraph routes through `CheckpointFunction` so backward\ntriggers the recompute path."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.utils.checkpoint import checkpoint\n>>>\n>>> def block(x):\n...     return (x @ x.T).relu().sum(dim=-1)\n>>>\n>>> x = lucid.randn(4, 8, requires_grad=True)\n>>> y = checkpoint(block, x)         # forward under no_grad; saves only x\n>>> y.sum().backward()               # re-runs `block(x)` to populate grads"
+      ],
+      "notes": [
+        "Best applied to a *sequence* of homogeneous blocks (transformer\nlayers, ResNet stages) where the per-block memory saving compounds.\nCheckpointing every layer roughly doubles training time; the usual\nrecipe is to checkpoint every other layer or once per stage."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lucid.autograd.Function",
+          "description": "the autograd primitive underneath."
+        }
+      ]
+    }
+  ],
+  "summary": "lucid.utils: utility modules.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

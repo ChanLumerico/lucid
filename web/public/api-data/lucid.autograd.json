@@ -1,0 +1,1504 @@
+{
+  "slug": "lucid.autograd",
+  "name": "autograd",
+  "path": "lucid.autograd",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/__init__.py#L1",
+  "members": [
+    {
+      "name": "no_grad",
+      "path": "lucid.autograd._grad_mode.no_grad",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "no_grad()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L14",
+      "subcategory": "grad_mode",
+      "methods": [
+        {
+          "name": "__enter__",
+          "path": "lucid.autograd._grad_mode.no_grad.__enter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__enter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L82",
+          "subcategory": "grad_mode",
+          "summary": "Enter the context.  Returns self so the value can be bound via `with ... as`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "no_grad",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__exit__",
+          "path": "lucid.autograd._grad_mode.no_grad.__exit__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__exit__(args: object = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L88",
+          "subcategory": "grad_mode",
+          "summary": "Exit the context, restoring any state that was modified on entry.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.autograd._grad_mode.no_grad.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(fn: _F)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L92",
+          "subcategory": "grad_mode",
+          "summary": "Forward to the underlying callable (see class docstring).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "_F",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Context manager / decorator that disables gradient tracking.",
+      "extended": "Inside a `no_grad` scope every op skips the graph-building\nbookkeeping that autograd normally performs: no autograd node\nis registered, no activations are saved, and the produced\ntensors carry `requires_grad=False` regardless of their\ninputs. The flag is process-global, so this affects all code\nrunning inside the scope.\n\nUse `no_grad` for inference, for validation loops, and for\nparameter updates that should not themselves be differentiable\n(e.g. EMA accumulation, optimizer steps if performed outside\nan Optimizer object). The savings — fewer Python objects\nallocated, no saved activations holding memory, no overhead\non each op — are typically large.\n\nThe previous gradient mode is restored on exit (RAII), so\n`no_grad` may be safely nested inside `enable_grad`\nand vice-versa.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "`no_grad` takes no arguments; configure with\n`set_grad_enabled` if a dynamic flag is needed.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "As a context manager:\n>>> import lucid\n>>> from lucid.autograd import no_grad\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> with no_grad():\n...     y = x * 2\n>>> y.requires_grad\nFalse\nAs a decorator:\n>>> @no_grad()\n... def eval_step(x):\n...     return (x * x).sum()"
+      ],
+      "notes": [
+        "Gradient mode controls whether autograd records the chain rule\n\n$$\n\\frac{\\partial \\mathcal{L}}{\\partial x}\n= \\sum_i \\frac{\\partial \\mathcal{L}}{\\partial y_i}\n  \\cdot \\frac{\\partial y_i}{\\partial x}.\n$$\nWith `no_grad` the graph that this sum is computed over is\nnever built, so calling `backward` afterwards is a\nno-op on tensors produced inside the scope."
+      ],
+      "attributes": [
+        {
+          "name": "_prev",
+          "annotation": "bool",
+          "description": "Internal — saved grad-mode flag captured at `__enter__`\ntime and restored at `__exit__`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "enable_grad",
+      "path": "lucid.autograd._grad_mode.enable_grad",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "enable_grad()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L104",
+      "subcategory": "grad_mode",
+      "methods": [
+        {
+          "name": "__enter__",
+          "path": "lucid.autograd._grad_mode.enable_grad.__enter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__enter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L156",
+          "subcategory": "grad_mode",
+          "summary": "Enter the context.  Returns self so the value can be bound via `with ... as`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "enable_grad",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__exit__",
+          "path": "lucid.autograd._grad_mode.enable_grad.__exit__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__exit__(args: object = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L162",
+          "subcategory": "grad_mode",
+          "summary": "Exit the context, restoring any state that was modified on entry.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.autograd._grad_mode.enable_grad.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(fn: _F)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L166",
+          "subcategory": "grad_mode",
+          "summary": "Forward to the underlying callable (see class docstring).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "_F",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Context manager / decorator that (re-)enables gradient tracking.",
+      "extended": "Counterpart of `no_grad`: turns gradient recording back\non inside the wrapped scope, even when an outer scope has\ndisabled it. Useful when a small differentiable subroutine\nruns inside a larger `no_grad` block — for example, an\ninner training step embedded in an outer evaluation loop, or\nexplicit gradient computation for diagnostic plots inside a\ndecorated inference function.\n\nThe previous gradient mode is restored on exit (RAII), so the\nsurrounding `no_grad` continues to apply once the inner\nscope finishes.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import no_grad, enable_grad\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> with no_grad():\n...     with enable_grad():\n...         y = (x * x).sum()\n>>> y.requires_grad\nTrue"
+      ],
+      "notes": [
+        "Setting the flag back to `True` re-arms autograd to record\nthe chain rule\n\n$$\n\\frac{\\partial \\mathcal{L}}{\\partial x}\n= \\sum_i \\frac{\\partial \\mathcal{L}}{\\partial y_i}\n  \\cdot \\frac{\\partial y_i}{\\partial x}\n$$\nfor every op executed inside the scope."
+      ],
+      "attributes": [
+        {
+          "name": "_prev",
+          "annotation": "bool",
+          "description": "Internal — saved grad-mode flag captured at `__enter__`\ntime and restored at `__exit__`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "set_grad_enabled",
+      "path": "lucid.autograd._grad_mode.set_grad_enabled",
+      "kind": "function",
+      "labels": [],
+      "signature": "set_grad_enabled(flag: bool)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L178",
+      "subcategory": "grad_mode",
+      "summary": "Globally set the autograd gradient-tracking flag.",
+      "extended": "Imperative counterpart of `no_grad` and\n`enable_grad`: flips the process-wide flag without a\n`with` block. Useful when the desired state is determined\nby configuration (e.g. an inference server that disables\ngrad once at start-up).",
+      "parameters": [
+        {
+          "name": "flag",
+          "annotation": "bool",
+          "description": "`True` to enable gradient tracking on subsequent ops,\n`False` to disable it. The change persists until\nanother call to `set_grad_enabled` or until a\ncontext-manager-based override.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import set_grad_enabled, is_grad_enabled\n>>> set_grad_enabled(False)\n>>> is_grad_enabled()\nFalse\n>>> set_grad_enabled(True)"
+      ],
+      "notes": [
+        "Unlike the context-manager forms, this function does not\nstack previous states — repeated calls simply overwrite the\nflag. Pair it with `is_grad_enabled` to save and\nrestore manually if needed."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_grad_enabled",
+      "path": "lucid.autograd._grad_mode.is_grad_enabled",
+      "kind": "function",
+      "labels": [],
+      "signature": "is_grad_enabled()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L218",
+      "subcategory": "grad_mode",
+      "summary": "Return whether autograd gradient tracking is currently enabled.",
+      "extended": "Reports the current state of the process-wide flag that\n`no_grad`, `enable_grad`, and\n`set_grad_enabled` mutate. The result reflects whether\nsubsequent ops will register autograd nodes.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` if gradient tracking is enabled (the default\noutside any `no_grad` scope); `False` otherwise."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import no_grad, is_grad_enabled\n>>> is_grad_enabled()\nTrue\n>>> with no_grad():\n...     is_grad_enabled()\nFalse"
+      ],
+      "notes": [
+        "The flag is the same Boolean queried by the C++ engine at\nop construction time — the result is therefore guaranteed\nconsistent with the actual behaviour of the next op."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "inference_mode",
+      "path": "lucid.autograd._grad_mode.inference_mode",
+      "kind": "function",
+      "labels": [],
+      "signature": "inference_mode()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_grad_mode.py#L255",
+      "subcategory": "grad_mode",
+      "summary": "Context manager for inference-time autograd suppression.",
+      "extended": "Like `no_grad` but reserved for fully read-only\ninference paths: the user guarantees that no in-place\nmutation of autograd-tracked tensors will occur inside the\nscope. In the current Lucid implementation\n`inference_mode` is an alias for `no_grad`; the API\nexists so that future versions can add stricter optimisations\n(e.g. skipping version-counter tracking on in-place ops)\nwithout changing user code.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Iterator[None]",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import inference_mode\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> with inference_mode():\n...     y = x * 3\n>>> y.requires_grad\nFalse"
+      ],
+      "notes": [
+        "Mathematically equivalent to wrapping the inference forward\npass in\n\n$$\ny = f(x), \\qquad \\text{grad mode} = \\text{off},\n$$\nso no part of $\\partial \\mathcal{L} / \\partial \\theta$\ncan be reconstructed afterwards."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "backward",
+      "path": "lucid.autograd._backward.backward",
+      "kind": "function",
+      "labels": [],
+      "signature": "backward(tensors: Tensor | list[Tensor], grad_tensors: list[Tensor] | None = None, retain_graph: bool = False, create_graph: bool = False, inputs: list[Tensor] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_backward.py#L12",
+      "subcategory": "backward",
+      "summary": "Compute gradients of `tensors` w.r.t. the leaf variables in their graph.",
+      "extended": "Top-level entry point that triggers reverse-mode automatic\ndifferentiation across the computation graph rooted at\n`tensors`. For every leaf tensor `x` reachable from\n`tensors` whose `requires_grad` is `True`, this function\naccumulates $\\partial \\mathcal{L} / \\partial x$ into\n`x.grad`, where $\\mathcal{L}$ is the (possibly weighted)\nsum of the root tensors.\n\nThe chain rule is applied edge-by-edge during a topological\nwalk of the graph in reverse order, so each intermediate\nJacobian-vector product fires exactly once.",
+      "parameters": [
+        {
+          "name": "tensors",
+          "annotation": "Tensor or list of Tensor",
+          "description": "Root tensors at which the backward pass starts. When more\nthan one root is supplied each receives its own seed and the\ncontributions are summed at every shared leaf.",
+          "default": null
+        },
+        {
+          "name": "grad_tensors",
+          "annotation": "list of Tensor or None",
+          "description": "Seed cotangent vectors, one per root tensor and matching the\ncorresponding root's shape. Required when a root is\nnon-scalar. Defaults to `ones_like(t)` for each root, which\nis correct for scalar losses.",
+          "default": "None"
+        },
+        {
+          "name": "retain_graph",
+          "annotation": "bool",
+          "description": "If `True` the intermediate saved tensors are not freed after\nthe backward pass, so the same graph can be traversed again.\nNecessary when calling `backward` multiple times on\noverlapping graphs or when `create_graph` is also `True`.",
+          "default": "False"
+        },
+        {
+          "name": "create_graph",
+          "annotation": "bool",
+          "description": "If `True` the operations performed during backward are\nthemselves recorded in the graph, enabling higher-order\ndifferentiation (e.g. Hessian-vector products, meta-learning).\nImplies stronger memory usage. Defaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "inputs",
+          "annotation": "list of Tensor or None",
+          "description": "Reserved for the future ability to restrict gradient\naccumulation to a specified subset of leaves. Currently\nunused.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": "Gradients are accumulated in-place onto each leaf tensor's\n`.grad` attribute. Existing `.grad` values are added to,\nnot overwritten — call `Tensor.zero_grad` (or the\noptimizer's `zero_grad`) between successive backward passes\nif accumulation is undesired."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import backward\n>>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)\n>>> y = (x * x).sum()\n>>> backward(y)\n>>> x.grad\nTensor([2., 4., 6.])"
+      ],
+      "notes": [
+        "Reverse-mode AD computes\n\n$$\n\\frac{\\partial \\mathcal{L}}{\\partial x}\n= \\sum_{i}\n    \\left(\n        \\frac{\\partial \\mathcal{L}}{\\partial t_i}\n    \\right)^{\\!\\top}\n    \\frac{\\partial t_i}{\\partial x},\n$$\npropagating cotangents $\\bar t_i = \\partial \\mathcal{L} / \\partial t_i$ from the roots through each saved op contract\nuntil every reachable leaf has received its contribution.\n\nMemory/compute trade-off:\n\n* `retain_graph=False` (default) is the cheapest mode — once\n  the walk finishes, every saved tensor is freed.\n* `retain_graph=True, create_graph=False` keeps activations\n  so the same graph can be traversed again.\n* `create_graph=True` additionally records the backward ops\n  in a new graph, doubling memory in the worst case but\n  enabling $\\nabla^2 \\mathcal{L}$ and beyond."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "grad",
+      "path": "lucid.autograd._backward.grad",
+      "kind": "function",
+      "labels": [],
+      "signature": "grad(outputs: Tensor | list[Tensor], inputs: Tensor | list[Tensor], grad_outputs: list[Tensor] | None = None, retain_graph: bool | None = None, create_graph: bool = False, only_inputs: bool = True, allow_unused: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_backward.py#L116",
+      "subcategory": "backward",
+      "summary": "Compute gradients of outputs w.r.t. inputs, returning them as a tuple.",
+      "extended": "The \"functional\" gradient interface — invoke once to get the partial\nderivatives back without touching `.grad` on any leaf tensor.\nUseful for higher-order differentiation, gradient-based meta-learning,\nor any pattern where you want to use the gradients as input to a new\ncomputation rather than to update parameters in-place.",
+      "parameters": [
+        {
+          "name": "outputs",
+          "annotation": "Tensor or list of Tensor",
+          "description": "Output tensors to differentiate.  Each must have `requires_grad`\nset in the graph that produced it.",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "Tensor or list of Tensor",
+          "description": "Input tensors w.r.t. which gradients are requested.  Each must be\na leaf (or non-leaf with `requires_grad=True` if you want grads\nflowing into intermediate nodes).",
+          "default": null
+        },
+        {
+          "name": "grad_outputs",
+          "annotation": "list of Tensor",
+          "description": "Seed gradients $\\partial \\mathcal{L} / \\partial \\text{outputs}$\nfor non-scalar outputs.  If omitted, `outputs` is expected to be\nscalar and an implicit `ones_like` seed is used.",
+          "default": "None"
+        },
+        {
+          "name": "retain_graph",
+          "annotation": "bool",
+          "description": "Keep the autograd graph alive after this call so additional\nbackward passes are possible.  Defaults to `create_graph`.",
+          "default": "None"
+        },
+        {
+          "name": "create_graph",
+          "annotation": "bool",
+          "description": "If `True`, build the autograd graph of the gradient itself so\nthe returned tensors are differentiable — used by\n`gradgradcheck` and other higher-order recipes.",
+          "default": "False"
+        },
+        {
+          "name": "only_inputs",
+          "annotation": "bool",
+          "description": "Reserved for reference-framework compatibility; gradients are\nalways restricted to the requested `inputs`.",
+          "default": "True"
+        },
+        {
+          "name": "allow_unused",
+          "annotation": "bool",
+          "description": "If `True`, return `None` for any `inputs` entry that lies\noutside the computation graph of `outputs`.  Otherwise raise.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple[Tensor or None, ...]",
+        "description": "One gradient per element of `inputs`, in the same order.\nEntries are `None` only when `allow_unused=True` and the\ninput is disconnected from `outputs`."
+      },
+      "raises": [],
+      "examples": [
+        "Scalar output — no seed needed:\n>>> import lucid\n>>> from lucid.autograd import grad\n>>> x = lucid.randn(3, requires_grad=True)\n>>> y = (x * x).sum()\n>>> (gx,) = grad(y, [x])\n>>> gx                         # equals 2 * x\nTensor([...])\nVector output — explicit seed:\n>>> z = x * x\n>>> seed = lucid.ones_like(z)\n>>> (gx,) = grad(z, [x], grad_outputs=[seed])\nHigher-order with ``create_graph=True``:\n>>> y = (x ** 3).sum()\n>>> (g,) = grad(y, [x], create_graph=True)\n>>> (gg,) = grad(g.sum(), [x])    # second derivative: 6x"
+      ],
+      "notes": [
+        "Mathematically, `grad` computes the vector-Jacobian product\n\n$$\n\\frac{\\partial}{\\partial \\mathbf{x}}\n\\left(\\sum_k \\text{grad\\_outputs}_k \\cdot \\text{outputs}_k\\right)\n$$\nvia one reverse-mode pass.  Unlike `Tensor.backward`, it does\nNOT accumulate into `.grad` — leaf tensors' existing `.grad`\nvalues are preserved across the call.  For chained gradient\ncomputations (Hessian-vector products, MAML inner loops, etc.) this\nis the right primitive."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Function",
+      "path": "lucid.autograd.function.Function",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "Function()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L228",
+      "subcategory": "function",
+      "methods": [
+        {
+          "name": "forward",
+          "path": "lucid.autograd.function.Function.forward",
+          "kind": "function",
+          "labels": [
+            "staticmethod"
+          ],
+          "signature": "forward(ctx: FunctionCtx, args: Tensor = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L308",
+          "subcategory": "function",
+          "summary": "Compute the forward result of the custom op.",
+          "extended": "Subclasses override this static method. Save anything needed\nduring backward on `ctx` (via `ctx.save_for_backward(...)`\nor by setting attributes like `ctx.shape = x.shape`); do not\ncapture tensors via closure.",
+          "parameters": [
+            {
+              "name": "ctx",
+              "annotation": "FunctionCtx",
+              "description": "Per-call context; will be passed unchanged to `backward`.",
+              "default": null
+            },
+            {
+              "name": "*args",
+              "annotation": "Tensor",
+              "description": "Positional inputs to the custom op. Non-Tensor positional\narguments are allowed but receive no gradients.",
+              "default": "()"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor or tuple of Tensor",
+            "description": "One or more output tensors."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "backward",
+          "path": "lucid.autograd.function.Function.backward",
+          "kind": "function",
+          "labels": [
+            "staticmethod"
+          ],
+          "signature": "backward(ctx: FunctionCtx, grad_outputs: Tensor = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L332",
+          "subcategory": "function",
+          "summary": "Compute gradients of the loss w.r.t. each input of `forward`.",
+          "extended": "Subclasses override this static method. The returned tuple must\ncontain one gradient per **positional argument** of `forward`,\nin the same order; non-Tensor arguments receive `None`.",
+          "parameters": [
+            {
+              "name": "ctx",
+              "annotation": "FunctionCtx",
+              "description": "The same context that was populated during `forward`.",
+              "default": null
+            },
+            {
+              "name": "*grad_outputs",
+              "annotation": "Tensor",
+              "description": "Upstream gradients $\\partial L / \\partial y_i$, one per\noutput that `forward` returned.",
+              "default": "()"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor or tuple of Tensor",
+            "description": "Downstream gradients matching the positional inputs of\n`forward`. Use `None` for inputs that have no gradient."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "apply",
+          "path": "lucid.autograd.function.Function.apply",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "apply(args: object = (), kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L358",
+          "subcategory": "function",
+          "summary": "Run the function — autograd-tracked when `forward` requests grad.",
+          "extended": "`FunctionMeta` rewrites this on every concrete subclass to dispatch\nthrough `forward`/`backward`; the base implementation here exists\nonly so `Function.apply` is a real attribute (matters for tooling\nand `hasattr` checks).  Calling it on the base class is meaningless\nand raises.",
+          "parameters": [],
+          "returns": {
+            "annotation": "object",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Base class for custom differentiable operations.",
+      "extended": "Subclass to define an operation whose forward and backward\npasses Lucid's autograd cannot deduce automatically — for\nexample, an operation that wraps an external library, an op\nwith a custom backward formula for numerical stability, or a\npiecewise-defined function whose gradient differs from naïve\nautograd.\n\nDefine :py`forward` and :py`backward` as\n`@staticmethod` on the subclass, then invoke the op via\n:py`apply` (NOT by calling `forward` directly — that\nwould skip autograd registration).",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "`Function` itself is never instantiated. Subclasses\nare stateless — their behaviour is defined entirely by\nthe `forward` / `backward` static methods, and ops\nare invoked through the :py`apply` classmethod\nrather than `__init__`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Custom ReLU with an explicit backward:\n>>> import lucid\n>>> from lucid.autograd import Function\n>>> class MyReLU(Function):\n...     @staticmethod\n...     def forward(ctx, x):\n...         ctx.save_for_backward(x)\n...         return x.clamp(min=0.0)\n...     @staticmethod\n...     def backward(ctx, grad_out):\n...         (x,) = ctx.saved_tensors\n...         return grad_out * (x > 0).float()\n>>> y = MyReLU.apply(lucid.tensor([-1.0, 2.0], requires_grad=True))\n>>> y.sum().backward()"
+      ],
+      "notes": [
+        "The :py`FunctionCtx` passed to `forward` carries the\nbookkeeping autograd needs to call `backward` later — saved\ntensors plus per-input non-differentiable flags.\n\nEach :py`Function` defines a node in the computation graph\n\n$$\n\\mathbf{y} = f(\\mathbf{x}_1, \\ldots, \\mathbf{x}_n; \\theta)\n$$\nand supplies the chain-rule contribution\n\n$$\n\\frac{\\partial \\mathcal{L}}{\\partial \\mathbf{x}_i}\n= \\sum_j \\frac{\\partial \\mathcal{L}}{\\partial y_j}\n  \\cdot \\frac{\\partial y_j}{\\partial x_{i}}\n$$\nfor each input $\\mathbf{x}_i$. The `backward` method\nimplements precisely this Jacobian-vector product."
+      ],
+      "attributes": [
+        {
+          "name": "forward",
+          "annotation": "staticmethod",
+          "description": "`forward(ctx, *args, **kwargs) -> Tensor or tuple[Tensor, ...]`.\nComputes the primal value; stores anything `backward` will\nneed on `ctx`."
+        },
+        {
+          "name": "backward",
+          "annotation": "staticmethod",
+          "description": "`backward(ctx, *grad_outputs) -> tuple of Tensors (or None per\nnon-tensor input)`. Returns the cotangents matching the\npositional inputs of `forward`."
+        },
+        {
+          "name": "apply",
+          "annotation": "classmethod",
+          "description": "Bind `forward` to the autograd graph, returning the forward\noutput and registering `backward` as the gradient closure."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "FunctionCtx",
+      "path": "lucid.autograd.function.FunctionCtx",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "FunctionCtx()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L26",
+      "subcategory": "function",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.autograd.function.FunctionCtx.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L104",
+          "subcategory": "function",
+          "summary": "Initialise an empty context with no saved tensors or extras.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "save_for_backward",
+          "path": "lucid.autograd.function.FunctionCtx.save_for_backward",
+          "kind": "function",
+          "labels": [],
+          "signature": "save_for_backward(tensors: Tensor = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L111",
+          "subcategory": "function",
+          "summary": "Store tensors needed to compute the backward pass.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "*tensors",
+              "annotation": "Tensor",
+              "description": "Activations / inputs the `backward` implementation will\nrequire. They are retrieved later via the `saved_tensors`\nproperty as a tuple in the same order.",
+              "default": "()"
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Each call replaces any tensors previously saved on this context."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "saved_tensors",
+          "path": "lucid.autograd.function.FunctionCtx.saved_tensors",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "saved_tensors: tuple[Tensor, ...]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L128",
+          "summary": "Read back the tensors saved during `forward`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple of Tensor",
+            "description": "The tensors stored by `save_for_backward`, wrapped\nback into Python `Tensor` instances if the engine stored\nraw `TensorImpl` handles."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "mark_non_differentiable",
+          "path": "lucid.autograd.function.FunctionCtx.mark_non_differentiable",
+          "kind": "function",
+          "labels": [],
+          "signature": "mark_non_differentiable(tensors: Tensor = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/function.py#L146",
+          "subcategory": "function",
+          "summary": "Declare that the given output tensors carry no gradient.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "*tensors",
+              "annotation": "Tensor",
+              "description": "Outputs of `Function.forward` for which autograd should\nnot propagate gradients (e.g., integer indices, masks).",
+              "default": "()"
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Per-call context shared between `Function.forward` and\n`Function.backward`.",
+      "extended": "A fresh `FunctionCtx` is created on every `Function.apply`\ninvocation. `forward` populates it with anything `backward`\nwill need: saved tensors (via `save_for_backward`),\nnon-differentiable output markers (via\n`mark_non_differentiable`), and arbitrary user-defined\nattributes (cached shapes, axis indices, scalar hyperparameters,\n...) set with ordinary attribute assignment. The context is the\nonly legal channel for passing state from forward to backward —\ncapturing tensors through Python closures bypasses autograd's\nbookkeeping and leaks memory.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "`FunctionCtx` is instantiated by `Function.apply`\nwith no arguments. User code never constructs one\ndirectly; it receives the instance as the first\npositional argument of `forward` / `backward`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import Function\n>>> class Square(Function):\n...     @staticmethod\n...     def forward(ctx, x):\n...         ctx.save_for_backward(x)\n...         ctx.shape = x.shape\n...         return x * x\n...     @staticmethod\n...     def backward(ctx, grad_out):\n...         (x,) = ctx.saved_tensors\n...         return 2 * x * grad_out"
+      ],
+      "notes": [
+        "The context is what ties the forward and backward halves of a\ncustom node together in the chain rule:\n\n$$\n\\mathbf{y} = f(\\mathbf{x}; \\text{ctx}),\n\\qquad\n\\bar{\\mathbf{x}} = g(\\mathbf{ctx}, \\bar{\\mathbf{y}}),\n$$\nwhere $\\bar{\\mathbf{y}} = \\partial \\mathcal{L} / \\partial \\mathbf{y}$ is the upstream gradient and the same\n`ctx` object is passed to both halves so $g$ can read\nback whatever $f$ saved."
+      ],
+      "attributes": [
+        {
+          "name": "needs_input_grad",
+          "annotation": "tuple of bool",
+          "description": "One flag per positional `Tensor` input to `forward`,\nindicating whether autograd would propagate a gradient to\nthat input. Use this to skip unneeded branches in\n`backward`."
+        },
+        {
+          "name": "saved_tensors",
+          "annotation": "tuple of Tensor",
+          "description": "Read-only view of the tensors stored via\n`save_for_backward`, in registration order."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "gradcheck",
+      "path": "lucid.autograd.gradcheck.gradcheck",
+      "kind": "function",
+      "labels": [],
+      "signature": "gradcheck(func: Callable[..., Tensor | tuple[Tensor, ...]], inputs: Sequence[Tensor], eps: float = 1e-06, atol: float = 1e-05, rtol: float = 0.001, raise_exception: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/gradcheck.py#L17",
+      "subcategory": "gradcheck",
+      "summary": "Compare analytical gradients from backward() against finite-difference Jacobians.",
+      "extended": "Implemented entirely with the Lucid C++ engine — no numpy.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "callable",
+          "description": "Scalar-valued function mapping Tensor inputs to a single-element Tensor.",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "sequence of Tensor",
+          "description": "Inputs to func that require grad (must be float tensors).",
+          "default": null
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Finite-difference step size (default 1e-6).",
+          "default": "1e-06"
+        },
+        {
+          "name": "atol",
+          "annotation": "float",
+          "description": "Tolerances for the gradient comparison.",
+          "default": "1e-05"
+        },
+        {
+          "name": "rtol",
+          "annotation": "float",
+          "description": "Tolerances for the gradient comparison.",
+          "default": "1e-05"
+        },
+        {
+          "name": "raise_exception",
+          "annotation": "bool",
+          "description": "Raise AssertionError on mismatch (default True), else return False.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "bool  True if all gradients agree within tolerance.",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "gradgradcheck",
+      "path": "lucid.autograd.gradcheck.gradgradcheck",
+      "kind": "function",
+      "labels": [],
+      "signature": "gradgradcheck(func: Callable[..., Tensor | tuple[Tensor, ...]], inputs: Sequence[Tensor], grad_outputs: Sequence[Tensor] | None = None, eps: float = 1e-06, atol: float = 1e-05, rtol: float = 0.001, raise_exception: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/gradcheck.py#L185",
+      "subcategory": "gradcheck",
+      "summary": "Verify second-order gradients via finite differences.",
+      "extended": "Most bugs in custom `lucid.autograd.Function.backward`\nimplementations show up at the *second*-derivative level —\nthe first-order gradient is consistent but the gradient of\nthe gradient is not. `gradgradcheck` constructs such a\ntest by wrapping `func` in a scalar-valued helper\n\n$$\n\\tilde f(x) = \\sum_i (\\nabla f(x))_i,\n$$\ndifferentiates it analytically with\n`create_graph=True`, and then runs `gradcheck` on\n$\\tilde f$ so its gradient is compared against the\ncentral finite-difference estimate\n\n$$\n\\frac{\\tilde f(x + \\varepsilon e_k)\n      - \\tilde f(x - \\varepsilon e_k)}{2 \\varepsilon}\n\\approx \\frac{\\partial^2 f(x)}{\\partial x_k^2}.\n$$\nDisagreement signals a bug in the analytic backward\nformula that ordinary `gradcheck` would miss.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "callable",
+          "description": "Function mapping `Tensor` inputs to a `Tensor` (or\ntuple of `Tensor`). Must be twice differentiable.",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "sequence of Tensor",
+          "description": "Input tensors at which to verify the gradient. Floating\ndtype required.",
+          "default": null
+        },
+        {
+          "name": "grad_outputs",
+          "annotation": "sequence of Tensor or None",
+          "description": "Reserved for custom upstream gradients in the inner\nbackward pass. Currently ignored — `ones_like`\nupstream gradients are always used.",
+          "default": "None"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Finite-difference step size used by the underlying\n`gradcheck`. Defaults to `1e-6`.",
+          "default": "1e-06"
+        },
+        {
+          "name": "atol",
+          "annotation": "float",
+          "description": "Absolute tolerance for the comparison. Defaults to\n`1e-5`.",
+          "default": "1e-05"
+        },
+        {
+          "name": "rtol",
+          "annotation": "float",
+          "description": "Relative tolerance for the comparison. Defaults to\n`1e-3`.",
+          "default": "0.001"
+        },
+        {
+          "name": "raise_exception",
+          "annotation": "bool",
+          "description": "If `True` (default) raise `AssertionError` on\nmismatch; if `False` return `False` silently.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` iff all second-order gradients agree with the\nfinite-difference reference within the supplied\ntolerances."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import gradgradcheck\n>>> x = lucid.randn(3, requires_grad=True, dtype=lucid.float64)\n>>> def f(x):\n...     return (x ** 3).sum()\n>>> gradgradcheck(f, [x])\nTrue"
+      ],
+      "notes": [
+        "The bound on the truncation error of central differences is\n\n$$\n\\left|\n    \\frac{\\tilde f(x + \\varepsilon) - \\tilde f(x - \\varepsilon)}\n         {2 \\varepsilon}\n    - \\tilde f'(x)\n\\right|\n= O(\\varepsilon^2),\n$$\nso tightening `eps` improves accuracy until round-off\nerror dominates."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "detect_anomaly",
+      "path": "lucid.autograd._anomaly.detect_anomaly",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "detect_anomaly(check_nan: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_anomaly.py#L15",
+      "subcategory": "anomaly",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.autograd._anomaly.detect_anomaly.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(check_nan: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_anomaly.py#L84",
+          "subcategory": "anomaly",
+          "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__enter__",
+          "path": "lucid.autograd._anomaly.detect_anomaly.__enter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__enter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_anomaly.py#L89",
+          "subcategory": "anomaly",
+          "summary": "Enter the context.  Returns self so the value can be bound via `with ... as`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "detect_anomaly",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__exit__",
+          "path": "lucid.autograd._anomaly.detect_anomaly.__exit__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__exit__(args: object = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_anomaly.py#L97",
+          "subcategory": "anomaly",
+          "summary": "Exit the context, restoring any state that was modified on entry.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.autograd._anomaly.detect_anomaly.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(fn: object)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_anomaly.py#L103",
+          "subcategory": "anomaly",
+          "summary": "Support use as a decorator.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "object",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Context manager / decorator that enables autograd anomaly detection.",
+      "extended": "Reverse-mode automatic differentiation propagates a chain of partial\nderivatives backwards through the computation graph; a single\n`NaN` or `Inf` appearing anywhere in that chain silently\ncontaminates every upstream gradient and is one of the hardest\nclasses of training bugs to localise. `detect_anomaly` opts the\ncurrent scope into stricter checking: after each call to\n`backward` the resulting gradients are scanned for\nnon-finite values, and an exception is raised at the offending\nboundary so the failure surfaces at the source rather than at the\noptimiser step.\n\nEnabling anomaly detection adds overhead — every backward pass\nperforms an additional reduction over the gradient tensors — so it\nis intended for debugging sessions, not steady-state training.",
+      "parameters": [
+        {
+          "name": "check_nan",
+          "annotation": "bool",
+          "description": "If `True` (default) every backward pass is checked for\n`NaN` / `Inf` gradients and a `RuntimeError` is raised on\nthe first violation. Setting it to `False` enters the context\nbut performs no checking — useful for nested scopes where an\nouter block already enabled the flag.",
+          "default": "True"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Use as a context manager during loss computation:\n>>> import lucid\n>>> from lucid.autograd import detect_anomaly\n>>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)\n>>> with detect_anomaly():\n...     y = (x * x).sum()\n...     y.backward()\nUse as a decorator on a training step:\n>>> @detect_anomaly()\n... def train_step(x, target):\n...     loss = ((x - target) ** 2).sum()\n...     loss.backward()\n...     return loss"
+      ],
+      "notes": [
+        "Reverse-mode AD computes\n\n$$\n\\frac{\\partial \\mathcal{L}}{\\partial x}\n= \\sum_{p \\in \\text{paths}(x \\to \\mathcal{L})}\n    \\prod_{(u, v) \\in p} \\frac{\\partial v}{\\partial u}.\n$$\nA single non-finite Jacobian entry along any path corrupts the\nsum, so the check is performed on the final accumulated gradient\nrather than on individual op outputs.\n\nThe context manager restores the previous anomaly flag on exit,\nso nested `with` blocks behave correctly."
+      ],
+      "attributes": [
+        {
+          "name": "check_nan",
+          "annotation": "bool",
+          "description": "The mode argument as passed to `__init__`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "is_anomaly_enabled",
+      "path": "lucid.autograd._anomaly.is_anomaly_enabled",
+      "kind": "function",
+      "labels": [],
+      "signature": "is_anomaly_enabled()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_anomaly.py#L164",
+      "subcategory": "anomaly",
+      "summary": "Return whether autograd anomaly detection is currently enabled.",
+      "extended": "Query accessor for the global flag that `detect_anomaly`\nand `set_detect_anomaly` mutate. Useful when conditionally\nwrapping additional debug logic, or when asserting state inside\ntest suites.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "bool",
+        "description": "`True` if anomaly detection is currently active; `False`\notherwise."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import detect_anomaly, is_anomaly_enabled\n>>> is_anomaly_enabled()\nFalse\n>>> with detect_anomaly():\n...     is_anomaly_enabled()\nTrue\n>>> is_anomaly_enabled()\nFalse"
+      ],
+      "notes": [
+        "The flag is process-global. In multi-threaded code (Lucid does\nnot currently run multiple Python threads through the autograd\nengine) the value would be shared across threads — treat it as\na debug switch rather than per-call state."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "set_detect_anomaly",
+      "path": "lucid.autograd._anomaly.set_detect_anomaly",
+      "kind": "function",
+      "labels": [],
+      "signature": "set_detect_anomaly(mode: bool, check_nan: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_anomaly.py#L116",
+      "subcategory": "anomaly",
+      "summary": "Programmatic global toggle for autograd anomaly detection.",
+      "extended": "Equivalent to entering `detect_anomaly` once and never\nexiting — flips the process-wide flag that `backward`\nconsults at the end of each pass. Prefer the `with`-block form\nwhen the scope is bounded; use this free function when the flag\nis controlled by a CLI argument or an environment variable read\nonce at start-up.",
+      "parameters": [
+        {
+          "name": "mode",
+          "annotation": "bool",
+          "description": "`True` enables `NaN` / `Inf` checking on every backward;\n`False` disables it.",
+          "default": null
+        },
+        {
+          "name": "check_nan",
+          "annotation": "bool",
+          "description": "Forwarded to the underlying flag. Currently the only supported\ncheck is for non-finite values; the parameter exists for API\nsymmetry and forward compatibility.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "None",
+        "description": "The function mutates a module-level flag; it has no return\nvalue."
+      },
+      "raises": [],
+      "examples": [
+        "Enable checks at start-up:\n>>> import lucid\n>>> from lucid.autograd import set_detect_anomaly, is_anomaly_enabled\n>>> set_detect_anomaly(True)\n>>> is_anomaly_enabled()\nTrue\n>>> set_detect_anomaly(False)"
+      ],
+      "notes": [
+        "The effective flag is $\\text{mode} \\land \\text{check\\_nan}$:\nsetting either to `False` disables checking. There is no stack of\nsaved states — once changed, the flag stays until the next call."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "jacobian",
+      "path": "lucid.autograd._functional.jacobian",
+      "kind": "function",
+      "labels": [],
+      "signature": "jacobian(func: Callable[..., Tensor], inputs: Tensor | tuple[Tensor, ...], create_graph: bool = False, strict: bool = False, vectorize: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_functional.py#L11",
+      "subcategory": "functional",
+      "summary": "Compute the Jacobian matrix of `func` with respect to each input.",
+      "extended": "The Jacobian of a vector-valued function\n$f : \\mathbb{R}^n \\to \\mathbb{R}^m$ is\n\n$$\nJ_{ij} = \\frac{\\partial f_i}{\\partial x_j}, \\qquad\nJ \\in \\mathbb{R}^{m \\times n}.\n$$\nLucid evaluates it row-by-row by repeated reverse-mode\nbackward passes — one per output element — seeding each pass\nwith a one-hot cotangent so the resulting input gradient is\nexactly the corresponding Jacobian row. The cost therefore\nscales with the output dimension $m$; prefer `vjp`\nwhen only $v^\\top J$ is needed and `jvp` when only\n$J v$ is needed.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "callable",
+          "description": "A function mapping `Tensor` inputs to a `Tensor` (or\ntuple of `Tensor`). Must be differentiable w.r.t. each\npositional input.",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "Tensor or tuple of Tensor",
+          "description": "Input tensor(s) at which the Jacobian is evaluated. They\nare silently promoted to `requires_grad=True` if needed.",
+          "default": null
+        },
+        {
+          "name": "create_graph",
+          "annotation": "bool",
+          "description": "If `True` the Jacobian itself is differentiable, enabling\nhigher-order derivatives (e.g. building `hessian` on\ntop). Defaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "strict",
+          "annotation": "bool",
+          "description": "Reserved for stricter shape/dtype validation. Currently\nunused.",
+          "default": "False"
+        },
+        {
+          "name": "vectorize",
+          "annotation": "bool",
+          "description": "Reserved for a future vmap-based implementation. Currently\nunused.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor or tuple of Tensor",
+        "description": "For a single input `x` the returned tensor has shape\n`(prod(out_shape), prod(x.shape))`. For multiple inputs\na tuple is returned, one Jacobian block per input."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import jacobian\n>>> x = lucid.tensor([1.0, 2.0, 3.0])\n>>> def f(x):\n...     return x * x\n>>> J = jacobian(f, x)\n>>> J.shape\n(3, 3)"
+      ],
+      "notes": [
+        "Reverse-mode differentiation makes the cost per row\n$O(\\text{cost}(f))$; the full Jacobian therefore costs\n$O(m \\cdot \\text{cost}(f))$. For square or wide\nJacobians ($m \\ge n$) forward-mode would be cheaper —\nLucid does not yet ship a forward-mode implementation, so\nthis routine is preferred for tall Jacobians\n($m \\ll n$)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "hessian",
+      "path": "lucid.autograd._functional.hessian",
+      "kind": "function",
+      "labels": [],
+      "signature": "hessian(func: Callable[..., Tensor], inputs: Tensor | tuple[Tensor, ...], create_graph: bool = False, strict: bool = False, vectorize: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_functional.py#L163",
+      "subcategory": "functional",
+      "summary": "Compute the Hessian matrix of a scalar-valued `func`.",
+      "extended": "The Hessian of a scalar function\n$f : \\mathbb{R}^n \\to \\mathbb{R}$ is\n\n$$\nH_{ij} = \\frac{\\partial^2 f}{\\partial x_i \\, \\partial x_j},\n\\qquad H \\in \\mathbb{R}^{n \\times n}.\n$$\nImplemented as `jacobian` of the gradient of `func` —\na forward pass produces the loss, a first backward (with\n`create_graph=True`) builds the gradient graph, and a second\nbackward along each gradient coordinate yields the rows of\n$H$. Cost is therefore $O(n \\cdot \\text{cost}(\\nabla f))$.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "callable",
+          "description": "Scalar-valued function of one or more `Tensor` inputs.",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "Tensor or tuple of Tensor",
+          "description": "Inputs at which $H$ is evaluated. They are silently\npromoted to `requires_grad=True` if necessary.",
+          "default": null
+        },
+        {
+          "name": "create_graph",
+          "annotation": "bool",
+          "description": "If `True` the Hessian itself remains differentiable\n(third-order derivatives). Defaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "strict",
+          "annotation": "bool",
+          "description": "Reserved for stricter validation. Currently unused.",
+          "default": "False"
+        },
+        {
+          "name": "vectorize",
+          "annotation": "bool",
+          "description": "Reserved for a future vmap-based implementation. Currently\nunused.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor or tuple of tuple of Tensor",
+        "description": "For a single input the returned tensor has shape\n`(numel(x), numel(x))`. For multiple inputs a nested\ntuple of cross-Hessian blocks is returned, with\n`H[i][j]` containing $\\partial^2 f / (\\partial x_i \\, \\partial x_j)$."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import hessian\n>>> x = lucid.tensor([1.0, 2.0])\n>>> def f(x):\n...     return (x * x).sum()\n>>> H = hessian(f, x)\n>>> H.shape\n(2, 2)"
+      ],
+      "notes": [
+        "Symmetry $H_{ij} = H_{ji}$ holds in exact arithmetic\nwhen $f$ is $C^2$. In floating-point the result is\nonly approximately symmetric; symmetrize as\n$\\tfrac{1}{2}(H + H^\\top)$ if a strictly symmetric\nmatrix is required."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vjp",
+      "path": "lucid.autograd._functional.vjp",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjp(func: Callable[..., Tensor], inputs: Tensor | tuple[Tensor, ...], v: Tensor | tuple[Tensor, ...], create_graph: bool = False, strict: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_functional.py#L295",
+      "subcategory": "functional",
+      "summary": "Vector-Jacobian product $v^\\top J$ (reverse-mode AD).",
+      "extended": "Given $f : \\mathbb{R}^n \\to \\mathbb{R}^m$ with Jacobian\n$J \\in \\mathbb{R}^{m \\times n}$ and a cotangent vector\n$v \\in \\mathbb{R}^m$, returns\n\n$$\nv^\\top J \\in \\mathbb{R}^{n}\n$$\nalong with the primal output $y = f(x)$. This is the\noperation that backpropagation performs on every node: when\na scalar loss $\\mathcal{L}(y)$ is being differentiated\nagainst an intermediate $y$, the upstream cotangent is\n$v = \\partial \\mathcal{L} / \\partial y$ and the result\nis $\\partial \\mathcal{L} / \\partial x$.\n\nComputing a full VJP costs the same as one backward pass —\nmuch cheaper than materialising $J$ when only the\nproduct is needed.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "callable",
+          "description": "Function mapping `Tensor` inputs to a `Tensor` (or\ntuple thereof).",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "Tensor or tuple of Tensor",
+          "description": "Primal point $x$ at which $J$ is evaluated.\nSilently promoted to `requires_grad=True` if needed.",
+          "default": null
+        },
+        {
+          "name": "v",
+          "annotation": "Tensor or tuple of Tensor",
+          "description": "Cotangent vector(s) matching the output shape(s) of\n`func`. Scalar-valued `v` is broadcast for scalar\noutputs.",
+          "default": null
+        },
+        {
+          "name": "create_graph",
+          "annotation": "bool",
+          "description": "If `True` the returned VJP is itself differentiable,\nenabling double-backward. Defaults to `False`.",
+          "default": "False"
+        },
+        {
+          "name": "strict",
+          "annotation": "bool",
+          "description": "Reserved for stricter validation. Currently unused.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple of (Tensor, tuple of (Tensor or None))",
+        "description": "`(output, vjp_grads)` where `output = func(*inputs)`\nand `vjp_grads[i]` is $v^\\top J$ projected onto\ninput `i` (or `None` if that input has no gradient\npath)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import vjp\n>>> x = lucid.tensor([1.0, 2.0, 3.0])\n>>> v = lucid.tensor([1.0, 1.0, 1.0])\n>>> def f(x):\n...     return x * x\n>>> y, (grad_x,) = vjp(f, x, v)"
+      ],
+      "notes": [
+        "The dual to `vjp` is `jvp`, which computes\n$J v$ via forward-mode (or finite differences in\nLucid's current implementation)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "jvp",
+      "path": "lucid.autograd._functional.jvp",
+      "kind": "function",
+      "labels": [],
+      "signature": "jvp(func: Callable[..., Tensor], inputs: Tensor | tuple[Tensor, ...], v: Tensor | tuple[Tensor, ...], create_graph: bool = False, strict: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_functional.py#L409",
+      "subcategory": "functional",
+      "summary": "Jacobian-vector product $J v$ (forward-mode directional derivative).",
+      "extended": "Given $f : \\mathbb{R}^n \\to \\mathbb{R}^m$ with Jacobian\n$J \\in \\mathbb{R}^{m \\times n}$ and a tangent vector\n$v \\in \\mathbb{R}^n$, returns\n\n$$\nJ v = \\left.\\frac{d}{dt} f(x + t v)\\right|_{t=0}\n    \\in \\mathbb{R}^{m}\n$$\nalong with the primal output $y = f(x)$. JVPs are the\nnatural primitive of forward-mode AD and are useful for\npropagating tangent information (sensitivities) through a\nnetwork in a single forward sweep, for computing directional\nderivatives, and as a building block for second-order methods.\n\nLucid currently realises the JVP via a symmetric central\nfinite difference\n\n$$\nJ v \\approx \\frac{f(x + \\varepsilon v) - f(x - \\varepsilon v)}\n                 {2 \\varepsilon},\n$$\nwith $\\varepsilon = 10^{-4}$. This avoids the need for a\ntrue forward-mode implementation while still being accurate\nenough for testing and most applications.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "callable",
+          "description": "Function mapping `Tensor` inputs to a `Tensor` (or\ntuple thereof).",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "Tensor or tuple of Tensor",
+          "description": "Primal point $x$.",
+          "default": null
+        },
+        {
+          "name": "v",
+          "annotation": "Tensor or tuple of Tensor",
+          "description": "Tangent vector(s) matching the input shape(s).",
+          "default": null
+        },
+        {
+          "name": "create_graph",
+          "annotation": "bool",
+          "description": "Reserved for the future native forward-mode implementation.\nCurrently unused.",
+          "default": "False"
+        },
+        {
+          "name": "strict",
+          "annotation": "bool",
+          "description": "Reserved for stricter validation. Currently unused.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple of (Tensor or tuple of Tensor, Tensor or tuple of Tensor)",
+        "description": "`(primals_out, tangents_out)` where\n`primals_out = func(*inputs)` and `tangents_out` has the\nsame shape as `primals_out` and holds $J v$."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.autograd import jvp\n>>> x = lucid.tensor([1.0, 2.0, 3.0])\n>>> v = lucid.tensor([1.0, 0.0, 0.0])\n>>> def f(x):\n...     return x * x\n>>> y, tangent = jvp(f, x, v)"
+      ],
+      "notes": [
+        "The complementary operation is `vjp`, which computes\n$v^\\top J$ cheaply via reverse-mode. Use `jvp`\nwhen the input dimension is small relative to the output\ndimension; otherwise reverse-mode is more efficient."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "checkpoint",
+      "path": "lucid.autograd.checkpoint.checkpoint",
+      "kind": "function",
+      "labels": [],
+      "signature": "checkpoint(function: Callable[..., Tensor], args: Tensor = (), preserve_rng_state: bool = True, use_reentrant: bool = True, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/checkpoint.py#L46",
+      "subcategory": "checkpoint",
+      "summary": "Run *function* under gradient checkpointing.",
+      "extended": "Executes `function(*args, **kwargs)` during the forward pass\n**without** tracking intermediate activations (`no_grad` context).\nDuring the backward pass the function is re-executed under\n`enable_grad` to reconstruct the local autograd graph, and the\ngradients are computed through that graph.",
+      "parameters": [
+        {
+          "name": "function",
+          "annotation": "callable",
+          "description": "The differentiable segment to checkpoint.  Must accept tensors as\npositional arguments and return a single `lucid.Tensor`.",
+          "default": null
+        },
+        {
+          "name": "*args",
+          "annotation": "Tensor",
+          "description": "Positional tensor inputs to *function*.",
+          "default": "()"
+        },
+        {
+          "name": "preserve_rng_state",
+          "annotation": "bool",
+          "description": "Accepted for API compatibility.  RNG state restoration is not yet\nimplemented — set to `False` when *function* contains stochastic\nlayers.",
+          "default": "True"
+        },
+        {
+          "name": "use_reentrant",
+          "annotation": "bool",
+          "description": "Accepted for API compatibility.  Only the reentrant (default)\nimplementation is provided.",
+          "default": "True"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Extra keyword arguments forwarded to *function* on both the\nforward and recomputation passes.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Output of `function(*args, **kwargs)`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> def block(x):\n...     return lucid.nn.functional.relu(x @ W + b)\n>>> y = lucid.autograd.checkpoint(block, x)\n>>> y.sum().backward()"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "RemovableHandle",
+      "path": "lucid.autograd._hooks.RemovableHandle",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "RemovableHandle(hooks_list: list[Callable[..., object]], hook: Callable[..., object])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_hooks.py#L41",
+      "subcategory": "hooks",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.autograd._hooks.RemovableHandle.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(hooks_list: list[Callable[..., object]], hook: Callable[..., object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_hooks.py#L106",
+          "subcategory": "hooks",
+          "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "remove",
+          "path": "lucid.autograd._hooks.RemovableHandle.remove",
+          "kind": "function",
+          "labels": [],
+          "signature": "remove()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_hooks.py#L113",
+          "subcategory": "hooks",
+          "summary": "Remove the hook from the tensor.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__enter__",
+          "path": "lucid.autograd._hooks.RemovableHandle.__enter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__enter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_hooks.py#L120",
+          "subcategory": "hooks",
+          "summary": "Enter the context.  Returns self so the value can be bound via `with ... as`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "RemovableHandle",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__exit__",
+          "path": "lucid.autograd._hooks.RemovableHandle.__exit__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__exit__(args: object = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/autograd/_hooks.py#L124",
+          "subcategory": "hooks",
+          "summary": "Exit the context, restoring any state that was modified on entry.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Handle returned by `lucid.Tensor.register_hook`.",
+      "extended": "A `RemovableHandle` keeps a reference to the list of hooks\nattached to a tensor's gradient and to the specific callable\nthat was just registered, providing two ways to take the hook\nback off:\n\n* Imperative — call `remove` whenever the hook is no\n  longer needed.\n* RAII — bind the handle in a `with` block; the hook is\n  automatically removed when control leaves the block.\n\nThis class is *distinct* from\n`lucid.nn.hooks.RemovableHandle`: that one manages\nforward/backward hooks on `lucid.nn.Module`, whereas\nthis one operates on the per-tensor hooks dispatched from\n`lucid.Tensor.backward` after the gradient has been\naccumulated.",
+      "parameters": [
+        {
+          "name": "hooks_list",
+          "annotation": "list of callable",
+          "description": "The underlying registry list owned by the tensor; on\n`remove` the hook is dropped from this list.",
+          "default": null
+        },
+        {
+          "name": "hook",
+          "annotation": "callable",
+          "description": "The exact callable to remove. Identity (`is`) is used\nfor matching.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> x = lucid.tensor([1.0, 2.0], requires_grad=True)\n>>> handle = x.register_hook(lambda g: print('grad =', g))\n>>> (x * x).sum().backward()\n>>> handle.remove()\nAs a context manager:\n>>> with x.register_hook(lambda g: g * 2) as h:\n...     (x * x).sum().backward()"
+      ],
+      "notes": [
+        "The post-backward hook contract is\n\n$$\n\\bar x \\leftarrow h(\\bar x),\n$$\nwhere $\\bar x = \\partial \\mathcal{L} / \\partial x$ is\nthe accumulated gradient and $h$ is the user-supplied\nhook. A hook returning `None` leaves $\\bar x$\nunchanged; returning a tensor replaces it.\n\n`remove` is idempotent — calling it twice is harmless."
+      ],
+      "attributes": [
+        {
+          "name": "_hooks_list",
+          "annotation": "list of callable",
+          "description": "The registry list (private)."
+        },
+        {
+          "name": "_hook",
+          "annotation": "callable",
+          "description": "The registered hook (private)."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": null,
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

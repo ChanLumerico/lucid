@@ -1,0 +1,1117 @@
+{
+  "slug": "lucid.fft",
+  "name": "fft",
+  "path": "lucid.fft",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1",
+  "members": [
+    {
+      "name": "fftn",
+      "path": "lucid.fft.fftn",
+      "kind": "function",
+      "labels": [],
+      "signature": "fftn(input: Tensor, s: int | Sequence[int] | None = None, dim: int | Sequence[int] | None = None, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L311",
+      "subcategory": null,
+      "summary": "N-dimensional discrete Fourier transform.",
+      "extended": "Computes the N-dimensional discrete Fourier transform (DFT) by applying\n1-D FFTs over each of the specified axes in succession.  For a single\naxis of length $N$, the DFT is defined as:\n\n$$\nX[k] = \\sum_{n=0}^{N-1} x[n]\\, e^{-i 2\\pi k n / N},\n\\quad k = 0, 1, \\ldots, N-1.\n$$\nFor multiple axes the transforms are applied sequentially, one axis at\na time (the final result is equivalent to a single multi-dimensional\ntransform).\n\nThe output is always a complex tensor (`complex64`).  Its shape is\nidentical to `input` except along the transformed axes, where axis\n`i` has length `s[i]` when `s` is provided (the input is\nzero-padded or truncated to that size first).",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Input tensor of any shape.  May be real or complex.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "int or sequence of int",
+          "description": "Signal length(s) along each transformed axis.  When given, each\naxis is zero-padded (if `s[i] > input.shape[dim[i]]`) or\ntruncated (if smaller) before the transform.  `len(s)` must\nequal `len(dim)` when both are sequences.  If `None`, each\naxis is transformed at its current size.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes over which to compute the transform.  Negative\nindices are supported.  Defaults to all axes when `None`.",
+          "default": "None"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode.  One of:\n\n- `\"backward\"` (default, same as `None`) — forward transform\n  is unscaled; inverse divides by $N$.\n- `\"forward\"` — forward transform divides by $N$; inverse\n  is unscaled.\n- `\"ortho\"` — both forward and inverse divide by\n  $\\sqrt{N}$, making the transforms mutually unitary.\n\nHere $N$ is the product of the lengths of all transformed\naxes (after padding/truncation).",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that each transformed axis `i` has length `s[i]` (or\n`input.shape[dim[i]]` when `s` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "1-D DFT of a length-8 signal:\n>>> x = lucid.fft.fft(lucid.ones(8))\n>>> x.shape\n(8,)\n2-D DFT over the last two axes with explicit output sizes:\n>>> x = lucid.ones(4, 4)\n>>> X = lucid.fft.fftn(x, s=[8, 8], dim=[-2, -1])\n>>> X.shape\n(8, 8)\nOrthonormal convention (``\"ortho\"``) makes the transform unitary:\n>>> x = lucid.randn(16)\n>>> X = lucid.fft.fftn(x, norm=\"ortho\")\n>>> # lucid.fft.ifftn(X, norm=\"ortho\") recovers x exactly"
+      ],
+      "notes": [
+        "**Frequency ordering** — the output follows the standard FFT ordering.\nFor an axis of length $N$, the output bins represent frequencies:\n\n$$\nf_k = \\frac{k}{N}, \\quad k = 0, 1, \\ldots, N-1.\n$$\nBins $k = 0, \\ldots, \\lfloor N/2 \\rfloor$ are the non-negative\nfrequencies; bins $k = \\lfloor N/2 \\rfloor + 1, \\ldots, N-1$\nwrap around and represent negative frequencies\n$(k-N)/N$.  Use `fftshift` to reorder so that the\nzero-frequency bin sits at the centre of each axis.\n\n**Autograd** — the backward pass computes\n$\\text{grad}_x = \\text{ifft}(\\text{grad}_{\\text{out}}, \\text{dual}(\\text{norm}))$ where `dual` swaps `\"backward\"` and\n`\"forward\"` and leaves `\"ortho\"` unchanged."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ifftn",
+      "path": "lucid.fft.ifftn",
+      "kind": "function",
+      "labels": [],
+      "signature": "ifftn(input: Tensor, s: int | Sequence[int] | None = None, dim: int | Sequence[int] | None = None, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L421",
+      "subcategory": null,
+      "summary": "N-dimensional inverse discrete Fourier transform.",
+      "extended": "Recovers the original signal from its frequency-domain representation\nproduced by `fftn`.  For a single axis of length $N$, the\ninverse DFT is:\n\n$$\nx[n] = \\frac{1}{N} \\sum_{k=0}^{N-1} X[k]\\, e^{+i 2\\pi k n / N},\n\\quad n = 0, 1, \\ldots, N-1.\n$$\nThe $1/N$ factor shown above corresponds to `norm='backward'`\n(the default).  With `norm='forward'` the factor becomes 1 (unscaled),\nand with `norm='ortho'` it becomes $1/\\sqrt{N}$.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex input tensor (frequency domain), of any shape.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "int or sequence of int",
+          "description": "Output signal length(s) along each transformed axis.  The\nfrequency-domain tensor is zero-padded or truncated to match\nbefore inverting.  `len(s)` must equal `len(dim)` when both\nare sequences.  If `None`, each axis keeps its current size.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes over which to compute the inverse transform.\nNegative indices are supported.  Defaults to all axes.",
+          "default": "None"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode.  One of:\n\n- `\"backward\"` (default, same as `None`) — divides by\n  $N$ (standard inverse-DFT convention).\n- `\"forward\"` — no division; assumes the forward transform\n  divided by $N$.\n- `\"ortho\"` — divides by $\\sqrt{N}$, matching\n  `fftn` with `norm='ortho'`.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that each transformed axis `i` has length `s[i]` (or\nthe input size when `s` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "Round-trip through the frequency domain:\n>>> x = lucid.randn(32)\n>>> X = lucid.fft.fftn(x)\n>>> x_rec = lucid.fft.ifftn(X)\n>>> # x_rec.real ≈ x  (imaginary part is ≈ 0 for a real input)\nInverse of a 2-D transform:\n>>> X = lucid.fft.fftn(lucid.ones(8, 8))\n>>> x = lucid.fft.ifftn(X)\n>>> x.shape\n(8, 8)"
+      ],
+      "notes": [
+        "**Round-trip property** — for any complex tensor `x`:\n\n$$\n\\text{ifftn}(\\text{fftn}(x, \\text{norm}=m), \\text{norm}=m) \\approx x\n$$\nup to floating-point rounding, for any valid `norm` mode `m`.\n\n**Conjugate symmetry** — if the input to `fftn` was a real\ntensor, its DFT satisfies $X[N-k] = X^*[k]$.  In that\ncase `irfftn` is preferred because it exploits this symmetry\nto produce a real output more efficiently."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fft",
+      "path": "lucid.fft.fft",
+      "kind": "function",
+      "labels": [],
+      "signature": "fft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L512",
+      "subcategory": null,
+      "summary": "1-D discrete Fourier transform along a single axis.",
+      "extended": "Computes the one-dimensional DFT of the input tensor along the axis\n`dim`.  For an input sequence $x[0], x[1], \\ldots, x[N-1]$,\nthe output is:\n\n$$\nX[k] = \\sum_{n=0}^{N-1} x[n]\\, e^{-i 2\\pi k n / N},\n\\quad k = 0, 1, \\ldots, N-1.\n$$\nThe output bin $X[0]$ is the DC component (sum of all samples);\n$X[1]$ through $X[\\lfloor N/2 \\rfloor]$ are the positive\nfrequencies; $X[\\lfloor N/2 \\rfloor + 1]$ through\n$X[N-1]$ are the negative frequencies.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Input tensor of any shape.  May be real or complex.",
+          "default": null
+        },
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Length of the transformed axis.  If larger than the input axis,\nthe input is zero-padded; if smaller, it is truncated.  If\n`None`, the axis length is used as-is.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis over which to compute the transform.  Default is `-1`\n(last axis).  Negative indices are supported.",
+          "default": "-1"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that axis `dim` has length `n` (or the original length\nwhen `n` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "DFT of a pure cosine at the third harmonic:\n>>> N = 16\n>>> k0 = 3\n>>> n = lucid.arange(N)\n>>> # x[n] = cos(2π k0 n / N) — should spike at bins k0 and N-k0\n>>> x = lucid.cos(n * (2 * 3.14159 * k0 / N))\n>>> X = lucid.fft.fft(x)\n>>> X.shape\n(16,)\nZero-padding to the next power of two for spectral interpolation:\n>>> x = lucid.randn(100)\n>>> X = lucid.fft.fft(x, n=128)   # pads from 100 → 128\n>>> X.shape\n(128,)"
+      ],
+      "notes": [
+        "**Computational efficiency** — under the hood this calls `fftn`\nrestricted to one axis, which in turn delegates to the MLX/Accelerate\nFFT kernel.  For a length-$N$ axis where $N$ is a power\nof two, the Cooley–Tukey radix-2 algorithm is used, reducing the\n$O(N^2)$ DFT to $O(N \\log N)$.\n\n**DC and Nyquist** — for an even-length transform of a real signal:\n\n- `X[0]` is real and equals the mean of `x` times $N$.\n- `X[N//2]` is real and is the Nyquist component.\n- All other bins come in conjugate pairs:\n  `X[N-k] == conj(X[k])`.\n\nUse `rfft` to exploit this conjugate symmetry and halve the\noutput size."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ifft",
+      "path": "lucid.fft.ifft",
+      "kind": "function",
+      "labels": [],
+      "signature": "ifft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L594",
+      "subcategory": null,
+      "summary": "1-D inverse discrete Fourier transform along a single axis.",
+      "extended": "Recovers the time-domain signal from its frequency-domain\nrepresentation computed by `fft`.  For a complex frequency\nsequence $X[0], \\ldots, X[N-1]$, the inverse DFT is:\n\n$$\nx[n] = \\frac{1}{N} \\sum_{k=0}^{N-1} X[k]\\, e^{+i 2\\pi k n / N},\n\\quad n = 0, 1, \\ldots, N-1.\n$$\nThe $1/N$ factor above corresponds to `norm='backward'`\n(default).  With `norm='ortho'` both `fft` and `ifft`\ndivide by $\\sqrt{N}$, making the pair a unitary transform.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex input tensor (frequency domain) of any shape.",
+          "default": null
+        },
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Length of the output (time-domain) axis.  The frequency-domain\naxis is zero-padded or truncated to match before inverting.\nIf `None`, the axis keeps its current length.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis over which to compute the inverse transform.  Default is\n`-1` (last axis).",
+          "default": "-1"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that axis `dim` has length `n` (or the input length\nwhen `n` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "Round-trip reconstruction:\n>>> x = lucid.randn(64)\n>>> X = lucid.fft.fft(x)\n>>> x_rec = lucid.fft.ifft(X)\n>>> x_rec.shape\n(64,)\n>>> # x_rec.real ≈ x\nDeconvolution in the frequency domain:\n>>> H = lucid.fft.fft(lucid.randn(32))   # frequency response\n>>> Y = lucid.fft.fft(lucid.randn(32))   # observed output spectrum\n>>> x_est = lucid.fft.ifft(Y / H)        # estimated input"
+      ],
+      "notes": [
+        "**Round-trip** — for any complex tensor `x`:\n\n$$\n\\text{ifft}(\\text{fft}(x)) \\approx x\n$$\nup to floating-point rounding.\n\n**Real inputs** — if `input` represents the spectrum of a real\nsignal (conjugate-symmetric), the imaginary part of the output will\nbe negligibly small.  Use `irfft` to obtain a strictly real\noutput more efficiently when you know the input is conjugate-symmetric."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fft2",
+      "path": "lucid.fft.fft2",
+      "kind": "function",
+      "labels": [],
+      "signature": "fft2(input: Tensor, s: Sequence[int] | None = None, dim: Sequence[int] = (-2, -1), norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L669",
+      "subcategory": null,
+      "summary": "2-D discrete Fourier transform over a pair of axes.",
+      "extended": "Computes the two-dimensional DFT of the input tensor by applying\n`fft` along the two axes specified by `dim` (default: the\nlast two axes).  For an $M \\times N$ input array, the 2-D DFT\nis:\n\n$$\nX[p, q] = \\sum_{m=0}^{M-1} \\sum_{n=0}^{N-1}\n          x[m, n]\\, e^{-i 2\\pi (pm/M + qn/N)},\n$$\nwhere $p = 0, \\ldots, M-1$ and $q = 0, \\ldots, N-1$.\n\nThis is equivalent to calling `fftn(input, s=s, dim=dim, norm=norm)`\nwith a two-element `dim` — it is provided as a convenience for the\ncommon case of 2-D signals such as images or spatial fields.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Input tensor with at least 2 dimensions.  May be real or complex.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "sequence of int",
+          "description": "Output size `(M_out, N_out)` along each transformed axis.\nThe input is zero-padded or truncated to this size before the\ntransform.  `len(s)` must be 2 when given.  If `None`, the\naxes are transformed at their current sizes.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "sequence of int",
+          "description": "The two axes over which to compute the transform.  Default is\n`(-2, -1)` (the last two axes).",
+          "default": "(-2, -1)"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  $N$ in the scaling formula is the product\n$M_{\\text{out}} \\times N_{\\text{out}}$.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that the two transformed axes have lengths `s[0]` and\n`s[1]` (or the original axis sizes when `s` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "2-D DFT of a real image-like tensor:\n>>> x = lucid.randn(64, 64)\n>>> X = lucid.fft.fft2(x)\n>>> X.shape\n(64, 64)\nZero-pad to a larger grid for spectral interpolation:\n>>> X_padded = lucid.fft.fft2(x, s=[128, 128])\n>>> X_padded.shape\n(128, 128)\nCentre the spectrum for visualisation:\n>>> X_shifted = lucid.fft.fftshift(lucid.fft.fft2(x))"
+      ],
+      "notes": [
+        "**Spatial frequency interpretation** — in image processing, the\n2-D DFT maps a spatial image $x[m, n]$ to its spatial-frequency\ncontent $X[p, q]$.  The bin $(p, q) = (0, 0)$ is the\nDC component (average pixel value times $MN$).  Radial distance\nfrom the origin in the frequency plane corresponds to spatial frequency\nmagnitude; `fftshift` is typically applied before displaying the\nspectrum so that low frequencies sit at the centre.\n\n**Separability** — the 2-D DFT is separable: the row-wise 1-D DFTs\nfollowed by the column-wise 1-D DFTs yield the same result as a\nsingle 2-D DFT.  The engine exploits this to run two passes of the\n1-D algorithm."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ifft2",
+      "path": "lucid.fft.ifft2",
+      "kind": "function",
+      "labels": [],
+      "signature": "ifft2(input: Tensor, s: Sequence[int] | None = None, dim: Sequence[int] = (-2, -1), norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L754",
+      "subcategory": null,
+      "summary": "2-D inverse discrete Fourier transform over a pair of axes.",
+      "extended": "Recovers the 2-D spatial-domain signal from its frequency-domain\nrepresentation produced by `fft2`.  For an $M \\times N$\nfrequency array, the 2-D inverse DFT is:\n\n$$\nx[m, n] = \\frac{1}{MN} \\sum_{p=0}^{M-1} \\sum_{q=0}^{N-1}\n          X[p, q]\\, e^{+i 2\\pi (pm/M + qn/N)}.\n$$\nThe $1/(MN)$ factor corresponds to `norm='backward'` (default).",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex input tensor (2-D frequency domain) with at least 2\ndimensions.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "sequence of int",
+          "description": "Output size `(M_out, N_out)` along each transformed axis.\nThe frequency tensor is zero-padded or truncated before inverting.\n`len(s)` must be 2 when given.  If `None`, the axes keep\ntheir current sizes.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "sequence of int",
+          "description": "The two axes over which to compute the inverse transform.\nDefault is `(-2, -1)`.",
+          "default": "(-2, -1)"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that the two transformed axes have lengths `s[0]` and\n`s[1]` (or the input sizes when `s` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "Round-trip through the frequency domain:\n>>> x = lucid.randn(32, 32)\n>>> X = lucid.fft.fft2(x)\n>>> x_rec = lucid.fft.ifft2(X)\n>>> x_rec.shape\n(32, 32)\nLow-pass filtering in the frequency domain:\n>>> X = lucid.fft.fft2(lucid.randn(64, 64))\n>>> # Zero out high frequencies, then invert\n>>> x_smooth = lucid.fft.ifft2(X)"
+      ],
+      "notes": [
+        "**Round-trip** — for any 2-D complex tensor `x`:\n\n$$\n\\text{ifft2}(\\text{fft2}(x)) \\approx x\n$$\n**Real outputs** — if `input` is the 2-D DFT of a real image\n(conjugate-symmetric in 2-D), the imaginary part of the output will\nbe negligibly small.  Use `irfft2` for strictly real output."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "rfftn",
+      "path": "lucid.fft.rfftn",
+      "kind": "function",
+      "labels": [],
+      "signature": "rfftn(input: Tensor, s: int | Sequence[int] | None = None, dim: int | Sequence[int] | None = None, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L831",
+      "subcategory": null,
+      "summary": "N-dimensional FFT of a real-valued input, exploiting conjugate symmetry.",
+      "extended": "When the input is real, its N-dimensional DFT satisfies the\nHermitian (conjugate-symmetric) property:\n\n$$\nX[k_1, \\ldots, k_d] = X^*[N_1 - k_1, \\ldots, N_d - k_d].\n$$\nOnly the non-redundant half of the spectrum along the *last*\ntransformed axis needs to be stored.  For a last-axis length\n$N$, the output contains only $\\lfloor N/2 \\rfloor + 1$\nunique complex values along that axis.  All other axes are full-length\n($N_i$ bins each).",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Real-valued input tensor of any shape.  Passing a complex tensor\nis accepted but the imaginary part is silently discarded by the\nengine.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "int or sequence of int",
+          "description": "Signal length(s) along each transformed axis.  When given, the\nlast element `s[-1]` determines the last-axis size before the\nreal FFT; the output last axis will be `s[-1] // 2 + 1`.\n`len(s)` must equal `len(dim)` when both are sequences.\nIf `None`, each axis is transformed at its current size.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes over which to compute the transform.  The *last*\nelement of `dim` is the axis that gets the conjugate-symmetry\ncompression.  Defaults to all axes when `None`.",
+          "default": "None"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  $N$ is the product of the *full* (uncompressed)\nlengths of all transformed axes.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept:\n\n- All transformed axes except the last have their original lengths\n  (or `s[i]` when specified).\n- The *last* transformed axis has length\n  $\\lfloor N_{\\text{last}} / 2 \\rfloor + 1$."
+      },
+      "raises": [],
+      "examples": [
+        "1-D real FFT:\n>>> x = lucid.randn(128)\n>>> X = lucid.fft.rfftn(x)\n>>> X.shape   # 128 // 2 + 1 = 65\n(65,)\n3-D real FFT over all axes:\n>>> x = lucid.randn(16, 32, 64)\n>>> X = lucid.fft.rfftn(x)\n>>> X.shape   # last axis: 64 // 2 + 1 = 33\n(16, 32, 33)\nExplicit output size for zero-padding:\n>>> X = lucid.fft.rfftn(lucid.randn(60), s=[64])\n>>> X.shape   # 64 // 2 + 1 = 33\n(33,)"
+      ],
+      "notes": [
+        "**Why n//2 + 1?** — A real-to-complex 1-D DFT of length $N$\nhas the symmetry $X[N-k] = X^*[k]$.  The unique bins are\ntherefore $k = 0, 1, \\ldots, \\lfloor N/2 \\rfloor$, giving\n$\\lfloor N/2 \\rfloor + 1$ complex values.  For even $N$\nthis is $N/2 + 1$; for odd $N$ it is $(N+1)/2$.\n\n**Nyquist theorem** — for a real discrete signal sampled at rate\n$f_s$, the highest representable frequency is the Nyquist\nfrequency $f_s / 2$.  The bin at index\n$\\lfloor N/2 \\rfloor$ corresponds exactly to this frequency.\nAny signal energy above $f_s / 2$ aliases back into the\n$[0, f_s/2]$ range — this is the aliasing artefact that the\nsampling theorem warns against.\n\n**Memory saving** — compared to `fftn`, `rfftn` stores\nroughly half the complex coefficients along the last axis, reducing\npeak memory and compute by ~2× for large real tensors."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "irfftn",
+      "path": "lucid.fft.irfftn",
+      "kind": "function",
+      "labels": [],
+      "signature": "irfftn(input: Tensor, s: int | Sequence[int] | None = None, dim: int | Sequence[int] | None = None, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L939",
+      "subcategory": null,
+      "summary": "N-dimensional inverse FFT for a Hermitian-symmetric spectrum.",
+      "extended": "Computes the inverse N-dimensional FFT assuming the input is\nconjugate-symmetric (Hermitian), as produced by `rfftn`.\nThe output is guaranteed to be real-valued.\n\nFor the last transformed axis, the full-length signal size must be\nspecified or inferred: given an input last-axis of length\n$m = \\lfloor N/2 \\rfloor + 1$, the default assumed full length\nis $N = 2(m - 1)$ (even).  Supply `s[-1]` explicitly when\nthe original signal length was odd.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex Hermitian tensor (frequency domain) of any shape,\ntypically the output of `rfftn`.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "int or sequence of int",
+          "description": "Full output signal length(s) along each transformed axis.  The\nlast element is the real (time-domain) length of the last\ntransformed axis.  For all other axes `s[i]` may equal the\ncorresponding input axis length.  If `None`, the last axis\noutput length defaults to $2 (m - 1)$ where $m$ is\nthe input last-axis length; all other axes keep their input sizes.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes over which to compute the inverse transform.\nDefaults to all axes.",
+          "default": "None"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Real tensor (`float32`) whose shape matches `input` except:\n\n- The last transformed axis has length `s[-1]` (or\n  $2(m-1)$ by default, where $m$ is the input\n  last-axis length).\n- All other transformed axes have lengths `s[i]` (or input\n  sizes when `s` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "Round-trip through the real FFT:\n>>> x = lucid.randn(128)\n>>> X = lucid.fft.rfftn(x)\n>>> X.shape\n(65,)\n>>> x_rec = lucid.fft.irfftn(X, s=[128])\n>>> x_rec.shape\n(128,)\n3-D round-trip:\n>>> x = lucid.randn(16, 32, 64)\n>>> X = lucid.fft.rfftn(x)\n>>> x_rec = lucid.fft.irfftn(X, s=[16, 32, 64])\n>>> x_rec.shape\n(16, 32, 64)"
+      ],
+      "notes": [
+        "**Specifying odd-length signals** — if the original real signal had\nan odd length $N$ (so the rfft output had $(N+1)/2$\nbins), you must pass `s=[N]` explicitly.  Without it the default\n$2(m-1)$ rule would give $N-1$ (even), producing the\nwrong output length.\n\n**Round-trip** — for a real tensor `x`:\n\n$$\n\\text{irfftn}(\\text{rfftn}(x, \\text{norm}=m), s, \\text{norm}=m)\n\\approx x\n$$\nwhere `s` should contain the original axis sizes to avoid the\neven/odd ambiguity."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "rfft",
+      "path": "lucid.fft.rfft",
+      "kind": "function",
+      "labels": [],
+      "signature": "rfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1045",
+      "subcategory": null,
+      "summary": "1-D FFT of a real-valued input along a single axis.",
+      "extended": "Computes the one-dimensional DFT of a real signal and returns only\nthe non-redundant complex output bins.  For a real input of length\n$N$, the DFT satisfies $X[N-k] = X^*[k]$, so only\n$\\lfloor N/2 \\rfloor + 1$ unique complex values need to be\nstored.\n\nThe mathematical definition is identical to `fft`:\n\n$$\nX[k] = \\sum_{n=0}^{N-1} x[n]\\, e^{-i 2\\pi k n / N},\n\\quad k = 0, 1, \\ldots, \\lfloor N/2 \\rfloor.\n$$",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Real-valued input tensor of any shape.",
+          "default": null
+        },
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Number of input samples used (along `dim`).  The axis is\nzero-padded or truncated to this length before the transform.\nIf `None`, the full axis length is used.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis over which to compute the transform.  Default is `-1`\n(last axis).",
+          "default": "-1"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that axis `dim` has length $\\lfloor n/2 \\rfloor + 1$\n(where $n$ is the effective input length along that axis)."
+      },
+      "raises": [],
+      "examples": [
+        "Real FFT of a length-128 signal:\n>>> x = lucid.randn(128)\n>>> X = lucid.fft.rfft(x)\n>>> X.shape   # 128 // 2 + 1 = 65\n(65,)\nRound-trip:\n>>> x_rec = lucid.fft.irfft(X, n=128)\n>>> x_rec.shape\n(128,)"
+      ],
+      "notes": [
+        "**Output size** — for an input axis of length $N$ the output\nhas $N//2 + 1$ complex bins:\n\n- Bin 0 is the DC component (purely real for a real input).\n- Bins 1 through $N//2 - 1$ are complex (positive frequencies).\n- Bin $N//2$ is the Nyquist component (purely real for even\n  $N$).\n\n**Inverse** — use `irfft` to reconstruct the real signal.\nYou must pass the original length `n` to resolve the even/odd\nambiguity when the output of `rfft` has an odd number of bins."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "irfft",
+      "path": "lucid.fft.irfft",
+      "kind": "function",
+      "labels": [],
+      "signature": "irfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1117",
+      "subcategory": null,
+      "summary": "1-D inverse FFT for a Hermitian-symmetric spectrum.",
+      "extended": "Computes the inverse one-dimensional FFT of a conjugate-symmetric\n(Hermitian) spectrum, as produced by `rfft`, and returns a\nreal-valued output.\n\nGiven an input of length $m = \\lfloor N/2 \\rfloor + 1$, the\nfull-length real output has length $N$.  The default assumption\nis that $N = 2(m-1)$ (even); supply `n` explicitly when the\noriginal signal length was odd.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex Hermitian input tensor (the one-sided spectrum produced\nby `rfft`), of any shape.",
+          "default": null
+        },
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Length of the output (real) axis.  If `None`, the output\nlength defaults to $2(m - 1)$ where $m$ is the\ninput axis length.  Pass the original signal length to avoid\nthe even/odd ambiguity.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis over which to compute the inverse transform.  Default is\n`-1` (last axis).",
+          "default": "-1"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Real tensor (`float32`) with the same shape as `input`\nexcept that axis `dim` has length `n` (or $2(m-1)$\nwhen `n` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "Round-trip with explicit length:\n>>> x = lucid.randn(100)              # odd length\n>>> X = lucid.fft.rfft(x)\n>>> X.shape                           # 51\n(51,)\n>>> x_rec = lucid.fft.irfft(X, n=100)\n>>> x_rec.shape\n(100,)\nDefault (even-length assumption):\n>>> X = lucid.fft.rfft(lucid.randn(128))\n>>> lucid.fft.irfft(X).shape          # 2*(65-1) = 128\n(128,)"
+      ],
+      "notes": [
+        "**Odd-length signals** — if the original real signal had odd length\n$N$, the `rfft` output has $(N+1)/2$ bins.  The\ndefault $2(m-1)$ rule gives $N-1$ instead of $N$.\nAlways pass `n=N` explicitly when the original length was odd.\n\n**Normalisation parity** — to faithfully invert `rfft`, use\nthe same `norm` value for both the forward and inverse calls."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "rfft2",
+      "path": "lucid.fft.rfft2",
+      "kind": "function",
+      "labels": [],
+      "signature": "rfft2(input: Tensor, s: Sequence[int] | None = None, dim: Sequence[int] = (-2, -1), norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1186",
+      "subcategory": null,
+      "summary": "2-D FFT of a real-valued input over a pair of axes.",
+      "extended": "Computes the two-dimensional DFT of a real tensor and returns only\nthe non-redundant complex coefficients.  For a real input of shape\n$(M, N)$ (along the two transformed axes), the output shape\nis $(M, N//2 + 1)$ — full along the first transformed axis\nand compressed along the last.\n\nThis is a convenience wrapper around `rfftn` restricted to\ntwo axes (default: the last two).",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Real-valued input tensor with at least 2 dimensions.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "sequence of int",
+          "description": "Output sizes `(M_out, N_out)` along the two transformed axes.\nThe last value `s[-1]` is the full signal length along the last\naxis before the real FFT; the output last axis will be\n`s[-1] // 2 + 1`.  If `None`, current axis sizes are used.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "sequence of int",
+          "description": "The two axes over which to compute the transform.  Default is\n`(-2, -1)`.  The *last* element receives the conjugate-symmetry\ncompression.",
+          "default": "(-2, -1)"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept:\n\n- The first transformed axis has length `s[0]` (or input size).\n- The *last* transformed axis has length\n  $\\lfloor s[-1]/2 \\rfloor + 1$."
+      },
+      "raises": [],
+      "examples": [
+        "2-D real FFT of an image-like tensor:\n>>> x = lucid.randn(64, 64)\n>>> X = lucid.fft.rfft2(x)\n>>> X.shape   # last axis: 64 // 2 + 1 = 33\n(64, 33)\nRound-trip:\n>>> x_rec = lucid.fft.irfft2(X, s=[64, 64])\n>>> x_rec.shape\n(64, 64)"
+      ],
+      "notes": [
+        "**Typical use** — `rfft2` is the standard choice for 2-D image\nconvolution via the convolution theorem:\n\n$$\n(f * g)[m, n] = \\mathcal{F}^{-1}\\{\\mathcal{F}\\{f\\} \\cdot\n                \\mathcal{F}\\{g\\}\\}[m, n],\n$$\nwhere $\\mathcal{F}$ denotes the 2-D DFT.  Performing the\nmultiplication in the frequency domain reduces the cost of a full\nconvolution from $O(M^2 N^2)$ to $O(MN \\log(MN))$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "irfft2",
+      "path": "lucid.fft.irfft2",
+      "kind": "function",
+      "labels": [],
+      "signature": "irfft2(input: Tensor, s: Sequence[int] | None = None, dim: Sequence[int] = (-2, -1), norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1262",
+      "subcategory": null,
+      "summary": "2-D inverse FFT for a Hermitian-symmetric spectrum.",
+      "extended": "Recovers a real 2-D signal from its one-sided 2-D spectrum as\nproduced by `rfft2`.  The output is guaranteed to be\nreal-valued.\n\nFor an input of shape $(M, m)$ where $m = \\lfloor N/2 \\rfloor + 1$, the default full output size is $(M, 2(m-1))$\n(assuming an even last-axis length $N$).",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex Hermitian tensor (one-sided 2-D spectrum) with at least\n2 dimensions, typically the output of `rfft2`.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "sequence of int",
+          "description": "Full output sizes `(M_out, N_out)` along the two transformed\naxes.  Pass the original signal shape to avoid the even/odd\nambiguity in the last axis.  If `None`, the last axis\ndefaults to $2(m-1)$.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "sequence of int",
+          "description": "The two axes over which to compute the inverse transform.\nDefault is `(-2, -1)`.",
+          "default": "(-2, -1)"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Real tensor (`float32`) with the same shape as `input`\nexcept the two transformed axes have lengths `s[0]` and\n`s[1]` (or inferred sizes when `s` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "Round-trip for a 128×256 image:\n>>> x = lucid.randn(128, 256)\n>>> X = lucid.fft.rfft2(x)\n>>> X.shape   # (128, 129)\n(128, 129)\n>>> x_rec = lucid.fft.irfft2(X, s=[128, 256])\n>>> x_rec.shape\n(128, 256)"
+      ],
+      "notes": [
+        "**Odd-length last axis** — if the original image had an odd number\nof columns $N$, always pass `s=[M, N]` explicitly."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "hfftn",
+      "path": "lucid.fft.hfftn",
+      "kind": "function",
+      "labels": [],
+      "signature": "hfftn(input: Tensor, s: int | Sequence[int] | None = None, dim: int | Sequence[int] | None = None, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1334",
+      "subcategory": null,
+      "summary": "N-dimensional FFT of a Hermitian-symmetric complex signal.",
+      "extended": "Computes the N-dimensional DFT of a signal that is known to be\nHermitian (conjugate-symmetric), producing a real-valued output.\nThe input is the *half-spectrum* as conventionally stored by\n`rfftn` or constructed manually: the first $n//2 + 1$\nbins along the last transformed axis, with no redundancy stored.\n\nThe implementation uses the identity:\n\n$$\n\\text{hfftn}(x, n, \\text{norm}) =\n\\text{irfftn}(x^*, n, \\text{norm}=\\text{dual}(\\text{norm})),\n$$\nwhere $x^*$ is the element-wise complex conjugate and\n`dual` swaps `\"backward\"` ↔ `\"forward\"` while leaving\n`\"ortho\"` unchanged.  This is mathematically equivalent to a\nforward DFT on a Hermitian signal: conjugating the input flips the\nsign in the exponent, converting the inverse-real transform into a\nforward-real one.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex Hermitian half-spectrum tensor of any shape.  The last\ntransformed axis is the compressed one-sided axis (length\n$\\lfloor N/2 \\rfloor + 1$).",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "int or sequence of int",
+          "description": "Full output signal length(s) along each transformed axis.  The\nlast value gives the full real length of the last axis.  If\n`None`, the last axis defaults to $2(m-1)$ where\n$m$ is the input last-axis length.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes over which to compute the transform.  Defaults to\nall axes.",
+          "default": "None"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  Note that the dual normalisation is applied\ninternally; the semantics mirror those of `fftn`.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Real tensor (`float32`) whose shape matches `input` except\nthat the last transformed axis has length `s[-1]` (or\n$2(m-1)$ when `s` is `None`), and all other\ntransformed axes have lengths `s[i]`."
+      },
+      "raises": [],
+      "examples": [
+        "Recover a real spectrum from a Hermitian half-spectrum:\n>>> x_complex = lucid.randn(33)   # half-spectrum for N=64\n>>> y = lucid.fft.hfftn(x_complex, s=[64])\n>>> y.shape\n(64,)\nN-dimensional example:\n>>> x = lucid.randn(16, 33)           # last axis: 33 = 64//2+1\n>>> y = lucid.fft.hfftn(x, s=[16, 64])\n>>> y.shape\n(16, 64)"
+      ],
+      "notes": [
+        "**Relationship to rfft / irfft** — the Hermitian FFT pair\n(`hfftn` / `ihfftn`) is the *Fourier-domain dual* of the real\nFFT pair (`rfftn` / `irfftn`):\n\n- `rfftn` takes a **real** time-domain signal → **half complex**\n  spectrum.\n- `hfftn` takes a **half complex** Hermitian signal (frequency\n  domain) → **real** output in the transform domain.\n\n**Sign convention** — `hfftn` uses the *forward* FFT sign\nconvention ($e^{-i2\\pi kn/N}$) applied to the Hermitian input.\nThis means applying `hfftn` followed by `ihfftn` recovers the\noriginal half-spectrum (up to floating-point rounding)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ihfftn",
+      "path": "lucid.fft.ihfftn",
+      "kind": "function",
+      "labels": [],
+      "signature": "ihfftn(input: Tensor, s: int | Sequence[int] | None = None, dim: int | Sequence[int] | None = None, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1425",
+      "subcategory": null,
+      "summary": "N-dimensional inverse FFT of a real-valued signal, giving a Hermitian output.",
+      "extended": "Computes the inverse of `hfftn`: given a real-valued input,\nproduces the conjugate-symmetric half-spectrum.  The implementation\nuses the identity:\n\n$$\n\\text{ihfftn}(x, s, \\text{norm}) =\n\\overline{\\text{rfftn}(x, s, \\text{norm}=\\text{dual}(\\text{norm}))},\n$$\nwhere $\\overline{(\\cdot)}$ denotes complex conjugation.\n\nEquivalently, `ihfftn` computes the *backward*-sign DFT\n($e^{+i2\\pi kn/N}$) of the real input and returns only the\nfirst $\\lfloor N/2 \\rfloor + 1$ bins along the last\ntransformed axis, exactly mirroring the output format of `rfft`.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Real-valued input tensor of any shape.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "int or sequence of int",
+          "description": "Signal length(s) along each transformed axis.  The last value\ndetermines the full real length, and the output last axis will\nbe `s[-1] // 2 + 1`.  If `None`, current axis sizes are used.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes over which to compute the transform.  Defaults to\nall axes.",
+          "default": "None"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that the last transformed axis has length\n$\\lfloor N/2 \\rfloor + 1$."
+      },
+      "raises": [],
+      "examples": [
+        "Compute the Hermitian half-spectrum of a real signal:\n>>> x = lucid.randn(128)\n>>> H = lucid.fft.ihfftn(x)\n>>> H.shape   # 128 // 2 + 1 = 65\n(65,)\nRound-trip:\n>>> x_rec = lucid.fft.hfftn(H, s=[128])\n>>> x_rec.shape\n(128,)"
+      ],
+      "notes": [
+        "**Round-trip with hfftn** — for a real tensor `x`:\n\n$$\n\\text{hfftn}(\\text{ihfftn}(x, s, \\text{norm}=m),\ns, \\text{norm}=m) \\approx x.\n$$\n**Relationship to rfft** — the output of `ihfftn` with\n`norm='backward'` has the same element magnitudes as `rfft` with\n`norm='backward'` but the signs of the imaginary parts are\nnegated (due to the conjugation in the identity above)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "hfft",
+      "path": "lucid.fft.hfft",
+      "kind": "function",
+      "labels": [],
+      "signature": "hfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1504",
+      "subcategory": null,
+      "summary": "1-D FFT of a Hermitian-symmetric complex signal.",
+      "extended": "Computes the one-dimensional DFT of a Hermitian (conjugate-symmetric)\nsignal stored as a one-sided half-spectrum, returning a real-valued\noutput.  This is the 1-D specialisation of `hfftn`.\n\nA Hermitian signal satisfies $x[N-k] = x^*[k]$, so only\n$\\lfloor N/2 \\rfloor + 1$ complex values need to be given as\ninput.  The transform is mathematically:\n\n$$\ny[n] = \\sum_{k=0}^{N-1} x[k]\\, e^{-i 2\\pi k n / N},\n\\quad n = 0, \\ldots, N-1,\n$$\nwhere the full spectrum $x[k]$ is reconstructed from the\nhalf-spectrum by Hermitian extension before the sum is evaluated.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex half-spectrum tensor of any shape.  Axis `dim` is\nexpected to have length $\\lfloor N/2 \\rfloor + 1$.",
+          "default": null
+        },
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Full length of the output (real) axis.  If `None`, the output\ndefaults to $2(m-1)$ where $m$ is the input axis\nlength.  Specify `n` explicitly when the original signal\nlength was odd.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis over which to compute the transform.  Default is `-1`.",
+          "default": "-1"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Real tensor (`float32`) with the same shape as `input`\nexcept that axis `dim` has length `n` (or $2(m-1)$\nwhen `n` is `None`)."
+      },
+      "raises": [],
+      "examples": [
+        "Construct a Hermitian half-spectrum and recover the real signal:\n>>> half_spec = lucid.randn(33)  # half-spectrum for N=64\n>>> y = lucid.fft.hfft(half_spec, n=64)\n>>> y.shape\n(64,)\nRound-trip with ``ihfft``:\n>>> x = lucid.randn(64)\n>>> H = lucid.fft.ihfft(x)\n>>> x_rec = lucid.fft.hfft(H, n=64)\n>>> x_rec.shape\n(64,)"
+      ],
+      "notes": [
+        "**Usage pattern** — `hfft` is rarely needed in signal processing\npipelines that use the standard `rfft` / `irfft` pair.  It\nbecomes useful when working in the frequency domain: if you have\nsynthesised or modified a Hermitian spectrum directly and want to\nrecover the implied real time-domain signal, `hfft` does it in\none call without needing to materialise the full (redundant) spectrum."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ihfft",
+      "path": "lucid.fft.ihfft",
+      "kind": "function",
+      "labels": [],
+      "signature": "ihfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1577",
+      "subcategory": null,
+      "summary": "1-D inverse FFT of a real signal, giving a Hermitian half-spectrum.",
+      "extended": "Computes the inverse of `hfft`: given a real-valued input,\nreturns the conjugate of its one-sided real FFT.  The output is\ncomplex and has length $\\lfloor N/2 \\rfloor + 1$ along\naxis `dim`.\n\nMathematically:\n\n$$\nY[k] = \\overline{\\text{rfft}(x)[k]},\n\\quad k = 0, 1, \\ldots, \\lfloor N/2 \\rfloor,\n$$\nwhere $\\overline{(\\cdot)}$ denotes complex conjugation and\nthe dual normalisation is applied to match `hfft`.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Real-valued input tensor of any shape.",
+          "default": null
+        },
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Number of input samples to use.  If `None`, the full axis\nlength is used.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis over which to compute the transform.  Default is `-1`.",
+          "default": "-1"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept that axis `dim` has length $\\lfloor n/2 \\rfloor + 1$."
+      },
+      "raises": [],
+      "examples": [
+        "Compute the Hermitian half-spectrum:\n>>> x = lucid.randn(64)\n>>> H = lucid.fft.ihfft(x)\n>>> H.shape   # 64 // 2 + 1 = 33\n(33,)\nRound-trip check:\n>>> x_rec = lucid.fft.hfft(H, n=64)\n>>> x_rec.shape\n(64,)"
+      ],
+      "notes": [
+        "**Round-trip with hfft** — for a real tensor `x` of length\n$N$:\n\n$$\n\\text{hfft}(\\text{ihfft}(x, N), N) \\approx x.\n$$\n**Negative imaginary parts** — because `ihfft` conjugates the\n`rfft` output, the imaginary parts of the result are the negatives\nof those from `rfft`.  For a real input, `rfft(x)[0]` and\n`rfft(x)[N//2]` (for even $N$) are both real, so\n`ihfft(x)[0]` and `ihfft(x)[N//2]` are also real."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "hfft2",
+      "path": "lucid.fft.hfft2",
+      "kind": "function",
+      "labels": [],
+      "signature": "hfft2(input: Tensor, s: Sequence[int] | None = None, dim: Sequence[int] = (-2, -1), norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1649",
+      "subcategory": null,
+      "summary": "2-D FFT of a Hermitian-symmetric complex signal over a pair of axes.",
+      "extended": "Computes the two-dimensional DFT of a Hermitian signal stored as a\none-sided half-spectrum (as produced by `ihfft2`), returning a\nreal-valued output.  This is the 2-D specialisation of `hfftn`.\n\nFor an input of shape $(M, m)$ where $m = N//2 + 1$,\nthe output shape is $(M, N)$.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Complex Hermitian half-spectrum tensor with at least 2 dimensions.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "sequence of int",
+          "description": "Full output sizes `(M_out, N_out)` along the two transformed\naxes.  If `None`, the last axis defaults to $2(m-1)$.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "sequence of int",
+          "description": "The two axes over which to compute the transform.  Default is\n`(-2, -1)`.",
+          "default": "(-2, -1)"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Real tensor (`float32`) with the same shape as `input`\nexcept the last transformed axis has length `s[-1]` (or\n$2(m-1)$ by default)."
+      },
+      "raises": [],
+      "examples": [
+        "Recover a real 2-D signal from its Hermitian half-spectrum:\n>>> H = lucid.randn(64, 33)   # half-spectrum for 64×64 real image\n>>> y = lucid.fft.hfft2(H, s=[64, 64])\n>>> y.shape\n(64, 64)"
+      ],
+      "notes": [
+        "**Odd-length last axis** — always pass `s` explicitly when the\noriginal last axis had an odd length to avoid the default\n$2(m-1)$ even-length assumption."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ihfft2",
+      "path": "lucid.fft.ihfft2",
+      "kind": "function",
+      "labels": [],
+      "signature": "ihfft2(input: Tensor, s: Sequence[int] | None = None, dim: Sequence[int] = (-2, -1), norm: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1703",
+      "subcategory": null,
+      "summary": "2-D inverse FFT of a real signal, giving a Hermitian half-spectrum.",
+      "extended": "Computes the inverse of `hfft2`: given a real-valued 2-D input,\nreturns the conjugated one-sided 2-D spectrum (the Hermitian\nhalf-spectrum).  This is the 2-D specialisation of `ihfftn`.\n\nFor an input of shape $(M, N)$, the output shape is\n$(M, N//2 + 1)$ — full along the first axis and compressed\nalong the last.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Real-valued input tensor with at least 2 dimensions.",
+          "default": null
+        },
+        {
+          "name": "s",
+          "annotation": "sequence of int",
+          "description": "Signal sizes `(M_out, N_out)` along the two transformed axes.\nIf `None`, current axis sizes are used.",
+          "default": "None"
+        },
+        {
+          "name": "dim",
+          "annotation": "sequence of int",
+          "description": "The two axes over which to compute the transform.  Default is\n`(-2, -1)`.",
+          "default": "(-2, -1)"
+        },
+        {
+          "name": "norm",
+          "annotation": "str or None",
+          "description": "Normalisation mode — `\"backward\"` (default), `\"forward\"`, or\n`\"ortho\"`.  See `fftn` for the full description.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Complex tensor (`complex64`) with the same shape as `input`\nexcept the last transformed axis has length\n$\\lfloor N/2 \\rfloor + 1$."
+      },
+      "raises": [],
+      "examples": [
+        "Compute the Hermitian half-spectrum of a 2-D real image:\n>>> x = lucid.randn(64, 64)\n>>> H = lucid.fft.ihfft2(x)\n>>> H.shape   # last axis: 64 // 2 + 1 = 33\n(64, 33)\nRound-trip:\n>>> x_rec = lucid.fft.hfft2(H, s=[64, 64])\n>>> x_rec.shape\n(64, 64)"
+      ],
+      "notes": [
+        "**Round-trip with hfft2** — for a real tensor `x` of shape\n$(M, N)$:\n\n$$\n\\text{hfft2}(\\text{ihfft2}(x), s=[M, N]) \\approx x.\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fftfreq",
+      "path": "lucid.fft.fftfreq",
+      "kind": "function",
+      "labels": [],
+      "signature": "fftfreq(n: int, d: float = 1.0, dtype: DTypeLike = None, device: DeviceLike = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1770",
+      "subcategory": null,
+      "summary": "Frequency bin centres for the output of `fft` / `fftn`.",
+      "extended": "Returns a 1-D tensor of length `n` containing the normalised\ndiscrete frequencies corresponding to the output bins of a length-`n`\nDFT computed with sample spacing `d`.  The values follow the\nstandard FFT frequency ordering:\n\n$$\nf_k = \\frac{k}{n \\cdot d}, \\quad\nk \\in \\{0, 1, \\ldots, \\lfloor n/2 \\rfloor - 1,\n          -\\lfloor n/2 \\rfloor, \\ldots, -1\\}.\n$$\nEquivalently the output tensor is:\n\n.. code-block:: text\n\n[0, 1, 2, ..., n/2-1, -n/2, ..., -2, -1] / (d * n)   # n even\n    [0, 1, 2, ..., (n-1)/2, -(n-1)/2, ..., -1] / (d * n) # n odd",
+      "parameters": [
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Window length (number of DFT points).  Must be positive.",
+          "default": null
+        },
+        {
+          "name": "d",
+          "annotation": "float",
+          "description": "Sample spacing (inverse of the sample rate).  Default is `1.0`,\nwhich gives frequencies in units of *cycles per sample*.\nPass `d = 1/fs` where `fs` is the sample rate in Hz to get\nfrequencies in Hz.",
+          "default": "1.0"
+        },
+        {
+          "name": "dtype",
+          "annotation": "DTypeLike",
+          "description": "Data type of the output tensor.  Default uses the framework's\ndefault floating-point type.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "DeviceLike",
+          "description": "Device on which to allocate the output tensor.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "1-D float tensor of shape `(n,)` containing the frequency bin\ncentres in the same order as the DFT output."
+      },
+      "raises": [],
+      "examples": [
+        "Frequencies for a length-8 DFT at sample spacing 1:\n>>> lucid.fft.fftfreq(8)\n# [ 0.,   0.125,  0.25,  0.375, -0.5,  -0.375, -0.25, -0.125]\nFrequencies in Hz for a 1 kHz sample rate:\n>>> fs = 1000.0\n>>> freqs = lucid.fft.fftfreq(256, d=1.0/fs)\n>>> freqs.shape\n(256,)\n>>> # freqs[0] == 0.0,  freqs[128] == -500.0 (Nyquist)\nCentred frequency axis for plotting:\n>>> freqs_centred = lucid.fft.fftshift(lucid.fft.fftfreq(256, d=1.0/1000.0))\n>>> # Now ranges from -500 Hz to ~496 Hz, centred at 0"
+      ],
+      "notes": [
+        "**Physical frequency interpretation** — for a signal sampled at\nrate $f_s = 1/d$:\n\n- The first bin ($k=0$) is DC (zero frequency).\n- Bins $k = 1, \\ldots, \\lfloor n/2 \\rfloor - 1$ are positive\n  frequencies $k f_s / n$.\n- Bin $k = \\lfloor n/2 \\rfloor$ is the *Nyquist frequency*\n  $f_s / 2$ (for even $n$).  This is the highest\n  representable frequency without aliasing.\n- Bins $k = \\lfloor n/2 \\rfloor + 1, \\ldots, n-1$ are\n  aliased negative frequencies.\n\n**Centred display** — to get frequencies in monotonically increasing\norder (centred at zero), apply `fftshift` to both the frequency\nvector and the DFT output.\n\n**Closed-form implementation** — `fftfreq` is computed as a\nclosed-form expression over `lucid.arange`; no external\nlibraries are required."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "rfftfreq",
+      "path": "lucid.fft.rfftfreq",
+      "kind": "function",
+      "labels": [],
+      "signature": "rfftfreq(n: int, d: float = 1.0, dtype: DTypeLike = None, device: DeviceLike = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1870",
+      "subcategory": null,
+      "summary": "Frequency bin centres for the output of `rfft` / `rfftn`.",
+      "extended": "Returns a 1-D tensor of length $\\lfloor n/2 \\rfloor + 1$\ncontaining the non-negative discrete frequencies corresponding to\nthe output bins of a length-`n` real DFT.  Because `rfft`\nexploits conjugate symmetry and returns only the unique half of the\nspectrum, all returned frequencies are non-negative:\n\n$$\nf_k = \\frac{k}{n \\cdot d},\n\\quad k = 0, 1, \\ldots, \\lfloor n/2 \\rfloor.\n$$",
+      "parameters": [
+        {
+          "name": "n",
+          "annotation": "int",
+          "description": "Length of the original (real) signal, not the length of the\n`rfft` output.  Must be positive.",
+          "default": null
+        },
+        {
+          "name": "d",
+          "annotation": "float",
+          "description": "Sample spacing (inverse of the sample rate).  Default is `1.0`\n(cycles per sample).  Pass `d = 1/fs` to get frequencies in Hz.",
+          "default": "1.0"
+        },
+        {
+          "name": "dtype",
+          "annotation": "DTypeLike",
+          "description": "Data type of the output tensor.",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "DeviceLike",
+          "description": "Device on which to allocate the output tensor.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "1-D float tensor of shape $(\\lfloor n/2 \\rfloor + 1,)$\ncontaining the non-negative frequency bin centres, in ascending\norder from 0 to the Nyquist frequency $1/(2d)$."
+      },
+      "raises": [],
+      "examples": [
+        "Frequencies for a length-8 real DFT:\n>>> lucid.fft.rfftfreq(8)\n# [0., 0.125, 0.25, 0.375, 0.5]   — shape (5,)\nFrequencies in Hz at 44100 Hz sample rate:\n>>> fs = 44100.0\n>>> freqs = lucid.fft.rfftfreq(2048, d=1.0/fs)\n>>> freqs.shape\n(1025,)\n>>> # freqs[-1] ≈ 22050.0 Hz  (Nyquist)\nPair with rfft output:\n>>> x = lucid.randn(1024)\n>>> X = lucid.fft.rfft(x)\n>>> freqs = lucid.fft.rfftfreq(1024)\n>>> # len(freqs) == X.shape[-1] == 513"
+      ],
+      "notes": [
+        "**Non-negative only** — unlike `fftfreq`, `rfftfreq` returns\nonly non-negative frequencies.  The last bin is the Nyquist frequency\n$f_{n//2} = 1/(2d) = f_s/2$.  This is because for a real input\nthe negative-frequency bins are redundant (they are the complex\nconjugates of the positive-frequency bins).\n\n**Bin count** — for even $n$, there are $n/2 + 1$ bins\n(including DC and Nyquist); for odd $n$, there are\n$(n+1)/2$ bins (including DC but no exact Nyquist bin).\n\n**Monotone ordering** — the output is always in ascending order,\nmaking it directly usable as an $x$-axis for power spectra.\nNo `fftshift` is needed."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fftshift",
+      "path": "lucid.fft.fftshift",
+      "kind": "function",
+      "labels": [],
+      "signature": "fftshift(input: Tensor, dim: int | Sequence[int] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L1955",
+      "subcategory": null,
+      "summary": "Shift the zero-frequency component to the centre of the spectrum.",
+      "extended": "Rearranges the output of `fft`, `fft2`, or `fftn`\nso that the zero-frequency bin (DC component) moves to the centre\nof each specified axis.  For an axis of length $N$, the\noperation performs a circular shift of $\\lfloor N/2 \\rfloor$\npositions:\n\n- Bins $\\lfloor N/2 \\rfloor, \\ldots, N-1$ (the negative\n  frequencies) wrap around to the *left* half of the axis.\n- Bins $0, \\ldots, \\lfloor N/2 \\rfloor - 1$ (DC and positive\n  frequencies) move to the *right* half.\n\nThe result is a spectrum ordered from the most-negative frequency\nto the most-positive, with DC at index $\\lfloor N/2 \\rfloor$.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Tensor containing DFT output (or any data in FFT frequency\nordering) of any shape.",
+          "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes along which to shift.  Negative indices are\nsupported.  Defaults to all axes when `None`.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Tensor with the same shape and dtype as `input`, rearranged\nso that zero frequency is centred along each specified axis."
+      },
+      "raises": [],
+      "examples": [
+        "Centre the spectrum of a 1-D signal:\n>>> x = lucid.randn(8)\n>>> X = lucid.fft.fft(x)\n>>> X_centred = lucid.fft.fftshift(X)\n>>> # X_centred[4] == X[0]  (DC at centre for N=8)\nCentre both the 2-D spectrum and its frequency axes:\n>>> x = lucid.randn(64, 64)\n>>> X = lucid.fft.fft2(x)\n>>> X_c = lucid.fft.fftshift(X)           # centred spectrum\n>>> freqs = lucid.fft.fftshift(lucid.fft.fftfreq(64))  # centred frequency axis"
+      ],
+      "notes": [
+        "**Visual motivation** — the standard FFT ordering places the DC\ncomponent at index 0 and the Nyquist frequency at index\n$N//2$.  When displaying spectra (e.g. 2-D power spectra of\nimages), it is conventional to show the DC component at the centre\nof the image.  `fftshift` performs exactly this reordering so\nthat the spatial-frequency origin is visually centred.\n\n**Frequency correspondence** — after shifting, use\n`fftfreq` with the same `n` and apply the same shift to\nobtain a matching, monotonically increasing frequency axis:\n\n$$\nf_{\\text{centred}} =\n\\text{fftshift}(\\text{fftfreq}(N, d)).\n$$\n**Inverse** — `ifftshift` undoes `fftshift` exactly.\nFor even $N$, `fftshift` and `ifftshift` are\nself-inverse (applying either twice returns the original).  For\nodd $N$ the two differ by one position.\n\n**Implementation** — realised as `lucid.roll` with shift\n$\\lfloor N/2 \\rfloor$ along each axis; no data copy is\nrequired when the underlying buffer supports strides."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ifftshift",
+      "path": "lucid.fft.ifftshift",
+      "kind": "function",
+      "labels": [],
+      "signature": "ifftshift(input: Tensor, dim: int | Sequence[int] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/fft/__init__.py#L2036",
+      "subcategory": null,
+      "summary": "Undo the zero-frequency centring performed by `fftshift`.",
+      "extended": "Performs the inverse of `fftshift`: given a centred spectrum\n(with DC at the middle of each axis), restores the standard FFT\nfrequency ordering (DC at index 0).\n\nFor an axis of length $N$, the operation is a circular shift\nof $-(N//2)$ positions, which is exactly $\\lceil N/2 \\rceil$\npositions in the forward direction (i.e., the *ceiling* variant\nrather than the *floor* used by `fftshift`).  For even\n$N$ the two shifts have the same magnitude; for odd $N$\nthey differ by one.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Tensor in centred-spectrum ordering (typically the output of\n`fftshift`), of any shape.",
+          "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int or sequence of int",
+          "description": "Axis or axes along which to shift.  Defaults to all axes.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Tensor with the same shape and dtype as `input`, rearranged\nback to the standard FFT ordering (DC at index 0 of each\nspecified axis)."
+      },
+      "raises": [],
+      "examples": [
+        "Round-trip through fftshift / ifftshift:\n>>> X = lucid.fft.fft(lucid.randn(16))\n>>> X_c = lucid.fft.fftshift(X)\n>>> X_back = lucid.fft.ifftshift(X_c)\n>>> # X_back ≈ X  (exact, not approximate)\nTypical pipeline for constructing a centred filter:\n>>> N = 64\n>>> freqs = lucid.fft.fftshift(lucid.fft.fftfreq(N))\n>>> # Build H_centred (e.g. Gaussian low-pass) in centred coords\n>>> # H = ...\n>>> # Then convert back to FFT ordering before inverting:\n>>> # x_filtered = lucid.fft.ifft(lucid.fft.ifftshift(H))"
+      ],
+      "notes": [
+        "**Exact inverse** — for any tensor `x` and any axis selection\n`dim`:\n\n$$\n\\text{ifftshift}(\\text{fftshift}(x, \\text{dim}), \\text{dim}) = x,\n$$\n$$\n\\text{fftshift}(\\text{ifftshift}(x, \\text{dim}), \\text{dim}) = x.\n$$\n**Even vs. odd** — for even $N$, `fftshift` and\n`ifftshift` are identical (both shift by $N/2$).  For\nodd $N$, `fftshift` shifts by $\\lfloor N/2 \\rfloor$\nand `ifftshift` shifts by $-\\lfloor N/2 \\rfloor$ (= shift\nby $\\lceil N/2 \\rceil$ forward), so they are distinct\noperations.  Always use the matching call to guarantee an exact\nround-trip.\n\n**Typical use** — when a signal has been constructed or modified in\ncentred-frequency space (e.g. a 2-D optical transfer function defined\nas centred), `ifftshift` must be applied before feeding it into\n`ifftn` to recover the correct spatial-domain signal."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "lucid.fft — discrete Fourier transform ops.",
+  "extended": "Mirrors the standard FFT surface: 18 transform variants\n(`fft` / `ifft` / `fft2` / `ifft2` / `fftn` / `ifftn` and the\n`r`- and `h`-prefixed counterparts) plus the four utility helpers\n`fftfreq` / `rfftfreq` / `fftshift` / `ifftshift`.\n\nBackend: every transform delegates to `mlx::core::fft` through the four\nengine primitives `_C_engine.fft.{fftn,ifftn,rfftn,irfftn}`.  MLX\nitself wraps Apple Accelerate vDSP under the hood, so both `Device::CPU`\nand `Device::GPU` tensors land on the same fast CPU FFT kernel — see\n`lucid/_C/ops/fft/_Detail.h` for the carve-out rationale.\n\nNormalisation: matches the standard convention.  `norm='backward'` (the\ndefault) leaves `fft` unscaled and divides `ifft` by `N`;\n`norm='forward'` swaps those; `norm='ortho'` divides both by\n`sqrt(N)`.  MLX's transforms always produce the `'backward'` form,\nso non-default norms are reached by post-multiplying the result.\n\nAutograd: each base op is wrapped in a `lucid.autograd.Function`\nsubclass.  The backward of every transform is the *dual* transform with\nthe *dual* normalisation (`backward ↔ forward`, `ortho ↔ ortho`),\nrestricted to the original input size for `r`/`ir` variants.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

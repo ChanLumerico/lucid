@@ -40,8 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Griffe generated API data (rebuilt on deploy)
-/public/api-data
+# Griffe generated API data is committed to keep the docs deploy fast —
+# the pre-commit hook rebuilds + re-stages it whenever lucid/ source
+# changes, so CI just consumes the JSON tree as a static input.
 
 # Pagefind static search index (rebuilt on deploy)
 /public/pagefind

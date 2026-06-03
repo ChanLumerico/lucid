@@ -1,0 +1,930 @@
+{
+  "slug": "lucid.profiler",
+  "name": "profiler",
+  "path": "lucid.profiler",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L1",
+  "members": [
+    {
+      "name": "OpEvent",
+      "path": "lucid.profiler.OpEvent",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "OpEvent(impl: _C_engine.OpEvent)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L20",
+      "subcategory": null,
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.profiler.OpEvent.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(impl: _C_engine.OpEvent)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L49",
+          "subcategory": null,
+          "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "name",
+          "path": "lucid.profiler.OpEvent.name",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "name: str",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L54",
+          "summary": "Operation name (e.g. 'matmul', 'add').",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "time_ns",
+          "path": "lucid.profiler.OpEvent.time_ns",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "time_ns: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L59",
+          "summary": "Wall-clock duration of the operation in nanoseconds.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "time_us",
+          "path": "lucid.profiler.OpEvent.time_us",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "time_us: float",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L64",
+          "summary": "Wall-clock duration in microseconds.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "float",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "time_ms",
+          "path": "lucid.profiler.OpEvent.time_ms",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "time_ms: float",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L69",
+          "summary": "Wall-clock duration in milliseconds.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "float",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "shape",
+          "path": "lucid.profiler.OpEvent.shape",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "shape: list[int]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L74",
+          "summary": "Output tensor shape.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[int]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "flops",
+          "path": "lucid.profiler.OpEvent.flops",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "flops: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L79",
+          "summary": "Estimated FLOPs for this operation.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "memory_delta_bytes",
+          "path": "lucid.profiler.OpEvent.memory_delta_bytes",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "memory_delta_bytes: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L84",
+          "summary": "Net memory allocated by this operation in bytes.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.profiler.OpEvent.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L88",
+          "subcategory": null,
+          "summary": "Return a developer-facing string representation of the instance.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A single recorded operation event captured by the profiler.",
+      "extended": "Each `OpEvent` corresponds to one C++ engine op invocation: name,\nwall-clock duration, output tensor shape, an FLOP estimate, and the\nnet memory delta. Profilers expose lists of these events so that\nper-op cost can be aggregated, exported, and visualised.",
+      "parameters": [
+        {
+          "name": "impl",
+          "annotation": "object",
+          "description": "Underlying engine `OpEvent` handle returned from the C++\nprofiler.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     y = lucid.randn(64, 64) @ lucid.randn(64, 64)\n>>> for ev in prof.events():\n...     print(ev.name, ev.time_us)"
+      ],
+      "notes": [
+        "Durations are reported in nanoseconds at the source; helper\nproperties expose the same value in microseconds and milliseconds\nfor convenience."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ProfileSummary",
+      "path": "lucid.profiler.ProfileSummary",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "ProfileSummary(name: str, events: list[OpEvent])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L96",
+      "subcategory": null,
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.profiler.ProfileSummary.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(name: str, events: list[OpEvent])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L132",
+          "subcategory": null,
+          "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "count",
+          "path": "lucid.profiler.ProfileSummary.count",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "count: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L138",
+          "summary": "Number of times this operation was called.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "total_time_us",
+          "path": "lucid.profiler.ProfileSummary.total_time_us",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "total_time_us: float",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L143",
+          "summary": "Total time in microseconds across all calls.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "float",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "avg_time_us",
+          "path": "lucid.profiler.ProfileSummary.avg_time_us",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "avg_time_us: float",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L148",
+          "summary": "Average time in microseconds per call.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "float",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "total_flops",
+          "path": "lucid.profiler.ProfileSummary.total_flops",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "total_flops: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L153",
+          "summary": "Total FLOPs across all calls.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.profiler.ProfileSummary.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L157",
+          "subcategory": null,
+          "summary": "Return a developer-facing string representation of the instance.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Aggregated timing summary for a single op name across many calls.",
+      "extended": "Produced by `Profiler.key_averages`, which buckets the recorded\n`OpEvent` list by op name and exposes total time, average\ntime, call count, and cumulative FLOP estimate. This is the natural\nobject for a \"top-k by self-time\" performance report.",
+      "parameters": [
+        {
+          "name": "name",
+          "annotation": "str",
+          "description": "Op name shared by all events in the summary.",
+          "default": null
+        },
+        {
+          "name": "events",
+          "annotation": "list of OpEvent",
+          "description": "Recorded events bucketed under `name`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     for _ in range(10):\n...         y = lucid.randn(64, 64) @ lucid.randn(64, 64)\n>>> for summary in prof.key_averages()[:3]:\n...     print(summary)"
+      ],
+      "notes": [
+        "The average is computed as\n\n$$\n\\bar{t} = \\frac{1}{N} \\sum_{i=1}^{N} t_i,\n$$\nwhere $N$ is the call count and $t_i$ is the per-call\nduration in microseconds."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MemoryStats",
+      "path": "lucid.profiler.MemoryStats",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "MemoryStats(impl: _C_engine.MemoryStats)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L165",
+      "subcategory": null,
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.profiler.MemoryStats.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(impl: _C_engine.MemoryStats)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L193",
+          "subcategory": null,
+          "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "current_bytes",
+          "path": "lucid.profiler.MemoryStats.current_bytes",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "current_bytes: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L198",
+          "summary": "Currently allocated bytes.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "peak_bytes",
+          "path": "lucid.profiler.MemoryStats.peak_bytes",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "peak_bytes: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L203",
+          "summary": "Peak allocated bytes since last reset.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "alloc_count",
+          "path": "lucid.profiler.MemoryStats.alloc_count",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "alloc_count: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L208",
+          "summary": "Number of allocations.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "free_count",
+          "path": "lucid.profiler.MemoryStats.free_count",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "free_count: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L213",
+          "summary": "Number of deallocations.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.profiler.MemoryStats.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L217",
+          "subcategory": null,
+          "summary": "Return a developer-facing string representation of the instance.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Snapshot of allocator state at a single point in time.",
+      "extended": "Wraps the engine's memory tracker so user code can correlate peak\nmemory usage with specific phases of training or inference. Combined\nwith `Profiler` events, this is sufficient to diagnose memory\nregressions and validate the effect of activation checkpointing.",
+      "parameters": [
+        {
+          "name": "impl",
+          "annotation": "object",
+          "description": "Underlying engine `MemoryStats` handle.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     _ = lucid.randn(1024, 1024)\n>>> stats = prof.memory_stats()\n>>> stats and stats.peak_bytes"
+      ],
+      "notes": [
+        "Reported quantities are byte counts. The ratio\n$\\text{peak} / \\text{current}$ is a coarse indicator of\nfragmentation overhead."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Profiler",
+      "path": "lucid.profiler.Profiler",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "Profiler(with_memory: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L225",
+      "subcategory": null,
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.profiler.Profiler.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(with_memory: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L260",
+          "subcategory": null,
+          "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "start",
+          "path": "lucid.profiler.Profiler.start",
+          "kind": "function",
+          "labels": [],
+          "signature": "start()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L266",
+          "subcategory": null,
+          "summary": "Start recording operations.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "stop",
+          "path": "lucid.profiler.Profiler.stop",
+          "kind": "function",
+          "labels": [],
+          "signature": "stop()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L272",
+          "subcategory": null,
+          "summary": "Stop recording operations.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__enter__",
+          "path": "lucid.profiler.Profiler.__enter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__enter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L278",
+          "subcategory": null,
+          "summary": "Enter the context.  Returns self so the value can be bound via `with ... as`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Profiler",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__exit__",
+          "path": "lucid.profiler.Profiler.__exit__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__exit__(args: object = ())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L283",
+          "subcategory": null,
+          "summary": "Exit the context, restoring any state that was modified on entry.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "events",
+          "path": "lucid.profiler.Profiler.events",
+          "kind": "function",
+          "labels": [],
+          "signature": "events()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L287",
+          "subcategory": null,
+          "summary": "Return all recorded OpEvents.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[OpEvent]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "key_averages",
+          "path": "lucid.profiler.Profiler.key_averages",
+          "kind": "function",
+          "labels": [],
+          "signature": "key_averages()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L291",
+          "subcategory": null,
+          "summary": "Return per-operation-name summaries sorted by total time.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[ProfileSummary]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "memory_stats",
+          "path": "lucid.profiler.Profiler.memory_stats",
+          "kind": "function",
+          "labels": [],
+          "signature": "memory_stats()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L301",
+          "subcategory": null,
+          "summary": "Return memory stats if available.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "MemoryStats | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "export_chrome_trace",
+          "path": "lucid.profiler.Profiler.export_chrome_trace",
+          "kind": "function",
+          "labels": [],
+          "signature": "export_chrome_trace(path: str)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L309",
+          "subcategory": null,
+          "summary": "Export events as a Chrome trace JSON file.",
+          "extended": "Open with chrome://tracing or https://ui.perfetto.dev.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "clear",
+          "path": "lucid.profiler.Profiler.clear",
+          "kind": "function",
+          "labels": [],
+          "signature": "clear()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L332",
+          "subcategory": null,
+          "summary": "Clear all recorded events.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Record op-level timing and memory traces from the C++ engine.",
+      "extended": "Drives the engine's profiling hook so that every dispatched op\nbecomes an `OpEvent`. Suitable for both interactive use\n(`with` block) and programmatic control via explicit\n`start` / `stop`. Recorded events can be exported as a\nChrome / Perfetto trace for visual inspection.",
+      "parameters": [
+        {
+          "name": "with_memory",
+          "annotation": "bool",
+          "description": "If `True` (default), also capture allocator stats via\n`MemoryStats`.",
+          "default": "True"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     y = lucid.randn(64, 64) @ lucid.randn(64, 64)\n>>> top = prof.key_averages()[:5]"
+      ],
+      "notes": [
+        "Total recorded time can be summarised per op as\n\n$$\nT_{\\text{op}} = \\sum_{i : \\text{name}(e_i) = \\text{op}} t_i,\n$$\nvia `key_averages`. Only one `Profiler` may be active\nat a time; entering a nested instance overwrites the engine's\ncurrent profiler pointer until the outer context exits."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "profile",
+      "path": "lucid.profiler.profile",
+      "kind": "function",
+      "labels": [],
+      "signature": "profile(activities: list[str] | None = None, with_memory: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L337",
+      "subcategory": null,
+      "summary": "Context manager that records ops executed within the `with` block.",
+      "extended": "The canonical entry point for ad-hoc profiling: enter the context,\nrun any Lucid computation, exit, then inspect `prof.events()` or\n`prof.key_averages()`. The `activities` parameter is accepted\nfor parity with the conventional profiling API but is not\ninterpreted.",
+      "parameters": [
+        {
+          "name": "activities",
+          "annotation": "list of str",
+          "description": "Currently ignored; reserved for future per-device filtering.",
+          "default": "None"
+        },
+        {
+          "name": "with_memory",
+          "annotation": "bool",
+          "description": "Include memory statistics in the recorded trace. Default\n`True`.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "Iterator[Profiler]",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     out = lucid.randn(128, 128) @ lucid.randn(128, 128)\n>>> for row in prof.key_averages():\n...     print(row)"
+      ],
+      "notes": [
+        "Internally instantiates a `Profiler` and routes its lifecycle\nthrough `__enter__` / `__exit__`. Equivalent to::\n\n    prof = Profiler(with_memory=with_memory)\n    prof.start()\n    try: ...\n    finally: prof.stop()"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "record_function",
+      "path": "lucid.profiler.record_function",
+      "kind": "function",
+      "labels": [],
+      "signature": "record_function(name: str)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L387",
+      "subcategory": null,
+      "summary": "Annotate an enclosing region with a name visible to the profiler.",
+      "extended": "Lets user code carve the trace into semantically meaningful regions\n(e.g. `\"encoder\"`, `\"decoder\"`, `\"loss\"`) alongside the\nautomatic per-op events. The hook is a no-op when no profiler is\nactive and when the engine does not yet support named regions, so\nits presence is always safe.",
+      "parameters": [
+        {
+          "name": "name",
+          "annotation": "str",
+          "description": "Label to associate with the enclosed block in the trace.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Iterator[None]",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     with lucid.profiler.record_function(\"matmul-region\"):\n...         y = lucid.randn(64, 64) @ lucid.randn(64, 64)"
+      ],
+      "notes": [
+        "Intended placement is around coarse-grained phases — invoking it on\nevery micro-op would inflate trace size without aiding analysis."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "lucid.profiler: performance profiling utilities.",
+  "extended": "Wraps the C++ engine's Profiler, OpEvent, and MemoryStats classes.\n\nUsage:\n    with lucid.profiler.profile() as prof:\n        loss = model(x)\n        loss.backward()\n\nfor event in prof.events():\n        print(event.name, event.time_ns)",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

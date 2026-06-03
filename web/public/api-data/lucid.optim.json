@@ -1,0 +1,3806 @@
+{
+  "slug": "lucid.optim",
+  "name": "optim",
+  "path": "lucid.optim",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/__init__.py#L1",
+  "members": [
+    {
+      "name": "Optimizer",
+      "path": "lucid.optim.optimizer.Optimizer",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "Optimizer(params: Iterable[Parameter] | Iterable[dict[str, object]], defaults: dict[str, object])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/optimizer.py#L14",
+      "subcategory": "optimizer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.optimizer.Optimizer.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], defaults: dict[str, object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/optimizer.py#L146",
+          "subcategory": "optimizer",
+          "summary": "Initialise the Optimizer.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "add_param_group",
+          "path": "lucid.optim.optimizer.Optimizer.add_param_group",
+          "kind": "function",
+          "labels": [],
+          "signature": "add_param_group(group: dict[str, object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/optimizer.py#L169",
+          "subcategory": "optimizer",
+          "summary": "Add a parameter group, creating one new engine optimizer for it.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "zero_grad",
+          "path": "lucid.optim.optimizer.Optimizer.zero_grad",
+          "kind": "function",
+          "labels": [],
+          "signature": "zero_grad(set_to_none: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/optimizer.py#L202",
+          "subcategory": "optimizer",
+          "summary": "Zero gradients of all parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.optimizer.Optimizer.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/optimizer.py#L212",
+          "subcategory": "optimizer",
+          "summary": "Perform a single optimization step.",
+          "extended": "Subclasses must override this to update parameters from their\ncurrent gradients.  Optionally accepts a *closure* that re-evaluates\nthe model and returns the loss (required by some optimizers, e.g.\nLBFGS; ignored by most first-order methods).",
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "state_dict",
+          "path": "lucid.optim.optimizer.Optimizer.state_dict",
+          "kind": "function",
+          "labels": [],
+          "signature": "state_dict()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/optimizer.py#L323",
+          "subcategory": "optimizer",
+          "summary": "Return a checkpointable snapshot of the optimizer.",
+          "extended": "Mirrors reference framework's optimizer state_dict layout:\n\n- `state`: `{param_index: {key: value, ...}}` — Python-side per-\n  parameter state (e.g. LBFGS history). Engine-managed moments (Adam)\n  are not currently captured.\n- `param_groups`: list of group dicts; each group's `params` is a\n  list of integer indices into the flat parameter list.",
+          "parameters": [],
+          "returns": {
+            "annotation": "dict[str, object]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "load_state_dict",
+          "path": "lucid.optim.optimizer.Optimizer.load_state_dict",
+          "kind": "function",
+          "labels": [],
+          "signature": "load_state_dict(state_dict: dict[str, object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/optimizer.py#L343",
+          "subcategory": "optimizer",
+          "summary": "Restore from a state_dict produced by `state_dict`.",
+          "extended": "Hyperparameters in `param_groups` are restored. Python-side state\n(returned from `_save_state`) is restored via `_load_state`.\nEngine-managed moment buffers are not restored — see class docstring.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Base class for all optimizers.",
+      "extended": "Every concrete optimizer must subclass `Optimizer` and implement\n`step`.  The base class manages parameter groups, provides\n`zero_grad`, and handles `state_dict` / `load_state_dict`\ncheckpointing.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Either a flat iterable of `lucid.nn.Parameter` objects, or\na list of *parameter-group dicts*.  Each group dict must contain at\nleast a `\"params\"` key; any other keys override the corresponding\nentry in `defaults` for that group.",
+          "default": null
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values (e.g. `{\"lr\": 1e-3, \"weight_decay\": 0}`).\nThese are copied into each param group that does not override them.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "``Optimizer`` is not used directly.  Use a concrete subclass:\n>>> import lucid.optim as optim\n>>> optimizer = optim.Adam(model.parameters(), lr=1e-3)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "Every concrete `step()` override is automatically wrapped at class\ndefinition time (via `__init_subclass__`) to flush all parameter\ntensors to the Metal GPU after each update.  This ensures that\nparameter values are materialised before the next forward pass.\n\nParameter groups allow different hyperparameters per group:\n\n.. code-block:: python\n\n    optimizer = optim.SGD(\n        [\n            {\"params\": model.backbone.parameters(), \"lr\": 1e-3},\n            {\"params\": model.head.parameters(),     \"lr\": 1e-2},\n        ],\n        lr=1e-4,   # default, overridden per group above\n    )"
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "List of parameter groups.  Each entry is a dict with at least\n`\"params\": list[Parameter]` plus all hyperparameter keys from\n`defaults` (possibly overridden per group)."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "The default hyperparameters passed at construction."
+        },
+        {
+          "name": "state",
+          "annotation": "dict",
+          "description": "Per-parameter optimizer state indexed by flat parameter index.\nPopulated by `state_dict` and consumed by\n`load_state_dict`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "SGD",
+      "path": "lucid.optim.sgd.SGD",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "SGD(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float, momentum: float = 0, dampening: float = 0, weight_decay: float = 0, nesterov: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/sgd.py#L14",
+      "subcategory": "sgd",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.sgd.SGD.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float, momentum: float = 0, dampening: float = 0, weight_decay: float = 0, nesterov: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/sgd.py#L92",
+          "subcategory": "sgd",
+          "summary": "Initialise the SGD.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.sgd.SGD.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/sgd.py#L126",
+          "subcategory": "sgd",
+          "summary": "Perform a single SGD step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Stochastic Gradient Descent optimizer with optional momentum and weight decay.",
+      "extended": "Implements the classic SGD update rule.  Without momentum the update is:\n\n$$\n\\theta_{t+1} = \\theta_t - \\alpha \\, \\nabla L(\\theta_t)\n$$\nWith momentum (Polyak momentum), a velocity buffer $v$ is\nmaintained and the update becomes:\n\n$$\n\\begin{aligned}\nv_{t+1} &= \\mu \\, v_t + (1 - \\tau) \\, \\nabla L(\\theta_t) \\\\\n\\theta_{t+1} &= \\theta_t - \\alpha \\, v_{t+1}\n\\end{aligned}\n$$\nwhere $\\mu$ is the momentum factor and $\\tau$ is the\ndampening coefficient.  With Nesterov momentum the gradient is\nevaluated at the *lookahead* position:\n\n$$\n\\theta_{t+1} = \\theta_t - \\alpha\n    \\bigl(\\nabla L(\\theta_t) + \\mu \\, v_{t+1}\\bigr)\n$$\nL2 weight decay adds $\\lambda \\theta_t$ to the gradient before\nthe momentum step:\n\n$$\ng_t = \\nabla L(\\theta_t) + \\lambda \\, \\theta_t\n$$",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\alpha$.",
+          "default": null
+        },
+        {
+          "name": "momentum",
+          "annotation": "float",
+          "description": "Momentum factor $\\mu$ (default: `0`).  Set to a value\nsuch as `0.9` to enable momentum.",
+          "default": "0"
+        },
+        {
+          "name": "dampening",
+          "annotation": "float",
+          "description": "Dampening factor $\\tau$ for the momentum buffer\n(default: `0`).  Has no effect when `momentum=0`.",
+          "default": "0"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient $\\lambda$ (default: `0`).",
+          "default": "0"
+        },
+        {
+          "name": "nesterov",
+          "annotation": "bool",
+          "description": "If `True`, use Nesterov momentum (default: `False`).\nRequires `momentum > 0` and `dampening == 0`.",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(\n...     model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4\n... )\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "SGD with momentum is the de-facto standard for training image\nclassifiers.  Nesterov momentum often converges faster than vanilla\nmomentum because it incorporates a correction based on where the\nparameters will be after the momentum step."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups, each containing `\"params\"`, `\"lr\"`,\n`\"momentum\"`, `\"dampening\"`, `\"weight_decay\"`, and\n`\"nesterov\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Adam",
+      "path": "lucid.optim.adam.Adam",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "Adam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0, amsgrad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/adam.py#L14",
+      "subcategory": "adam",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.adam.Adam.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0, amsgrad: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/adam.py#L81",
+          "subcategory": "adam",
+          "summary": "Initialise the Adam.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.adam.Adam.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/adam.py#L116",
+          "subcategory": "adam",
+          "summary": "Perform a single Adam optimisation step.",
+          "extended": "Calls the engine-level Adam update for each parameter group, which\napplies the bias-corrected first- and second-moment update rule.",
+          "parameters": [
+            {
+              "name": "closure",
+              "annotation": "callable",
+              "description": "A closure that re-evaluates the model and returns the loss.\nIf provided, it is called **before** the parameter update and\nits return value is passed back to the caller.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor or None",
+            "description": "The loss returned by `closure`, or `None` if no closure\nwas provided."
+          },
+          "raises": [],
+          "examples": [
+            ">>> optimizer.zero_grad()\n>>> loss = model(inputs)\n>>> loss.backward()\n>>> optimizer.step()"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Adaptive Moment Estimation optimizer (Kingma & Ba, 2015).",
+      "extended": "Combines the benefits of two earlier adaptive methods — AdaGrad's\nper-parameter learning rates derived from the running history of\ngradients, and RMSProp's exponential moving average of squared\ngradients — by maintaining two moment estimates and applying\n**bias correction** to compensate for their zero initialisation.\nThe result is a near-parameterless optimiser that works well across\na remarkably wide range of architectures and is the de-facto default\nfor deep learning training.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter",
+          "description": "Iterable of parameters to optimise, or dicts defining parameter\ngroups with their own per-group hyperparameters.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\alpha$ (default: `1e-3`).",
+          "default": "0.001"
+        },
+        {
+          "name": "betas",
+          "annotation": "tuple of float",
+          "description": "Decay rates $(\\beta_1, \\beta_2)$ for the first and second\nmoment running averages (default: `(0.9, 0.999)`).",
+          "default": "(0.9, 0.999)"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\varepsilon$ added to the denominator for numerical\nstability (default: `1e-8`).",
+          "default": "1e-08"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "$L_2$ penalty coefficient.  Note that Adam folds this\ndirectly into the gradient before the moment update, which\ncouples it with the adaptive learning rate; prefer\n`AdamW` for properly decoupled weight decay.",
+          "default": "0"
+        },
+        {
+          "name": "amsgrad",
+          "annotation": "bool",
+          "description": "Whether to use the AMSGrad variant (Reddi et al., 2018), which\nkeeps the running max of the second moment to guarantee\nconvergence under non-convex settings (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Adam(model.parameters(), lr=1e-3)\n>>> for x, y in dataloader:\n...     optimizer.zero_grad()\n...     loss = loss_fn(model(x), y)\n...     loss.backward()\n...     optimizer.step()"
+      ],
+      "notes": [
+        "The update rule for parameter $\\theta$ with gradient\n$g_t$ at step $t$ is:\n\n$$\n\\begin{aligned}\nm_t &= \\beta_1 m_{t-1} + (1 - \\beta_1) g_t \\\\\nv_t &= \\beta_2 v_{t-1} + (1 - \\beta_2) g_t^2 \\\\\n\\hat{m}_t &= m_t / (1 - \\beta_1^t) \\\\\n\\hat{v}_t &= v_t / (1 - \\beta_2^t) \\\\\n\\theta_t &= \\theta_{t-1} - \\alpha \\cdot \\hat{m}_t / (\\sqrt{\\hat{v}_t} + \\varepsilon)\n\\end{aligned}\n$$\nwhere $m_t$ is the running first moment (mean of gradients),\n$v_t$ is the running uncentered second moment (mean of squared\ngradients), and the hat-quantities apply bias correction so that\n$\\mathbb{E}[\\hat{m}_t] = \\mathbb{E}[g_t]$ even at small\n$t$.  The effective per-parameter learning rate is\n$\\alpha / (\\sqrt{\\hat{v}_t} + \\varepsilon)$ — small for\nhigh-variance gradients, large for stable ones."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "AdamW",
+      "path": "lucid.optim.adam.AdamW",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "AdamW(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0.01, amsgrad: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/adam.py#L148",
+      "subcategory": "adam",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.adam.AdamW.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0.01, amsgrad: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/adam.py#L215",
+          "subcategory": "adam",
+          "summary": "Initialise the AdamW.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.adam.AdamW.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/adam.py#L250",
+          "subcategory": "adam",
+          "summary": "Perform a single AdamW optimisation step.",
+          "extended": "Calls the engine-level AdamW update for each parameter group, which\napplies the adaptive gradient update followed by decoupled weight\ndecay directly on the parameters.",
+          "parameters": [
+            {
+              "name": "closure",
+              "annotation": "callable",
+              "description": "A closure that re-evaluates the model and returns the loss.\nIf provided, it is called **before** the parameter update and\nits return value is passed back to the caller.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor or None",
+            "description": "The loss returned by `closure`, or `None` if no closure\nwas provided."
+          },
+          "raises": [],
+          "examples": [
+            ">>> optimizer.zero_grad()\n>>> loss = model(inputs)\n>>> loss.backward()\n>>> optimizer.step()"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Adam optimizer with decoupled weight decay regularisation.",
+      "extended": "`AdamW` fixes the weight-decay coupling present in standard Adam by\napplying the decay directly to the parameters rather than adding it to\nthe gradient.  The update rule is:\n\n$$\n\\begin{aligned}\nm_t &= \\beta_1 m_{t-1} + (1 - \\beta_1) g_t \\\\\nv_t &= \\beta_2 v_{t-1} + (1 - \\beta_2) g_t^2 \\\\\n\\hat{m}_t &= \\frac{m_t}{1 - \\beta_1^t} \\\\\n\\hat{v}_t &= \\frac{v_t}{1 - \\beta_2^t} \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\alpha \\frac{\\hat{m}_t}{\\sqrt{\\hat{v}_t} + \\epsilon}\n    - \\alpha \\lambda \\theta_{t-1}\n\\end{aligned}\n$$\nThe final term $-\\alpha \\lambda \\theta_{t-1}$ is the decoupled\nweight decay; it is applied after the adaptive gradient step, not mixed\ninto $g_t$.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\alpha$ (default: `1e-3`).",
+          "default": "0.001"
+        },
+        {
+          "name": "betas",
+          "annotation": "tuple of float",
+          "description": "Coefficients $(\\beta_1, \\beta_2)$ for computing running\naverages of the gradient and its square (default: `(0.9, 0.999)`).",
+          "default": "(0.9, 0.999)"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ added to the denominator for numerical\nstability (default: `1e-8`).",
+          "default": "1e-08"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "Decoupled weight decay coefficient $\\lambda$\n(default: `1e-2`).",
+          "default": "0.01"
+        },
+        {
+          "name": "amsgrad",
+          "annotation": "bool",
+          "description": "Whether to use the AMSGrad variant that maintains the maximum of\npast squared gradients (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.AdamW(\n...     model.parameters(), lr=1e-4, weight_decay=1e-2\n... )\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "Decoupled weight decay makes the effective regularisation independent\nof the learning rate, which simplifies hyperparameter tuning.\n`AdamW` is the recommended default optimizer for transformer-based\nmodels and generally outperforms `Adam` with L2 regularisation."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups, each containing `\"params\"`, `\"lr\"`,\n`\"beta1\"`, `\"beta2\"`, `\"eps\"`, `\"weight_decay\"`, and\n`\"amsgrad\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "LBFGS",
+      "path": "lucid.optim.lbfgs.LBFGS",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "LBFGS(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, max_iter: int = 20, max_eval: int = 25, tolerance_grad: float = 1e-07, tolerance_change: float = 1e-09, history_size: int = 100, line_search_fn: str | None = 'strong_wolfe')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lbfgs.py#L15",
+      "subcategory": "lbfgs",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lbfgs.LBFGS.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, max_iter: int = 20, max_eval: int = 25, tolerance_grad: float = 1e-07, tolerance_change: float = 1e-09, history_size: int = 100, line_search_fn: str | None = 'strong_wolfe')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lbfgs.py#L109",
+          "subcategory": "lbfgs",
+          "summary": "Initialise the LBFGS.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "zero_grad",
+          "path": "lucid.optim.lbfgs.LBFGS.zero_grad",
+          "kind": "function",
+          "labels": [],
+          "signature": "zero_grad(set_to_none: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lbfgs.py#L286",
+          "subcategory": "lbfgs",
+          "summary": "Set gradients of all parameters to `None`.",
+          "extended": "L-BFGS always sets gradients to `None` regardless of the\n`set_to_none` argument, because the closure passed to\n`step` is responsible for zeroing and recomputing gradients\non each function evaluation.",
+          "parameters": [
+            {
+              "name": "set_to_none",
+              "annotation": "bool",
+              "description": "Ignored; kept for API compatibility with `Optimizer`\n(default: `True`).",
+              "default": "True"
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [
+            ">>> def closure():\n...     optimizer.zero_grad()\n...     loss = criterion(model(x), y)\n...     loss.backward()\n...     return loss\n>>> optimizer.step(closure)"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.lbfgs.LBFGS.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lbfgs.py#L313",
+          "subcategory": "lbfgs",
+          "summary": "Perform a single L-BFGS optimisation step.",
+          "extended": "Computes the L-BFGS search direction using the two-loop recursion,\nperforms a back-tracking Armijo line search to find an acceptable\nstep size, updates all parameters, and then updates the curvature\nhistory $(s, y)$.",
+          "parameters": [
+            {
+              "name": "closure",
+              "annotation": "callable",
+              "description": "A zero-argument callable that:\n\n1. Calls `optimizer.zero_grad()` to clear stale gradients.\n2. Runs the forward pass and computes the scalar loss.\n3. Calls `loss.backward()` to populate gradients.\n4. Returns the loss tensor.\n\nThis argument is **required** — passing `None` raises\n`ValueError`.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "The loss value at the final parameter position after the line\nsearch."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If `closure` is `None`."
+            }
+          ],
+          "examples": [
+            ">>> def closure():\n...     optimizer.zero_grad()\n...     output = model(x)\n...     loss = criterion(output, y)\n...     loss.backward()\n...     return loss\n>>> optimizer.step(closure)"
+          ],
+          "notes": [
+            "The closure may be called multiple times per `step` call\n(up to `max_eval` times) during the line search.  Ensure that\nany side effects (e.g. batch norm running stats) are handled\nappropriately if this matters for your use-case."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Limited-memory Broyden–Fletcher–Goldfarb–Shanno (L-BFGS) optimizer.",
+      "extended": "L-BFGS is a quasi-Newton method that approximates the inverse Hessian\nusing a limited history of gradient and parameter difference vectors.\nAt each step it computes a search direction $d_t$ via the\ntwo-loop recursion:\n\n$$\nd_t = -H_t^{-1} \\nabla L(\\theta_t)\n$$\nwhere $H_t^{-1}$ is the L-BFGS Hessian approximation built from\nthe last `history_size` curvature pairs\n$\\{(s_k, y_k)\\}_{k=t-m}^{t-1}$:\n\n$$\n\\begin{aligned}\ns_k &= \\theta_{k+1} - \\theta_k \\\\\ny_k &= \\nabla L(\\theta_{k+1}) - \\nabla L(\\theta_k)\n\\end{aligned}\n$$\nThe diagonal scaling of $H_t^{-1}$ is initialised as:\n\n$$\nH_{\\text{diag}} = \\frac{s_{t-1}^\\top y_{t-1}}{y_{t-1}^\\top y_{t-1}}\n$$\nA back-tracking Armijo line search finds a step size $\\alpha$ that\nsatisfies the sufficient-decrease condition:\n\n$$\nL(\\theta_t + \\alpha d_t)\n\\le L(\\theta_t) + c_1 \\alpha \\, \\nabla L(\\theta_t)^\\top d_t\n$$\nwith $c_1 = 10^{-4}$.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Initial step size for the line search (default: `1.0`).",
+          "default": "1.0"
+        },
+        {
+          "name": "max_iter",
+          "annotation": "int",
+          "description": "Maximum number of L-BFGS iterations per `step` call\n(default: `20`).",
+          "default": "20"
+        },
+        {
+          "name": "max_eval",
+          "annotation": "int",
+          "description": "Maximum number of closure evaluations per `step` call\n(default: `25`).",
+          "default": "25"
+        },
+        {
+          "name": "tolerance_grad",
+          "annotation": "float",
+          "description": "Gradient-norm convergence threshold; optimisation stops when\n$\\|\\nabla L\\|_2 \\le \\text{tolerance\\_grad}$\n(default: `1e-7`).",
+          "default": "1e-07"
+        },
+        {
+          "name": "tolerance_change",
+          "annotation": "float",
+          "description": "Parameter-change convergence threshold (default: `1e-9`).",
+          "default": "1e-09"
+        },
+        {
+          "name": "history_size",
+          "annotation": "int",
+          "description": "Number of $(s, y)$ curvature pairs retained in memory\n(default: `100`).",
+          "default": "100"
+        },
+        {
+          "name": "line_search_fn",
+          "annotation": "str or None",
+          "description": "Line search strategy.  Currently `\"strong_wolfe\"` (back-tracking\nArmijo) and `None` (fixed step) are recognised\n(default: `\"strong_wolfe\"`).",
+          "default": "'strong_wolfe'"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)\n>>> def closure():\n...     optimizer.zero_grad()\n...     loss = criterion(model(x), y)\n...     loss.backward()\n...     return loss\n>>> optimizer.step(closure)"
+      ],
+      "notes": [
+        "Unlike first-order optimizers, L-BFGS **requires a closure** argument\nin `step` that clears gradients, computes the loss, and calls\n`loss.backward()`.  Without a closure the method raises\n`ValueError`.\n\nL-BFGS is best suited for full-batch or large-batch training where the\ncurvature information is reliable.  It is not recommended for\nstochastic mini-batch training because noisy gradients corrupt the\nHessian approximation."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Single parameter group containing all parameters."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "RMSprop",
+      "path": "lucid.optim.others.RMSprop",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "RMSprop(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, alpha: float = 0.99, eps: float = 1e-08, weight_decay: float = 0, momentum: float = 0, centered: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L14",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.RMSprop.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, alpha: float = 0.99, eps: float = 1e-08, weight_decay: float = 0, momentum: float = 0, centered: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L78",
+          "subcategory": "others",
+          "summary": "Initialise the RMSprop.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.RMSprop.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L111",
+          "subcategory": "others",
+          "summary": "Perform a single RMSprop step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Root Mean Square Propagation optimizer.",
+      "extended": "RMSprop maintains a running average of the squared gradient for each\nparameter and divides the gradient by the square root of that average,\nwhich normalises the effective learning rate per parameter:\n\n$$\n\\begin{aligned}\nv_t &= \\alpha \\, v_{t-1} + (1 - \\alpha) \\, g_t^2 \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\frac{\\eta}{\\sqrt{v_t} + \\epsilon} \\, g_t\n\\end{aligned}\n$$\nWith momentum an additional velocity buffer $b$ is maintained:\n\n$$\n\\begin{aligned}\nb_t &= \\mu \\, b_{t-1}\n    + \\frac{\\eta}{\\sqrt{v_t} + \\epsilon} \\, g_t \\\\\n\\theta_t &= \\theta_{t-1} - b_t\n\\end{aligned}\n$$",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\eta$ (default: `1e-2`).",
+          "default": "0.01"
+        },
+        {
+          "name": "alpha",
+          "annotation": "float",
+          "description": "Smoothing constant $\\alpha$ for the running squared-gradient\naverage (default: `0.99`).",
+          "default": "0.99"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ added to the denominator for numerical\nstability (default: `1e-8`).",
+          "default": "1e-08"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient (default: `0`).",
+          "default": "0"
+        },
+        {
+          "name": "momentum",
+          "annotation": "float",
+          "description": "Momentum factor $\\mu$ (default: `0`).",
+          "default": "0"
+        },
+        {
+          "name": "centered",
+          "annotation": "bool",
+          "description": "If `True`, normalise by the estimated variance rather than the\nraw second moment (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.RMSprop(model.parameters(), lr=1e-3, alpha=0.99)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "RMSprop was proposed as an unpublished improvement for non-stationary\nobjectives and recurrent networks.  It works well with a moderate\nlearning rate and is often used for reinforcement learning tasks."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"alpha\"`,\n`\"eps\"`, `\"weight_decay\"`, `\"momentum\"`, and `\"centered\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Adagrad",
+      "path": "lucid.optim.others.Adagrad",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "Adagrad(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lr_decay: float = 0, weight_decay: float = 0, eps: float = 1e-10)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L119",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.Adagrad.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lr_decay: float = 0, weight_decay: float = 0, eps: float = 1e-10)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L181",
+          "subcategory": "others",
+          "summary": "Initialise the Adagrad.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.Adagrad.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L206",
+          "subcategory": "others",
+          "summary": "Perform a single Adagrad step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Adaptive Gradient optimizer.",
+      "extended": "Adagrad adapts the learning rate for each parameter based on the sum\nof all past squared gradients.  Parameters that receive large or\nfrequent gradient updates get smaller effective learning rates:\n\n$$\n\\begin{aligned}\nG_t &= G_{t-1} + g_t^2 \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\frac{\\eta_t}{\\sqrt{G_t} + \\epsilon} \\, g_t\n\\end{aligned}\n$$\nwhere the effective learning rate decays with time as:\n\n$$\n\\eta_t = \\frac{\\eta_0}{1 + (t - 1) \\cdot \\lambda}\n$$\nand $\\lambda$ is the `lr_decay` parameter.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Initial learning rate $\\eta_0$ (default: `1e-2`).",
+          "default": "0.01"
+        },
+        {
+          "name": "lr_decay",
+          "annotation": "float",
+          "description": "Learning-rate decay applied to the effective LR at each step\n$\\lambda$ (default: `0`).",
+          "default": "0"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient (default: `0`).",
+          "default": "0"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ added to the denominator for numerical\nstability (default: `1e-10`).",
+          "default": "1e-10"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Adagrad(model.parameters(), lr=1e-2)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "Adagrad is particularly well-suited for sparse data (e.g. NLP with\nword embeddings) because infrequently updated parameters retain a\nlarger effective learning rate.  The main drawback is that the\naccumulated squared-gradient sum $G_t$ only grows, so the\neffective learning rate can become vanishingly small over long training\nruns."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"lr_decay\"`,\n`\"weight_decay\"`, and `\"eps\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Adadelta",
+      "path": "lucid.optim.others.Adadelta",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "Adadelta(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, rho: float = 0.9, eps: float = 1e-06, weight_decay: float = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L214",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.Adadelta.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, rho: float = 0.9, eps: float = 1e-06, weight_decay: float = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L273",
+          "subcategory": "others",
+          "summary": "Initialise the Adadelta.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.Adadelta.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L298",
+          "subcategory": "others",
+          "summary": "Perform a single Adadelta step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Adadelta optimizer — an adaptive learning rate method with no global LR.",
+      "extended": "Adadelta addresses Adagrad's aggressive, monotonically decreasing learning\nrate by limiting the accumulated past gradients to a fixed-size window via\nexponential moving averages.  No global learning rate is required in the\ncanonical form:\n\n$$\n\\begin{aligned}\nE[g^2]_t &= \\rho \\, E[g^2]_{t-1} + (1 - \\rho) \\, g_t^2 \\\\\n\\Delta\\theta_t &=\n    -\\frac{\\sqrt{E[\\Delta\\theta^2]_{t-1} + \\epsilon}}\n           {\\sqrt{E[g^2]_t + \\epsilon}} \\, g_t \\\\\nE[\\Delta\\theta^2]_t &= \\rho \\, E[\\Delta\\theta^2]_{t-1}\n    + (1 - \\rho) \\, \\Delta\\theta_t^2 \\\\\n\\theta_t &= \\theta_{t-1} + \\eta \\, \\Delta\\theta_t\n\\end{aligned}\n$$\nwhere $\\eta$ is `lr` (defaults to `1.0` in the original\nformulation) and $\\rho$ controls the decay window size.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Scaling factor $\\eta$ applied to the update (default: `1.0`).",
+          "default": "1.0"
+        },
+        {
+          "name": "rho",
+          "annotation": "float",
+          "description": "Coefficient for the running averages of squared gradients and\nsquared updates $\\rho$ (default: `0.9`).",
+          "default": "0.9"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ added to the denominator for numerical\nstability (default: `1e-6`).",
+          "default": "1e-06"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient (default: `0`).",
+          "default": "0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Adadelta(model.parameters(), rho=0.9, eps=1e-6)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "Because Adadelta automatically adapts its learning rate based on a\nwindow of recent gradient magnitudes, it is relatively robust to\nhyperparameter choices and does not require manual LR tuning."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"rho\"`,\n`\"eps\"`, and `\"weight_decay\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Adamax",
+      "path": "lucid.optim.others.Adamax",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "Adamax(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L306",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.Adamax.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L363",
+          "subcategory": "others",
+          "summary": "Initialise the Adamax.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.Adamax.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L389",
+          "subcategory": "others",
+          "summary": "Perform a single Adamax step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Adamax optimizer — a variant of Adam based on the infinity norm.",
+      "extended": "Adamax generalises Adam by using the $\\ell_\\infty$ norm instead\nof the $\\ell_2$ norm for the second-moment estimate.  The update\nrule replaces $v_t$ with the element-wise maximum of past\nabsolute gradients scaled by $\\beta_2$:\n\n$$\n\\begin{aligned}\nm_t &= \\beta_1 m_{t-1} + (1 - \\beta_1) g_t \\\\\nu_t &= \\max\\!\\left(\\beta_2 \\, u_{t-1},\\; |g_t|\\right) \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\frac{\\eta}{(1 - \\beta_1^t)} \\cdot \\frac{m_t}{u_t + \\epsilon}\n\\end{aligned}\n$$\nBecause $u_t$ is bounded by $\\max_k \\beta_2^k |g_{t-k}|$,\nthe effective step size is naturally bounded.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\eta$ (default: `2e-3`).",
+          "default": "0.002"
+        },
+        {
+          "name": "betas",
+          "annotation": "tuple of float",
+          "description": "Coefficients $(\\beta_1, \\beta_2)$ for the first-moment\nestimate and the $\\ell_\\infty$ norm decay\n(default: `(0.9, 0.999)`).",
+          "default": "(0.9, 0.999)"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ added to the denominator for numerical\nstability (default: `1e-8`).",
+          "default": "1e-08"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient (default: `0`).",
+          "default": "0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Adamax(model.parameters(), lr=2e-3)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "Adamax can be more stable than Adam on problems where gradients are\nsparse or have large outliers, because the infinity norm is less\nsensitive to large individual gradient magnitudes than the L2 norm."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"beta1\"`,\n`\"beta2\"`, `\"eps\"`, and `\"weight_decay\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "RAdam",
+      "path": "lucid.optim.others.RAdam",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "RAdam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L397",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.RAdam.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L470",
+          "subcategory": "others",
+          "summary": "Initialise the RAdam.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.RAdam.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L496",
+          "subcategory": "others",
+          "summary": "Perform a single RAdam step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Rectified Adam optimizer with variance-adapted step size.",
+      "extended": "RAdam addresses the large variance in Adam's effective learning rate\nduring the early training steps (when the moving averages are poorly\ninitialised) by computing a rectification term that smoothly transitions\nbetween SGD and Adam.\n\nThe maximum length of the approximated SMA is:\n\n$$\n\\rho_\\infty = \\frac{2}{1 - \\beta_2} - 1\n$$\nAt step $t$ the current SMA length estimate is:\n\n$$\n\\rho_t = \\rho_\\infty\n    - \\frac{2 t \\, \\beta_2^t}{1 - \\beta_2^t}\n$$\nWhen $\\rho_t > 4$ the variance is tractable and a rectified\nadaptive step is used:\n\n$$\n\\begin{aligned}\nr_t &= \\sqrt{\n    \\frac{(\\rho_t - 4)(\\rho_t - 2)\\rho_\\infty}\n         {(\\rho_\\infty - 4)(\\rho_\\infty - 2)\\rho_t}} \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\alpha \\, r_t\n      \\frac{\\hat{m}_t}{\\sqrt{\\hat{v}_t} + \\epsilon}\n\\end{aligned}\n$$\nOtherwise the update falls back to SGD with bias-corrected momentum.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\alpha$ (default: `1e-3`).",
+          "default": "0.001"
+        },
+        {
+          "name": "betas",
+          "annotation": "tuple of float",
+          "description": "Coefficients $(\\beta_1, \\beta_2)$ for the first- and\nsecond-moment estimates (default: `(0.9, 0.999)`).",
+          "default": "(0.9, 0.999)"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ for numerical stability (default: `1e-8`).",
+          "default": "1e-08"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient (default: `0`).",
+          "default": "0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.RAdam(model.parameters(), lr=1e-3)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "RAdam removes the need for a warmup schedule by automatically\nstabilising the adaptive learning rate in the early stages of training.\nIt is a drop-in replacement for Adam that is less sensitive to the\nchoice of learning rate."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"beta1\"`,\n`\"beta2\"`, `\"eps\"`, and `\"weight_decay\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "NAdam",
+      "path": "lucid.optim.others.NAdam",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "NAdam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L504",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.NAdam.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L560",
+          "subcategory": "others",
+          "summary": "Initialise the NAdam.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.NAdam.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L586",
+          "subcategory": "others",
+          "summary": "Perform a single NAdam step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Nesterov-accelerated Adaptive Moment Estimation optimizer.",
+      "extended": "NAdam incorporates Nesterov momentum into Adam by replacing the\nstandard first-moment estimate $\\hat{m}_t$ in the denominator\nwith a one-step lookahead estimate.  The update rule is:\n\n$$\n\\begin{aligned}\nm_t &= \\beta_1 m_{t-1} + (1 - \\beta_1) g_t \\\\\nv_t &= \\beta_2 v_{t-1} + (1 - \\beta_2) g_t^2 \\\\\n\\hat{m}_t^{\\text{Nesterov}}\n    &= \\frac{\\beta_1 m_t}{1 - \\beta_1^{t+1}}\n     + \\frac{(1 - \\beta_1) g_t}{1 - \\beta_1^t} \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\frac{\\alpha}{\\sqrt{\\hat{v}_t} + \\epsilon}\n      \\hat{m}_t^{\\text{Nesterov}}\n\\end{aligned}\n$$",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\alpha$ (default: `2e-3`).",
+          "default": "0.002"
+        },
+        {
+          "name": "betas",
+          "annotation": "tuple of float",
+          "description": "Coefficients $(\\beta_1, \\beta_2)$ for the first- and\nsecond-moment estimates (default: `(0.9, 0.999)`).",
+          "default": "(0.9, 0.999)"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ for numerical stability (default: `1e-8`).",
+          "default": "1e-08"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient (default: `0`).",
+          "default": "0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.NAdam(model.parameters(), lr=2e-3)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "NAdam often converges faster than vanilla Adam because the Nesterov\nlookahead provides a more accurate gradient direction.  It is\nparticularly effective on recurrent networks and tasks with noisy\ngradients."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"beta1\"`,\n`\"beta2\"`, `\"eps\"`, and `\"weight_decay\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ASGD",
+      "path": "lucid.optim.others.ASGD",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "ASGD(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lambd: float = 0.0001, alpha: float = 0.75, t0: float = 1000000.0, weight_decay: float = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L594",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.ASGD.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lambd: float = 0.0001, alpha: float = 0.75, t0: float = 1000000.0, weight_decay: float = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L661",
+          "subcategory": "others",
+          "summary": "Initialise the ASGD.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.ASGD.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L696",
+          "subcategory": "others",
+          "summary": "Perform a single ASGD step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Averaged Stochastic Gradient Descent optimizer.",
+      "extended": "ASGD performs standard SGD updates but maintains a running average of\nthe iterate sequence, which serves as the final parameter estimate.\nThe averaging improves convergence in the presence of noise and is\nparticularly effective near the end of training.\n\nThe SGD update with L2 regularisation is:\n\n$$\n\\theta_t = \\theta_{t-1}\n    - \\eta_t \\bigl(g_t + \\lambda \\, \\theta_{t-1}\\bigr)\n$$\nwhere the effective learning rate decays as:\n\n$$\n\\eta_t = \\frac{\\eta_0}{(1 + \\lambda \\, \\eta_0 \\, t)^\\alpha}\n$$\nThe Polyak–Ruppert average is then:\n\n$$\n\\bar{\\theta}_t = \\frac{1}{t - t_0} \\sum_{k=t_0}^{t} \\theta_k\n\\quad \\text{for } t \\ge t_0\n$$",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Initial learning rate $\\eta_0$ (default: `1e-2`).",
+          "default": "0.01"
+        },
+        {
+          "name": "lambd",
+          "annotation": "float",
+          "description": "Decay term $\\lambda$ (default: `1e-4`).",
+          "default": "0.0001"
+        },
+        {
+          "name": "alpha",
+          "annotation": "float",
+          "description": "Power for LR decay $\\alpha$ (default: `0.75`).",
+          "default": "0.75"
+        },
+        {
+          "name": "t0",
+          "annotation": "float",
+          "description": "Step at which averaging begins (default: `1e6`).",
+          "default": "1000000.0"
+        },
+        {
+          "name": "weight_decay",
+          "annotation": "float",
+          "description": "L2 regularisation coefficient (default: `0`).",
+          "default": "0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.ASGD(model.parameters(), lr=1e-2, t0=1e5)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "ASGD can match or exceed the convergence rate of SGD with careful\nlearning-rate tuning, and the averaging step provides additional\nregularisation.  The default `t0=1e6` delays averaging until very\nlate in training; reduce it to start averaging earlier."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"lambd\"`,\n`\"alpha\"`, `\"t0\"`, and `\"weight_decay\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Rprop",
+      "path": "lucid.optim.others.Rprop",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "Rprop(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, etas: tuple[float, float] = (0.5, 1.2), step_sizes: tuple[float, float] = (1e-06, 50))",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L704",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.Rprop.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, etas: tuple[float, float] = (0.5, 1.2), step_sizes: tuple[float, float] = (1e-06, 50))",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L767",
+          "subcategory": "others",
+          "summary": "Initialise the Rprop.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.Rprop.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L796",
+          "subcategory": "others",
+          "summary": "Perform a single Rprop step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Resilient Backpropagation optimizer.",
+      "extended": "Rprop ignores gradient magnitudes and adapts a per-parameter step size\nbased only on the **sign** of the gradient.  If the sign of the\ngradient does not change between steps the step size is increased; if\nthe sign reverses the step size is decreased:\n\n$$\n\\Delta_{i,t} =\n\\begin{cases}\n    \\min(\\Delta_{i,t-1} \\cdot \\eta^+,\\; \\Delta_{\\max})\n        & \\text{if } g_{i,t} \\cdot g_{i,t-1} > 0 \\\\\n    \\max(\\Delta_{i,t-1} \\cdot \\eta^-,\\; \\Delta_{\\min})\n        & \\text{if } g_{i,t} \\cdot g_{i,t-1} < 0 \\\\\n    \\Delta_{i,t-1} & \\text{otherwise}\n\\end{cases}\n$$\nThe parameter update is then:\n\n$$\n\\theta_{i,t} = \\theta_{i,t-1}\n    - \\operatorname{sign}(g_{i,t}) \\cdot \\Delta_{i,t}\n$$",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Initial step size for each parameter (default: `1e-2`).",
+          "default": "0.01"
+        },
+        {
+          "name": "etas",
+          "annotation": "tuple of float",
+          "description": "Multiplicative decrease and increase factors\n$(\\eta^-, \\eta^+)$ (default: `(0.5, 1.2)`).",
+          "default": "(0.5, 1.2)"
+        },
+        {
+          "name": "step_sizes",
+          "annotation": "tuple of float",
+          "description": "Minimum and maximum allowed step sizes\n$(\\Delta_{\\min}, \\Delta_{\\max})$ (default: `(1e-6, 50)`).",
+          "default": "(1e-06, 50)"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Rprop(model.parameters(), lr=1e-2, etas=(0.5, 1.2))\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "Rprop is particularly effective for full-batch training because the\nsign-based update is well-defined when gradients are deterministic.\nFor stochastic mini-batch training RMSprop or Adam are generally\npreferred."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"eta_minus\"`,\n`\"eta_plus\"`, `\"step_min\"`, and `\"step_max\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "SparseAdam",
+      "path": "lucid.optim.others.SparseAdam",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Optimizer"
+      ],
+      "labels": [],
+      "signature": "SparseAdam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L804",
+      "subcategory": "others",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.others.SparseAdam.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L870",
+          "subcategory": "others",
+          "summary": "Initialise the SparseAdam.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.others.SparseAdam.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(closure: _OptimizerClosure = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/others.py#L888",
+          "subcategory": "others",
+          "summary": "Perform a single SparseAdam optimisation step.",
+          "extended": "Iterates over all parameters.  For each parameter whose gradient\nis not `None`, lazily initialises first- and second-moment\nbuffers (on first call), increments the step counter, computes\nbias-corrected moment estimates, and applies the Adam update\nin-place via engine ops.\n\nParameters with `None` gradients (e.g. embedding rows not\naccessed in the current batch) are skipped entirely.",
+          "parameters": [
+            {
+              "name": "closure",
+              "annotation": "callable",
+              "description": "A closure that re-evaluates the model and returns the loss.\nIf provided, it is called **before** the parameter updates.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor or None",
+            "description": "The loss returned by `closure`, or `None` if no closure\nwas provided."
+          },
+          "raises": [],
+          "examples": [
+            ">>> optimizer.zero_grad()\n>>> loss = model(inputs)\n>>> loss.backward()\n>>> optimizer.step()"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Adam optimizer designed for sparse gradient workloads.",
+      "extended": "Implements a dense Adam update that is API-compatible with the sparse\nvariant used in embedding-heavy models.  All moment state is stored as\ndense `lucid._C.engine.TensorImpl` buffers and updated using\nengine operations, so the optimizer works correctly on both CPU and GPU.\n\nThe update rule is identical to standard Adam:\n\n$$\n\\begin{aligned}\nm_t &= \\beta_1 m_{t-1} + (1 - \\beta_1) g_t \\\\\nv_t &= \\beta_2 v_{t-1} + (1 - \\beta_2) g_t^2 \\\\\n\\hat{m}_t &= \\frac{m_t}{1 - \\beta_1^t} \\\\\n\\hat{v}_t &= \\frac{v_t}{1 - \\beta_2^t} \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\frac{\\alpha \\sqrt{1 - \\beta_2^t}}{1 - \\beta_1^t}\n      \\cdot \\frac{m_t}{\\sqrt{v_t} + \\epsilon}\n\\end{aligned}\n$$\nMoment buffers are allocated lazily on the first step for each\nparameter to avoid unnecessary memory usage for parameters with\nall-zero gradients.",
+      "parameters": [
+        {
+          "name": "params",
+          "annotation": "iterable of Parameter or iterable of dict",
+          "description": "Parameters to optimise, or a list of parameter-group dicts.",
+          "default": null
+        },
+        {
+          "name": "lr",
+          "annotation": "float",
+          "description": "Learning rate $\\alpha$ (default: `1e-3`).",
+          "default": "0.001"
+        },
+        {
+          "name": "betas",
+          "annotation": "tuple of float",
+          "description": "Coefficients $(\\beta_1, \\beta_2)$ for the first- and\nsecond-moment estimates (default: `(0.9, 0.999)`).",
+          "default": "(0.9, 0.999)"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Term $\\epsilon$ for numerical stability (default: `1e-8`).",
+          "default": "1e-08"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SparseAdam(\n...     model.embedding.parameters(), lr=1e-3\n... )\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+      ],
+      "notes": [
+        "`SparseAdam` skips parameter updates when the gradient is `None`,\nwhich is the common case for embedding rows that were not accessed in\nthe current mini-batch.  This makes it efficient even though the\nunderlying storage is dense.\n\nUnlike the engine-backed optimizers (Adam, AdamW, SGD), `SparseAdam`\nmanages its own Python-side moment buffers and does **not** use a C++\nengine optimizer object."
+      ],
+      "attributes": [
+        {
+          "name": "param_groups",
+          "annotation": "list of dict",
+          "description": "Parameter groups with keys `\"params\"`, `\"lr\"`, `\"betas\"`,\nand `\"eps\"`."
+        },
+        {
+          "name": "defaults",
+          "annotation": "dict",
+          "description": "Default hyperparameter values."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "StepLR",
+      "path": "lucid.optim.lr_scheduler.StepLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "StepLR(optimizer: Optimizer, step_size: int, gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L157",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.StepLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, step_size: int, gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L213",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the StepLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.StepLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L226",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Decay the learning rate by a fixed multiplicative factor every fixed number of epochs.",
+      "extended": "At each epoch that is a multiple of `step_size`, every param-group\nlearning rate is multiplied by `gamma`:\n\n$$\n\\eta_t =\n\\begin{cases}\n    \\eta_{t-1} \\times \\gamma & \\text{if } t \\bmod \\text{step\\_size} = 0 \\\\\n    \\eta_{t-1} & \\text{otherwise}\n\\end{cases}\n$$",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "step_size",
+          "annotation": "int",
+          "description": "Period (in epochs) between learning rate decays.",
+          "default": null
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Multiplicative factor applied at each decay step (default: `0.1`).",
+          "default": "0.1"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> scheduler = optim.StepLR(optimizer, step_size=30, gamma=0.1)\n>>> for epoch in range(90):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "After `k` full decay steps the effective learning rate is:\n\n$$\n\\eta_k = \\eta_0 \\cdot \\gamma^{\\lfloor t / \\text{step\\_size} \\rfloor}\n$$\nA common choice is `step_size=30, gamma=0.1` for image classification\ntasks trained for 90 epochs."
+      ],
+      "attributes": [
+        {
+          "name": "step_size",
+          "annotation": "int",
+          "description": "Decay period in epochs."
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Multiplicative decay factor."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ExponentialLR",
+      "path": "lucid.optim.lr_scheduler.ExponentialLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "ExponentialLR(optimizer: Optimizer, gamma: float, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L240",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.ExponentialLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, gamma: float, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L285",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the ExponentialLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.ExponentialLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L296",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Decay the learning rate by a constant factor every epoch.",
+      "extended": "The learning rate is multiplied by `gamma` at every epoch, producing\nan exponential decay over time:\n\n$$\n\\eta_t = \\eta_0 \\cdot \\gamma^{t}\n$$",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Multiplicative factor applied each epoch.  Values in `(0, 1)`\nproduce decay; values greater than `1` produce growth (rarely\nuseful).",
+          "default": null
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> scheduler = optim.ExponentialLR(optimizer, gamma=0.95)\n>>> for epoch in range(100):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "`ExponentialLR` applies the decay at every epoch without any\nplateau detection.  For a coarser schedule that decays only at\ncertain milestones, prefer `StepLR` or `MultiStepLR`."
+      ],
+      "attributes": [
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Multiplicative factor applied each epoch."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MultiStepLR",
+      "path": "lucid.optim.lr_scheduler.MultiStepLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "MultiStepLR(optimizer: Optimizer, milestones: list[int], gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L310",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.MultiStepLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, milestones: list[int], gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L358",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the MultiStepLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.MultiStepLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L371",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Decay the learning rate by a fixed factor at a list of epoch milestones.",
+      "extended": "Unlike `StepLR`, the decay epochs need not be evenly spaced.\nAt each epoch listed in `milestones` the learning rate is multiplied\nby `gamma`:\n\n$$\n\\eta_t = \\eta_0 \\cdot \\gamma^{\\sum_{m \\in \\text{milestones}} \\mathbf{1}[t \\ge m]}\n$$",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "milestones",
+          "annotation": "list of int",
+          "description": "Sorted list of epoch indices at which the learning rate is decayed.\nIf unsorted, the list is sorted internally.",
+          "default": null
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Multiplicative factor applied at each milestone (default: `0.1`).",
+          "default": "0.1"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> scheduler = optim.MultiStepLR(optimizer, milestones=[50, 100, 150], gamma=0.1)\n>>> for epoch in range(200):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "Useful when natural training phases occur at irregular intervals (e.g.,\ndecay at epochs 50, 100, and 150 in a 200-epoch run)."
+      ],
+      "attributes": [
+        {
+          "name": "milestones",
+          "annotation": "list of int",
+          "description": "Sorted epoch indices where decay is applied."
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Multiplicative decay factor."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CosineAnnealingLR",
+      "path": "lucid.optim.lr_scheduler.CosineAnnealingLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "CosineAnnealingLR(optimizer: Optimizer, T_max: int, eta_min: float = 0, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L385",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.CosineAnnealingLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, T_max: int, eta_min: float = 0, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L438",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the CosineAnnealingLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.CosineAnnealingLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L451",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Anneal the learning rate following a cosine curve over `T_max` epochs.",
+      "extended": "The learning rate at epoch $t$ is:\n\n$$\n\\eta_t = \\eta_{\\min} + \\frac{1}{2}(\\eta_{\\max} - \\eta_{\\min})\n          \\left(1 + \\cos\\!\\left(\\frac{\\pi\\, t}{T_{\\max}}\\right)\\right)\n$$\nwhere $\\eta_{\\max}$ is the initial learning rate captured from the\noptimizer (`base_lr`) and $\\eta_{\\min}$ is the floor set by\n`eta_min`.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "T_max",
+          "annotation": "int",
+          "description": "Half-period of the cosine cycle in epochs.  After `T_max` epochs\nthe learning rate reaches `eta_min`.",
+          "default": null
+        },
+        {
+          "name": "eta_min",
+          "annotation": "float",
+          "description": "Minimum learning rate (default: `0`).",
+          "default": "0"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> scheduler = optim.CosineAnnealingLR(optimizer, T_max=100, eta_min=1e-5)\n>>> for epoch in range(100):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "Cosine annealing produces a smooth, monotonically decreasing schedule\nthat starts fast and slows near the minimum.  It is widely used for\ntraining deep networks and pairs naturally with warm-restarts\n(see `CosineAnnealingWarmRestarts`)."
+      ],
+      "attributes": [
+        {
+          "name": "T_max",
+          "annotation": "int",
+          "description": "Decay period in epochs."
+        },
+        {
+          "name": "eta_min",
+          "annotation": "float",
+          "description": "Lower bound on the learning rate."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "LambdaLR",
+      "path": "lucid.optim.lr_scheduler.LambdaLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "LambdaLR(optimizer: Optimizer, lr_lambda: Callable[[int], float] | list[Callable[[int], float]], last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L469",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.LambdaLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, lr_lambda: Callable[[int], float] | list[Callable[[int], float]], last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L523",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the LambdaLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.LambdaLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L537",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Set the learning rate using a user-supplied multiplicative factor function.",
+      "extended": "At each epoch $t$, the learning rate for param group $i$ is:\n\n$$\n\\eta_t^{(i)} = \\eta_0^{(i)} \\cdot \\lambda_i(t)\n$$\nwhere $\\eta_0^{(i)}$ is the initial learning rate of group\n$i$ and $\\lambda_i$ is the corresponding callable.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "lr_lambda",
+          "annotation": "callable or list of callable",
+          "description": "A function `f(epoch: int) -> float` returning the multiplicative\nfactor for the learning rate.  If a single callable is given it is\napplied to every param group; if a list is given it must have the\nsame length as `optimizer.param_groups`.",
+          "default": null
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Adam(model.parameters(), lr=1e-3)\n>>> scheduler = optim.LambdaLR(optimizer, lr_lambda=lambda t: 0.95 ** t)\n>>> for epoch in range(50):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "`LambdaLR` provides maximum flexibility: any monotone or cyclic\nschedule can be encoded as a Python function.  For a linearly increasing\nwarmup followed by constant LR:\n\n.. code-block:: python\n\n    warmup = 5\n    fn = lambda t: min(1.0, t / warmup)\n    scheduler = optim.LambdaLR(optimizer, lr_lambda=fn)"
+      ],
+      "attributes": [
+        {
+          "name": "lr_lambdas",
+          "annotation": "list of callable",
+          "description": "One factor function per param group."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CyclicLR",
+      "path": "lucid.optim.lr_scheduler.CyclicLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "CyclicLR(optimizer: Optimizer, base_lr: float, max_lr: float, step_size_up: int = 2000, mode: str = 'triangular', gamma: float = 1.0, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L552",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.CyclicLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, base_lr: float, max_lr: float, step_size_up: int = 2000, mode: str = 'triangular', gamma: float = 1.0, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L634",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the CyclicLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.CyclicLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L653",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Cycle the learning rate between `base_lr` and `max_lr`.",
+      "extended": "Implements the triangular, triangular2, and exp_range cyclic policies.\nWithin each cycle of length $2 \\times \\text{step\\_size\\_up}$ the\nlearning rate rises linearly from `base_lr` to `max_lr` and then\nfalls back:\n\n$$\n\\begin{aligned}\n\\text{cycle} &= \\left\\lfloor 1 + \\frac{t}{2 \\cdot s} \\right\\rfloor \\\\\nx &= \\left|\\frac{t}{s} - 2 \\cdot \\text{cycle} + 1\\right| \\\\\n\\text{scale} &= \\max(0,\\; 1 - x) \\\\\n\\eta_t &= \\eta_{\\min} + (\\eta_{\\max} - \\eta_{\\min}) \\cdot \\text{scale}\n\\end{aligned}\n$$\nwhere $s = \\text{step\\_size\\_up}$.\n\nFor `mode=\"triangular2\"` the amplitude halves each cycle:\n\n$$\n\\text{scale} \\mathrel{/}= 2^{\\text{cycle}-1}\n$$\nFor `mode=\"exp_range\"` the amplitude decays exponentially each step:\n\n$$\n\\text{scale} \\mathrel{\\times}= \\gamma^{t}\n$$",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "base_lr",
+          "annotation": "float",
+          "description": "Lower boundary of the learning rate cycle.",
+          "default": null
+        },
+        {
+          "name": "max_lr",
+          "annotation": "float",
+          "description": "Upper boundary of the learning rate cycle.",
+          "default": null
+        },
+        {
+          "name": "step_size_up",
+          "annotation": "int",
+          "description": "Number of steps in the increasing half of the cycle (default: `2000`).",
+          "default": "2000"
+        },
+        {
+          "name": "mode",
+          "annotation": "str",
+          "description": "One of `\"triangular\"` (constant amplitude), `\"triangular2\"`\n(amplitude halves each cycle), or `\"exp_range\"` (amplitude\ndecays by $\\gamma^t$ each step).  Default: `\"triangular\"`.",
+          "default": "'triangular'"
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Decay factor used only in `\"exp_range\"` mode (default: `1.0`).",
+          "default": "1.0"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.01)\n>>> scheduler = optim.CyclicLR(\n...     optimizer, base_lr=1e-4, max_lr=1e-2, step_size_up=500\n... )\n>>> for batch in dataloader:\n...     train_step(batch)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "Cyclic learning rates can reduce the need for careful manual tuning by\nautomatically exploring a range of rates.  Use `step_size_up` between\n2 and 10 times the number of iterations per epoch."
+      ],
+      "attributes": [
+        {
+          "name": "base_lr_val",
+          "annotation": "float",
+          "description": "Lower bound of the cycle."
+        },
+        {
+          "name": "max_lr_val",
+          "annotation": "float",
+          "description": "Upper bound of the cycle."
+        },
+        {
+          "name": "step_size_up",
+          "annotation": "int",
+          "description": "Half-cycle length in steps."
+        },
+        {
+          "name": "mode",
+          "annotation": "str",
+          "description": "Scaling policy name."
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Decay factor for `\"exp_range\"` mode."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ReduceLROnPlateau",
+      "path": "lucid.optim.lr_scheduler.ReduceLROnPlateau",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "ReduceLROnPlateau(optimizer: Optimizer, mode: str = 'min', factor: float = 0.1, patience: int = 10, verbose: bool = False, threshold: float = 0.0001, min_lr: float = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L673",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.ReduceLROnPlateau.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, mode: str = 'min', factor: float = 0.1, patience: int = 10, verbose: bool = False, threshold: float = 0.0001, min_lr: float = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L751",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the ReduceLROnPlateau.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.lr_scheduler.ReduceLROnPlateau.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(metrics: float)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L772",
+          "subcategory": "lr_scheduler",
+          "summary": "Update the scheduler with the latest monitored metric value.",
+          "extended": "Checks whether the metric has improved relative to the stored best.\nIf it has not improved for more than `patience` epochs, the\nlearning rate is reduced by `factor`.",
+          "parameters": [
+            {
+              "name": "metrics",
+              "annotation": "float",
+              "description": "The current value of the monitored metric (e.g. validation loss\nor validation accuracy, depending on `mode`).",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [
+            ">>> scheduler.step(val_loss)"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Reduce the learning rate when a monitored metric stops improving.",
+      "extended": "Once the metric fails to improve by more than `threshold` for\n`patience` consecutive epochs, the learning rate is multiplied by\n`factor`.  This is useful when progress stalls and a smaller step\nsize may help escape a plateau:\n\n$$\n\\eta \\leftarrow \\max(\\eta \\cdot \\text{factor},\\; \\eta_{\\min})\n$$",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "mode",
+          "annotation": "str",
+          "description": "One of `\"min\"` or `\"max\"`.  In `\"min\"` mode the LR is\nreduced when the metric has stopped decreasing; in `\"max\"` mode\nit is reduced when the metric has stopped increasing\n(default: `\"min\"`).",
+          "default": "'min'"
+        },
+        {
+          "name": "factor",
+          "annotation": "float",
+          "description": "Multiplicative factor by which the learning rate is reduced\n(default: `0.1`).  Must be less than 1.",
+          "default": "0.1"
+        },
+        {
+          "name": "patience",
+          "annotation": "int",
+          "description": "Number of epochs with no improvement after which the LR is\nreduced (default: `10`).",
+          "default": "10"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print a message when the LR is reduced (default: `False`).",
+          "default": "False"
+        },
+        {
+          "name": "threshold",
+          "annotation": "float",
+          "description": "Minimum change to qualify as an improvement (default: `1e-4`).",
+          "default": "0.0001"
+        },
+        {
+          "name": "min_lr",
+          "annotation": "float",
+          "description": "A lower bound on the learning rate (default: `0`).",
+          "default": "0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Adam(model.parameters(), lr=1e-3)\n>>> scheduler = optim.ReduceLROnPlateau(\n...     optimizer, mode=\"min\", factor=0.5, patience=5\n... )\n>>> for epoch in range(100):\n...     val_loss = evaluate(...)\n...     scheduler.step(val_loss)"
+      ],
+      "notes": [
+        "Unlike the epoch-based schedulers that inherit from `_LRScheduler`,\n`ReduceLROnPlateau` does **not** inherit from `_LRScheduler`\nbecause it requires a metric value at each `step` call rather\nthan advancing by a fixed epoch count.\n\nA typical use-case is to monitor validation loss:\n\n.. code-block:: python\n\n    scheduler = optim.ReduceLROnPlateau(optimizer, mode=\"min\", patience=5)\n    for epoch in range(epochs):\n        train(...)\n        val_loss = validate(...)\n        scheduler.step(val_loss)"
+      ],
+      "attributes": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "The optimizer being scheduled."
+        },
+        {
+          "name": "mode",
+          "annotation": "str",
+          "description": "`\"min\"` or `\"max\"`."
+        },
+        {
+          "name": "factor",
+          "annotation": "float",
+          "description": "LR reduction factor."
+        },
+        {
+          "name": "patience",
+          "annotation": "int",
+          "description": "Epochs to wait before reducing."
+        },
+        {
+          "name": "threshold",
+          "annotation": "float",
+          "description": "Minimum improvement threshold."
+        },
+        {
+          "name": "min_lr",
+          "annotation": "float",
+          "description": "Floor on the learning rate."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "NoamScheduler",
+      "path": "lucid.optim.lr_scheduler.NoamScheduler",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "NoamScheduler(optimizer: Optimizer, d_model: int, warmup_steps: int, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L807",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.NoamScheduler.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, d_model: int, warmup_steps: int, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L863",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the NoamScheduler.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.NoamScheduler.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L876",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Noam learning rate schedule from the original Transformer paper.",
+      "extended": "The learning rate increases linearly during a warmup phase and then\ndecays proportionally to the inverse square root of the step number:\n\n$$\n\\eta_t = d_{\\text{model}}^{-0.5} \\cdot\n          \\min\\!\\left(t^{-0.5},\\;\n                         t \\cdot w^{-1.5}\\right)\n$$\nwhere $d_{\\text{model}}$ is the model dimensionality and\n$w$ is the number of warmup steps.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.  The `lr` in each param group is set to the\nNoam value directly (the base learning rate is not used as a\nmultiplicative factor).",
+          "default": null
+        },
+        {
+          "name": "d_model",
+          "annotation": "int",
+          "description": "Dimensionality of the model (e.g. 512 for the base Transformer).\nLarger models have smaller peak learning rates.",
+          "default": null
+        },
+        {
+          "name": "warmup_steps",
+          "annotation": "int",
+          "description": "Number of warmup steps during which the LR increases linearly.\nA typical value is 4000.",
+          "default": null
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.Adam(model.parameters(), lr=1.0, betas=(0.9, 0.98))\n>>> scheduler = optim.NoamScheduler(optimizer, d_model=512, warmup_steps=4000)\n>>> for step, batch in enumerate(dataloader):\n...     train_step(batch)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "The Noam schedule is designed to be called **once per training step**\n(i.e. per batch), not once per epoch.  The learning rate peaks at step\n$t^* = w$ and then decreases as $t^{-0.5}$."
+      ],
+      "attributes": [
+        {
+          "name": "d_model",
+          "annotation": "int",
+          "description": "Model dimension used in the scaling formula."
+        },
+        {
+          "name": "warmup_steps",
+          "annotation": "int",
+          "description": "Warmup period length."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MultiplicativeLR",
+      "path": "lucid.optim.lr_scheduler.MultiplicativeLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "MultiplicativeLR(optimizer: Optimizer, lr_lambda: Callable[[int], float], last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L892",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.MultiplicativeLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, lr_lambda: Callable[[int], float], last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L941",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the MultiplicativeLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.MultiplicativeLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L952",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Multiply the learning rate by a factor returned by a function each epoch.",
+      "extended": "Unlike `LambdaLR`, which computes the learning rate as\n`base_lr * fn(t)`, `MultiplicativeLR` **accumulates** the factor:\neach epoch the current learning rate is multiplied by `lr_lambda(t)`:\n\n$$\n\\eta_t = \\eta_{t-1} \\cdot \\lambda(t)\n$$\nThis means the schedule depends on the entire history of `lr_lambda`\nvalues, not only the current epoch index.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "lr_lambda",
+          "annotation": "callable",
+          "description": "A function `f(epoch: int) -> float` returning the multiplicative\nfactor to apply at that epoch.",
+          "default": null
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> # Decay by 0.95 every epoch\n>>> scheduler = optim.MultiplicativeLR(optimizer, lr_lambda=lambda t: 0.95)\n>>> for epoch in range(50):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "At epoch 0 the learning rate is left unchanged (the factor is not\napplied on the very first step so that the initial LR from the\noptimizer is honored)."
+      ],
+      "attributes": [
+        {
+          "name": "lr_lambda",
+          "annotation": "callable",
+          "description": "The factor function applied each epoch."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "LinearLR",
+      "path": "lucid.optim.lr_scheduler.LinearLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "LinearLR(optimizer: Optimizer, start_factor: float = 1.0 / 3, end_factor: float = 1.0, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L967",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.LinearLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, start_factor: float = 1.0 / 3, end_factor: float = 1.0, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1032",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the LinearLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.LinearLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1047",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Linearly interpolate the learning rate from a start factor to an end factor.",
+      "extended": "The learning rate is scaled by a factor that changes linearly from\n`start_factor` to `end_factor` over `total_iters` steps:\n\n$$\n\\text{factor}(t) = \\text{start\\_factor}\n    + \\frac{(\\text{end\\_factor} - \\text{start\\_factor})\n             \\cdot \\min(t,\\, T)}{T}\n$$\n$$\n\\eta_t = \\eta_0 \\cdot \\text{factor}(t)\n$$\nwhere $T = \\text{total\\_iters}$.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "start_factor",
+          "annotation": "float",
+          "description": "The multiplier applied to the base LR at epoch 0\n(default: `1/3`).",
+          "default": "1.0 / 3"
+        },
+        {
+          "name": "end_factor",
+          "annotation": "float",
+          "description": "The multiplier applied to the base LR at epoch `total_iters`\n(default: `1.0`).",
+          "default": "1.0"
+        },
+        {
+          "name": "total_iters",
+          "annotation": "int",
+          "description": "Number of steps over which the interpolation runs (default: `5`).",
+          "default": "5"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.AdamW(model.parameters(), lr=1e-3)\n>>> # Warm up over 5 epochs: LR goes from lr/3 to lr\n>>> scheduler = optim.LinearLR(\n...     optimizer, start_factor=1/3, end_factor=1.0, total_iters=5\n... )\n>>> for epoch in range(50):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "`LinearLR` is commonly used for **linear warmup**: set\n`start_factor` to a small value (e.g. `1/total_iters`) and\n`end_factor=1.0` so the learning rate ramps up to its nominal value\nover the first few epochs."
+      ],
+      "attributes": [
+        {
+          "name": "start_factor",
+          "annotation": "float",
+          "description": "Initial LR multiplier."
+        },
+        {
+          "name": "end_factor",
+          "annotation": "float",
+          "description": "Final LR multiplier."
+        },
+        {
+          "name": "total_iters",
+          "annotation": "int",
+          "description": "Interpolation length in epochs."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ConstantLR",
+      "path": "lucid.optim.lr_scheduler.ConstantLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "ConstantLR(optimizer: Optimizer, factor: float = 1.0 / 3, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1064",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.ConstantLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, factor: float = 1.0 / 3, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1120",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the ConstantLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.ConstantLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1133",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Hold the learning rate at a constant scaled value, then restore the base LR.",
+      "extended": "For the first `total_iters` epochs the learning rate is scaled by\n`factor`; after that it is restored to the original base learning rate:\n\n$$\n\\eta_t =\n\\begin{cases}\n    \\eta_0 \\cdot \\text{factor} & t < T \\\\\n    \\eta_0                        & t \\ge T\n\\end{cases}\n$$\nwhere $T = \\text{total\\_iters}$.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "factor",
+          "annotation": "float",
+          "description": "Multiplicative factor applied to the base LR during the constant\nphase (default: `1/3`).",
+          "default": "1.0 / 3"
+        },
+        {
+          "name": "total_iters",
+          "annotation": "int",
+          "description": "Number of epochs to hold the scaled LR before restoring the base\nvalue (default: `5`).",
+          "default": "5"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> # Hold LR at 0.1/3 for 5 epochs, then jump back to 0.1\n>>> scheduler = optim.ConstantLR(optimizer, factor=1/3, total_iters=5)\n>>> for epoch in range(50):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "`ConstantLR` is useful as the first stage in a `SequentialLR`\nchain, e.g. to hold a reduced LR during an initial burn-in period\nbefore switching to a main decay schedule."
+      ],
+      "attributes": [
+        {
+          "name": "factor",
+          "annotation": "float",
+          "description": "LR scaling factor during the constant phase."
+        },
+        {
+          "name": "total_iters",
+          "annotation": "int",
+          "description": "Duration of the constant phase in epochs."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PolynomialLR",
+      "path": "lucid.optim.lr_scheduler.PolynomialLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "PolynomialLR(optimizer: Optimizer, total_iters: int = 5, power: float = 1.0, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1147",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.PolynomialLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, total_iters: int = 5, power: float = 1.0, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1210",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the PolynomialLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.PolynomialLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1225",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Decay the learning rate using a polynomial function over a fixed number of steps.",
+      "extended": "The learning rate follows a polynomial decay from the base LR down to\n`eta_min` over `total_iters` epochs:\n\n$$\n\\eta_t =\n\\begin{cases}\n    (\\eta_0 - \\eta_{\\min})\n    \\left(1 - \\dfrac{t}{T}\\right)^{p}\n    + \\eta_{\\min}\n    & t < T \\\\\n    \\eta_{\\min} & t \\ge T\n\\end{cases}\n$$\nwhere $T = \\text{total\\_iters}$ and $p = \\text{power}$.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "total_iters",
+          "annotation": "int",
+          "description": "Number of epochs over which the decay runs (default: `5`).",
+          "default": "5"
+        },
+        {
+          "name": "power",
+          "annotation": "float",
+          "description": "Exponent of the polynomial.  `power=1` gives linear decay;\n`power=2` gives quadratic decay (default: `1.0`).",
+          "default": "1.0"
+        },
+        {
+          "name": "eta_min",
+          "annotation": "float",
+          "description": "Minimum learning rate reached at `total_iters` (default: `0.0`).",
+          "default": "0.0"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> scheduler = optim.PolynomialLR(\n...     optimizer, total_iters=100, power=2.0, eta_min=1e-5\n... )\n>>> for epoch in range(100):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "`power=1` (linear) is equivalent to `LinearLR` with\n`start_factor=1` and `end_factor=0`.  Higher powers produce a\nschedule that decays slowly at first and more steeply near the end."
+      ],
+      "attributes": [
+        {
+          "name": "total_iters",
+          "annotation": "int",
+          "description": "Decay period in epochs."
+        },
+        {
+          "name": "power",
+          "annotation": "float",
+          "description": "Polynomial exponent."
+        },
+        {
+          "name": "eta_min",
+          "annotation": "float",
+          "description": "Lower bound on the learning rate."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CosineAnnealingWarmRestarts",
+      "path": "lucid.optim.lr_scheduler.CosineAnnealingWarmRestarts",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "CosineAnnealingWarmRestarts(optimizer: Optimizer, T_0: int, T_mult: int = 1, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1244",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.CosineAnnealingWarmRestarts.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, T_0: int, T_mult: int = 1, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1313",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the CosineAnnealingWarmRestarts.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.lr_scheduler.CosineAnnealingWarmRestarts.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1330",
+          "subcategory": "lr_scheduler",
+          "summary": "Advance the scheduler by one step and update the optimizer learning rates.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Should be called after the optimizer's `.step()` at the end of each\nepoch (or each iteration, depending on the schedule)."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.CosineAnnealingWarmRestarts.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1352",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Cosine annealing with periodic warm restarts (SGDR).",
+      "extended": "Implements the Stochastic Gradient Descent with Warm Restarts (SGDR)\nschedule.  Within each restart cycle of length $T_i$ epochs the\nlearning rate follows a cosine curve from the base LR down to\n`eta_min`, then restarts:\n\n$$\n\\eta_t = \\eta_{\\min} + \\frac{1}{2}(\\eta_{\\max} - \\eta_{\\min})\n          \\left(1 + \\cos\\!\\left(\n              \\frac{\\pi\\, T_{\\text{cur}}}{T_i}\n          \\right)\\right)\n$$\nwhere $T_{\\text{cur}}$ is the step count within the current\ncycle and $T_i$ is the current cycle length.  After each full\ncycle the cycle length is multiplied by `T_mult`:\n\n$$\nT_{i+1} = T_i \\cdot T_{\\text{mult}}\n$$",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "T_0",
+          "annotation": "int",
+          "description": "Length (in epochs) of the first restart cycle.",
+          "default": null
+        },
+        {
+          "name": "T_mult",
+          "annotation": "int",
+          "description": "Factor by which the cycle length is multiplied after each restart\n(default: `1`, i.e. all cycles have the same length).",
+          "default": "1"
+        },
+        {
+          "name": "eta_min",
+          "annotation": "float",
+          "description": "Minimum learning rate at the bottom of each cosine curve\n(default: `0.0`).",
+          "default": "0.0"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> scheduler = optim.CosineAnnealingWarmRestarts(\n...     optimizer, T_0=10, T_mult=2, eta_min=1e-5\n... )\n>>> for epoch in range(80):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "With `T_mult=1` every cycle has the same length `T_0`.  With\n`T_mult=2` cycle lengths double after each restart: `T_0`,\n`2*T_0`, `4*T_0`, …  Longer later cycles are useful because the\nmodel can refine a good basin found in earlier cycles."
+      ],
+      "attributes": [
+        {
+          "name": "T_0",
+          "annotation": "int",
+          "description": "Initial cycle length."
+        },
+        {
+          "name": "T_mult",
+          "annotation": "int",
+          "description": "Cycle-length multiplier applied after each restart."
+        },
+        {
+          "name": "eta_min",
+          "annotation": "float",
+          "description": "Lower bound on the learning rate."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "OneCycleLR",
+      "path": "lucid.optim.lr_scheduler.OneCycleLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_LRScheduler"
+      ],
+      "labels": [],
+      "signature": "OneCycleLR(optimizer: Optimizer, max_lr: float, total_steps: int, pct_start: float = 0.3, anneal_strategy: str = 'cos', div_factor: float = 25.0, final_div_factor: float = 10000.0, last_epoch: int = -1, verbose: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1370",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.OneCycleLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, max_lr: float, total_steps: int, pct_start: float = 0.3, anneal_strategy: str = 'cos', div_factor: float = 25.0, final_div_factor: float = 10000.0, last_epoch: int = -1, verbose: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1454",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the OneCycleLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_lr",
+          "path": "lucid.optim.lr_scheduler.OneCycleLR.get_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1481",
+          "subcategory": "lr_scheduler",
+          "summary": "Compute the learning rate for each parameter group at the current step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[float]",
+            "description": "One learning rate per param group, derived from the schedule formula\ndocumented in the class docstring."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "1Cycle learning rate policy.",
+      "extended": "Implements the 1cycle policy: the learning rate first rises from an\ninitial value to `max_lr` over a warmup phase, then anneals down to\na minimum value over the remaining steps.\n\nThree special learning rates are derived from `max_lr`:\n\n$$\n\\begin{aligned}\n\\eta_{\\text{init}} &= \\frac{\\eta_{\\max}}{\\text{div\\_factor}} \\\\\n\\eta_{\\min}  &= \\frac{\\eta_{\\text{init}}}{\\text{final\\_div\\_factor}}\n\\end{aligned}\n$$\nThe schedule has two phases:\n\n1. **Warmup** (first `pct_start * total_steps` steps): anneal from\n   $\\eta_{\\text{init}}$ up to $\\eta_{\\max}$.\n2. **Cooldown** (remaining steps): anneal from $\\eta_{\\max}$ down\n   to $\\eta_{\\min}$.\n\nEach phase uses either cosine or linear annealing depending on\n`anneal_strategy`.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "Wrapped optimizer.",
+          "default": null
+        },
+        {
+          "name": "max_lr",
+          "annotation": "float",
+          "description": "Peak learning rate reached at the end of the warmup phase.",
+          "default": null
+        },
+        {
+          "name": "total_steps",
+          "annotation": "int",
+          "description": "Total number of steps (batches) in the training run.",
+          "default": null
+        },
+        {
+          "name": "pct_start",
+          "annotation": "float",
+          "description": "Fraction of `total_steps` devoted to the warmup phase\n(default: `0.3`).",
+          "default": "0.3"
+        },
+        {
+          "name": "anneal_strategy",
+          "annotation": "str",
+          "description": "Annealing function: `\"cos\"` for cosine annealing or\n`\"linear\"` for linear annealing (default: `\"cos\"`).",
+          "default": "'cos'"
+        },
+        {
+          "name": "div_factor",
+          "annotation": "float",
+          "description": "Determines the initial LR as `max_lr / div_factor`\n(default: `25.0`).",
+          "default": "25.0"
+        },
+        {
+          "name": "final_div_factor",
+          "annotation": "float",
+          "description": "Determines the minimum LR as `initial_lr / final_div_factor`\n(default: `1e4`).",
+          "default": "10000.0"
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        },
+        {
+          "name": "verbose",
+          "annotation": "bool",
+          "description": "Print the updated LR after each step if `True` (default: `False`).",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> scheduler = optim.OneCycleLR(\n...     optimizer, max_lr=0.1, total_steps=len(dataloader) * epochs\n... )\n>>> for batch in dataloader:\n...     train_step(batch)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "The 1cycle policy should be called **once per training step** (per\nbatch), not once per epoch.  It is designed for super-convergence\nand often allows training with much larger learning rates than\nstandard schedules."
+      ],
+      "attributes": [
+        {
+          "name": "max_lr",
+          "annotation": "float",
+          "description": "Peak learning rate."
+        },
+        {
+          "name": "total_steps",
+          "annotation": "int",
+          "description": "Total training steps."
+        },
+        {
+          "name": "pct_start",
+          "annotation": "float",
+          "description": "Warmup fraction."
+        },
+        {
+          "name": "anneal_strategy",
+          "annotation": "str",
+          "description": "`\"cos\"` or `\"linear\"`."
+        },
+        {
+          "name": "div_factor",
+          "annotation": "float",
+          "description": "Initial LR divisor."
+        },
+        {
+          "name": "final_div_factor",
+          "annotation": "float",
+          "description": "Minimum LR divisor relative to initial LR."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "SequentialLR",
+      "path": "lucid.optim.lr_scheduler.SequentialLR",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "SequentialLR(optimizer: Optimizer, schedulers: list[_LRScheduler], milestones: list[int], last_epoch: int = -1)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1513",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.SequentialLR.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(optimizer: Optimizer, schedulers: list[_LRScheduler], milestones: list[int], last_epoch: int = -1)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1572",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the SequentialLR.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.lr_scheduler.SequentialLR.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1586",
+          "subcategory": "lr_scheduler",
+          "summary": "Advance the active scheduler by one epoch, switching if a milestone is reached.",
+          "extended": "Increments the internal epoch counter, checks whether any\nmilestone has been crossed, and delegates to the currently active\nscheduler's `_LRScheduler.step`.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [
+            ">>> for epoch in range(100):\n...     optimizer.step()\n...     scheduler.step()"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_last_lr",
+          "path": "lucid.optim.lr_scheduler.SequentialLR.get_last_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_last_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1607",
+          "subcategory": "lr_scheduler",
+          "summary": "Return the last learning rates from the currently active scheduler.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list of float",
+            "description": "Current learning rate of each optimizer param group, as\nreported by the active scheduler."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Chain multiple schedulers and switch between them at epoch milestones.",
+      "extended": "`SequentialLR` runs its list of schedulers one at a time, activating\nthe next scheduler whenever the epoch counter crosses a milestone.\nBefore the first milestone, `schedulers[0]` is active; between\nmilestone `k-1` and `k`, `schedulers[k]` is active.",
+      "parameters": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "The optimizer shared by all schedulers.",
+          "default": null
+        },
+        {
+          "name": "schedulers",
+          "annotation": "list of _LRScheduler",
+          "description": "Ordered list of scheduler instances to activate in sequence.\nMust have `len(schedulers) == len(milestones) + 1`.",
+          "default": null
+        },
+        {
+          "name": "milestones",
+          "annotation": "list of int",
+          "description": "Sorted list of epoch indices at which to switch to the next\nscheduler.",
+          "default": null
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "The index of the last epoch (default: `-1`).",
+          "default": "-1"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> s1 = optim.ConstantLR(optimizer, factor=0.1, total_iters=5)\n>>> s2 = optim.ExponentialLR(optimizer, gamma=0.9)\n>>> scheduler = optim.SequentialLR(optimizer, schedulers=[s1, s2], milestones=[5])\n>>> for epoch in range(50):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "A common pattern is to combine a short warmup with a long cosine decay:\n\n.. code-block:: python\n\n    warmup   = optim.LinearLR(optimizer, start_factor=0.1, total_iters=5)\n    cosine   = optim.CosineAnnealingLR(optimizer, T_max=95)\n    combined = optim.SequentialLR(\n        optimizer,\n        schedulers=[warmup, cosine],\n        milestones=[5],\n    )"
+      ],
+      "attributes": [
+        {
+          "name": "optimizer",
+          "annotation": "Optimizer",
+          "description": "The shared optimizer."
+        },
+        {
+          "name": "schedulers",
+          "annotation": "list of _LRScheduler",
+          "description": "All schedulers in activation order."
+        },
+        {
+          "name": "milestones",
+          "annotation": "list of int",
+          "description": "Epoch indices marking scheduler transitions."
+        },
+        {
+          "name": "last_epoch",
+          "annotation": "int",
+          "description": "Number of `step` calls completed."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ChainedScheduler",
+      "path": "lucid.optim.lr_scheduler.ChainedScheduler",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "ChainedScheduler(schedulers: list[_LRScheduler])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1619",
+      "subcategory": "lr_scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.optim.lr_scheduler.ChainedScheduler.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(schedulers: list[_LRScheduler])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1669",
+          "subcategory": "lr_scheduler",
+          "summary": "Initialise the ChainedScheduler.  See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.optim.lr_scheduler.ChainedScheduler.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1673",
+          "subcategory": "lr_scheduler",
+          "summary": "Step all chained schedulers simultaneously.",
+          "extended": "Calls `_LRScheduler.step` on every scheduler in order.\nEach scheduler writes its updated learning rates into the shared\noptimizer, so the final LR reflects the composition of all\nschedules.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [
+            ">>> for epoch in range(50):\n...     optimizer.step()\n...     scheduler.step()"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_last_lr",
+          "path": "lucid.optim.lr_scheduler.ChainedScheduler.get_last_lr",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_last_lr()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/optim/lr_scheduler.py#L1690",
+          "subcategory": "lr_scheduler",
+          "summary": "Return the last learning rates from the final scheduler in the chain.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list of float",
+            "description": "Current learning rate of each optimizer param group, as\nreported by the last scheduler in `schedulers`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Apply multiple schedulers simultaneously, compounding their LR changes.",
+      "extended": "At every `step` call each scheduler in the list is stepped in\norder.  Because each scheduler writes its own learning rates back into\nthe shared optimizer, the net effect is the **composition** of all\nindividual schedule factors:\n\n$$\n\\eta_t = \\eta_0 \\cdot \\prod_{k} f_k(t)\n$$\nwhere $f_k(t)$ is the multiplicative change applied by scheduler\n$k$ at epoch $t$.",
+      "parameters": [
+        {
+          "name": "schedulers",
+          "annotation": "list of _LRScheduler",
+          "description": "List of scheduler instances to step together.  All schedulers must\nwrap the same optimizer.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid.optim as optim\n>>> optimizer = optim.SGD(model.parameters(), lr=0.1)\n>>> warmup = optim.LinearLR(optimizer, start_factor=0.1, total_iters=5)\n>>> decay  = optim.ExponentialLR(optimizer, gamma=0.95)\n>>> scheduler = optim.ChainedScheduler([warmup, decay])\n>>> for epoch in range(50):\n...     train(...)\n...     optimizer.step()\n...     scheduler.step()"
+      ],
+      "notes": [
+        "`ChainedScheduler` differs from `SequentialLR` in that **all**\nschedulers are active at every step rather than one at a time.  This is\nuseful when you want, for example, a warmup schedule and an exponential\ndecay to both apply simultaneously.\n\nOnly the last scheduler in the chain is consulted by\n`get_last_lr`, so the returned value reflects that scheduler's\nview of the current LR (which is also what is stored in the optimizer)."
+      ],
+      "attributes": [
+        {
+          "name": "schedulers",
+          "annotation": "list of _LRScheduler",
+          "description": "The chained schedulers stepped in order."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": null,
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

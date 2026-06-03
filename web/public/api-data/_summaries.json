@@ -1,0 +1,879 @@
+{
+  "roformer": {
+    "name": "RoFormerModel",
+    "type": "RoFormerModel",
+    "params": 124048128,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "embeddings",
+        "type": "_RoFormerEmbeddings",
+        "params": 38403072,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "word_embeddings",
+            "type": "Embedding",
+            "params": 38400000,
+            "own_params": 38400000,
+            "children": []
+          },
+          {
+            "name": "token_type_embeddings",
+            "type": "Embedding",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "LayerNorm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "rotary",
+        "type": "_RoFormerRotaryEmbedding",
+        "params": 0,
+        "own_params": 0,
+        "children": []
+      },
+      {
+        "name": "encoder",
+        "type": "_RoFormerEncoder",
+        "params": 85054464,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "layer",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_RoFormerLayer",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "attention",
+                    "type": "_RoFormerAttention",
+                    "params": 2363904,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self",
+                        "type": "_RoFormerSelfAttention",
+                        "params": 1771776,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 590592,
+                            "own_params": 590592,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_RoFormerSelfOutput",
+                        "params": 592128,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 590592,
+                            "own_params": 590592,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "intermediate",
+                    "type": "_RoFormerIntermediate",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dense",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "output",
+                    "type": "_RoFormerOutput",
+                    "params": 2361600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dense",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "LayerNorm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "pooler",
+        "type": "_RoFormerPooler",
+        "params": 590592,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "dense",
+            "type": "Linear",
+            "params": 590592,
+            "own_params": 590592,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "roformer_cls": {
+    "name": "RoFormerForSequenceClassification",
+    "type": "RoFormerForSequenceClassification",
+    "params": 124049666,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "roformer",
+        "type": "RoFormerModel",
+        "params": 124048128,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_RoFormerEmbeddings",
+            "params": 38403072,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 38400000,
+                "own_params": 38400000,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "rotary",
+            "type": "_RoFormerRotaryEmbedding",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "encoder",
+            "type": "_RoFormerEncoder",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_RoFormerLayer",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_RoFormerAttention",
+                        "params": 2363904,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_RoFormerSelfAttention",
+                            "params": 1771776,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_RoFormerSelfOutput",
+                            "params": 592128,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_RoFormerIntermediate",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_RoFormerOutput",
+                        "params": 2361600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_RoFormerPooler",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "dropout",
+        "type": "Dropout",
+        "params": 0,
+        "own_params": 0,
+        "children": []
+      },
+      {
+        "name": "classifier",
+        "type": "Linear",
+        "params": 1538,
+        "own_params": 1538,
+        "children": []
+      }
+    ]
+  },
+  "roformer_mlm": {
+    "name": "RoFormerForMaskedLM",
+    "type": "RoFormerForMaskedLM",
+    "params": 124690256,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "roformer",
+        "type": "RoFormerModel",
+        "params": 124048128,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_RoFormerEmbeddings",
+            "params": 38403072,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 38400000,
+                "own_params": 38400000,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "rotary",
+            "type": "_RoFormerRotaryEmbedding",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "encoder",
+            "type": "_RoFormerEncoder",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_RoFormerLayer",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_RoFormerAttention",
+                        "params": 2363904,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_RoFormerSelfAttention",
+                            "params": 1771776,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_RoFormerSelfOutput",
+                            "params": 592128,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_RoFormerIntermediate",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_RoFormerOutput",
+                        "params": 2361600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_RoFormerPooler",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "cls",
+        "type": "_RoFormerOnlyMLMHead",
+        "params": 39042128,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "predictions",
+            "type": "_RoFormerLMPredictionHead",
+            "params": 39042128,
+            "own_params": 50000,
+            "children": [
+              {
+                "name": "transform",
+                "type": "_RoFormerPredictionHeadTransform",
+                "params": 592128,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "Linear",
+                "params": 38400000,
+                "own_params": 38400000,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "roformer_token_cls": {
+    "name": "RoFormerForTokenClassification",
+    "type": "RoFormerForTokenClassification",
+    "params": 124049666,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "roformer",
+        "type": "RoFormerModel",
+        "params": 124048128,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_RoFormerEmbeddings",
+            "params": 38403072,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 38400000,
+                "own_params": 38400000,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "rotary",
+            "type": "_RoFormerRotaryEmbedding",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "encoder",
+            "type": "_RoFormerEncoder",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_RoFormerLayer",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_RoFormerAttention",
+                        "params": 2363904,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_RoFormerSelfAttention",
+                            "params": 1771776,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_RoFormerSelfOutput",
+                            "params": 592128,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_RoFormerIntermediate",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_RoFormerOutput",
+                        "params": 2361600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_RoFormerPooler",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "dropout",
+        "type": "Dropout",
+        "params": 0,
+        "own_params": 0,
+        "children": []
+      },
+      {
+        "name": "classifier",
+        "type": "Linear",
+        "params": 1538,
+        "own_params": 1538,
+        "children": []
+      }
+    ]
+  }
+}

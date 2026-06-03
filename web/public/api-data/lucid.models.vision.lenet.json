@@ -1,0 +1,571 @@
+{
+  "slug": "lucid.models.vision.lenet",
+  "name": "lenet",
+  "path": "lucid.models.vision.lenet",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/__init__.py#L1",
+  "members": [
+    {
+      "name": "LeNetConfig",
+      "path": "lucid.models.vision.lenet._config.LeNetConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "LeNetConfig(num_classes: int = 10, in_channels: int = 1, activation: str = 'tanh', pooling: str = 'avg')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.lenet._config.LeNetConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 10, in_channels: int = 1, activation: str = 'tanh', pooling: str = 'avg')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for LeNet-5.",
+      "extended": "`activation` controls the nonlinearity:\n  - `\"tanh\"`    — original paper (Gradient-Based Learning, 1998)\n  - `\"relu\"`    — modern convention\n\n`pooling` controls the sub-sampling layers:\n  - `\"avg\"`     — original paper (average pooling / sub-sampling)\n  - `\"max\"`     — modern convention\n\n`in_channels` defaults to 1 (grayscale). Set to 3 for RGB inputs,\nthough the canonical use-case is MNIST / single-channel images.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "LeNet",
+      "path": "lucid.models.vision.lenet._model.LeNet",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "LeNet(config: LeNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L74",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.lenet._model.LeNet.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: LeNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L144",
+          "subcategory": "model",
+          "summary": "Configure a `DataLoader`; see the class docstring for parameter\nsemantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "On any of the above mutual-exclusion / range violations."
+            }
+          ],
+          "examples": [],
+          "notes": [
+            "`sampler` / `batch_sampler` / `shuffle` / `batch_size` /\n`drop_last` interact: passing `batch_sampler` precludes the\nother four; passing `sampler` precludes `shuffle`. When no\nsampler is supplied, a `SequentialSampler` (`shuffle=False`)\nor `RandomSampler` (`shuffle=True`) is constructed\nautomatically. `persistent_workers` requires `num_workers > 0`."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.lenet._model.LeNet.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L154",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.lenet._model.LeNet.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L157",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.lenet._model.LeNet.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L160",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "BaseModelOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "LeNet-5 feature extractor (no fully-connected head).",
+      "extended": "Implements the canonical convolutional trunk of the original LeNet-5\nnetwork from LeCun et al., \"Gradient-Based Learning Applied to\nDocument Recognition\", Proc. IEEE 1998: three convolutional layers\n(C1, C3, C5) interleaved with two sub-sampling layers (S2, S4).  The\nreceptive field grows from a single $5\\times5$ patch in C1 to\nthe entire $32\\times32$ input by C5 — so for the canonical\ninput size the C5 output collapses to a $1\\times1$ spatial map\nof 120 channels, acting as a fully-connected layer in conv form.\nUsed as the canonical \"Hello World\" of convolutional networks and\nas the smallest paper-cited baseline in the model zoo.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "LeNetConfig",
+          "description": "Frozen architecture spec.  Use `lenet_5` for the\npaper-cited tanh + average-pool variant; pass a custom config to\nswitch to modern `activation=\"relu\"` / `pooling=\"max\"` or to\naccept RGB input via `in_channels=3`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Run a single forward pass on a batch of MNIST-shaped inputs:\n>>> import lucid\n>>> from lucid.models.vision.lenet import lenet_5\n>>> backbone = lenet_5()\n>>> x = lucid.randn(8, 1, 32, 32)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape   # (B, 120, 1, 1)\n(8, 120, 1, 1)"
+      ],
+      "notes": [
+        "From LeCun et al., \"Gradient-Based Learning Applied to Document\nRecognition\", Proc. IEEE 86(11):2278–2324, 1998, Figure 2.  Each\nconvolution computes\n\n$$\nh_{i,j}^{(k)} = \\phi\\!\\left(\n    \\sum_{c}\\sum_{u,v} W_{u,v,c}^{(k)} \\, x_{i+u,\\,j+v,\\,c}\n    + b^{(k)}\n\\right),\n$$\nwhere $\\phi$ is $\\tanh$ in the paper.  The original\nsub-sampling layer was a *trainable* $2\\times2$ average pool\nwith learnable scale and bias; this implementation uses standard\nparameter-free `lucid.nn.AvgPool2d` for compatibility with\nmodern training recipes.  Total parameter count is approximately\n60 k — small enough to train to convergence on MNIST in minutes on\na CPU."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "LeNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features",
+          "annotation": "nn.Sequential",
+          "description": "The C1-S2-C3-S4-C5 convolutional stack — see\n`_build_features` for the exact layer chain."
+        },
+        {
+          "name": "feature_info",
+          "annotation": "list[FeatureInfo]",
+          "description": "Per-stage descriptor (channels + reduction factor) exposed via\n`BackboneMixin` for downstream decoder modules."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "LeNetForImageClassification",
+      "path": "lucid.models.vision.lenet._model.LeNetForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "LeNetForImageClassification(config: LeNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L169",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.lenet._model.LeNetForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: LeNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L247",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.lenet._model.LeNetForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_model.py#L254",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "LeNet-5 with F6 fully-connected layer and final classifier.",
+      "extended": "Combines a `LeNet` convolutional trunk with the original\npaper's two-layer fully-connected head: a hidden layer F6 mapping\n120 → 84 followed by the output layer mapping 84 →\n`config.num_classes`.  When `labels` are supplied to\n`forward`, a cross-entropy loss is returned alongside the\nlogits; otherwise `loss` is `None`.  Used as a teaching baseline\non MNIST / Fashion-MNIST and as a parity reference for LeNet-style\narchitectures.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "LeNetConfig",
+          "description": "Architecture spec.  Use `lenet_5_cls` for the paper-cited\nconfiguration (10-way classifier, tanh, average pooling); pass a\ncustom config to retarget `num_classes` or to switch the\nactivation/pooling family.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Run inference on a small MNIST-style batch:\n>>> import lucid\n>>> from lucid.models.vision.lenet import lenet_5_cls\n>>> model = lenet_5_cls()\n>>> x = lucid.randn(4, 1, 32, 32)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 10)\n>>> out.loss is None\nTrue\nCompute a training loss given labels:\n>>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)\n>>> out = model(x, labels=labels)\n>>> out.loss.shape\n()"
+      ],
+      "notes": [
+        "From LeCun et al., \"Gradient-Based Learning Applied to Document\nRecognition\", Proc. IEEE 86(11):2278–2324, 1998, Figure 2.  The\noriginal output layer was a Gaussian-RBF unit comparing F6\nactivations against fixed digit templates; this implementation uses\nthe modern linear + cross-entropy head, which gave essentially the\nsame accuracy in subsequent reimplementations.  Loss is the standard\ncategorical cross-entropy\n\n$$\n\\mathcal{L} = -\\frac{1}{N} \\sum_{n=1}^{N}\n    \\log \\operatorname{softmax}(\\text{logits}_n)_{\\,y_n},\n$$\ncomputed only when `labels` is not `None`."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "LeNetConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features",
+          "annotation": "nn.Sequential",
+          "description": "The C1-S2-C3-S4-C5 convolutional stack inherited from the\nbackbone."
+        },
+        {
+          "name": "f6",
+          "annotation": "nn.Linear",
+          "description": "Hidden fully-connected layer projecting 120 → 84."
+        },
+        {
+          "name": "act_f6",
+          "annotation": "nn.Module",
+          "description": "Activation applied after F6 — `lucid.nn.Tanh` in the\npaper, `lucid.nn.ReLU` if `config.activation=\"relu\"`."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Module",
+          "description": "Final linear projection 84 → `num_classes`, built by\n`ClassificationHeadMixin._build_classifier`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "lenet_5",
+      "path": "lucid.models.vision.lenet._pretrained.lenet_5",
+      "kind": "function",
+      "labels": [],
+      "signature": "lenet_5(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_pretrained.py#L19",
+      "subcategory": "pretrained",
+      "summary": "LeNet-5 feature-extracting backbone (no classification head).",
+      "extended": "Builds a `LeNet` with the paper-cited LeCun 1998 topology:\nthree convolutions (C1: 1→6, C3: 6→16, C5: 16→120) interleaved with\ntwo $2\\times2$ sub-sampling layers, using $\\tanh$\nactivations and parameter-free average pooling.  Approximately\n44 k convolutional parameters (≈60 k including the F6 + output\nlayers of the classifier variant).  Designed for $1\\times32 \\times32$ grayscale digit inputs.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored — the returned model is randomly initialised.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `LeNetConfig` to\ncustomise individual fields.  Use `activation=\"relu\"` and\n`pooling=\"max\"` for the modern ReLU + max-pool reimplementation,\nor `in_channels=3` for RGB inputs.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "LeNet",
+        "description": "Backbone with the LeNet-5 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.lenet import lenet_5\n>>> model = lenet_5()\n>>> x = lucid.randn(1, 1, 32, 32)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 120, 1, 1)\n(1, 120, 1, 1)"
+      ],
+      "notes": [
+        "See LeCun et al., \"Gradient-Based Learning Applied to Document\nRecognition\", Proc. IEEE 86(11):2278–2324, 1998, Figure 2.  The\ncanonical metric is MNIST test-set error: the original paper reports\n0.95% with the full distortion-augmented training recipe.  No\npaper-cited \"tiny / large\" LeNet variants exist (H11) — pass\n`activation`/`pooling` overrides to get the common modernised\nflavours."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "LeNet",
+        "type": "LeNet",
+        "params": 50692,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 50692,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 156,
+                "own_params": 156,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 2416,
+                "own_params": 2416,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 48120,
+                "own_params": 48120,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "lenet_5_cls",
+      "path": "lucid.models.vision.lenet._pretrained.lenet_5_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "lenet_5_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/lenet/_pretrained.py#L81",
+      "subcategory": "pretrained",
+      "summary": "LeNet-5 image classifier (C1-S2-C3-S4-C5 + F6 + linear head).",
+      "extended": "Builds a `LeNetForImageClassification` with the paper-cited\nLeCun 1998 configuration: three convolutions, two sub-sampling\nlayers, a hidden F6 layer (120 → 84), and a final linear projection\nto `config.num_classes` (default 10 for MNIST).  Approximately\n60 k parameters total.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `LeNetConfig` to\nretarget `num_classes` (e.g. `num_classes=100` for\nCIFAR-100) or to enable the modern ReLU + max-pool variant via\n`activation=\"relu\"`, `pooling=\"max\"`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "LeNetForImageClassification",
+        "description": "Classifier with the LeNet-5 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.lenet import lenet_5_cls\n>>> model = lenet_5_cls()\n>>> x = lucid.randn(2, 1, 32, 32)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
+      ],
+      "notes": [
+        "See LeCun et al., \"Gradient-Based Learning Applied to Document\nRecognition\", Proc. IEEE 86(11):2278–2324, 1998, Figure 2.  The\ncanonical MNIST test-set error is 0.95% with the original distortion-\naugmented training recipe."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "LeNetForImageClassification",
+        "type": "LeNetForImageClassification",
+        "params": 61706,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 50692,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 156,
+                "own_params": 156,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 2416,
+                "own_params": 2416,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 48120,
+                "own_params": 48120,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "f6",
+            "type": "Linear",
+            "params": 10164,
+            "own_params": 10164,
+            "children": []
+          },
+          {
+            "name": "act_f6",
+            "type": "Tanh",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 850,
+            "own_params": 850,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "LeNet family — LeCun et al., 1998.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "LeNet",
+  "citation": "LeCun, Yann, et al. \"Gradient-based learning applied to document recognition.\" Proceedings of the IEEE, vol. 86, no. 11, 1998, pp. 2278–2324.",
+  "theory": "LeNet-5 is the prototypical convolutional neural network and the\ndirect ancestor of every modern vision architecture.  Designed for\nhandwritten-digit recognition on 32×32 grayscale inputs, it\ninterleaves *learned* $5\\times5$ convolutions with fixed\n$2\\times2$ sub-sampling (average pooling) layers, ending in\ntwo fully-connected layers and a Gaussian-RBF output layer.\n\nThe key insight of LeCun et al. was that local receptive fields,\nshared weights, and spatial sub-sampling — together — give a model\nthat is approximately invariant to small translations, scalings,\nand distortions of the input.  Convolution enforces *weight\nsharing*: the same $5\\times5$ filter slides across the image,\nso a feature detector learned in one location applies everywhere.\nSub-sampling layers then *pool* responses over a neighbourhood,\nyielding coarser feature maps that are robust to the exact position\nof each feature.\n\nFormally, a LeNet layer computes\n\n\n\n$$\nh_{i,j}^{(k)} = \\phi\\!\\left(\n    \\sum_{c}\\sum_{u,v} W_{u,v,c}^{(k)} \\, x_{i+u,\\,j+v,\\,c}\n    + b^{(k)}\n\\right),\n$$\n\nwhere $\\phi$ is $\\tanh$ in the original paper (or ReLU\nin modern reimplementations) and the kernel $W^{(k)}$ is\nshared across all spatial positions $(i, j)$.  Despite its\nsmall size by today's standards (≈60 k parameters), LeNet\nestablished the convolutional template — conv → nonlinearity →\npool → repeat → flatten → MLP — that is still recognisable in\nevery CNN that followed.",
+  "tasks": [
+    "image-classification"
+  ]
+}

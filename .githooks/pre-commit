@@ -114,6 +114,38 @@ if [[ "${LUCID_SKIP_XREFS:-0}" != "1" && -f "${XREF_SCRIPT}" ]]; then
     fi
 fi
 
+# ── 2c. Docs API-data sync ──────────────────────────────────────────────────
+# The docs site reads pre-built JSON from ``web/public/api-data/`` — that
+# directory is checked in so the GitHub Pages workflow can skip Griffe
+# entirely and deploy from source.  Whenever this commit touches
+# ``lucid/**/*.{py,pyi}``, regenerate the JSON tree and re-stage it so
+# the source-of-truth and the rendered API data ship together.
+#
+# Skip with ``LUCID_SKIP_API_DATA=1`` (per-commit override) when the
+# regeneration cost is unwanted (e.g. partial commits, infra fix-ups).
+
+if [[ "${LUCID_SKIP_API_DATA:-0}" != "1" ]]; then
+    STAGED_LUCID="$(git diff --cached --name-only --diff-filter=ACMR \
+        | grep -E '^lucid/.*\.(py|pyi)$' || true)"
+    BUILD_SCRIPT="${REPO_ROOT}/web/scripts/build-api-data.py"
+    if [[ -n "$STAGED_LUCID" && -f "$BUILD_SCRIPT" ]]; then
+        echo "  [api-data] lucid/ source changed — rebuilding web/public/api-data/…"
+        if (
+            cd "$REPO_ROOT" && \
+            PYTHONPATH="${REPO_ROOT}" python3 web/scripts/build-api-data.py \
+                >/tmp/lucid-api-data.log 2>&1
+        ); then
+            git add "${REPO_ROOT}/web/public/api-data"
+            echo "  [api-data] ✓ re-staged $(git diff --cached --name-only \
+                -- web/public/api-data | wc -l | tr -d ' ') JSON file(s)"
+        else
+            echo "  ❌  api-data build failed — see /tmp/lucid-api-data.log" >&2
+            echo "      (set LUCID_SKIP_API_DATA=1 to bypass for this commit)" >&2
+            exit 1
+        fi
+    fi
+fi
+
 # ── 3. LOC badge refresh ────────────────────────────────────────────────────
 if [[ "${LUCID_SKIP_LOC_BADGE:-0}" == "1" ]]; then
     exit 0

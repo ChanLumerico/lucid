@@ -1,0 +1,5395 @@
+{
+  "slug": "lucid.models.vision.vgg",
+  "name": "vgg",
+  "path": "lucid.models.vision.vgg",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/__init__.py#L1",
+  "members": [
+    {
+      "name": "VGGConfig",
+      "path": "lucid.models.vision.vgg._config.VGGConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "VGGConfig(num_classes: int = 1000, in_channels: int = 3, arch: tuple[int, ...] = (2, 2, 3, 3, 3), batch_norm: bool = False, dropout: float = 0.5)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vgg._config.VGGConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, arch: tuple[int, ...] = (2, 2, 3, 3, 3), batch_norm: bool = False, dropout: float = 0.5)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for all VGG variants (A/B/D/E ≡ 11/13/16/19).",
+      "extended": "`arch` encodes the per-block conv counts:\n  - `(1, 1, 2, 2, 2)` → VGG-11\n  - `(2, 2, 2, 2, 2)` → VGG-13\n  - `(2, 2, 3, 3, 3)` → VGG-16\n  - `(2, 2, 4, 4, 4)` → VGG-19\n\n`batch_norm` enables BatchNorm after each Conv+ReLU pair (VGG-BN).\n`dropout` applies to the two 4096-dim FC layers (0.5 in the paper).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VGG",
+      "path": "lucid.models.vision.vgg._model.VGG",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "VGG(config: VGGConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L56",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vgg._model.VGG.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VGGConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L123",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.vgg._model.VGG.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L133",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.vgg._model.VGG.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L136",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vgg._model.VGG.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L140",
+          "subcategory": "model",
+          "summary": "Run Fast R-CNN on a batch of images.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": null,
+              "description": "(B, C, H, W) image batch.",
+              "default": null
+            },
+            {
+              "name": "proposals",
+              "annotation": null,
+              "description": "list of B tensors, each (N_i, 4) xyxy proposals.",
+              "default": null
+            },
+            {
+              "name": "targets",
+              "annotation": null,
+              "description": "Optional training targets (list of dicts with\n       \"boxes\" and \"labels\").",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "BaseModelOutput",
+            "description": "`ObjectDetectionOutput`:\n`logits`     : (Σ N_i, num_classes + 1) raw class logits.\n`pred_boxes` : (Σ N_i, 4) decoded xyxy top-class boxes.\n`loss`       : scalar multi-task loss (only with targets)."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "VGG feature-extracting backbone (no fully-connected head).",
+      "extended": "Implements the unified VGG topology from Simonyan & Zisserman,\n\"Very Deep Convolutional Networks for Large-Scale Image\nRecognition\", ICLR 2015.  All variants (VGG-11/13/16/19, with or\nwithout `lucid.nn.BatchNorm2d`) share the same macro\nstructure: five blocks of stacked $3\\times3$ convolutions\ninterleaved with $2\\times2$ max-pools, with channel widths\nfixed at `(64, 128, 256, 512, 512)`.  Only the number of\nconvolutions per block changes between variants.  A final\n`lucid.nn.AdaptiveAvgPool2d` collapses the feature map to\n$7\\times7$ so the backbone output is fixed-size regardless of\ninput resolution.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VGGConfig",
+          "description": "Frozen architecture spec.  Use the factory functions\n(`vgg_11`, `vgg_13`, `vgg_16`, `vgg_19`\nand their `*_bn` variants) for paper-cited configurations.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Build a VGG-16 backbone and run a single forward pass:\n>>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16\n>>> backbone = vgg_16()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape   # (B, 512, 7, 7)\n(2, 512, 7, 7)"
+      ],
+      "notes": [
+        "From Simonyan & Zisserman, ICLR 2015, Table 1.  The motivating\ninsight is that two stacked $3\\times3$ convolutions cover the\nsame receptive field as a single $5\\times5$ convolution but\nuse only $2 \\cdot 9 C^2 = 18 C^2$ parameters versus\n$25 C^2$, while inserting an extra nonlinearity between them.\nThree stacked $3\\times3$ layers match a $7\\times7$\nreceptive field at $27 C^2$ versus $49 C^2$ parameters\nand *two* extra nonlinearities.  Depth at a fixed receptive field\ntherefore buys representational power essentially for free.  VGG\nbackbones became the standard feature extractor for downstream\ntasks (Faster R-CNN, neural style transfer) for several years\nafter publication."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "VGGConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features",
+          "annotation": "nn.Sequential",
+          "description": "The five conv blocks; structure depends on `config.arch` and\n`config.batch_norm` — see `_build_features`."
+        },
+        {
+          "name": "avgpool",
+          "annotation": "nn.AdaptiveAvgPool2d",
+          "description": "Global pool down to $7\\times7$ so the backbone produces a\nfixed-size feature regardless of input resolution."
+        },
+        {
+          "name": "feature_info",
+          "annotation": "list[FeatureInfo]",
+          "description": "Per-stage descriptor (channels + reduction factor) exposed via\n`BackboneMixin` for downstream decoder modules."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VGGForImageClassification",
+      "path": "lucid.models.vision.vgg._model.VGGForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "VGGForImageClassification(config: VGGConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L149",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vgg._model.VGGForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VGGConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L209",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vgg._model.VGGForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_model.py#L219",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "VGG with two 4096-dim fully-connected layers and a linear classifier.",
+      "extended": "Combines a `VGG` convolutional backbone with the standard\npaper-cited classifier head: FC6 (512·7·7 = 25088 → 4096), FC7\n(4096 → 4096), and a final linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\n`lucid.nn.Dropout` with `config.dropout` (0.5 in the\npaper) is applied after both ReLU activations.  When `labels` are\nsupplied to `forward`, cross-entropy loss is returned\nalongside the logits.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VGGConfig",
+          "description": "Architecture spec.  Use the `*_cls` factory functions\n(`vgg_11_cls`, `vgg_16_cls`, …) for paper-cited\nconfigurations.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        "Run inference on a 224x224 RGB batch:\n>>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16_cls\n>>> model = vgg_16_cls()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)"
+      ],
+      "notes": [
+        "From Simonyan & Zisserman, ICLR 2015.  The two 4096-dim FC layers\ndominate the parameter count: VGG-16 has 138 M parameters total, of\nwhich roughly 124 M sit in FC6 + FC7.  This is a recognised\nweakness — almost all later architectures (ResNet, DenseNet, …)\nreplace the giant FC head with a single `lucid.nn.Linear`\nafter `lucid.nn.AdaptiveAvgPool2d` to slash the parameter\ncost.  VGG-16 reaches a top-5 ImageNet validation error of 7.3% and\nVGG-19 reaches 7.5%."
+      ],
+      "attributes": [
+        {
+          "name": "config",
+          "annotation": "VGGConfig",
+          "description": "Stored copy of the config that built this model."
+        },
+        {
+          "name": "features, avgpool",
+          "annotation": null,
+          "description": "Same backbone components as on `VGG`."
+        },
+        {
+          "name": "fc6, fc7",
+          "annotation": "nn.Linear",
+          "description": "The two 4096-dim hidden fully-connected layers."
+        },
+        {
+          "name": "drop6, drop7",
+          "annotation": "nn.Dropout",
+          "description": "Dropout layers applied after each ReLU in the hidden FC stack,\ncontrolled by `config.dropout`."
+        },
+        {
+          "name": "classifier",
+          "annotation": "nn.Module",
+          "description": "Final linear projection 4096 → `num_classes`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vgg_11",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_11",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_11(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L34",
+      "subcategory": "pretrained",
+      "summary": "VGG-11 feature-extracting backbone (config A, no BatchNorm).",
+      "extended": "Builds a `VGG` with the paper-cited VGG-11 topology:\nper-block convolution counts `(1, 1, 2, 2, 2)` across the five\nblocks of widths `(64, 128, 256, 512, 512)`.  Approximately\n132.9 M parameters in the full classifier variant (≈9.2 M in the\nconvolutional trunk alone).  Reaches a top-5 ImageNet validation\nerror of 9.4% in Simonyan & Zisserman, ICLR 2015 (Table 3,\nconfiguration A).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored — the returned model is randomly initialised.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig` to\ncustomise individual fields (`in_channels`, `num_classes`,\n`dropout`).",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-11 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_11\n>>> model = vgg_11()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 512, 7, 7)\n(1, 512, 7, 7)"
+      ],
+      "notes": [
+        "See Simonyan & Zisserman, \"Very Deep Convolutional Networks for\nLarge-Scale Image Recognition\", ICLR 2015, Table 1 (configuration A)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9220480,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9220480,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_11_bn",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_11_bn",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_11_bn(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L217",
+      "subcategory": "pretrained",
+      "summary": "VGG-11 with BatchNorm — feature-extracting backbone.",
+      "extended": "Builds a `VGG` with the VGG-11 topology\n`arch=(1, 1, 2, 2, 2)` and a `lucid.nn.BatchNorm2d` layer\nafter each Conv + ReLU pair.  BatchNorm was added in the\ntimm / reference-framework reimplementations of VGG (not in the\noriginal paper) and substantially improves convergence speed and\nfinal accuracy; the topology is otherwise identical to\n`vgg_11`.  Approximately 132.9 M parameters.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-11-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_11_bn\n>>> model = vgg_11_bn()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9225984,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9225984,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_11_bn_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_11_bn_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_11_bn_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L577",
+      "subcategory": "pretrained",
+      "summary": "VGG-11 with BatchNorm — image classifier.",
+      "extended": "Same topology as `vgg_11_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nBatchNorm was added in the timm / reference-framework\nreimplementations of VGG (not in the original paper) and\nsubstantially improves convergence speed and final accuracy.\nApproximately 132.9 M parameters.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-11-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_11_bn_cls\n>>> model = vgg_11_bn_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 132868840,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9225984,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_11_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_11_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_11_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L393",
+      "subcategory": "pretrained",
+      "summary": "VGG-11 image classifier (config A, no BatchNorm).",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-11 topology (`arch=(1, 1, 2, 2, 2)`) followed by the two\n4096-dim fully-connected layers and a final linear projection to\n`config.num_classes`.  Approximately 132.9 M parameters total\n(≈124 M of which sit in the two large FC layers).  Reaches a top-5\nImageNet validation error of 9.4% (Simonyan & Zisserman, ICLR 2015,\nTable 3, configuration A).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig` — use\n`num_classes=N` to retarget the head.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-11 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_11_cls\n>>> model = vgg_11_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 132863336,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9220480,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_13",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_13",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_13(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L82",
+      "subcategory": "pretrained",
+      "summary": "VGG-13 feature-extracting backbone (config B, no BatchNorm).",
+      "extended": "Builds a `VGG` with the paper-cited VGG-13 topology:\nper-block convolution counts `(2, 2, 2, 2, 2)`.  Approximately\n133.0 M parameters in the full classifier variant.  Reaches a top-5\nImageNet validation error of 8.8% (Simonyan & Zisserman, ICLR 2015,\nTable 3, configuration B).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-13 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_13\n>>> model = vgg_13()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 512, 7, 7)\n(1, 512, 7, 7)"
+      ],
+      "notes": [
+        "See Simonyan & Zisserman, ICLR 2015, Table 1 (configuration B)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9404992,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9404992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_13_bn",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_13_bn",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_13_bn(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L262",
+      "subcategory": "pretrained",
+      "summary": "VGG-13 with BatchNorm — feature-extracting backbone.",
+      "extended": "Builds a `VGG` with the VGG-13 topology\n`arch=(2, 2, 2, 2, 2)` and `lucid.nn.BatchNorm2d` after\neach Conv + ReLU pair.  Approximately 133.0 M parameters.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-13-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_13_bn\n>>> model = vgg_13_bn()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9410880,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9410880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_13_bn_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_13_bn_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_13_bn_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L623",
+      "subcategory": "pretrained",
+      "summary": "VGG-13 with BatchNorm — image classifier.",
+      "extended": "Same topology as `vgg_13_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nApproximately 133.0 M parameters.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-13-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_13_bn_cls\n>>> model = vgg_13_bn_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 133053736,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9410880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_13_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_13_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_13_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L441",
+      "subcategory": "pretrained",
+      "summary": "VGG-13 image classifier (config B, no BatchNorm).",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-13 topology (`arch=(2, 2, 2, 2, 2)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 133.0 M\nparameters total.  Reaches a top-5 ImageNet validation error of\n8.8% (Simonyan & Zisserman, ICLR 2015, Table 3, configuration B).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-13 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_13_cls\n>>> model = vgg_13_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 133047848,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9404992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_16",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L125",
+      "subcategory": "pretrained",
+      "summary": "VGG-16 feature-extracting backbone (config D, no BatchNorm).",
+      "extended": "Builds a `VGG` with the paper-cited VGG-16 topology:\nper-block convolution counts `(2, 2, 3, 3, 3)` — adding a third\n$3\\times3$ convolution to each of the deeper blocks 3/4/5.\nApproximately 138.4 M parameters in the full classifier variant\n(≈14.7 M in the convolutional trunk alone).  Reaches a top-5\nImageNet validation error of 7.3% (Simonyan & Zisserman, ICLR 2015,\nTable 3, configuration D) — VGG-16 was the most widely deployed\nvariant of the family.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-16 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16\n>>> model = vgg_16()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 512, 7, 7)\n(1, 512, 7, 7)"
+      ],
+      "notes": [
+        "See Simonyan & Zisserman, ICLR 2015, Table 1 (configuration D)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 14714688,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14714688,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_16_bn",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_16_bn",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_16_bn(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L303",
+      "subcategory": "pretrained",
+      "summary": "VGG-16 with BatchNorm — feature-extracting backbone.",
+      "extended": "Builds a `VGG` with the VGG-16 topology\n`arch=(2, 2, 3, 3, 3)` and `lucid.nn.BatchNorm2d` after\neach Conv + ReLU pair.  Approximately 138.4 M parameters.  Often\npreferred over plain `vgg_16` for downstream fine-tuning\nbecause BatchNorm stabilises gradient statistics in the early conv\nstack.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-16-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16_bn\n>>> model = vgg_16_bn()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 14723136,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14723136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_16_bn_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_16_bn_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_16_bn_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L666",
+      "subcategory": "pretrained",
+      "summary": "VGG-16 with BatchNorm — image classifier.",
+      "extended": "Same topology as `vgg_16_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nApproximately 138.4 M parameters.  Often preferred over plain\n`vgg_16_cls` for downstream fine-tuning.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-16-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16_bn_cls\n>>> model = vgg_16_bn_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 138365992,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14723136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_16_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_16_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_16_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L486",
+      "subcategory": "pretrained",
+      "summary": "VGG-16 image classifier (config D, no BatchNorm).",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-16 topology (`arch=(2, 2, 3, 3, 3)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 138.4 M\nparameters total and a top-5 ImageNet validation error of 7.3%\n(Simonyan & Zisserman, ICLR 2015, Table 3, configuration D) — the\nmost widely used VGG variant.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-16 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16_cls\n>>> model = vgg_16_cls(num_classes=100)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 100)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 138357544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14714688,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_19",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_19",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_19(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L171",
+      "subcategory": "pretrained",
+      "summary": "VGG-19 feature-extracting backbone (config E, no BatchNorm).",
+      "extended": "Builds a `VGG` with the paper-cited VGG-19 topology:\nper-block convolution counts `(2, 2, 4, 4, 4)` — four\n$3\\times3$ convolutions in each of the deeper blocks.\nApproximately 143.7 M parameters in the full classifier variant.\nReaches a top-5 ImageNet validation error of 7.5% (Simonyan &\nZisserman, ICLR 2015, Table 3, configuration E) — slightly worse\nthan VGG-16 due to optimisation difficulty at this depth without\nresidual connections.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-19 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_19\n>>> model = vgg_19()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 512, 7, 7)\n(1, 512, 7, 7)"
+      ],
+      "notes": [
+        "See Simonyan & Zisserman, ICLR 2015, Table 1 (configuration E)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 20024384,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20024384,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_19_bn",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_19_bn",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_19_bn(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L347",
+      "subcategory": "pretrained",
+      "summary": "VGG-19 with BatchNorm — feature-extracting backbone.",
+      "extended": "Builds a `VGG` with the VGG-19 topology\n`arch=(2, 2, 4, 4, 4)` and `lucid.nn.BatchNorm2d` after\neach Conv + ReLU pair.  Approximately 143.7 M parameters.  The\ndeepest VGG variant; BatchNorm is particularly helpful at this\ndepth.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGG",
+        "description": "Backbone with the VGG-19-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_19_bn\n>>> model = vgg_19_bn()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 20035392,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20035392,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "44",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "45",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "46",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "47",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "48",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "49",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "50",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "51",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "52",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_19_bn_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_19_bn_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_19_bn_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L710",
+      "subcategory": "pretrained",
+      "summary": "VGG-19 with BatchNorm — image classifier.",
+      "extended": "Same topology as `vgg_19_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nApproximately 143.7 M parameters.  The deepest VGG variant —\nBatchNorm is especially valuable at this depth.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-19-BN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_19_bn_cls\n>>> model = vgg_19_bn_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 143678248,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20035392,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "44",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "45",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "46",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "47",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "48",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "49",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "50",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "51",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "52",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vgg_19_cls",
+      "path": "lucid.models.vision.vgg._pretrained.vgg_19_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vgg_19_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/vgg/_pretrained.py#L532",
+      "subcategory": "pretrained",
+      "summary": "VGG-19 image classifier (config E, no BatchNorm).",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-19 topology (`arch=(2, 2, 4, 4, 4)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 143.7 M\nparameters total.  Reaches a top-5 ImageNet validation error of\n7.5% (Simonyan & Zisserman, ICLR 2015, Table 3, configuration E).",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `VGGConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VGGForImageClassification",
+        "description": "Classifier with the VGG-19 configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_19_cls\n>>> model = vgg_19_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 143667240,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20024384,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "VGG family — Simonyan & Zisserman, 2014.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "VGG",
+  "citation": "Simonyan, Karen, and Andrew Zisserman. \"Very Deep Convolutional Networks for Large-Scale Image Recognition.\" International Conference on Learning Representations (ICLR), 2015.",
+  "theory": "VGG demonstrated that *uniformity and depth* — rather than\nbespoke layer designs — were the dominant factors driving image-\nclassification accuracy in 2014.  The network is built from a\nsingle recipe: stack $3\\times3$ convolutions with stride 1\nand padding 1, periodically halve the spatial resolution with a\n$2\\times2$ max-pool, double the channel count at each\npooling boundary, and end with three large fully-connected\nlayers.\n\nThe $3\\times3$ kernel choice is theoretically motivated.\nTwo stacked $3\\times3$ convolutions have the same receptive\nfield as a single $5\\times5$ convolution but use only\n$2 \\cdot 9 C^2 = 18 C^2$ parameters versus $25 C^2$,\nwhile inserting an extra nonlinearity between them.  Three stacked\n$3\\times3$ layers match a $7\\times7$ receptive field at\n$27 C^2$ versus $49 C^2$ parameters and *two* extra\nnonlinearities.  Depth at a fixed receptive field therefore buys\nrepresentational power essentially for free.\n\nThe paper's variants (configurations A, B, D, E corresponding to\nVGG-11/13/16/19) differ only in how many $3\\times3$ convs are\nstacked between pooling layers.  Despite a parameter count of\n138 M — most of it locked up in the 4096-dim fully-connected layers\n— VGG-16 achieves a top-5 ImageNet error of 7.3%, second only to\nGoogLeNet in ILSVRC-2014, and its features transferred so well\nthat \"VGG features\" became the standard backbone for downstream\ntasks (object detection, segmentation, style transfer) for years\nafter publication.",
+  "tasks": [
+    "image-classification"
+  ]
+}
