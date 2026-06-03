@@ -24,6 +24,16 @@
 
 export const WAIVERS = [
   {
+    id: "raw-hex-image-and-meta",
+    contracts: ["design.no-raw-hex"],
+    scope: ["src/app/layout.tsx", "src/app/opengraph-image.tsx"],
+    reason:
+      "These emit colour where CSS variables/Tailwind cannot reach: the " +
+      "<meta name=\"theme-color\"> value and the satori/ImageResponse OG-image " +
+      "renderer both require a literal hex. The value (#0d0c15) is the " +
+      "--color-lucid-bg token mirrored by hand.",
+  },
+  {
     id: "cpp-engine-libclang-pipeline",
     contracts: [
       "prose.no-visible-rest",

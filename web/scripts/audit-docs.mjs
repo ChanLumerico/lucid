@@ -126,6 +126,49 @@ const global = { files, routeSet, apiBySlug, labelKeys };
 //   check(ctxOrGlobal) → [{ scope, detail }] }.  ``scope`` is the slug/route a
 // waiver matches against.
 
+// ── UI design-language schema (the design language AS DATA) ──────────────────
+// Each entry: a CSS selector + the canonical token classes its matches MUST
+// carry (`all`), optionally MUST NOT (`none`), plus an any-of regex (`any`).
+// One generic checker turns this table into per-id contracts, so the visual
+// spec stays a declarative table rather than 15 hand-written functions.  Recipes
+// reverse-engineered from the built pages; prose in arch-docs-ui-design-language.
+function classSet(el) {
+  return new Set((el.getAttribute("class") || "").split(/\s+/).filter(Boolean));
+}
+const UI_CLASS_SCHEMA = [
+  { id: "ui.card.shape", sel: "a.group.block",
+    all: ["rounded-xl", "border-lucid-border", "bg-lucid-surface/40", "transition-colors", "hover:bg-lucid-surface", "hover:border-lucid-primary/40"] },
+  { id: "ui.member-card.shape", sel: "a.compact-card",
+    all: ["group", "flex", "items-start", "justify-between", "rounded-xl", "border-lucid-border", "bg-lucid-surface", "px-4", "py-3.5"] },
+  { id: "ui.member-card.hover-kind", sel: "a.compact-card",
+    all: ["hover:bg-lucid-elevated"], any: /^hover:border-api-[a-z-]+\/40$/ },
+  { id: "ui.section-heading.recipe", sel: 'section[id^="section-"] > h2',
+    all: ["text-xs", "font-semibold", "tracking-widest", "uppercase", "text-lucid-text-disabled"] },
+  { id: "ui.family-card.title", sel: "a.group.block header h3",
+    all: ["font-mono", "text-lg", "font-semibold", "text-api-class"] },
+  { id: "ui.type-link.style", sel: "a.decoration-dotted",
+    all: ["text-lucid-primary-light", "underline-offset-2"] },
+  { id: "ui.seealso.list", sel: 'ul[class*="border-lucid-primary/40"]',
+    all: ["rounded-xl", "border-l-2", "bg-lucid-primary/5", "space-y-1.5"] },
+];
+const uiContracts = UI_CLASS_SCHEMA.map((s) => ({
+  id: s.id, component: "UI", kind: "page", severity: s.sev || "error",
+  check(ctx) {
+    const out = [];
+    let els;
+    try { els = ctx.dom.querySelectorAll(s.sel); } catch { return out; }
+    for (const el of els) {
+      const cs = classSet(el);
+      const missing = (s.all || []).filter((c) => !cs.has(c));
+      const forbidden = (s.none || []).filter((c) => cs.has(c));
+      const anyOk = !s.any || [...cs].some((c) => s.any.test(c));
+      if (missing.length || forbidden.length || !anyOk)
+        out.push({ scope: ctx.scope, detail: `${s.sel}: ${[missing.length && "missing " + missing.join(" "), forbidden.length && "forbidden " + forbidden.join(" "), !anyOk && "need " + s.any].filter(Boolean).join("; ")}` });
+    }
+    return out;
+  },
+}));
+
 const PAGE_CONTRACTS = [
   // ── Links (every page) ─────────────────────────────────────────────────────
   {
@@ -206,43 +249,53 @@ const PAGE_CONTRACTS = [
     },
   },
   // ── UI design language (rendered-class conformance) ────────────────────────
-  // The design rules in arch-docs-site-rules.md, made executable: every
-  // component must use the canonical token recipe so the visual language stays
-  // uniform.  Drift (a card with rounded-md, an off-palette text-gray-400) is a
-  // build failure, not a code-review catch.
+  // Made executable as a DECLARATIVE SCHEMA (UI_CLASS_SCHEMA above) plus the
+  // custom checks below: every component must carry its canonical token recipe
+  // so the visual language stays uniform.  Drift (a card with rounded-md, an
+  // off-recipe heading, an off-palette text-gray-400) fails the build instead
+  // of relying on code review.  Full prose: arch-docs-ui-design-language.
+  ...uiContracts,
   {
-    id: "ui.card-shape", component: "Card", kind: "page",
+    id: "ui.classes-before-functions", component: "ModulePage", kind: "page",
     applies: (ctx) => ctx.kind === "api-module",
     check(ctx) {
+      const ids = ctx.dom.querySelectorAll('section[id^="section-"]').map((s) => s.getAttribute("id"));
+      const c = ids.indexOf("section-classes"), f = ids.indexOf("section-functions");
+      return c !== -1 && f !== -1 && c > f
+        ? [{ scope: ctx.scope, detail: "Functions section precedes Classes (Classes must render first)" }] : [];
+    },
+  },
+  {
+    id: "ui.kind-pill.color-trio", component: "ApiKindBadge", kind: "page",
+    check(ctx) {
+      // A kind pill's solid text token (text-api-X) must be backed by the
+      // matching bg-api-X/10 + border-api-X/{30,35,40} (one hue per pill).
       const out = [];
-      const secs = ctx.dom.querySelectorAll("section").filter((s) =>
-        /^(Model Families|Infrastructure|Sub-packages|Classes|Functions)$/.test(s.querySelector("h2")?.text?.trim() || ""));
-      for (const sec of secs) {
-        for (const a of sec.querySelectorAll("a")) {
-          const cls = a.getAttribute("class") || "";
-          // Card links are block/flex containers tagged ``group``; skip inline links.
-          if (!/\bgroup\b/.test(cls) || !/\b(block|flex)\b/.test(cls)) continue;
-          if (!/\brounded-xl\b/.test(cls) || !/border-lucid-border/.test(cls) || !/bg-lucid-surface/.test(cls))
-            out.push({ scope: ctx.scope, detail: `card off-recipe (need rounded-xl + border-lucid-border + bg-lucid-surface): ${a.getAttribute("href")}` });
-        }
+      for (const el of ctx.dom.querySelectorAll('span[class*="text-api-"]')) {
+        const cs = classSet(el);
+        if (!cs.has("select-none")) continue;   // scope to actual kind pills, not text-coloured spans
+        const tok = [...cs].find((c) => /^text-api-[a-z0-9-]+$/.test(c));  // solid only (no /opacity)
+        if (!tok) continue;
+        const kind = tok.slice("text-api-".length);
+        const bgOk = [...cs].some((c) => new RegExp(`^bg-api-${kind}/(8|10)$`).test(c));
+        const borderOk = [...cs].some((c) => new RegExp(`^border-api-${kind}/(30|35|40)$`).test(c));
+        if (!bgOk || !borderOk)
+          out.push({ scope: ctx.scope, detail: `kind pill text-api-${kind} lacks matching bg-api-${kind}/{8,10} or border-api-${kind}/{30,35,40}` });
       }
       return out;
     },
   },
   {
-    id: "ui.section-heading", component: "SectionHeading", kind: "page",
-    applies: (ctx) => ctx.kind === "api-module",
+    id: "ui.uppercase-tracking", component: "DesignToken", kind: "page",
     check(ctx) {
-      const out = [];
-      for (const sec of ctx.dom.querySelectorAll("section")) {
-        const h2 = sec.querySelector("h2");
-        const t = h2?.text?.trim() || "";
-        if (!/^(Model Families|Infrastructure|Sub-packages|Classes|Functions)$/.test(t)) continue;
-        const cls = h2.getAttribute("class") || "";
-        if (!/tracking-widest/.test(cls) || !/uppercase/.test(cls) || !/text-lucid-text-disabled/.test(cls))
-          out.push({ scope: ctx.scope, detail: `section heading "${t}" off-recipe (need tracking-widest uppercase text-lucid-text-disabled)` });
+      // Every all-caps element pairs with a tracking utility (typographic rule).
+      for (const el of ctx.dom.querySelectorAll('[class*="uppercase"]')) {
+        const cs = classSet(el);
+        // Any tracking-* utility counts (incl. arbitrary tracking-[0.12em]).
+        if (cs.has("uppercase") && ![...cs].some((c) => c.startsWith("tracking-")))
+          return [{ scope: ctx.scope, detail: `uppercase without tracking-*: "${(el.getAttribute("class") || "").slice(0, 60)}"` }];
       }
-      return out;
+      return [];
     },
   },
   {
@@ -277,6 +330,26 @@ const PAGE_CONTRACTS = [
 ];
 
 const GLOBAL_CONTRACTS = [
+  {
+    id: "design.no-raw-hex", component: "DesignToken", kind: "global",
+    check() {
+      // Components reference colour only via tokens — never a raw hex literal.
+      // (globals.css IS the token SSOT, so it is excluded.)
+      const out = [];
+      const walk = (dir) => {
+        for (const n of readdirSync(dir)) {
+          const p = join(dir, n);
+          if (statSync(p).isDirectory()) walk(p);
+          else if (n.endsWith(".tsx")) {
+            const m = readFileSync(p, "utf8").match(/#[0-9a-fA-F]{6}\b/);
+            if (m) out.push({ scope: relative(ROOT, p), detail: `raw hex colour ${m[0]} (use a lucid-/api- token)` });
+          }
+        }
+      };
+      try { walk(join(ROOT, "src")); } catch { /* no src */ }
+      return out;
+    },
+  },
   {
     id: "module.has-summary", component: "ModulePage", kind: "global", severity: "warn",
     check(g) {
