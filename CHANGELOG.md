@@ -15,6 +15,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-31
 
+### Fixed — Inference no longer leaks the autograd graph (saved-output self-cycle)
+
+Eager forward-only / inference loops *without* `no_grad` grew unbounded in memory
+and slowed per-call until OOM (115 → 265 → 1459 → 4699 ms → SIGKILL after a
+handful of `m(ids)` calls). The bogus "BERT 4.25× reference" headline was this
+blow-up contaminating the timing median. Root cause:
+`AutogradNode::saved_impl_output_` held this node's *own* output `TensorImpl` with
+a strong `shared_ptr`, and the output already owns the node via `grad_fn` — a
+`node ↔ output` self-cycle, the only forward-pointing strong reference in an
+otherwise backward-pointing autograd DAG. With no `backward()` to clear `grad_fn`
+(inference), every per-call graph was retained forever. Made
+`saved_impl_output_` a `weak_ptr`; the create_graph reader re-fetches the live
+grad_fn-bearing output via `lock()` (or reconstructs a data-only leaf from the
+saved Storage). First-order backward and inference are untouched; tanh/sigmoid/exp
+double-backward parity ≤ 7e-9. BERT-base inference: a 40-call eager loop is now
+flat at 6.4 GB (was OOM by call ~6); inference under `no_grad` was always fine.
+
+### Performance — Element-wise activations fused via `mx.compile`
+
+GPU activations were multi-op MLX composites (`gelu` ≈ 9 primitives), and MLX
+eager does not fuse element-wise chains, so each primitive was a separate Metal
+kernel launch + a full DRAM round-trip. A matched primitive bench showed GEMMs /
+fused SDPA / LayerNorm already at parity-or-better vs the reference framework, but
+GELU was 2.7× slower (1.71 vs 0.63 ms on `(32,128,3072)`) — about 70 % of BERT's
+per-layer gap. Added `mlx_unary_fused` / `mlx_binary_fused` helpers that route a
+capture-less composite through `mlx::core::compile(fn, shapeless=true)`, tracing
+it once into a single fused kernel reused across all shapes and dtypes, and routed
+the genuine composites (`silu`, `gelu`, `gelu_exact`, `softplus`, `selu`, `mish` —
+forward and backward) through them. `gelu_exact` 1.71 → 0.55 ms (faster than the
+reference's 0.63); **BERT-base inference forward 106 → 92 ms = 1.3× → ~1.02× the
+reference**. Bit-exact (metal-vs-CPU maxdiff ≤ 6e-7; F16/BF16 exact). Single-op
+activations (relu/sigmoid/exp) are left unfused (no gain). Helps every model with
+composite activations (ViT / ConvNeXt / EfficientNet …).
+
+### Performance — On-device RNG (dropout mask + general random tensors)
+
+Random tensors were built by a per-element CPU Philox loop then uploaded to the
+device. Because `m.train()` enables dropout, this made BERT's *training-mode*
+forward 10× its inference forward (956 vs 92 ms) — a single dropout mask on
+`(32,128,768)` cost ~19 ms. (Isolation proved the autograd graph adds only ~3 ms
+and the backward is a healthy ~1.3× the forward — the cost was entirely the
+dropout RNG.) Added `IBackend::bernoulli_mask` and
+`random_{uniform,normal,bernoulli,randint}` with GPU overrides that fill in one
+kernel via `mlx::core::random`, keyed from the framework `Generator` (one draw per
+fill) so results stay reproducible from the global seed; the CPU path is
+unchanged. Single dropout 18.9 → 1.57 ms (12×); **BERT-base training step
+(fwd+bwd) 1067 → 230 ms = 4.6×, faster than the reference's 284 ms**;
+`bert_base()` weight init on a metal device 853 → 5 ms (170×). Exact mask/sample
+values differ from the old CPU stream by design (Generator advances one draw per
+fill, not `numel`); same-seed reproducibility holds.
+
+### Performance — BERT self-attention routed through fused scaled-dot-product attention
+
+`_BERTSelfAttention` computed attention by hand (`q kᵀ / scale` → (+ additive
+mask) → softmax → dropout → `@ v`), materializing the `(B, H, T, T)` scores tensor
+across several kernels. It now calls `F.scaled_dot_product_attention` (one fused
+kernel, no scores materialization). Q/K/V stay three separate `Linear`s, so
+pretrained checkpoints load unchanged, and the result is bit-exact with the manual
+path (metal parity maxdiff 0.0 masked, 2e-7 unmasked). `attention.self` 1.29×
+unmasked / 1.19× masked; **BERT-base eager forward 92 → 84 ms = ~0.94× the
+reference** (compiled forward 81 ms = ~0.90×).
+
+### Performance — ConvNeXt compile: depthwise conv-grad off the MPSGraph slow path
+
+MPSGraph's grouped (depthwise) conv weight-gradient hits a ~14× slower path when
+its incoming gradient is a `transposeTensor:` output (ConvNeXt's channels-last
+permute VJP), and the generic grouped kernel is itself ~9× slower than the
+dedicated depthwise op at 7×7. The cost was re-localized to the channels-last
+**permute**, not LayerNorm (an earlier guess). `Conv2dVjp` now (a) launders the
+gradient through a non-foldable `× 2.0` / `× 0.5` pair to dodge the transpose slow
+path (bit-exact, rel 2.6e-7) and (b) routes the depthwise weight-gradient through
+the dedicated `depthwiseConvolution2DWeightsGradient` kernel. **ConvNeXt-tiny
+compile 2258 → 658 ms (8.65× → 2.52× reference), then to ~0.85× (a win) once the
+dedicated kernel lands**; ResNet / MobileNet show no regression; 131 compile
+tests pass.
+
 ### Fixed — Numerically stable `F.log_softmax` (and `cross_entropy`)
 
 `F.log_softmax` computed the naive `log(softmax(x))` — even though its own
