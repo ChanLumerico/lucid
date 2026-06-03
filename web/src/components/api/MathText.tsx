@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -44,16 +45,26 @@ const components: Components = {
       <span className="flex-1">{children}</span>
     </li>
   ),
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      className="text-lucid-primary-light underline underline-offset-2 hover:text-lucid-primary transition-colors"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) => {
+    // Internal docs links (``/api/…`` / ``/docs/…``) must route through Next's
+    // ``<Link>`` so the ``/lucid`` basePath is prepended — a raw ``<a>`` would
+    // escape the GitHub Pages project base and 404.  External links stay a
+    // plain new-tab anchor.
+    const cls =
+      "text-lucid-primary-light underline underline-offset-2 hover:text-lucid-primary transition-colors";
+    if (typeof href === "string" && href.startsWith("/")) {
+      return (
+        <Link href={href} className={cls}>
+          {children}
+        </Link>
+      );
+    }
+    return (
+      <a href={href} className={cls} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    );
+  },
   blockquote: ({ children }) => (
     <blockquote className="border-l-2 border-lucid-blue bg-lucid-blue/5 px-4 py-2 my-2 text-lucid-text-mid">
       {children}

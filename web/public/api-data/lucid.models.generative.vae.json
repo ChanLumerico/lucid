@@ -3,7 +3,7 @@
   "name": "vae",
   "path": "lucid.models.generative.vae",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/__init__.py#L1",
   "members": [
     {
       "name": "VAEConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "VAEConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', latent_dim: int | tuple[int, ...] = 128, down_block_channels: tuple[int, ...] = (lambda: (64, 128, 256))(), kl_weight: float = 1.0, recon_loss: Literal['mse', 'bce'] = 'mse')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_config.py#L26",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_config.py#L26",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "is_hierarchical: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_config.py#L168",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_config.py#L168",
           "summary": "True when `latent_dim` is a tuple — selects the HVAE topology.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "latent_dims: tuple[int, ...]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_config.py#L173",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_config.py#L173",
           "summary": "Always-tuple view of `latent_dim` (length 1 in vanilla mode).",
           "extended": null,
           "parameters": [],
@@ -72,7 +72,7 @@
             "property"
           ],
           "signature": "total_latent_dim: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_config.py#L180",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_config.py#L180",
           "summary": "Sum across levels — what the decoder consumes at its top input.",
           "extended": null,
           "parameters": [],
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', latent_dim: int | tuple[int, ...] = 128, down_block_channels: tuple[int, ...] = (lambda: (64, 128, 256))(), kl_weight: float = 1.0, recon_loss: Literal['mse', 'bce'] = 'mse')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -156,7 +156,7 @@
       ],
       "labels": [],
       "signature": "VAEForImageGeneration(config: VAEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L407",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L407",
       "subcategory": "model",
       "methods": [
         {
@@ -165,7 +165,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VAEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L474",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L474",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -187,7 +187,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L495",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L495",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -209,7 +209,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, device: str = 'cpu')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L543",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L543",
           "subcategory": "model",
           "summary": "Sample `n_samples` images from the prior `N(0, I)`.",
           "extended": null,
@@ -242,7 +242,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import (\n...     VAEConfig, VAEForImageGeneration,\n... )\n>>> cfg = VAEConfig(sample_size=32, in_channels=3, out_channels=3,\n...                 latent_dim=16, down_block_channels=(16, 32, 64))\n>>> model = VAEForImageGeneration(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.loss.shape   # reconstruction + scalar loss\n((1, 3, 32, 32), ())"
       ],
       "notes": [
-        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); $\\beta$-VAE in Higgins et al.,\nICLR, 2017; hierarchical extension in Sønderby et al., NeurIPS, 2016\n([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nTraining objective — evidence lower bound:\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\beta \\cdot \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x) \\,\\big\\|\\, p(z)\n        \\big).\n$$\nIn hierarchical mode the KL term is the sum\n$\\sum_l \\mathrm{KL}(q_\\phi(z_l \\mid x) \\| p(z_l))$."
+        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); $\\beta$-VAE in Higgins et al.,\nICLR, 2017; hierarchical extension in Sønderby et al., NeurIPS, 2016\n([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nTraining objective — evidence lower bound:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\beta \\cdot \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x) \\,\\big\\|\\, p(z)\n        \\big).\n$$\n\nIn hierarchical mode the KL term is the sum\n$\\sum_l \\mathrm{KL}(q_\\phi(z_l \\mid x) \\| p(z_l))$."
       ],
       "attributes": [
         {
@@ -264,7 +264,7 @@
       ],
       "labels": [],
       "signature": "VAEModel(config: VAEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L270",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L270",
       "subcategory": "model",
       "methods": [
         {
@@ -273,7 +273,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VAEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L345",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L345",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -297,7 +297,7 @@
             "property"
           ],
           "signature": "is_hierarchical: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L353",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L353",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -320,7 +320,7 @@
             "property"
           ],
           "signature": "latent_dims: tuple[int, ...]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L357",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L357",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -341,7 +341,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L360",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L360",
           "subcategory": "model",
           "summary": "Return posterior parameters of `q(z|x)`.",
           "extended": "Vanilla mode → `(mu, logvar)`.  Hierarchical mode → `(mus,\nlogvars)` with one entry per encoder stage.",
@@ -363,7 +363,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(z_or_zs: Tensor | list[Tensor])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L373",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L373",
           "subcategory": "model",
           "summary": "Map a latent (or list of per-level latents) back to image space.",
           "extended": null,
@@ -385,7 +385,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_model.py#L377",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_model.py#L377",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -418,7 +418,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import VAEConfig, VAEModel\n>>> cfg = VAEConfig(sample_size=32, in_channels=3, out_channels=3,\n...                 latent_dim=16, down_block_channels=(16, 32, 64))\n>>> model = VAEModel(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.latent.shape   # reconstruction + latent\n((1, 3, 32, 32), (1, 16))"
       ],
       "notes": [
-        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); hierarchical extension from Sønderby,\nRaiko, Maaløe, Sønderby, and Winther, *\"Ladder Variational\nAutoencoders\"*, NeurIPS, 2016 ([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nThe closed-form KL term used by the loss head is\n\n$$\n\\mathrm{KL}\\!\\big(\n    \\mathcal{N}(\\mu, \\sigma^2) \\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\n\\big)\n    = \\tfrac{1}{2} \\sum_i \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$"
+        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); hierarchical extension from Sønderby,\nRaiko, Maaløe, Sønderby, and Winther, *\"Ladder Variational\nAutoencoders\"*, NeurIPS, 2016 ([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nThe closed-form KL term used by the loss head is\n\n\n\n$$\n\\mathrm{KL}\\!\\big(\n    \\mathcal{N}(\\mu, \\sigma^2) \\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\n\\big)\n    = \\tfrac{1}{2} \\sum_i \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$"
       ],
       "attributes": [
         {
@@ -441,7 +441,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hvae(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_pretrained.py#L111",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_pretrained.py#L111",
       "subcategory": "pretrained",
       "summary": "Construct a hierarchical (Ladder-style) VAE with one latent per stage.",
       "extended": "Hierarchical VAE topology following Sønderby et al., 2016, configured\nwith a 32x32 input, `down_block_channels=(64, 128, 256)` (three\nstride-2 encoder stages), and per-stage latent widths\n`(32, 64, 128)` — one $z_l \\in \\mathbb{R}^{d_l}$ extracted per\nstage and re-injected at the matching decoder resolution.  The KL\nbecomes a sum over levels (independent-posterior Ladder variant).",
@@ -468,159 +468,11 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import hvae\n>>> model = hvae().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.latent.shape   # latent is flat concat (32+64+128)\n((1, 3, 32, 32), (1, 224))"
       ],
       "notes": [
-        "Reference: Sønderby, Raiko, Maaløe, Sønderby, and Winther, *\"Ladder\nVariational Autoencoders\"*, NeurIPS, 2016 ([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nHierarchical ELBO:\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\sum_{l = 1}^{L}\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z_l \\mid x) \\,\\big\\|\\, p(z_l)\n        \\big).\n$$"
+        "Reference: Sønderby, Raiko, Maaløe, Sønderby, and Winther, *\"Ladder\nVariational Autoencoders\"*, NeurIPS, 2016 ([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nHierarchical ELBO:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\sum_{l = 1}^{L}\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z_l \\mid x) \\,\\big\\|\\, p(z_l)\n        \\big).\n$$"
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "VAEModel",
-        "type": "VAEModel",
-        "params": 2007043,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "encoder",
-            "type": "_VAEEncoder",
-            "params": 745344,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "down_blocks",
-                "type": "ModuleList",
-                "params": 658880,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 3136,
-                    "own_params": 3136,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "Conv2d",
-                    "params": 131200,
-                    "own_params": 131200,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "Conv2d",
-                    "params": 524544,
-                    "own_params": 524544,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "fc_mus",
-                "type": "ModuleList",
-                "params": 43232,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Linear",
-                    "params": 2080,
-                    "own_params": 2080,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "Linear",
-                    "params": 8256,
-                    "own_params": 8256,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "Linear",
-                    "params": 32896,
-                    "own_params": 32896,
-                    "children": []
-                  }
-                ],
-                "repeat": 2
-              }
-            ]
-          },
-          {
-            "name": "decoder",
-            "type": "_VAEDecoder",
-            "params": 1261699,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "fc",
-                "type": "Linear",
-                "params": 528384,
-                "own_params": 528384,
-                "children": []
-              },
-              {
-                "name": "up_blocks",
-                "type": "ModuleList",
-                "params": 721152,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ConvTranspose2d",
-                    "params": 524416,
-                    "own_params": 524416,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "ConvTranspose2d",
-                    "params": 131136,
-                    "own_params": 131136,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ConvTranspose2d",
-                    "params": 65600,
-                    "own_params": 65600,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "head",
-                "type": "Conv2d",
-                "params": 1731,
-                "own_params": 1731,
-                "children": []
-              },
-              {
-                "name": "injectors",
-                "type": "ModuleList",
-                "params": 10432,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Linear",
-                    "params": 8320,
-                    "own_params": 8320,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "Linear",
-                    "params": 2112,
-                    "own_params": 2112,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "hvae_gen",
@@ -628,7 +480,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hvae_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_pretrained.py#L222",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_pretrained.py#L222",
       "subcategory": "pretrained",
       "summary": "Construct a hierarchical VAE with the ELBO loss and prior-sample `.generate()`.",
       "extended": "Same trunk as `hvae` (3-level latent stack, 3-stage encoder),\nwrapped with the hierarchical ELBO training loss (reconstruction +\nsum of per-level $\\beta$-weighted KLs) and a convenience prior\nsampler that draws one $z_l \\sim \\mathcal{N}(0, \\mathbf{I})$\nper level.",
@@ -659,163 +511,7 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "VAEForImageGeneration",
-        "type": "VAEForImageGeneration",
-        "params": 2007043,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "vae",
-            "type": "VAEModel",
-            "params": 2007043,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "encoder",
-                "type": "_VAEEncoder",
-                "params": 745344,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "down_blocks",
-                    "type": "ModuleList",
-                    "params": 658880,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "Conv2d",
-                        "params": 3136,
-                        "own_params": 3136,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Conv2d",
-                        "params": 131200,
-                        "own_params": 131200,
-                        "children": []
-                      },
-                      {
-                        "name": "2",
-                        "type": "Conv2d",
-                        "params": 524544,
-                        "own_params": 524544,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "fc_mus",
-                    "type": "ModuleList",
-                    "params": 43232,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "Linear",
-                        "params": 2080,
-                        "own_params": 2080,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Linear",
-                        "params": 8256,
-                        "own_params": 8256,
-                        "children": []
-                      },
-                      {
-                        "name": "2",
-                        "type": "Linear",
-                        "params": 32896,
-                        "own_params": 32896,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "decoder",
-                "type": "_VAEDecoder",
-                "params": 1261699,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "fc",
-                    "type": "Linear",
-                    "params": 528384,
-                    "own_params": 528384,
-                    "children": []
-                  },
-                  {
-                    "name": "up_blocks",
-                    "type": "ModuleList",
-                    "params": 721152,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "ConvTranspose2d",
-                        "params": 524416,
-                        "own_params": 524416,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "ConvTranspose2d",
-                        "params": 131136,
-                        "own_params": 131136,
-                        "children": []
-                      },
-                      {
-                        "name": "2",
-                        "type": "ConvTranspose2d",
-                        "params": 65600,
-                        "own_params": 65600,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "head",
-                    "type": "Conv2d",
-                    "params": 1731,
-                    "own_params": 1731,
-                    "children": []
-                  },
-                  {
-                    "name": "injectors",
-                    "type": "ModuleList",
-                    "params": 10432,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "Linear",
-                        "params": 8320,
-                        "own_params": 8320,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Linear",
-                        "params": 2112,
-                        "own_params": 2112,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "vae",
@@ -823,7 +519,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vae(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_pretrained.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_pretrained.py#L49",
       "subcategory": "pretrained",
       "summary": "Construct a convolutional VAE with a single bottleneck latent.",
       "extended": "Vanilla VAE topology following Kingma and Welling, 2014, configured with\na 32x32 input, `down_block_channels=(64, 128, 256)` (three stride-2\nencoder stages — 32 -> 16 -> 8 -> 4), and a 128-dimensional latent.\nPass `latent_dim` as a tuple of integers to switch to the\nhierarchical topology, or call `hvae` directly to use the\nSønderby 3-level stack default.\n\nPass `kl_weight!=1.0` to obtain a $\\beta$-VAE (Higgins 2017).",
@@ -850,115 +546,11 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import vae\n>>> model = vae().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.latent.shape\n((1, 3, 32, 32), (1, 128))"
       ],
       "notes": [
-        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); $\\beta$-VAE in Higgins et al.,\n*\"beta-VAE: Learning Basic Visual Concepts with a Constrained\nVariational Framework\"*, ICLR, 2017.\n\nReparameterisation trick:\n\n$$\nz = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon,\n\\qquad\n\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I}).\n$$"
+        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); $\\beta$-VAE in Higgins et al.,\n*\"beta-VAE: Learning Basic Visual Concepts with a Constrained\nVariational Framework\"*, ICLR, 2017.\n\nReparameterisation trick:\n\n\n\n$$\nz = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon,\n\\qquad\n\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I}).\n$$"
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "VAEModel",
-        "type": "VAEModel",
-        "params": 2958979,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "encoder",
-            "type": "_VAEEncoder",
-            "params": 1707712,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "down_blocks",
-                "type": "ModuleList",
-                "params": 658880,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 3136,
-                    "own_params": 3136,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "Conv2d",
-                    "params": 131200,
-                    "own_params": 131200,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "Conv2d",
-                    "params": 524544,
-                    "own_params": 524544,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "fc_mu",
-                "type": "Linear",
-                "params": 524416,
-                "own_params": 524416,
-                "children": [],
-                "repeat": 2
-              }
-            ]
-          },
-          {
-            "name": "decoder",
-            "type": "_VAEDecoder",
-            "params": 1251267,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "fc",
-                "type": "Linear",
-                "params": 528384,
-                "own_params": 528384,
-                "children": []
-              },
-              {
-                "name": "up_blocks",
-                "type": "ModuleList",
-                "params": 721152,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ConvTranspose2d",
-                    "params": 524416,
-                    "own_params": 524416,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "ConvTranspose2d",
-                    "params": 131136,
-                    "own_params": 131136,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ConvTranspose2d",
-                    "params": 65600,
-                    "own_params": 65600,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "head",
-                "type": "Conv2d",
-                "params": 1731,
-                "own_params": 1731,
-                "children": []
-              }
-            ]
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "vae_gen",
@@ -966,7 +558,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vae_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/generative/vae/_pretrained.py#L175",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/generative/vae/_pretrained.py#L175",
       "subcategory": "pretrained",
       "summary": "Construct a vanilla VAE with the ELBO loss and prior-sample `.generate()`.",
       "extended": "Same trunk as `vae` (single 128-dim bottleneck, 3-stage encoder),\nwrapped with the ELBO training loss (reconstruction +\n$\\beta$-weighted KL) and a convenience prior sampler.",
@@ -997,119 +589,7 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "VAEForImageGeneration",
-        "type": "VAEForImageGeneration",
-        "params": 2958979,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "vae",
-            "type": "VAEModel",
-            "params": 2958979,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "encoder",
-                "type": "_VAEEncoder",
-                "params": 1707712,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "down_blocks",
-                    "type": "ModuleList",
-                    "params": 658880,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "Conv2d",
-                        "params": 3136,
-                        "own_params": 3136,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Conv2d",
-                        "params": 131200,
-                        "own_params": 131200,
-                        "children": []
-                      },
-                      {
-                        "name": "2",
-                        "type": "Conv2d",
-                        "params": 524544,
-                        "own_params": 524544,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "fc_mu",
-                    "type": "Linear",
-                    "params": 524416,
-                    "own_params": 524416,
-                    "children": [],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "decoder",
-                "type": "_VAEDecoder",
-                "params": 1251267,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "fc",
-                    "type": "Linear",
-                    "params": 528384,
-                    "own_params": 528384,
-                    "children": []
-                  },
-                  {
-                    "name": "up_blocks",
-                    "type": "ModuleList",
-                    "params": 721152,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "ConvTranspose2d",
-                        "params": 524416,
-                        "own_params": 524416,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "ConvTranspose2d",
-                        "params": 131136,
-                        "own_params": 131136,
-                        "children": []
-                      },
-                      {
-                        "name": "2",
-                        "type": "ConvTranspose2d",
-                        "params": 65600,
-                        "own_params": 65600,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "head",
-                    "type": "Conv2d",
-                    "params": 1731,
-                    "own_params": 1731,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
+      "see_also": []
     }
   ],
   "summary": "VAE family — Kingma & Welling, 2013 + Sønderby et al., 2016 hierarchical.",
@@ -1124,7 +604,7 @@
   "see_also": [],
   "canonical_name": "VAE",
   "citation": "Kingma, Diederik P., and Max Welling. \"Auto-Encoding Variational Bayes.\" International Conference on Learning Representations, 2014.",
-  "theory": "The Variational Auto-Encoder defines a latent-variable generative\nmodel $p_\\theta(x, z) = p_\\theta(x \\mid z)\\, p(z)$ with a\nstandard-normal prior $p(z) = \\mathcal{N}(0, \\mathbf{I})$ and\na neural decoder $p_\\theta(x \\mid z)$.  Because the marginal\nlikelihood $p_\\theta(x) = \\int p_\\theta(x \\mid z)\\, p(z)\\, dz$\nis intractable, training maximises the **evidence lower bound\n(ELBO)** instead:\n\n\n\n$$\n\\log p_\\theta(x) \\;\\geq\\;\n    \\underbrace{\n        \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\n            \\big[\\log p_\\theta(x \\mid z)\\big]\n    }_{\\text{reconstruction}}\n    \\;-\\;\n    \\underbrace{\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x)\\,\\big\\|\\,p(z)\n        \\big)\n    }_{\\text{regulariser}}.\n$$\n\nHere $q_\\phi(z \\mid x) = \\mathcal{N}\\!\\big(z;\\, \\mu_\\phi(x),\\;\n\\mathrm{diag}\\,\\sigma_\\phi^2(x)\\big)$ is the **encoder** (the\nvariational posterior).  Gradients flow through the stochastic\nsample via the **reparameterization trick** —\n$z = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon$,\n$\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I})$ — which keeps the\nMonte-Carlo gradient low-variance and pathwise-differentiable.  The\nKL term enjoys the closed form\n\n\n\n$$\n\\mathrm{KL}\\!\\big(\\mathcal{N}(\\mu, \\sigma^2)\\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\\big)\n    = \\tfrac{1}{2} \\sum_{i} \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$\n\nThe **β-VAE** (Higgins et al., 2017) variant rescales the KL term\nby a coefficient $\\beta$ to trade reconstruction fidelity for\nposterior compression / latent disentanglement, recovering vanilla\nELBO at $\\beta = 1$.  The **hierarchical / Ladder VAE**\n(Sønderby et al., 2016) extends the latent to a stack\n$z = (z_1, \\dots, z_L)$, with one $z_\\ell$ extracted per\nencoder stage and re-injected at the matching decoder resolution;\nthe KL becomes a sum\n$\\sum_\\ell \\mathrm{KL}(q_\\phi(z_\\ell \\mid x) \\,\\|\\, p(z_\\ell))$,\ngranting strictly tighter bounds and richer multi-scale priors.\n\nThe encoder/decoder backbones here are convolutional with stride-2\ndown-/up-sampling blocks; the reconstruction term is selectable\nbetween Gaussian (`mse`) and Bernoulli (`bce`) likelihoods to match\nthe data domain.  Despite being eclipsed by diffusion on raw sample\nquality, the VAE remains the workhorse of representation learning\nand a key component inside latent-diffusion pipelines (Stable\nDiffusion's first-stage autoencoder).",
+  "theory": "The Variational Auto-Encoder defines a latent-variable generative\nmodel $p_\\theta(x, z) = p_\\theta(x \\mid z)\\, p(z)$ with a\nstandard-normal prior $p(z) = \\mathcal{N}(0, \\mathbf{I})$ and\na neural decoder $p_\\theta(x \\mid z)$.  Because the marginal\nlikelihood $p_\\theta(x) = \\int p_\\theta(x \\mid z)\\, p(z)\\, dz$\nis intractable, training maximises the **evidence lower bound\n(ELBO)** instead:\n\n\n\n$$\n\\log p_\\theta(x) \\;\\geq\\;\n    \\underbrace{\n        \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\n            \\big[\\log p_\\theta(x \\mid z)\\big]\n    }_{\\text{reconstruction}}\n    \\;-\\;\n    \\underbrace{\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x)\\,\\big\\|\\,p(z)\n        \\big)\n    }_{\\text{regulariser}}.\n$$\n\nHere $q_\\phi(z \\mid x) = \\mathcal{N}\\!\\big(z;\\, \\mu_\\phi(x),\\; \\mathrm{diag}\\,\\sigma_\\phi^2(x)\\big)$ is the **encoder** (the\nvariational posterior).  Gradients flow through the stochastic\nsample via the **reparameterization trick** —\n$z = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon$,\n$\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I})$ — which keeps the\nMonte-Carlo gradient low-variance and pathwise-differentiable.  The\nKL term enjoys the closed form\n\n\n\n$$\n\\mathrm{KL}\\!\\big(\\mathcal{N}(\\mu, \\sigma^2)\\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\\big)\n    = \\tfrac{1}{2} \\sum_{i} \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$\n\nThe **β-VAE** (Higgins et al., 2017) variant rescales the KL term\nby a coefficient $\\beta$ to trade reconstruction fidelity for\nposterior compression / latent disentanglement, recovering vanilla\nELBO at $\\beta = 1$.  The **hierarchical / Ladder VAE**\n(Sønderby et al., 2016) extends the latent to a stack\n$z = (z_1, \\dots, z_L)$, with one $z_\\ell$ extracted per\nencoder stage and re-injected at the matching decoder resolution;\nthe KL becomes a sum\n$\\sum_\\ell \\mathrm{KL}(q_\\phi(z_\\ell \\mid x) \\,\\|\\, p(z_\\ell))$,\ngranting strictly tighter bounds and richer multi-scale priors.\n\nThe encoder/decoder backbones here are convolutional with stride-2\ndown-/up-sampling blocks; the reconstruction term is selectable\nbetween Gaussian (`mse`) and Bernoulli (`bce`) likelihoods to match\nthe data domain.  Despite being eclipsed by diffusion on raw sample\nquality, the VAE remains the workhorse of representation learning\nand a key component inside latent-diffusion pipelines (Stable\nDiffusion's first-stage autoencoder).",
   "tasks": [
     "image-generation"
   ]

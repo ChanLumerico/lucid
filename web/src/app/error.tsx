@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { buildIssueUrl } from "@/lib/error-report";
 
@@ -51,7 +52,7 @@ export default function GlobalError({
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Button onClick={reset}>Try again</Button>
           <Button variant="secondary" asChild>
-            <a href="/api">Back to API Reference</a>
+            <Link href="/api">Back to API Reference</Link>
           </Button>
           <Button variant="ghost" asChild>
             <a href={issueUrl} target="_blank" rel="noopener noreferrer">

@@ -3,7 +3,7 @@
   "name": "gpt2",
   "path": "lucid.models.text.gpt2",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/__init__.py#L1",
   "members": [
     {
       "name": "GPT2Config",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "GPT2Config(vocab_size: int = 50257, hidden_size: int = 768, num_hidden_layers: int = 12, num_attention_heads: int = 12, intermediate_size: int = 3072, hidden_act: TextActivation = 'gelu_new', max_position_embeddings: int = 1024, pad_token_id: int | None = None, bos_token_id: int | None = 50256, eos_token_id: int | None = 50256, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-05, tie_word_embeddings: bool = True, use_cache: bool = True, num_labels: int = 2, classifier_dropout: float | None = None, scale_residual_init: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_config.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_config.py#L17",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab_size: int = 50257, hidden_size: int = 768, num_hidden_layers: int = 12, num_attention_heads: int = 12, intermediate_size: int = 3072, hidden_act: TextActivation = 'gelu_new', max_position_embeddings: int = 1024, pad_token_id: int | None = None, bos_token_id: int | None = 50256, eos_token_id: int | None = 50256, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-05, tie_word_embeddings: bool = True, use_cache: bool = True, num_labels: int = 2, classifier_dropout: float | None = None, scale_residual_init: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -62,7 +62,7 @@
       ],
       "labels": [],
       "signature": "GPT2DoubleHeadsModel(config: GPT2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L578",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L578",
       "subcategory": "model",
       "methods": [
         {
@@ -71,7 +71,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: GPT2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L643",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L643",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, mc_token_ids: Tensor, attention_mask: Tensor | None = None, labels: Tensor | None = None, mc_labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L651",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L651",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -126,7 +126,7 @@
         ">>> import lucid\n>>> from lucid.models.text.gpt2 import GPT2Config, GPT2DoubleHeadsModel\n>>> cfg = GPT2Config(num_hidden_layers=2, hidden_size=64,\n...                  num_attention_heads=2, intermediate_size=256)\n>>> model = GPT2DoubleHeadsModel(cfg).eval()\n>>> input_ids = lucid.tensor([[[15496, 11, 995, 13],\n...                            [15496, 11, 1820, 13]]])    # (N=1, C=2, L=4)\n>>> mc_ids = lucid.tensor([[3, 3]]).long()\n>>> out = model(input_ids, mc_token_ids=mc_ids)\n>>> out.mc_logits.shape   # (N=1, C=2)\n(1, 2)"
       ],
       "notes": [
-        "Reference: Radford et al., *\"Language Models are Unsupervised\nMultitask Learners\"*, OpenAI Technical Report, 2019; multiple-choice\nhead follows the GPT-1 fine-tuning recipe (Radford 2018 §3.3).\n\nThe combined loss when both objectives are supplied is\n\n$$\n\\mathcal{L}_{\\mathrm{joint}}\n    = \\mathcal{L}_{\\mathrm{CLM}} + \\mathcal{L}_{\\mathrm{MC}},\n$$\nwhere $\\mathcal{L}_{\\mathrm{MC}}$ is a softmax cross-entropy\nover the `C` candidate completions."
+        "Reference: Radford et al., *\"Language Models are Unsupervised\nMultitask Learners\"*, OpenAI Technical Report, 2019; multiple-choice\nhead follows the GPT-1 fine-tuning recipe (Radford 2018 §3.3).\n\nThe combined loss when both objectives are supplied is\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{joint}}\n    = \\mathcal{L}_{\\mathrm{CLM}} + \\mathcal{L}_{\\mathrm{MC}},\n$$\n\nwhere $\\mathcal{L}_{\\mathrm{MC}}$ is a softmax cross-entropy\nover the `C` candidate completions."
       ],
       "attributes": [
         {
@@ -158,7 +158,7 @@
       ],
       "labels": [],
       "signature": "GPT2DoubleHeadsOutput(lm_logits: Tensor, mc_logits: Tensor, loss: Tensor | None = None, lm_loss: Tensor | None = None, mc_loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L500",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L500",
       "subcategory": "model",
       "methods": [
         {
@@ -167,7 +167,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(lm_logits: Tensor, mc_logits: Tensor, loss: Tensor | None = None, lm_loss: Tensor | None = None, mc_loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -240,7 +240,7 @@
       ],
       "labels": [],
       "signature": "GPT2ForSequenceClassification(config: GPT2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L396",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L396",
       "subcategory": "model",
       "methods": [
         {
@@ -249,7 +249,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: GPT2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L454",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L454",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -271,7 +271,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L465",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L465",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -304,7 +304,7 @@
         ">>> import lucid\n>>> from lucid.models.text.gpt2 import GPT2Config, GPT2ForSequenceClassification\n>>> cfg = GPT2Config(num_labels=3, num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = GPT2ForSequenceClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[15496, 11, 995, 13]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, num_labels=3)\n(1, 3)"
       ],
       "notes": [
-        "Reference: Radford et al., *\"Language Models are Unsupervised\nMultitask Learners\"*, OpenAI Technical Report, 2019.\n\nPooling picks index $t^\\star = \\sum_t \\mathbf{1}[\\mathrm{mask}_t] - 1$ (the rightmost real token) per row, then computes\n\n$$\nz = W_{\\mathrm{cls}}\\, \\mathrm{Dropout}(h_{t^\\star}).\n$$\nWhen `labels` is supplied, cross-entropy over `num_labels` classes\nis computed and exposed as `output.loss`."
+        "Reference: Radford et al., *\"Language Models are Unsupervised\nMultitask Learners\"*, OpenAI Technical Report, 2019.\n\nPooling picks index $t^\\star = \\sum_t \\mathbf{1}[\\mathrm{mask}_t] - 1$ (the rightmost real token) per row, then computes\n\n\n\n$$\nz = W_{\\mathrm{cls}}\\, \\mathrm{Dropout}(h_{t^\\star}).\n$$\n\nWhen `labels` is supplied, cross-entropy over `num_labels` classes\nis computed and exposed as `output.loss`."
       ],
       "attributes": [
         {
@@ -337,7 +337,7 @@
       ],
       "labels": [],
       "signature": "GPT2LMHeadModel(config: GPT2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L301",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L301",
       "subcategory": "model",
       "methods": [
         {
@@ -346,7 +346,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: GPT2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L359",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L359",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -368,7 +368,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L369",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L369",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -401,7 +401,7 @@
         ">>> import lucid\n>>> from lucid.models.text.gpt2 import GPT2Config, GPT2LMHeadModel\n>>> cfg = GPT2Config(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = GPT2LMHeadModel(cfg).eval()\n>>> input_ids = lucid.tensor([[15496, 11, 995, 13]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, V=50257)\n(1, 4, 50257)"
       ],
       "notes": [
-        "Reference: Radford, Wu, Child, Luan, Amodei, and Sutskever, *\"Language\nModels are Unsupervised Multitask Learners\"*, OpenAI Technical Report,\n2019.\n\nThe training loss (when `labels` is supplied) is the next-token\nshifted causal-LM cross-entropy:\n\n$$\n\\mathcal{L}_{\\mathrm{CLM}}\n    = -\\frac{1}{B(T-1)} \\sum_{b, t}\n      \\log p_\\theta(y_{b, t+1} \\mid x_{b, \\le t}),\n$$\nwith positions labelled `-100` excluded."
+        "Reference: Radford, Wu, Child, Luan, Amodei, and Sutskever, *\"Language\nModels are Unsupervised Multitask Learners\"*, OpenAI Technical Report,\n2019.\n\nThe training loss (when `labels` is supplied) is the next-token\nshifted causal-LM cross-entropy:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{CLM}}\n    = -\\frac{1}{B(T-1)} \\sum_{b, t}\n      \\log p_\\theta(y_{b, t+1} \\mid x_{b, \\le t}),\n$$\n\nwith positions labelled `-100` excluded."
       ],
       "attributes": [
         {
@@ -428,7 +428,7 @@
       ],
       "labels": [],
       "signature": "GPT2Model(config: GPT2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L169",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L169",
       "subcategory": "model",
       "methods": [
         {
@@ -437,7 +437,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: GPT2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L244",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L244",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -459,7 +459,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_input_embeddings()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L262",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L262",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -481,7 +481,7 @@
           "kind": "function",
           "labels": [],
           "signature": "set_input_embeddings(value: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L265",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L265",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -503,7 +503,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_model.py#L272",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_model.py#L272",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -536,7 +536,7 @@
         ">>> import lucid\n>>> from lucid.models.text.gpt2 import GPT2Config, GPT2Model\n>>> cfg = GPT2Config(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = GPT2Model(cfg).eval()\n>>> input_ids = lucid.tensor([[15496, 11, 995, 13]])   # \"Hello, world.\"\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape   # (B=1, T=4, H=128)\n(1, 4, 128)"
       ],
       "notes": [
-        "Reference: Radford, Wu, Child, Luan, Amodei, and Sutskever, *\"Language\nModels are Unsupervised Multitask Learners\"*, OpenAI Technical Report,\n2019.\n\nEach pre-LN block computes\n\n$$\n\\begin{aligned}\n    x &\\leftarrow x + \\mathrm{Attn}(\\mathrm{LN}_1(x)) \\\\\n    x &\\leftarrow x + \\mathrm{MLP}(\\mathrm{LN}_2(x))\n\\end{aligned}\n$$\nso the residual stream carries un-normalised state.  The trunk produces\nfinal hidden states $H \\in \\mathbb{R}^{B \\times T \\times H}$\nwhich the LM head projects to vocabulary logits."
+        "Reference: Radford, Wu, Child, Luan, Amodei, and Sutskever, *\"Language\nModels are Unsupervised Multitask Learners\"*, OpenAI Technical Report,\n2019.\n\nEach pre-LN block computes\n\n\n\n$$\n\\begin{aligned}\n    x &\\leftarrow x + \\mathrm{Attn}(\\mathrm{LN}_1(x)) \\\\\n    x &\\leftarrow x + \\mathrm{MLP}(\\mathrm{LN}_2(x))\n\\end{aligned}\n$$\n\nso the residual stream carries un-normalised state.  The trunk produces\nfinal hidden states $H \\in \\mathbb{R}^{B \\times T \\times H}$\nwhich the LM head projects to vocabulary logits."
       ],
       "attributes": [
         {
@@ -588,7 +588,7 @@
       ],
       "labels": [],
       "signature": "GPT2Tokenizer(vocab: dict[str, int], merges: list[tuple[str, str]], add_prefix_space: bool = False, normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_tokenizer.py#L54",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_tokenizer.py#L54",
       "subcategory": "tokenizer",
       "methods": [
         {
@@ -597,7 +597,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab: dict[str, int], merges: list[tuple[str, str]], add_prefix_space: bool = False, normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_tokenizer.py#L83",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_tokenizer.py#L83",
           "subcategory": "tokenizer",
           "summary": null,
           "extended": null,
@@ -633,7 +633,7 @@
           "name": "add_prefix_space",
           "annotation": "bool",
           "description": "Prepend a space so the first word receives the `Ġ` marker.\nOff in GPT-2 (matches the published vocab); on in RoBERTa.",
-          "default": "``False``"
+          "default": "False"
         },
         {
           "name": "normalizer",
@@ -679,7 +679,7 @@
       ],
       "labels": [],
       "signature": "GPT2TokenizerFast(vocab: dict[str, int], merges: list[tuple[str, str]], add_prefix_space: bool = False, normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_tokenizer.py#L103",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_tokenizer.py#L103",
       "subcategory": "tokenizer",
       "methods": [
         {
@@ -688,7 +688,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab: dict[str, int], merges: list[tuple[str, str]], add_prefix_space: bool = False, normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_tokenizer.py#L114",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_tokenizer.py#L114",
           "subcategory": "tokenizer",
           "summary": null,
           "extended": null,
@@ -706,7 +706,7 @@
         }
       ],
       "summary": "GPT-2 tokenizer — C++-backed.",
-      "extended": "Bit-identical to `GPT2Tokenizer`.  The BPE merge loop runs\nin C++ via `lucid._C.engine.utils.tokenizer.BPE` for\nproduction throughput.\n\nConstructor parameters mirror `GPT2Tokenizer` — see that\nclass for the full reference.",
+      "extended": "Bit-identical to `GPT2Tokenizer`.  The BPE merge loop runs\nin C++ via the engine-side `BPE` binding for production\nthroughput.\n\nConstructor parameters mirror `GPT2Tokenizer` — see that\nclass for the full reference.",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -721,8 +721,8 @@
       "path": "lucid.models.text.gpt2._pretrained.gpt2_large",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_large(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L144",
+      "signature": "gpt2_large(pretrained: bool | str = False, weights: GPT2LargeWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L179",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 large (774M) decoder trunk.",
       "extended": "Third of the four canonical OpenAI variants: $L=36$ transformer\nblocks, $H=1280$ hidden, $A=20$ attention heads,\nintermediate width 5120.  Roughly 774M parameters — released in\nAugust 2019 after the staged-release decision; SOTA zero-shot on\nLAMBADA at release time.",
@@ -732,6 +732,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2LargeWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -753,141 +759,15 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2Model",
-        "type": "GPT2Model",
-        "params": 774030080,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "wte",
-            "type": "Embedding",
-            "params": 64328960,
-            "own_params": 64328960,
-            "children": []
-          },
-          {
-            "name": "wpe",
-            "type": "Embedding",
-            "params": 1310720,
-            "own_params": 1310720,
-            "children": []
-          },
-          {
-            "name": "drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "h",
-            "type": "ModuleList",
-            "params": 708387840,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_GPT2Block",
-                "params": 19677440,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "ln_1",
-                    "type": "LayerNorm",
-                    "params": 2560,
-                    "own_params": 2560,
-                    "children": []
-                  },
-                  {
-                    "name": "attn",
-                    "type": "_GPT2SelfAttention",
-                    "params": 6558720,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_attn",
-                        "type": "Linear",
-                        "params": 4919040,
-                        "own_params": 4919040,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 1639680,
-                        "own_params": 1639680,
-                        "children": []
-                      },
-                      {
-                        "name": "attn_dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [],
-                        "repeat": 2
-                      }
-                    ]
-                  },
-                  {
-                    "name": "ln_2",
-                    "type": "LayerNorm",
-                    "params": 2560,
-                    "own_params": 2560,
-                    "children": []
-                  },
-                  {
-                    "name": "mlp",
-                    "type": "_GPT2MLP",
-                    "params": 13113600,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_fc",
-                        "type": "Linear",
-                        "params": 6558720,
-                        "own_params": 6558720,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 6554880,
-                        "own_params": 6554880,
-                        "children": []
-                      },
-                      {
-                        "name": "dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 36
-              }
-            ]
-          },
-          {
-            "name": "ln_f",
-            "type": "LayerNorm",
-            "params": 2560,
-            "own_params": 2560,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_large_lm",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_large_lm",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_large_lm(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L331",
+      "signature": "gpt2_large_lm(pretrained: bool | str = False, weights: GPT2LargeLMWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L410",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 large (774M) model with the tied causal-LM head.",
       "extended": "Same trunk as `gpt2_large` (L=36, H=1280, A=20, ~774M parameters),\nwrapped with the tied LM head for pre-training and free-form generation.",
@@ -897,6 +777,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2LargeLMWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -918,156 +804,15 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2LMHeadModel",
-        "type": "GPT2LMHeadModel",
-        "params": 774030080,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "transformer",
-            "type": "GPT2Model",
-            "params": 774030080,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "wte",
-                "type": "Embedding",
-                "params": 64328960,
-                "own_params": 64328960,
-                "children": []
-              },
-              {
-                "name": "wpe",
-                "type": "Embedding",
-                "params": 1310720,
-                "own_params": 1310720,
-                "children": []
-              },
-              {
-                "name": "drop",
-                "type": "Dropout",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "h",
-                "type": "ModuleList",
-                "params": 708387840,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_GPT2Block",
-                    "params": 19677440,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "ln_1",
-                        "type": "LayerNorm",
-                        "params": 2560,
-                        "own_params": 2560,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_GPT2SelfAttention",
-                        "params": 6558720,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_attn",
-                            "type": "Linear",
-                            "params": 4919040,
-                            "own_params": 4919040,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 1639680,
-                            "own_params": 1639680,
-                            "children": []
-                          },
-                          {
-                            "name": "attn_dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": [],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ln_2",
-                        "type": "LayerNorm",
-                        "params": 2560,
-                        "own_params": 2560,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_GPT2MLP",
-                        "params": 13113600,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_fc",
-                            "type": "Linear",
-                            "params": 6558720,
-                            "own_params": 6558720,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 6554880,
-                            "own_params": 6554880,
-                            "children": []
-                          },
-                          {
-                            "name": "dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ],
-                    "repeat": 36
-                  }
-                ]
-              },
-              {
-                "name": "ln_f",
-                "type": "LayerNorm",
-                "params": 2560,
-                "own_params": 2560,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "lm_head",
-            "type": "Linear",
-            "params": 64328960,
-            "own_params": 64328960,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_medium",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_medium",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_medium(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L95",
+      "signature": "gpt2_medium(pretrained: bool | str = False, weights: GPT2MediumWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L119",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 medium (355M) decoder trunk.",
       "extended": "Second of the four canonical OpenAI variants: $L=24$ transformer\nblocks, $H=1024$ hidden, $A=16$ attention heads,\nintermediate width 4096.  Roughly 355M parameters — the inflection\npoint at which zero-shot performance on reading comprehension /\nsummarisation begins to substantially outperform random baselines\n(Radford 2019 Table 3).",
@@ -1077,6 +822,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2MediumWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1098,141 +849,15 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2Model",
-        "type": "GPT2Model",
-        "params": 354823168,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "wte",
-            "type": "Embedding",
-            "params": 51463168,
-            "own_params": 51463168,
-            "children": []
-          },
-          {
-            "name": "wpe",
-            "type": "Embedding",
-            "params": 1048576,
-            "own_params": 1048576,
-            "children": []
-          },
-          {
-            "name": "drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "h",
-            "type": "ModuleList",
-            "params": 302309376,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_GPT2Block",
-                "params": 12596224,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "ln_1",
-                    "type": "LayerNorm",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
-                  },
-                  {
-                    "name": "attn",
-                    "type": "_GPT2SelfAttention",
-                    "params": 4198400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_attn",
-                        "type": "Linear",
-                        "params": 3148800,
-                        "own_params": 3148800,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 1049600,
-                        "own_params": 1049600,
-                        "children": []
-                      },
-                      {
-                        "name": "attn_dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [],
-                        "repeat": 2
-                      }
-                    ]
-                  },
-                  {
-                    "name": "ln_2",
-                    "type": "LayerNorm",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
-                  },
-                  {
-                    "name": "mlp",
-                    "type": "_GPT2MLP",
-                    "params": 8393728,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_fc",
-                        "type": "Linear",
-                        "params": 4198400,
-                        "own_params": 4198400,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 4195328,
-                        "own_params": 4195328,
-                        "children": []
-                      },
-                      {
-                        "name": "dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 24
-              }
-            ]
-          },
-          {
-            "name": "ln_f",
-            "type": "LayerNorm",
-            "params": 2048,
-            "own_params": 2048,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_medium_lm",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_medium_lm",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_medium_lm(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L287",
+      "signature": "gpt2_medium_lm(pretrained: bool | str = False, weights: GPT2MediumLMWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L355",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 medium (355M) model with the tied causal-LM head.",
       "extended": "Same trunk as `gpt2_medium` (L=24, H=1024, A=16, ~355M parameters),\nwrapped with the tied LM head for pre-training and free-form generation.",
@@ -1242,6 +867,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2MediumLMWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1263,156 +894,15 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2LMHeadModel",
-        "type": "GPT2LMHeadModel",
-        "params": 354823168,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "transformer",
-            "type": "GPT2Model",
-            "params": 354823168,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "wte",
-                "type": "Embedding",
-                "params": 51463168,
-                "own_params": 51463168,
-                "children": []
-              },
-              {
-                "name": "wpe",
-                "type": "Embedding",
-                "params": 1048576,
-                "own_params": 1048576,
-                "children": []
-              },
-              {
-                "name": "drop",
-                "type": "Dropout",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "h",
-                "type": "ModuleList",
-                "params": 302309376,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_GPT2Block",
-                    "params": 12596224,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "ln_1",
-                        "type": "LayerNorm",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_GPT2SelfAttention",
-                        "params": 4198400,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_attn",
-                            "type": "Linear",
-                            "params": 3148800,
-                            "own_params": 3148800,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 1049600,
-                            "own_params": 1049600,
-                            "children": []
-                          },
-                          {
-                            "name": "attn_dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": [],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ln_2",
-                        "type": "LayerNorm",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_GPT2MLP",
-                        "params": 8393728,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_fc",
-                            "type": "Linear",
-                            "params": 4198400,
-                            "own_params": 4198400,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 4195328,
-                            "own_params": 4195328,
-                            "children": []
-                          },
-                          {
-                            "name": "dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ],
-                    "repeat": 24
-                  }
-                ]
-              },
-              {
-                "name": "ln_f",
-                "type": "LayerNorm",
-                "params": 2048,
-                "own_params": 2048,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "lm_head",
-            "type": "Linear",
-            "params": 51463168,
-            "own_params": 51463168,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_small",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_small",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_small(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L45",
+      "signature": "gpt2_small(pretrained: bool | str = False, weights: GPT2SmallWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L58",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 small (124M) decoder trunk.",
       "extended": "Smallest of the four canonical OpenAI variants from Radford, Wu, Child,\nLuan, Amodei, and Sutskever, 2019: $L=12$ transformer blocks,\n$H=768$ hidden, $A=12$ attention heads, intermediate width\n3072.  Roughly 124M parameters (historically released as the \"117M\"\nfile before a re-count).  This is the default entry point for GPT-2\nresearch and the parameter-count match for GPT-1.",
@@ -1422,6 +912,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2SmallWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1443,161 +939,41 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2Model",
-        "type": "GPT2Model",
-        "params": 124439808,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "wte",
-            "type": "Embedding",
-            "params": 38597376,
-            "own_params": 38597376,
-            "children": []
-          },
-          {
-            "name": "wpe",
-            "type": "Embedding",
-            "params": 786432,
-            "own_params": 786432,
-            "children": []
-          },
-          {
-            "name": "drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "h",
-            "type": "ModuleList",
-            "params": 85054464,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_GPT2Block",
-                "params": 7087872,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "ln_1",
-                    "type": "LayerNorm",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "attn",
-                    "type": "_GPT2SelfAttention",
-                    "params": 2362368,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_attn",
-                        "type": "Linear",
-                        "params": 1771776,
-                        "own_params": 1771776,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 590592,
-                        "own_params": 590592,
-                        "children": []
-                      },
-                      {
-                        "name": "attn_dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [],
-                        "repeat": 2
-                      }
-                    ]
-                  },
-                  {
-                    "name": "ln_2",
-                    "type": "LayerNorm",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "mlp",
-                    "type": "_GPT2MLP",
-                    "params": 4722432,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_fc",
-                        "type": "Linear",
-                        "params": 2362368,
-                        "own_params": 2362368,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 2360064,
-                        "own_params": 2360064,
-                        "children": []
-                      },
-                      {
-                        "name": "dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 12
-              }
-            ]
-          },
-          {
-            "name": "ln_f",
-            "type": "LayerNorm",
-            "params": 1536,
-            "own_params": 1536,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_small_cls",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_small_cls",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_small_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L422",
+      "signature": "gpt2_small_cls(pretrained: bool | str = False, weights: GPT2SmallWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L523",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 small (124M) model with a sequence-classification head.",
       "extended": "Same trunk as `gpt2_small` (L=12, H=768, A=12), augmented with a\nlast-token linear classifier of output width `config.num_labels`.\nThe canonical recipe for fine-tuning GPT-2 on GLUE-style sentence\nclassification tasks when decoder-style features are preferred to\nbidirectional ones.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future weight registration; currently a no-op.",
+          "annotation": "bool or str",
+          "description": "Encoder-weight selector.  `False` → fully random init; `True`\n→ loads the pretrained `gpt2_small` decoder trunk\n(`GPT2SmallWeights.DEFAULT`) into the `.transformer`\nsubmodule; a tag string selects a specific encoder checkpoint.\n**The classifier head is always randomly initialised** (fine-tuning\nstarting point — no GLUE-fine-tuned head ships).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2SmallWeights, optional, keyword - only)",
+          "description": "Explicit encoder-weights enum member; takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Optional `GPT2Config` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the number of\nclasses (default 2).",
+          "description": "Optional `GPT2Config` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the number of\nclasses (default 2).  Overrides that change the trunk shape are\nincompatible with loading pretrained encoder weights.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "GPT2ForSequenceClassification",
-        "description": "GPT-2 small trunk wrapped with the last-token classifier head."
+        "description": "GPT-2 small trunk wrapped with the last-token classifier head\n(encoder pretrained when requested; head random)."
       },
       "raises": [],
       "examples": [
@@ -1608,163 +984,15 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2ForSequenceClassification",
-        "type": "GPT2ForSequenceClassification",
-        "params": 124441344,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "transformer",
-            "type": "GPT2Model",
-            "params": 124439808,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "wte",
-                "type": "Embedding",
-                "params": 38597376,
-                "own_params": 38597376,
-                "children": []
-              },
-              {
-                "name": "wpe",
-                "type": "Embedding",
-                "params": 786432,
-                "own_params": 786432,
-                "children": []
-              },
-              {
-                "name": "drop",
-                "type": "Dropout",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "h",
-                "type": "ModuleList",
-                "params": 85054464,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_GPT2Block",
-                    "params": 7087872,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "ln_1",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_GPT2SelfAttention",
-                        "params": 2362368,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_attn",
-                            "type": "Linear",
-                            "params": 1771776,
-                            "own_params": 1771776,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 590592,
-                            "own_params": 590592,
-                            "children": []
-                          },
-                          {
-                            "name": "attn_dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": [],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ln_2",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_GPT2MLP",
-                        "params": 4722432,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_fc",
-                            "type": "Linear",
-                            "params": 2362368,
-                            "own_params": 2362368,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 2360064,
-                            "own_params": 2360064,
-                            "children": []
-                          },
-                          {
-                            "name": "dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ],
-                    "repeat": 12
-                  }
-                ]
-              },
-              {
-                "name": "ln_f",
-                "type": "LayerNorm",
-                "params": 1536,
-                "own_params": 1536,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "dropout",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 1536,
-            "own_params": 1536,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_small_lm",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_small_lm",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_small_lm(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L242",
+      "signature": "gpt2_small_lm(pretrained: bool | str = False, weights: GPT2SmallLMWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L299",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 small (124M) model with the tied causal-LM head.",
       "extended": "Same trunk as `gpt2_small` (L=12, H=768, A=12, ~124M parameters),\nwrapped with the tied LM head used for pre-training and free-form\ngeneration via `lucid.models.GenerationMixin.generate`.",
@@ -1774,6 +1002,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2SmallLMWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1795,156 +1029,15 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2LMHeadModel",
-        "type": "GPT2LMHeadModel",
-        "params": 124439808,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "transformer",
-            "type": "GPT2Model",
-            "params": 124439808,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "wte",
-                "type": "Embedding",
-                "params": 38597376,
-                "own_params": 38597376,
-                "children": []
-              },
-              {
-                "name": "wpe",
-                "type": "Embedding",
-                "params": 786432,
-                "own_params": 786432,
-                "children": []
-              },
-              {
-                "name": "drop",
-                "type": "Dropout",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "h",
-                "type": "ModuleList",
-                "params": 85054464,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_GPT2Block",
-                    "params": 7087872,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "ln_1",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_GPT2SelfAttention",
-                        "params": 2362368,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_attn",
-                            "type": "Linear",
-                            "params": 1771776,
-                            "own_params": 1771776,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 590592,
-                            "own_params": 590592,
-                            "children": []
-                          },
-                          {
-                            "name": "attn_dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": [],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ln_2",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_GPT2MLP",
-                        "params": 4722432,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_fc",
-                            "type": "Linear",
-                            "params": 2362368,
-                            "own_params": 2362368,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 2360064,
-                            "own_params": 2360064,
-                            "children": []
-                          },
-                          {
-                            "name": "dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ],
-                    "repeat": 12
-                  }
-                ]
-              },
-              {
-                "name": "ln_f",
-                "type": "LayerNorm",
-                "params": 1536,
-                "own_params": 1536,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "lm_head",
-            "type": "Linear",
-            "params": 38597376,
-            "own_params": 38597376,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_xlarge",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_xlarge",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_xlarge(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L192",
+      "signature": "gpt2_xlarge(pretrained: bool | str = False, weights: GPT2XLargeWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L238",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 XL (1.5B) decoder trunk.",
       "extended": "Largest of the four canonical OpenAI variants: $L=48$ transformer\nblocks, $H=1600$ hidden, $A=25$ attention heads,\nintermediate width 6400.  Roughly 1.5B parameters — fully released in\nNovember 2019 after staged disclosure; remained the largest publicly\navailable autoregressive LM until GPT-3 (Brown 2020).",
@@ -1954,6 +1047,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2XLargeWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1975,141 +1074,15 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2Model",
-        "type": "GPT2Model",
-        "params": 1557611200,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "wte",
-            "type": "Embedding",
-            "params": 80411200,
-            "own_params": 80411200,
-            "children": []
-          },
-          {
-            "name": "wpe",
-            "type": "Embedding",
-            "params": 1638400,
-            "own_params": 1638400,
-            "children": []
-          },
-          {
-            "name": "drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "h",
-            "type": "ModuleList",
-            "params": 1475558400,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_GPT2Block",
-                "params": 30740800,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "ln_1",
-                    "type": "LayerNorm",
-                    "params": 3200,
-                    "own_params": 3200,
-                    "children": []
-                  },
-                  {
-                    "name": "attn",
-                    "type": "_GPT2SelfAttention",
-                    "params": 10246400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_attn",
-                        "type": "Linear",
-                        "params": 7684800,
-                        "own_params": 7684800,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 2561600,
-                        "own_params": 2561600,
-                        "children": []
-                      },
-                      {
-                        "name": "attn_dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [],
-                        "repeat": 2
-                      }
-                    ]
-                  },
-                  {
-                    "name": "ln_2",
-                    "type": "LayerNorm",
-                    "params": 3200,
-                    "own_params": 3200,
-                    "children": []
-                  },
-                  {
-                    "name": "mlp",
-                    "type": "_GPT2MLP",
-                    "params": 20488000,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "c_fc",
-                        "type": "Linear",
-                        "params": 10246400,
-                        "own_params": 10246400,
-                        "children": []
-                      },
-                      {
-                        "name": "c_proj",
-                        "type": "Linear",
-                        "params": 10241600,
-                        "own_params": 10241600,
-                        "children": []
-                      },
-                      {
-                        "name": "dropout",
-                        "type": "Dropout",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 48
-              }
-            ]
-          },
-          {
-            "name": "ln_f",
-            "type": "LayerNorm",
-            "params": 3200,
-            "own_params": 3200,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "gpt2_xlarge_lm",
       "path": "lucid.models.text.gpt2._pretrained.gpt2_xlarge_lm",
       "kind": "function",
       "labels": [],
-      "signature": "gpt2_xlarge_lm(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/gpt2/_pretrained.py#L375",
+      "signature": "gpt2_xlarge_lm(pretrained: bool | str = False, weights: GPT2XLargeLMWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/gpt2/_pretrained.py#L465",
       "subcategory": "pretrained",
       "summary": "Construct a GPT-2 XL (1.5B) model with the tied causal-LM head.",
       "extended": "Same trunk as `gpt2_xlarge` (L=48, H=1600, A=25, ~1.5B parameters),\nwrapped with the tied LM head for pre-training and free-form generation.",
@@ -2119,6 +1092,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(GPT2XLargeLMWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -2140,148 +1119,7 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "GPT2LMHeadModel",
-        "type": "GPT2LMHeadModel",
-        "params": 1557611200,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "transformer",
-            "type": "GPT2Model",
-            "params": 1557611200,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "wte",
-                "type": "Embedding",
-                "params": 80411200,
-                "own_params": 80411200,
-                "children": []
-              },
-              {
-                "name": "wpe",
-                "type": "Embedding",
-                "params": 1638400,
-                "own_params": 1638400,
-                "children": []
-              },
-              {
-                "name": "drop",
-                "type": "Dropout",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "h",
-                "type": "ModuleList",
-                "params": 1475558400,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_GPT2Block",
-                    "params": 30740800,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "ln_1",
-                        "type": "LayerNorm",
-                        "params": 3200,
-                        "own_params": 3200,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_GPT2SelfAttention",
-                        "params": 10246400,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_attn",
-                            "type": "Linear",
-                            "params": 7684800,
-                            "own_params": 7684800,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 2561600,
-                            "own_params": 2561600,
-                            "children": []
-                          },
-                          {
-                            "name": "attn_dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": [],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ln_2",
-                        "type": "LayerNorm",
-                        "params": 3200,
-                        "own_params": 3200,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_GPT2MLP",
-                        "params": 20488000,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "c_fc",
-                            "type": "Linear",
-                            "params": 10246400,
-                            "own_params": 10246400,
-                            "children": []
-                          },
-                          {
-                            "name": "c_proj",
-                            "type": "Linear",
-                            "params": 10241600,
-                            "own_params": 10241600,
-                            "children": []
-                          },
-                          {
-                            "name": "dropout",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ],
-                    "repeat": 48
-                  }
-                ]
-              },
-              {
-                "name": "ln_f",
-                "type": "LayerNorm",
-                "params": 3200,
-                "own_params": 3200,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "lm_head",
-            "type": "Linear",
-            "params": 80411200,
-            "own_params": 80411200,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     }
   ],
   "summary": "GPT-2 family — Radford et al., 2019 (pre-LN decoder-only transformer).",
@@ -2296,7 +1134,7 @@
   "see_also": [],
   "canonical_name": "GPT-2",
   "citation": "Radford, Alec, et al. \"Language Models are Unsupervised Multitask Learners.\" OpenAI Technical Report, 2019.",
-  "theory": "GPT-2 retains GPT-1's decoder-only causal-LM objective\n\n\n\n$$\n\\mathcal{L}_{\\text{LM}}(\\theta)\n    = \\sum_{t=1}^{T} \\log p_\\theta(x_t \\mid x_{<t}),\n$$\n\nbut introduces three architectural refinements that have since\nbecome standard for autoregressive transformers.  **Pre-LayerNorm**\nmoves the LayerNorm to the input of every sub-block (attention and\nMLP), so each block computes $h \\leftarrow h + f(\\mathrm{LN}(h))$\ninstead of $h \\leftarrow \\mathrm{LN}(h + f(h))$; combined with\na **final LayerNorm** (``ln_f``) after the last block, this yields\nmuch more stable optimisation at depth.  Residual projection weights\nare initialised with an extra $1/\\sqrt{2N}$ factor (where\n$N$ is the layer count), which keeps activation variance\nroughly invariant to depth.\n\nThe tokenizer switches to a byte-level BPE with a 50257-symbol\nvocabulary (50256 merges plus the ``<|endoftext|>`` sentinel), and\ncontext length doubles from 512 to 1024.  The released family spans\nfour sizes — *small* (124M, the defaults above), *medium* (355M),\n*large* (774M), and *xl* (1.5B) — by scaling\n$(\\text{hidden\\_size}, \\text{num\\_hidden\\_layers},\n\\text{num\\_attention\\_heads})$ while holding ``intermediate_size =\n4 \\cdot \\text{hidden\\_size}`` and head-dim = 64 fixed.\n\nThe paper's headline finding is that a sufficiently large LM trained\non WebText (~40 GB scraped from outbound Reddit links) performs\ncompetitive **zero-shot** transfer across reading comprehension,\ntranslation, summarisation, and QA — without any task-specific\nfine-tuning.  This is the empirical seed of in-context learning and\nthe modern prompting paradigm.",
+  "theory": "GPT-2 retains GPT-1's decoder-only causal-LM objective\n\n\n\n$$\n\\mathcal{L}_{\\text{LM}}(\\theta)\n    = \\sum_{t=1}^{T} \\log p_\\theta(x_t \\mid x_{<t}),\n$$\n\nbut introduces three architectural refinements that have since\nbecome standard for autoregressive transformers.  **Pre-LayerNorm**\nmoves the LayerNorm to the input of every sub-block (attention and\nMLP), so each block computes $h \\leftarrow h + f(\\mathrm{LN}(h))$\ninstead of $h \\leftarrow \\mathrm{LN}(h + f(h))$; combined with\na **final LayerNorm** (`ln_f`) after the last block, this yields\nmuch more stable optimisation at depth.  Residual projection weights\nare initialised with an extra $1/\\sqrt{2N}$ factor (where\n$N$ is the layer count), which keeps activation variance\nroughly invariant to depth.\n\nThe tokenizer switches to a byte-level BPE with a 50257-symbol\nvocabulary (50256 merges plus the `<|endoftext|>` sentinel), and\ncontext length doubles from 512 to 1024.  The released family spans\nfour sizes — *small* (124M, the defaults above), *medium* (355M),\n*large* (774M), and *xl* (1.5B) — by scaling\n$(\\text{hidden\\_size}, \\text{num\\_hidden\\_layers}, \\text{num\\_attention\\_heads})$ while holding `intermediate_size =\n4 \\cdot \\text{hidden\\_size}` and head-dim = 64 fixed.\n\nThe paper's headline finding is that a sufficiently large LM trained\non WebText (~40 GB scraped from outbound Reddit links) performs\ncompetitive **zero-shot** transfer across reading comprehension,\ntranslation, summarisation, and QA — without any task-specific\nfine-tuning.  This is the empirical seed of in-context learning and\nthe modern prompting paradigm.",
   "tasks": [
     "pretraining",
     "text-classification",

@@ -3,7 +3,7 @@
   "name": "cspnet",
   "path": "lucid.models.vision.cspnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/__init__.py#L1",
   "members": [
     {
       "name": "CSPNetConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "CSPNetConfig(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 3, 5, 2), channels: tuple[int, ...] = (64, 128, 256, 512))",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_config.py#L10",
+      "signature": "CSPNetConfig(num_classes: int = 1000, in_channels: int = 3, stem_out_chs: int = 64, stem_kernel: int = 7, stem_stride: int = 2, stem_pool: str = 'max', depths: tuple[int, ...] = (3, 3, 5, 2), out_chs: tuple[int, ...] = (128, 256, 512, 1024), strides: tuple[int, ...] = (1, 2, 2, 2), groups: tuple[int, ...] = (1, 1, 1, 1), expand_ratio: tuple[float, ...] = (2.0, 2.0, 2.0, 2.0), bottle_ratio: tuple[float, ...] = (0.5, 0.5, 0.5, 0.5), block_ratio: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0), cross_linear: tuple[bool, ...] = (True, True, True, True), down_growth: tuple[bool, ...] = (False, False, False, False), block_type: tuple[str, ...] = ('bottle', 'bottle', 'bottle', 'bottle'), dropout: float = 0.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.cspnet._config.CSPNetConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 3, 5, 2), channels: tuple[int, ...] = (64, 128, 256, 512))",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, stem_out_chs: int = 64, stem_kernel: int = 7, stem_stride: int = 2, stem_pool: str = 'max', depths: tuple[int, ...] = (3, 3, 5, 2), out_chs: tuple[int, ...] = (128, 256, 512, 1024), strides: tuple[int, ...] = (1, 2, 2, 2), groups: tuple[int, ...] = (1, 1, 1, 1), expand_ratio: tuple[float, ...] = (2.0, 2.0, 2.0, 2.0), bottle_ratio: tuple[float, ...] = (0.5, 0.5, 0.5, 0.5), block_ratio: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0), cross_linear: tuple[bool, ...] = (True, True, True, True), down_growth: tuple[bool, ...] = (False, False, False, False), block_type: tuple[str, ...] = ('bottle', 'bottle', 'bottle', 'bottle'), dropout: float = 0.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -41,9 +41,118 @@
           "see_also": []
         }
       ],
-      "summary": "Unified config for CSPResNet variants.",
-      "extended": "`layers` — per-stage block counts (4 stages total).\n`channels` — base channel widths per stage before CSP branching.",
-      "parameters": [],
+      "summary": "Generic configuration for every paper-cited CSPNet variant.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "",
+          "default": "1000"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "",
+          "default": "3"
+        },
+        {
+          "name": "stem_out_chs",
+          "annotation": "int",
+          "description": "Output channels of the stem.  `64` for the CSPResNet\nvariants (7×7 stride-4 + max-pool), `32` for CSPDarknet-53\n(3×3 stride-1, no pool).",
+          "default": "64"
+        },
+        {
+          "name": "stem_kernel",
+          "annotation": "int",
+          "description": "Kernel size of the stem convolution.",
+          "default": "7"
+        },
+        {
+          "name": "stem_stride",
+          "annotation": "int",
+          "description": "Stride of the stem (post-stem max-pool yields a further /2 for\nCSPResNet, none for CSPDarknet).",
+          "default": "4"
+        },
+        {
+          "name": "stem_pool",
+          "annotation": "str",
+          "description": "`\"max\"` (CSPResNet line) or `\"\"` (CSPDarknet — no pool).",
+          "default": "\"max\""
+        },
+        {
+          "name": "block_type",
+          "annotation": "str",
+          "description": "Per-stage block flavour: `\"bottle\"` = residual bottleneck\n(CSPResNet / CSPResNeXt), `\"dark\"` = Darknet block\n(CSPDarknet).",
+          "default": "\"bottle\""
+        },
+        {
+          "name": "stage_layout",
+          "annotation": "str",
+          "description": "`\"cross\"` = CSP-wrapped (CrossStage), `\"dark\"` = plain\nsequential (DarkStage).",
+          "default": "\"cross\""
+        },
+        {
+          "name": "depths",
+          "annotation": "tuple of int",
+          "description": "Block counts per stage.",
+          "default": "(3, 3, 5, 2)"
+        },
+        {
+          "name": "out_chs",
+          "annotation": "tuple of int",
+          "description": "Per-stage output channel widths.",
+          "default": "(128, 256, 512, 1024)"
+        },
+        {
+          "name": "strides",
+          "annotation": "tuple of int",
+          "description": "Per-stage stride (1 = no downsample, 2 = halve spatial).",
+          "default": "(1, 2, 2, 2)"
+        },
+        {
+          "name": "groups",
+          "annotation": "int",
+          "description": "Per-bottleneck grouped-conv count (CSPResNeXt-50 uses 32).",
+          "default": "1"
+        },
+        {
+          "name": "expand_ratio",
+          "annotation": "float",
+          "description": "How wide `conv_exp` is relative to the stage's input.",
+          "default": "2.0"
+        },
+        {
+          "name": "bottle_ratio",
+          "annotation": "float",
+          "description": "Bottleneck reduction inside each block.",
+          "default": "0.5"
+        },
+        {
+          "name": "block_ratio",
+          "annotation": "float",
+          "description": "Branch-output reduction inside CrossStage transitions.",
+          "default": "1.0"
+        },
+        {
+          "name": "cross_linear",
+          "annotation": "bool",
+          "description": "Whether the `conv_exp` of CrossStage skips its activation\n(paper-cited variants do skip).",
+          "default": "True"
+        },
+        {
+          "name": "down_growth",
+          "annotation": "bool",
+          "description": "CSPDarknet only — whether the down-conv at each stage already\napplies the channel expansion.",
+          "default": "False"
+        },
+        {
+          "name": "dropout",
+          "annotation": "float",
+          "description": "Head dropout probability.",
+          "default": "0.0"
+        }
+      ],
       "returns": null,
       "raises": [],
       "examples": [],
@@ -63,7 +172,7 @@
       ],
       "labels": [],
       "signature": "CSPNet(config: CSPNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L208",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L417",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +181,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CSPNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L283",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L428",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +205,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L299",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L437",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +226,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L302",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L440",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +248,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L314",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L446",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -156,56 +265,14 @@
           "see_also": []
         }
       ],
-      "summary": "CSPResNet feature-extracting backbone (no classification head).",
-      "extended": "Implements the Cross-Stage-Partial transformation from Wang\net al., \"CSPNet: A New Backbone that can Enhance Learning\nCapability of CNN\", CVPR Workshops 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929)),\nwrapped around a ResNet-50 bottleneck topology.  At every\nstage the input feature map is split along the channel\ndimension into two halves; only one half is fed through the\nstack of residual bottlenecks, the other bypasses the block\nentirely and is concatenated back in at the end:\n\n$$\ny = \\mathrm{Transition}\\big([x', \\mathcal{F}(x'')]\\big),\n\\qquad x = [x', x''].\n$$\nBecause half of the channels skip the heavy block, FLOPs and\nduplicate gradient flow are both cut substantially — by\nroughly 10–20% per stage — while accuracy on ImageNet rises a\nfraction of a percent.\n\nThe body is a 7×7 stride-2 stem followed by a 3×3 stride-2\nmax-pool and four CSP stages with explicit 3×3 stride-2\ndownsampling transitions between stages.  Output strides are\n4, 8, 16, and 32 relative to the input.",
-      "parameters": [
-        {
-          "name": "config",
-          "annotation": "CSPNetConfig",
-          "description": "Frozen architecture spec.  Use the factory function\n`cspresnet_50` for the canonical configuration.",
-          "default": null
-        }
-      ],
+      "summary": "CSPNet feature-extracting backbone (Wang et al., CVPRW 2020).",
+      "extended": "Builds a four-stage CSP-wrapped (or plain Darknet) trunk according to\n`CSPNetConfig`.  Returns the final feature map without\npooling.",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [
-        "Build a CSPResNet-50 backbone and run a forward pass:\n>>> import lucid\n>>> from lucid.models.vision.cspnet import cspresnet_50\n>>> backbone = cspresnet_50()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape\n(2, 512, 7, 7)"
-      ],
-      "notes": [
-        "The CSP transformation is *generic* — it can wrap any\ndense-or-residual block, not just ResNet's.  In this Lucid\nimplementation the inner stack is ResNet-style bottlenecks\n(`1×1 → 3×3 → 1×1` with 4× expansion), giving CSPResNet-50."
-      ],
-      "attributes": [
-        {
-          "name": "config",
-          "annotation": "CSPNetConfig",
-          "description": "Stored copy of the config that built this model."
-        },
-        {
-          "name": "stem",
-          "annotation": "nn.Sequential",
-          "description": "7×7 conv (stride 2) → BatchNorm → ReLU."
-        },
-        {
-          "name": "maxpool",
-          "annotation": "nn.MaxPool2d",
-          "description": "3×3 max-pool with stride 2."
-        },
-        {
-          "name": "stage0, stage1, stage2, stage3",
-          "annotation": "_CSPBottleneck",
-          "description": "The four CSP-wrapped residual stages.  Each stage halves\nthe input channels into a 1×1-projected bypass branch\nand a stack of $n_i$ `_ResBottleneck` blocks."
-        },
-        {
-          "name": "down1, down2, down3",
-          "annotation": "nn.Sequential",
-          "description": "3×3 stride-2 downsampling transitions inserted between\nconsecutive stages."
-        },
-        {
-          "name": "feature_info",
-          "annotation": "list[FeatureInfo]",
-          "description": "Per-stage descriptor (channels + reduction factor) exposed\nvia `BackboneMixin`."
-        }
-      ],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
       "warns": [],
       "see_also": []
     },
@@ -220,7 +287,7 @@
       ],
       "labels": [],
       "signature": "CSPNetForImageClassification(config: CSPNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L323",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L455",
       "subcategory": "model",
       "methods": [
         {
@@ -229,7 +296,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CSPNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L380",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L500",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -251,7 +318,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_model.py#L395",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_model.py#L509",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -268,48 +335,115 @@
           "see_also": []
         }
       ],
-      "summary": "CSPResNet with global-average-pooled linear classification head.",
-      "extended": "Combines a `CSPNet` backbone with global average\npooling and a linear projection to `config.num_classes`\nlogits.  When `labels` are supplied to `forward`, a\ncross-entropy loss is computed and returned alongside the\nlogits.",
+      "summary": "CSPNet image classifier — backbone + GAP + dropout + linear head.",
+      "extended": "Wraps a `CSPNet` trunk and appends the timm-style\n`ClassifierHead` (global-average-pool, dropout, `Linear`) so the\nwhole pipeline returns `(B, num_classes)` logits.  Use this entry\npoint when training or fine-tuning on classification datasets.",
       "parameters": [
         {
           "name": "config",
           "annotation": "CSPNetConfig",
-          "description": "Architecture spec.  Use the `cspresnet_50_cls`\nfactory for the canonical configuration.",
+          "description": "Hyperparameters including `num_classes` and head `dropout`.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
       "examples": [
-        "Run inference on a batch of 224×224 RGB images:\n>>> import lucid\n>>> from lucid.models.vision.cspnet import cspresnet_50_cls\n>>> model = cspresnet_50_cls()\n>>> x = lucid.randn(4, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)"
+        ">>> from lucid.models import cspresnet_50_cls\n>>> model = cspresnet_50_cls()\n>>> import lucid\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "The classification flow is\n\n$$\n\\text{logits} = W \\,\\operatorname{GAP}(\\mathrm{backbone}(x)) + b.\n$$\nWang et al., 2020 report 76.6% ImageNet-1k top-1 accuracy with\nCSPResNet-50 — roughly the same as plain ResNet-50 (76.1%)\nbut at substantially lower FLOPs and memory."
+        "Reference: Wang et al., *\"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\"*, CVPRW 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
       ],
       "attributes": [
         {
-          "name": "config",
-          "annotation": "CSPNetConfig",
-          "description": "Stored copy of the config that built this model."
+          "name": "stem",
+          "annotation": "nn.Module",
+          "description": "Conv-BN-act stem assembled from the config `stem` block."
         },
         {
-          "name": "stem, maxpool, stage0, …, stage3, down1, down2, down3",
-          "annotation": null,
-          "description": "Same backbone components as on `CSPNet`; see that\nclass for shape semantics."
+          "name": "stages",
+          "annotation": "nn.ModuleList",
+          "description": "The four CSP / Darknet stages emitting the `C2..C5` feature\npyramid."
         },
         {
           "name": "avgpool",
           "annotation": "nn.AdaptiveAvgPool2d",
-          "description": "Global average pool collapsing the final feature map to\n`1 × 1`."
+          "description": "Global average pool over the final feature map."
         },
         {
           "name": "classifier",
           "annotation": "nn.Linear",
-          "description": "Linear projection from `config.channels[-1]` (512 for\nCSPResNet-50) to `config.num_classes`."
+          "description": "Final linear projection to `num_classes` (named `head.fc` to\nmatch the upstream timm layout for direct checkpoint loading)."
         }
       ],
       "warns": [],
       "see_also": []
+    },
+    {
+      "name": "cspdarknet_53",
+      "path": "lucid.models.vision.cspnet._pretrained.cspdarknet_53",
+      "kind": "function",
+      "labels": [],
+      "signature": "cspdarknet_53(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_pretrained.py#L133",
+      "subcategory": "pretrained",
+      "summary": "CSPDarknet-53 backbone — Darknet-53 (YOLOv3 base) with CSP wrap.",
+      "extended": "The CSPNet recipe applied to the Darknet-53 trunk (Wang et al.,\nCVPRW 2020); same architecture later adopted by YOLOv4.  Returns\nthe final feature map only; pair with a classifier head via\n`cspdarknet_53_cls`.\n\nReference: Wang et al., *\"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\"*, CVPRW 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929)).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CSPNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 27610000
+    },
+    {
+      "name": "cspdarknet_53_cls",
+      "path": "lucid.models.vision.cspnet._pretrained.cspdarknet_53_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "cspdarknet_53_cls(pretrained: bool | str = False, weights: CSPDarknet53Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_pretrained.py#L251",
+      "subcategory": "pretrained",
+      "summary": "CSPDarknet-53 image classifier — paper Table 1, **27.6M**\nparams, ImageNet-1k acc@1 ~80.1% (timm `ra_in1k` recipe).",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CSPDarknet53Weights`; a string\nselects a named entry from that enum.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CSPDarknet53Weights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Per-field overrides forwarded to `CSPNetConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CSPNetForImageClassification",
+        "description": "The configured classifier."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Reference: Wang et al., *\"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\"*, CVPRW 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 27610000
     },
     {
       "name": "cspresnet_50",
@@ -317,1978 +451,253 @@
       "kind": "function",
       "labels": [],
       "signature": "cspresnet_50(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_pretrained.py#L18",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_pretrained.py#L91",
       "subcategory": "pretrained",
-      "summary": "CSPResNet-50 feature-extracting backbone (no classification head).",
-      "extended": "Builds a `CSPNet` with ResNet-50-style bottleneck\ntopology wrapped in the Cross-Stage-Partial transformation:\nblock repeats `(3, 3, 5, 2)` over four stages at channel\nwidths `(64, 128, 256, 512)`.  Approximately 21.6M\nparameters.  Wang et al., 2020 report 76.6% ImageNet-1k\ntop-1 accuracy — comparable to plain ResNet-50 (76.1%) but at\nsubstantially reduced FLOPs and memory.",
-      "parameters": [
-        {
-          "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future pretrained-weight loading.  Currently\nignored — the returned model is randomly initialised.",
-          "default": "False"
-        },
-        {
-          "name": "**overrides",
-          "annotation": "object",
-          "description": "Keyword overrides forwarded into `CSPNetConfig`\n(e.g. `in_channels=1` for grayscale input).",
-          "default": "{}"
-        }
-      ],
+      "summary": "CSPResNet-50 backbone — ResNet-50 with CSP-wrapped stages.",
+      "extended": "The CSPNet recipe applied to the ResNet-50 trunk (Wang et al.,\nCVPRW 2020).  Returns the final feature map only; pair with a\nclassifier head via `cspresnet_50_cls`.\n\nReference: Wang et al., *\"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\"*, CVPRW 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929)).",
+      "parameters": [],
       "returns": {
         "annotation": "CSPNet",
-        "description": "Backbone with the CSPResNet-50 configuration applied (or\nwith `overrides` merged on top of it)."
+        "description": ""
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.cspnet import cspresnet_50\n>>> model = cspresnet_50()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
-      ],
-      "notes": [
-        "See Wang et al., \"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\", CVPR Workshops 2020\n([arXiv:1911.11929](https://arxiv.org/abs/1911.11929)).  The key idea is the channel-wise split\nthat halves the FLOPs of each residual stage while\ndiversifying the gradient paths through truncated dense\nconnections."
-      ],
+      "examples": [],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CSPNet",
-        "type": "CSPNet",
-        "params": 7032320,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 9536,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 9408,
-                "own_params": 9408,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "maxpool",
-            "type": "MaxPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stage0",
-            "type": "_CSPBottleneck",
-            "params": 72256,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 2048,
-                "own_params": 2048,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 64,
-                "own_params": 64,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 59776,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 24192,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 9216,
-                        "own_params": 9216,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 8448,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 256,
-                            "own_params": 256,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 17792,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 9216,
-                        "own_params": 9216,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 10368,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 10240,
-                    "own_params": 10240,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stage1",
-            "type": "_CSPBottleneck",
-            "params": 285824,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 8192,
-                "own_params": 8192,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 236288,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 95488,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 8192,
-                        "own_params": 8192,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 33280,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 32768,
-                            "own_params": 32768,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 512,
-                            "own_params": 512,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 70400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 41216,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 40960,
-                    "own_params": 40960,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stage2",
-            "type": "_CSPBottleneck",
-            "params": 1697024,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 32768,
-                "own_params": 32768,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 256,
-                "own_params": 256,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 1499648,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 379392,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 132096,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 131072,
-                            "own_params": 131072,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 280064,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 164352,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 163840,
-                    "own_params": 163840,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stage3",
-            "type": "_CSPBottleneck",
-            "params": 3417600,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 131072,
-                "own_params": 131072,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 512,
-                "own_params": 512,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 2629632,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 1512448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 131072,
-                        "own_params": 131072,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 526336,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 524288,
-                            "own_params": 524288,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 1117184,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 656384,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 655360,
-                    "own_params": 655360,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 1024,
-                    "own_params": 1024,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "down1",
-            "type": "Sequential",
-            "params": 73984,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 73728,
-                "own_params": 73728,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 256,
-                "own_params": 256,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "down2",
-            "type": "Sequential",
-            "params": 295424,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 294912,
-                "own_params": 294912,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 512,
-                "own_params": 512,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "down3",
-            "type": "Sequential",
-            "params": 1180672,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 1179648,
-                "own_params": 1179648,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 1024,
-                "own_params": 1024,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          }
-        ]
-      }
+      "param_count": 21620000
     },
     {
       "name": "cspresnet_50_cls",
       "path": "lucid.models.vision.cspnet._pretrained.cspresnet_50_cls",
       "kind": "function",
       "labels": [],
-      "signature": "cspresnet_50_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/cspnet/_pretrained.py#L79",
+      "signature": "cspresnet_50_cls(pretrained: bool | str = False, weights: CSPResNet50Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_pretrained.py#L160",
       "subcategory": "pretrained",
-      "summary": "CSPResNet-50 image classifier (backbone + GAP + linear head).",
-      "extended": "Builds a `CSPNetForImageClassification` with the\ncanonical CSPResNet-50 backbone followed by global average\npooling and a linear projection to `config.num_classes`\n(default 1000 for ImageNet-1k).  Approximately 21.6M\nparameters and 76.6% ImageNet-1k top-1 accuracy (Wang et al.,\n2020).",
+      "summary": "CSPResNet-50 image classifier — paper Table 1, **21.6M** params,\nImageNet-1k acc@1 ~76.2% (timm `ra_in1k` recipe).",
+      "extended": null,
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CSPResNet50Weights`; a string\nselects a named entry from that enum.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CSPResNet50Weights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `CSPNetConfig`\n(typically `num_classes` to retarget the classifier).",
+          "description": "Per-field overrides forwarded to `CSPNetConfig` (e.g.\n`num_classes=10` to retarget the head).",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "CSPNetForImageClassification",
-        "description": "Classifier with the CSPResNet-50 configuration applied\n(or with `overrides` merged on top of it)."
+        "description": "The configured classifier."
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.cspnet import cspresnet_50_cls\n>>> model = cspresnet_50_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
-      ],
+      "examples": [],
       "notes": [
-        "See Wang et al., \"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\", CVPR Workshops 2020\n([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
+        "Reference: Wang et al., *\"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\"*, CVPRW 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CSPNetForImageClassification",
-        "type": "CSPNetForImageClassification",
-        "params": 7545320,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 9536,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 9408,
-                "own_params": 9408,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "maxpool",
-            "type": "MaxPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stage0",
-            "type": "_CSPBottleneck",
-            "params": 72256,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 2048,
-                "own_params": 2048,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 64,
-                "own_params": 64,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 59776,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 24192,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 9216,
-                        "own_params": 9216,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 8448,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 256,
-                            "own_params": 256,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 17792,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 9216,
-                        "own_params": 9216,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 10368,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 10240,
-                    "own_params": 10240,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stage1",
-            "type": "_CSPBottleneck",
-            "params": 285824,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 8192,
-                "own_params": 8192,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 236288,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 95488,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 8192,
-                        "own_params": 8192,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 33280,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 32768,
-                            "own_params": 32768,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 512,
-                            "own_params": 512,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 70400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 41216,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 40960,
-                    "own_params": 40960,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stage2",
-            "type": "_CSPBottleneck",
-            "params": 1697024,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 32768,
-                "own_params": 32768,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 256,
-                "own_params": 256,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 1499648,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 379392,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 132096,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 131072,
-                            "own_params": 131072,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 280064,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 164352,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 163840,
-                    "own_params": 163840,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stage3",
-            "type": "_CSPBottleneck",
-            "params": 3417600,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "branch_a",
-                "type": "Conv2d",
-                "params": 131072,
-                "own_params": 131072,
-                "children": []
-              },
-              {
-                "name": "bn_a",
-                "type": "BatchNorm2d",
-                "params": 512,
-                "own_params": 512,
-                "children": []
-              },
-              {
-                "name": "branch_b",
-                "type": "Sequential",
-                "params": 2629632,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_ResBottleneck",
-                    "params": 1512448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 131072,
-                        "own_params": 131072,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 526336,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 524288,
-                            "own_params": 524288,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_ResBottleneck",
-                    "params": 1117184,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "relu",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "name": "transition",
-                "type": "Sequential",
-                "params": 656384,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 655360,
-                    "own_params": 655360,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 1024,
-                    "own_params": 1024,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "relu",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "down1",
-            "type": "Sequential",
-            "params": 73984,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 73728,
-                "own_params": 73728,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 256,
-                "own_params": 256,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "down2",
-            "type": "Sequential",
-            "params": 295424,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 294912,
-                "own_params": 294912,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 512,
-                "own_params": 512,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "down3",
-            "type": "Sequential",
-            "params": 1180672,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 1179648,
-                "own_params": 1179648,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 1024,
-                "own_params": 1024,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "avgpool",
-            "type": "AdaptiveAvgPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 513000,
-            "own_params": 513000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 21620000
+    },
+    {
+      "name": "cspresnext_50",
+      "path": "lucid.models.vision.cspnet._pretrained.cspresnext_50",
+      "kind": "function",
+      "labels": [],
+      "signature": "cspresnext_50(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_pretrained.py#L112",
+      "subcategory": "pretrained",
+      "summary": "CSPResNeXt-50 backbone — ResNeXt-50 (32x4d) with CSP wrap.",
+      "extended": "The CSPNet recipe applied to the grouped-conv ResNeXt-50 trunk\n(Wang et al., CVPRW 2020).  Returns the final feature map only;\npair with a classifier head via `cspresnext_50_cls`.\n\nReference: Wang et al., *\"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\"*, CVPRW 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929)).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CSPNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 20570000
+    },
+    {
+      "name": "cspresnext_50_cls",
+      "path": "lucid.models.vision.cspnet._pretrained.cspresnext_50_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "cspresnext_50_cls(pretrained: bool | str = False, weights: CSPResNeXt50Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_pretrained.py#L206",
+      "subcategory": "pretrained",
+      "summary": "CSPResNeXt-50 image classifier — paper Table 1, **20.6M**\nparams, ImageNet-1k acc@1 ~80.0% (timm `ra_in1k` recipe).",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CSPResNeXt50Weights`; a string\nselects a named entry from that enum.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CSPResNeXt50Weights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Per-field overrides forwarded to `CSPNetConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CSPNetForImageClassification",
+        "description": "The configured classifier."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Reference: Wang et al., *\"CSPNet: A New Backbone that can Enhance\nLearning Capability of CNN\"*, CVPRW 2020 ([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 20570000
+    },
+    {
+      "name": "CSPDarknet53Weights",
+      "path": "lucid.models.vision.cspnet._weights.CSPDarknet53Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CSPDarknet53Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_weights.py#L105",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.cspdarknet_53_cls`.",
+      "extended": "Wang et al. CVPRW 2020 CSP-Darknet-53 (27.6 M params, top-1 80.06%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import cspdarknet_53_cls\n>>> model = cspdarknet_53_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Wang, Liao, Wu, Chen, Hsieh, Yeh, *\"CSPNet: A New Backbone\nthat can Enhance Learning Capability of CNN\"*, CVPRW 2020\n([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
+      ],
+      "attributes": [
+        {
+          "name": "RA_IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k RandAugment recipe checkpoint (top-1 80.06%),\nsourced from `timm/cspdarknet53.ra_in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `RA_IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CSPResNet50Weights",
+      "path": "lucid.models.vision.cspnet._weights.CSPResNet50Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CSPResNet50Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_weights.py#L17",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.cspresnet_50_cls`.",
+      "extended": "Wang et al. CVPRW 2020 CSP-ResNet-50 (21.6 M params, top-1 76.74%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import cspresnet_50_cls\n>>> model = cspresnet_50_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Wang, Liao, Wu, Chen, Hsieh, Yeh, *\"CSPNet: A New Backbone\nthat can Enhance Learning Capability of CNN\"*, CVPRW 2020\n([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
+      ],
+      "attributes": [
+        {
+          "name": "RA_IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k RandAugment recipe checkpoint (top-1 76.74%),\nsourced from `timm/cspresnet50.ra_in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `RA_IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CSPResNeXt50Weights",
+      "path": "lucid.models.vision.cspnet._weights.CSPResNeXt50Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CSPResNeXt50Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/cspnet/_weights.py#L61",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.cspresnext_50_cls`.",
+      "extended": "Wang et al. CVPRW 2020 CSP-ResNeXt-50 (20.6 M params, top-1 80.04%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import cspresnext_50_cls\n>>> model = cspresnext_50_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Wang, Liao, Wu, Chen, Hsieh, Yeh, *\"CSPNet: A New Backbone\nthat can Enhance Learning Capability of CNN\"*, CVPRW 2020\n([arXiv:1911.11929](https://arxiv.org/abs/1911.11929))."
+      ],
+      "attributes": [
+        {
+          "name": "RA_IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k RandAugment recipe checkpoint (top-1 80.04%),\nsourced from `timm/cspresnext50.ra_in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `RA_IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
     }
   ],
-  "summary": "CSPNet family — backbone + image classification (Wang et al., 2019).",
+  "summary": "CSPNet family — backbone + image classification (Wang et al., CVPRW 2020).",
   "extended": null,
   "parameters": [],
   "returns": null,
@@ -2300,7 +709,7 @@
   "see_also": [],
   "canonical_name": "CSPNet",
   "citation": "Wang, Chien-Yao, et al. \"CSPNet: A New Backbone that can Enhance Learning Capability of CNN.\" Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops, 2020, pp. 390–391.",
-  "theory": "CSPNet (\"Cross-Stage Partial Network\") is a generic backbone\ntransformation that can be wrapped around almost any\ndense-or-residual stage — ResNet, ResNeXt, DenseNet — to cut\nits compute and memory while *improving* its accuracy.  The\ncore observation is that during back-propagation the gradient\nflowing through a dense block is *duplicated* many times across\nrepeated dense connections, which both wastes computation and\ncan confuse the optimisation by re-using the same gradient\ninformation in many places.\n\nThe CSP transformation factors each stage as follows.  The\ninput feature map is split along the channel dimension into\ntwo halves:\n\n\n\n$$\nx = [x', x''], \\qquad\nx' \\in \\mathbb{R}^{H \\times W \\times C/2}, \\;\nx'' \\in \\mathbb{R}^{H \\times W \\times C/2}.\n$$\n\nOnly $x''$ is fed through the original dense / residual\nblock to produce $y'' = \\mathcal{F}(x'')$; the other half\n$x'$ *bypasses* the block entirely.  At the end of the\nstage the two halves are concatenated and projected:\n\n\n\n$$\ny = \\mathrm{Transition}\\big( [x', \\mathcal{F}(x'')] \\big).\n$$\n\nBecause $x'$ never enters the dense block, the duplicated\ngradient is split into two truncated paths that share no\nintermediate activations — which both reduces redundant gradient\ninformation *and* halves the FLOPs of the heavy block.  Applied\nto a ResNet-50 / ResNeXt-50 / DenseNet-201 backbone, CSP cuts\ncompute by 10–20% while improving ImageNet top-1 by a fraction\nof a percent.  In Lucid the :class:`CSPNetConfig` parameterises\nthe CSPResNet variants — four stages of CSP-wrapped bottleneck\nblocks with configurable per-stage depths and channel widths.",
+  "theory": "CSPNet (\"Cross-Stage Partial Network\") is a generic backbone\ntransformation that can be wrapped around almost any\ndense-or-residual stage — ResNet, ResNeXt, DenseNet, Darknet —\nto cut its compute and memory while *improving* its accuracy.\n\nThe CSP transformation factors each stage as follows.  The\ninput feature map (after an expansion conv) is split along the\nchannel dimension into two halves:\n\n\n\n$$\nx = [x', x''], \\qquad\nx' \\in \\mathbb{R}^{H \\times W \\times C/2}, \\;\nx'' \\in \\mathbb{R}^{H \\times W \\times C/2}.\n$$\n\nOnly $x''$ is fed through the heavy residual block to\nproduce $y'' = \\mathcal{F}(x'')$; the other half\n$x'$ *bypasses* the block entirely.  At the end of the\nstage the two halves are concatenated and projected:\n\n\n\n$$\ny = \\mathrm{Transition}\\big( [x', \\mathcal{F}(x'')] \\big).\n$$\n\nBecause $x'$ never enters the heavy block, the duplicated\ngradient is split into two truncated paths that share no\nintermediate activations — which both reduces redundant gradient\ninformation *and* halves the FLOPs of the heavy block.  Applied\nto ResNet-50 / ResNeXt-50 / Darknet-53 backbones, CSP cuts\ncompute by 10–20% while improving ImageNet top-1 by a fraction\nof a percent.\n\nLucid ships the three paper-cited base variants from Wang 2020:\n`cspresnet_50`, `cspresnext_50`, `cspdarknet_53`.\nThe first two use `CrossStage` (CSP-wrapped residual bottleneck);\nthe last uses `DarkStage` (sequential Darknet block).",
   "tasks": [
     "image-classification"
   ]

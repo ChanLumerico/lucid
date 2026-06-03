@@ -3,7 +3,7 @@
   "name": "roformer",
   "path": "lucid.models.text.roformer",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/__init__.py#L1",
   "members": [
     {
       "name": "RoFormerConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "RoFormerConfig(vocab_size: int = 50000, hidden_size: int = 768, num_hidden_layers: int = 12, num_attention_heads: int = 12, intermediate_size: int = 3072, hidden_act: TextActivation = 'gelu', max_position_embeddings: int = 1536, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, rotary_base: float = 10000.0, position_embedding_type: Literal['rotary'] = 'rotary', type_vocab_size: int = 2, num_labels: int = 2, classifier_dropout: float | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_config.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_config.py#L17",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab_size: int = 50000, hidden_size: int = 768, num_hidden_layers: int = 12, num_attention_heads: int = 12, intermediate_size: int = 3072, hidden_act: TextActivation = 'gelu', max_position_embeddings: int = 1536, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, rotary_base: float = 10000.0, position_embedding_type: Literal['rotary'] = 'rotary', type_vocab_size: int = 2, num_labels: int = 2, classifier_dropout: float | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -88,7 +88,7 @@
       ],
       "labels": [],
       "signature": "RoFormerForMaskedLM(config: RoFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L394",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L462",
       "subcategory": "model",
       "methods": [
         {
@@ -97,7 +97,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RoFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L452",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L520",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -119,7 +119,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L461",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L529",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -152,7 +152,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import RoFormerConfig, RoFormerForMaskedLM\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerForMaskedLM(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, V=50000)\n(1, 4, 50000)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen `labels` is provided, the loss is the standard masked\ncross-entropy\n\n$$\n\\mathcal{L}_{\\mathrm{MLM}} = -\\frac{1}{|M|}\n    \\sum_{i \\in M} \\log p_\\theta(x_i \\mid x_{\\setminus M}),\n$$\nover the set $M$ of masked positions (positions whose label\nequals `-100` are excluded)."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen `labels` is provided, the loss is the standard masked\ncross-entropy\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MLM}} = -\\frac{1}{|M|}\n    \\sum_{i \\in M} \\log p_\\theta(x_i \\mid x_{\\setminus M}),\n$$\n\nover the set $M$ of masked positions (positions whose label\nequals `-100` are excluded)."
       ],
       "attributes": [
         {
@@ -179,7 +179,7 @@
       ],
       "labels": [],
       "signature": "RoFormerForMultipleChoice(config: RoFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L680",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L748",
       "subcategory": "model",
       "methods": [
         {
@@ -188,7 +188,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RoFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L737",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L805",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -210,7 +210,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L748",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L816",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -243,7 +243,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForMultipleChoice,\n... )\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerForMultipleChoice(cfg).eval()\n>>> input_ids = lucid.tensor([[[101, 7592, 102], [101, 2088, 102]]])    # (N=1, C=2, L=3)\n>>> out = model(input_ids)\n>>> out.logits.shape   # (N=1, C=2)\n(1, 2)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen `labels` is supplied the loss is the softmax cross-entropy over\nthe `C` candidates:\n\n$$\n\\mathcal{L}_{\\mathrm{MC}}\n    = -\\frac{1}{N} \\sum_{n=1}^{N}\n      \\log \\mathrm{softmax}(z_n)_{y_n}.\n$$"
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen `labels` is supplied the loss is the softmax cross-entropy over\nthe `C` candidates:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MC}}\n    = -\\frac{1}{N} \\sum_{n=1}^{N}\n      \\log \\mathrm{softmax}(z_n)_{y_n}.\n$$"
       ],
       "attributes": [
         {
@@ -275,7 +275,7 @@
       ],
       "labels": [],
       "signature": "RoFormerForQuestionAnswering(config: RoFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L790",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L858",
       "subcategory": "model",
       "methods": [
         {
@@ -284,7 +284,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RoFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L849",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L917",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -306,7 +306,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, start_positions: Tensor | None = None, end_positions: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L854",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L922",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -324,7 +324,7 @@
         }
       ],
       "summary": "RoFormer with a 2-way span head for extractive question answering.",
-      "extended": "Wraps `RoFormerModel` with a single linear of output width 2,\nproducing start- and end-position logits over each token in the input.\nIdentical contract to `BertForQuestionAnswering`; the SQuAD\nv1.1 / v2.0 fine-tuning recipe applied to a RoPE-trained encoder.",
+      "extended": "Wraps `RoFormerModel` with a single linear of output width 2,\nproducing start- and end-position logits over each token in the input.\nIdentical contract to `BERTForQuestionAnswering`; the SQuAD\nv1.1 / v2.0 fine-tuning recipe applied to a RoPE-trained encoder.",
       "parameters": [
         {
           "name": "config",
@@ -339,7 +339,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForQuestionAnswering,\n... )\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerForQuestionAnswering(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=7, 2)\n(1, 7, 2)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen both `start_positions` and `end_positions` are supplied the\nloss is the symmetric average of two cross-entropies:\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\!\\left(\n    \\mathrm{CE}(z^{\\mathrm{start}}, y^{\\mathrm{start}})\n  + \\mathrm{CE}(z^{\\mathrm{end}},   y^{\\mathrm{end}})\n\\right).\n$$\nThe returned `logits` tensor has shape `(B, T, 2)`; index\n`[..., 0]` for start scores and `[..., 1]` for end scores."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen both `start_positions` and `end_positions` are supplied the\nloss is the symmetric average of two cross-entropies:\n\n\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\!\\left(\n    \\mathrm{CE}(z^{\\mathrm{start}}, y^{\\mathrm{start}})\n  + \\mathrm{CE}(z^{\\mathrm{end}},   y^{\\mathrm{end}})\n\\right).\n$$\n\nThe returned `logits` tensor has shape `(B, T, 2)`; index\n`[..., 0]` for start scores and `[..., 1]` for end scores."
       ],
       "attributes": [
         {
@@ -366,7 +366,7 @@
       ],
       "labels": [],
       "signature": "RoFormerForSequenceClassification(config: RoFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L485",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L553",
       "subcategory": "model",
       "methods": [
         {
@@ -375,7 +375,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RoFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L543",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L611",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -397,7 +397,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L554",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L622",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -415,7 +415,7 @@
         }
       ],
       "summary": "RoFormer with a pooled-CLS sequence-classification head.",
-      "extended": "Wraps `RoFormerModel` with a dropout-regularised linear\nclassifier operating on the pooled first-token embedding.  Pattern\nmirrors `BertForSequenceClassification`; use for GLUE-style\nfine-tunes when the RoPE-based relative position bias is preferred.",
+      "extended": "Wraps `RoFormerModel` with a dropout-regularised linear\nclassifier operating on the pooled first-token embedding.  Pattern\nmirrors `BERTForSequenceClassification`; use for GLUE-style\nfine-tunes when the RoPE-based relative position bias is preferred.",
       "parameters": [
         {
           "name": "config",
@@ -430,7 +430,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForSequenceClassification,\n... )\n>>> cfg = RoFormerConfig(num_labels=3, num_hidden_layers=2,\n...                      hidden_size=128, num_attention_heads=2,\n...                      intermediate_size=512)\n>>> model = RoFormerForSequenceClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, num_labels=3)\n(1, 3)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nLoss (when `labels` is provided) is the standard softmax\ncross-entropy:\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\log p_\\theta(y_b \\mid x_b).\n$$"
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nLoss (when `labels` is provided) is the standard softmax\ncross-entropy:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\log p_\\theta(y_b \\mid x_b).\n$$"
       ],
       "attributes": [
         {
@@ -463,7 +463,7 @@
       ],
       "labels": [],
       "signature": "RoFormerForTokenClassification(config: RoFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L579",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L647",
       "subcategory": "model",
       "methods": [
         {
@@ -472,7 +472,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RoFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L639",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L707",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -494,7 +494,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L650",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L718",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -512,7 +512,7 @@
         }
       ],
       "summary": "RoFormer with a per-token classification head.",
-      "extended": "Wraps `RoFormerModel` with a dropout-regularised linear\nclassifier applied independently at every sequence position.  Pattern\nmirrors `BertForTokenClassification` — used for sequence-\nlabelling tasks (NER / POS / chunking) on RoPE-trained encoders.",
+      "extended": "Wraps `RoFormerModel` with a dropout-regularised linear\nclassifier applied independently at every sequence position.  Pattern\nmirrors `BERTForTokenClassification` — used for sequence-\nlabelling tasks (NER / POS / chunking) on RoPE-trained encoders.",
       "parameters": [
         {
           "name": "config",
@@ -527,7 +527,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForTokenClassification,\n... )\n>>> cfg = RoFormerConfig(num_labels=9, num_hidden_layers=2,\n...                      hidden_size=128, num_attention_heads=2,\n...                      intermediate_size=512)\n>>> model = RoFormerForTokenClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, num_labels=9)\n(1, 4, 9)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nLoss when `labels` is provided is the masked cross-entropy inherited\nfrom `MaskedLMMixin`:\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|} \\sum_{(b, t) \\in V}\n    \\log p_\\theta(y_{b, t} \\mid x_b),\n$$\nwhere $V$ is the set of positions with `label != -100`."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nLoss when `labels` is provided is the masked cross-entropy inherited\nfrom `MaskedLMMixin`:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|} \\sum_{(b, t) \\in V}\n    \\log p_\\theta(y_{b, t} \\mid x_b),\n$$\n\nwhere $V$ is the set of positions with `label != -100`."
       ],
       "attributes": [
         {
@@ -559,7 +559,7 @@
       ],
       "labels": [],
       "signature": "RoFormerModel(config: RoFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L226",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L291",
       "subcategory": "model",
       "methods": [
         {
@@ -568,7 +568,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RoFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L298",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L366",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -590,7 +590,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_input_embeddings()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L311",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L379",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -612,7 +612,7 @@
           "kind": "function",
           "labels": [],
           "signature": "set_input_embeddings(value: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L314",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L382",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -634,7 +634,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, token_type_ids: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_model.py#L322",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_model.py#L390",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -667,7 +667,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import RoFormerConfig, RoFormerModel\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerModel(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 128), (1, 128))"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nRotary rotation per $(\\cos\\theta_i, \\sin\\theta_i)$ pair, with\n$\\theta_i = \\mathrm{base}^{-2i/d_{\\text{head}}}$:\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$\nApplied independently to every $(x_{2i}, x_{2i+1})$ pair of\n$Q$ and $K$ so $q_m^\\top k_n$ becomes a function of\n$m - n$ only."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nRotary rotation per $(\\cos\\theta_i, \\sin\\theta_i)$ pair, with\n$\\theta_i = \\mathrm{base}^{-2i/d_{\\text{head}}}$:\n\n\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$\n\nApplied independently to every $(x_{2i}, x_{2i+1})$ pair of\n$Q$ and $K$ so $q_m^\\top k_n$ becomes a function of\n$m - n$ only."
       ],
       "attributes": [
         {
@@ -677,8 +677,8 @@
         },
         {
           "name": "rotary",
-          "annotation": "nn.RotaryEmbedding",
-          "description": "Pre-computed `(cos, sin)` tables of shape\n`(max_position_embeddings, head_dim)`, sliced to the actual\nsequence length at each `forward`."
+          "annotation": "Module",
+          "description": "Pre-computed interleaved-layout `(cos, sin)` tables of shape\n`(max_position_embeddings, head_dim)`, sliced to the actual\nsequence length at each `forward`.  Uses the original RoPE\npairing `(x_2i, x_2i+1)` (each frequency repeated twice) rather\nthan the shared half-split layout, matching the RoFormer reference\ncheckpoints."
         },
         {
           "name": "encoder",
@@ -704,7 +704,7 @@
       ],
       "labels": [],
       "signature": "RoFormerTokenizer(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_tokenizer.py#L54",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_tokenizer.py#L54",
       "subcategory": "tokenizer",
       "methods": [
         {
@@ -713,7 +713,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_tokenizer.py#L84",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_tokenizer.py#L84",
           "subcategory": "tokenizer",
           "summary": null,
           "extended": null,
@@ -731,7 +731,7 @@
         }
       ],
       "summary": "RoFormer tokenizer — pure-Python reference.",
-      "extended": "Identical algorithm to `lucid.models.text.bert.BertTokenizer`\n(WordPiece longest-match with `[UNK]/[CLS]/[SEP]/[PAD]/[MASK]`\nregistered out of the box).  Kept as a separate class so every\ntext-model family exposes a uniform\n`from lucid.models.text.<family> import {Family}Tokenizer`\nsurface — useful for generic model-loading helpers.",
+      "extended": "Identical algorithm to `lucid.models.text.bert.BERTTokenizer`\n(WordPiece longest-match with `[UNK]/[CLS]/[SEP]/[PAD]/[MASK]`\nregistered out of the box).  Kept as a separate class so every\ntext-model family exposes a uniform\n`from lucid.models.text.<family> import {Family}Tokenizer`\nsurface — useful for generic model-loading helpers.",
       "parameters": [
         {
           "name": "vocab",
@@ -743,13 +743,13 @@
           "name": "unk_token",
           "annotation": "str",
           "description": "",
-          "default": "``\"[UNK]\"``"
+          "default": "\"[UNK]\""
         },
         {
           "name": "continuing_prefix",
           "annotation": "str",
           "description": "",
-          "default": "``\"##\"``"
+          "default": "\"##\""
         },
         {
           "name": "max_chars_per_word",
@@ -761,7 +761,7 @@
           "name": "do_lower_case",
           "annotation": "bool",
           "description": "Set `False` for cased RoFormer checkpoints.",
-          "default": "``True``"
+          "default": "True"
         },
         {
           "name": "normalizer",
@@ -794,7 +794,7 @@
           "description": "C++-backed variant with identical output."
         },
         {
-          "name": "lucid.models.text.bert.BertTokenizer",
+          "name": "lucid.models.text.bert.BERTTokenizer",
           "description": "Sibling wrapper sharing"
         },
         {
@@ -813,7 +813,7 @@
       ],
       "labels": [],
       "signature": "RoFormerTokenizerFast(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_tokenizer.py#L119",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_tokenizer.py#L119",
       "subcategory": "tokenizer",
       "methods": [
         {
@@ -822,7 +822,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab: dict[str, int], unk_token: str = '[UNK]', continuing_prefix: str = '##', max_chars_per_word: int = 100, do_lower_case: bool = True, normalizer: Normalizer | None = None, pre_tokenizer: PreTokenizer | None = None, special_tokens: SpecialTokens | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_tokenizer.py#L130",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_tokenizer.py#L130",
           "subcategory": "tokenizer",
           "summary": null,
           "extended": null,
@@ -840,7 +840,7 @@
         }
       ],
       "summary": "RoFormer tokenizer — C++-backed.",
-      "extended": "Bit-identical to `RoFormerTokenizer`.  The greedy\nlongest-match loop runs in C++ via\n`lucid._C.engine.utils.tokenizer.WordPiece`.\n\nConstructor parameters mirror `RoFormerTokenizer` — see\nthat class for the full reference.",
+      "extended": "Bit-identical to `RoFormerTokenizer`.  The greedy\nlongest-match loop runs in C++ via the engine-side `WordPiece`\nbinding.\n\nConstructor parameters mirror `RoFormerTokenizer` — see\nthat class for the full reference.",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -855,8 +855,8 @@
       "path": "lucid.models.text.roformer._pretrained.roformer",
       "kind": "function",
       "labels": [],
-      "signature": "roformer(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_pretrained.py#L29",
+      "signature": "roformer(pretrained: bool | str = False, weights: RoFormerWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_pretrained.py#L31",
       "subcategory": "pretrained",
       "summary": "Construct a RoFormer encoder trunk.",
       "extended": "Canonical RoFormer architecture from Su, Lu, Pan, Murtadha, Wen, and\nLiu, 2024: $L=12$ transformer layers, $H=768$ hidden,\n$A=12$ attention heads, intermediate width 3072 — same shape as\nBERT-base, but with absolute learned position embeddings replaced by\nrotary position embedding (RoPE) applied to $Q$ and $K$\ninside every self-attention layer.  Max sequence length is extended\nfrom 512 to 1536 to exercise RoPE's length-extrapolation property.",
@@ -866,6 +866,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(RoFormerWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -883,7 +889,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import roformer\n>>> model = roformer().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 768), (1, 768))"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nRotary rotation matrix per $(\\cos\\theta_i, \\sin\\theta_i)$ pair:\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$"
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nRotary rotation matrix per $(\\cos\\theta_i, \\sin\\theta_i)$ pair:\n\n\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$"
       ],
       "attributes": [],
       "warns": [],
@@ -932,7 +938,7 @@
           },
           {
             "name": "rotary",
-            "type": "RotaryEmbedding",
+            "type": "_RoFormerRotaryEmbedding",
             "params": 0,
             "own_params": 0,
             "children": []
@@ -1089,28 +1095,34 @@
       "path": "lucid.models.text.roformer._pretrained.roformer_cls",
       "kind": "function",
       "labels": [],
-      "signature": "roformer_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_pretrained.py#L142",
+      "signature": "roformer_cls(pretrained: bool | str = False, weights: RoFormerWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_pretrained.py#L166",
       "subcategory": "pretrained",
       "summary": "Construct a RoFormer model with a sequence-classification head.",
       "extended": "Same trunk as `roformer` (L=12, H=768, A=12), augmented with a\ndropout-regularised linear classifier on the pooled first-token\nembedding.  Use for GLUE-style fine-tunes when the RoPE relative\nposition bias is preferred to absolute position embeddings.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future weight registration; currently a no-op.",
+          "annotation": "bool or str",
+          "description": "Encoder-weight selector.  `False` → fully random init; `True`\n→ loads the pretrained `roformer` encoder\n(`RoFormerWeights.DEFAULT`) into the `.roformer` trunk; a\ntag string selects a specific encoder checkpoint.  **The classifier\nhead is always randomly initialised** (fine-tuning starting point —\nno fine-tuned head ships).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(RoFormerWeights, optional, keyword - only)",
+          "description": "Explicit encoder-weights enum member; takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Optional `RoFormerConfig` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the number of\nclasses (default 2).",
+          "description": "Optional `RoFormerConfig` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the number of\nclasses (default 2).  Overrides that change the encoder shape are\nincompatible with loading pretrained encoder weights.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "RoFormerForSequenceClassification",
-        "description": "RoFormer trunk wrapped with the pooled classifier head."
+        "description": "RoFormer trunk wrapped with the pooled classifier head (encoder\npretrained when requested; head random)."
       },
       "raises": [],
       "examples": [
@@ -1172,7 +1184,7 @@
               },
               {
                 "name": "rotary",
-                "type": "RotaryEmbedding",
+                "type": "_RoFormerRotaryEmbedding",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -1345,8 +1357,8 @@
       "path": "lucid.models.text.roformer._pretrained.roformer_mlm",
       "kind": "function",
       "labels": [],
-      "signature": "roformer_mlm(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_pretrained.py#L94",
+      "signature": "roformer_mlm(pretrained: bool | str = False, weights: RoFormerMLMWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_pretrained.py#L107",
       "subcategory": "pretrained",
       "summary": "Construct a RoFormer model with a tied masked-LM head.",
       "extended": "Same trunk as `roformer` (L=12, H=768, A=12), augmented with the\nBERT-style two-layer projection mapping each hidden state to vocabulary\nlogits via a decoder whose weight matrix is tied to the input\n`word_embeddings` table when `config.tie_word_embeddings` is True.\nUse for MLM pre-training when RoPE relative-position semantics are\npreferred to absolute position embeddings.",
@@ -1356,6 +1368,12 @@
           "annotation": "bool",
           "description": "Reserved for future weight registration; currently a no-op.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(RoFormerMLMWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member; takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1428,7 +1446,7 @@
               },
               {
                 "name": "rotary",
-                "type": "RotaryEmbedding",
+                "type": "_RoFormerRotaryEmbedding",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -1632,28 +1650,34 @@
       "path": "lucid.models.text.roformer._pretrained.roformer_token_cls",
       "kind": "function",
       "labels": [],
-      "signature": "roformer_token_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/text/roformer/_pretrained.py#L191",
+      "signature": "roformer_token_cls(pretrained: bool | str = False, weights: RoFormerWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/text/roformer/_pretrained.py#L232",
       "subcategory": "pretrained",
       "summary": "Construct a RoFormer model with a per-token classification head.",
       "extended": "Same trunk as `roformer` (L=12, H=768, A=12), augmented with a\ndropout-regularised per-position linear classifier of output width\n`config.num_labels`.  Use for sequence-labelling tasks (NER, POS,\nchunking) when a RoPE-trained encoder is preferred.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future weight registration; currently a no-op.",
+          "annotation": "bool or str",
+          "description": "Encoder-weight selector.  `False` → fully random init; `True`\n→ loads the pretrained `roformer` encoder\n(`RoFormerWeights.DEFAULT`) into the `.roformer` trunk; a\ntag string selects a specific encoder checkpoint.  **The per-token\nclassifier head is always randomly initialised** (fine-tuning\nstarting point — no NER/POS-fine-tuned head ships).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(RoFormerWeights, optional, keyword - only)",
+          "description": "Explicit encoder-weights enum member; takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Optional `RoFormerConfig` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the tag set size.",
+          "description": "Optional `RoFormerConfig` field overrides forwarded into the\nunderlying config.  Pass `num_labels=N` to set the tag set size.\nOverrides that change the encoder shape are incompatible with\nloading pretrained encoder weights.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "RoFormerForTokenClassification",
-        "description": "RoFormer trunk wrapped with the per-token classifier head."
+        "description": "RoFormer trunk wrapped with the per-token classifier head (encoder\npretrained when requested; head random)."
       },
       "raises": [],
       "examples": [
@@ -1715,7 +1739,7 @@
               },
               {
                 "name": "rotary",
-                "type": "RotaryEmbedding",
+                "type": "_RoFormerRotaryEmbedding",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -1896,7 +1920,7 @@
   "see_also": [],
   "canonical_name": "RoFormer",
   "citation": "Su, Jianlin, et al. \"RoFormer: Enhanced Transformer with Rotary Position Embedding.\" Neurocomputing, vol. 568, 2024, article 127063.",
-  "theory": "RoFormer replaces BERT's absolute (learned) position embedding with\n**Rotary Position Embedding (RoPE)** — a position-encoding scheme\nthat injects relative-position information **multiplicatively**\ninside attention rather than additively at the input.\n\nConsider a query/key vector $x \\in \\mathbb{R}^{d}$ at position\n$m$.  RoPE groups the $d$ features into $d/2$\ncomplex coordinates and rotates the $i$-th pair\n$(x_{2i}, x_{2i+1})$ by angle $m \\theta_i$, where\n\n\n\n$$\n\\theta_i = \\text{base}^{-2 i / d},\n\\qquad i = 0, 1, \\dots, d/2 - 1,\n$$\n\nand ``base`` (default $10\\,000$) controls the spectrum of\nrotational frequencies.  In complex form\n$z_i = x_{2i} + j\\, x_{2i+1}$, the rotation is just\n$z_i \\mapsto z_i\\, e^{j m \\theta_i}$.\n\nThe crucial property is that the **attention dot product becomes a\nfunction of the relative offset** $m - n$ only:\n\n\n\n$$\n\\langle R_m\\, q,\\; R_n\\, k \\rangle\n    = \\operatorname{Re}\\!\\sum_i z_i^{(q)} \\overline{z_i^{(k)}}\\,\n      e^{j (m - n) \\theta_i}\n    = f_{\\text{rel}}(q, k, m - n),\n$$\n\nso RoPE encodes relative positions without any extra parameters and\nwithout an additive bias term.  This grants three practical\nbenefits: (i) it generalises to **longer sequences than seen during\ntraining** (with mild quality decay), (ii) it composes naturally\nwith linear attention variants because it acts on $Q, K$\nbefore the softmax, and (iii) it requires the per-head dimension\n$d_{\\text{head}} = d_{\\text{model}} / h$ to be even — enforced\nby ``__post_init__`` above.  RoFormer otherwise mirrors BERT-base\n($L=12$, $H=768$, $A=12$) and is the de-facto\nposition-encoding choice for modern LLaMA-/Mistral-style LLMs.",
+  "theory": "RoFormer replaces BERT's absolute (learned) position embedding with\n**Rotary Position Embedding (RoPE)** — a position-encoding scheme\nthat injects relative-position information **multiplicatively**\ninside attention rather than additively at the input.\n\nConsider a query/key vector $x \\in \\mathbb{R}^{d}$ at position\n$m$.  RoPE groups the $d$ features into $d/2$\ncomplex coordinates and rotates the $i$-th pair\n$(x_{2i}, x_{2i+1})$ by angle $m \\theta_i$, where\n\n\n\n$$\n\\theta_i = \\text{base}^{-2 i / d},\n\\qquad i = 0, 1, \\dots, d/2 - 1,\n$$\n\nand `base` (default $10\\,000$) controls the spectrum of\nrotational frequencies.  In complex form\n$z_i = x_{2i} + j\\, x_{2i+1}$, the rotation is just\n$z_i \\mapsto z_i\\, e^{j m \\theta_i}$.\n\nThe crucial property is that the **attention dot product becomes a\nfunction of the relative offset** $m - n$ only:\n\n\n\n$$\n\\langle R_m\\, q,\\; R_n\\, k \\rangle\n    = \\operatorname{Re}\\!\\sum_i z_i^{(q)} \\overline{z_i^{(k)}}\\,\n      e^{j (m - n) \\theta_i}\n    = f_{\\text{rel}}(q, k, m - n),\n$$\n\nso RoPE encodes relative positions without any extra parameters and\nwithout an additive bias term.  This grants three practical\nbenefits: (i) it generalises to **longer sequences than seen during\ntraining** (with mild quality decay), (ii) it composes naturally\nwith linear attention variants because it acts on $Q, K$\nbefore the softmax, and (iii) it requires the per-head dimension\n$d_{\\text{head}} = d_{\\text{model}} / h$ to be even — enforced\nby `__post_init__` above.  RoFormer otherwise mirrors BERT-base\n($L=12$, $H=768$, $A=12$) and is the de-facto\nposition-encoding choice for modern LLaMA-/Mistral-style LLMs.",
   "tasks": [
     "fill-mask",
     "multiple-choice",

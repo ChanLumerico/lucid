@@ -2951,6 +2951,26 @@
       "module": "lucid.models.generative.ddpm"
     }
   ],
+  "lucid.models.generative.ddpm._weights.DDPMChurchWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ddpm._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.generative.ddpm._weights.DDPMCifarWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ddpm._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.generative.ncsn": [
     {
       "kind": "module",
@@ -3091,6 +3111,94 @@
       "module": "lucid.models"
     }
   ],
+  "lucid.models.text.bert._config.BERTConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForCausalLM": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForMaskedLM": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForNextSentencePrediction": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForPreTraining": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForPreTrainingOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForQuestionAnswering": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForSequenceClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTForTokenClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    }
+  ],
+  "lucid.models.text.bert._model.BERTModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    }
+  ],
   "lucid.models.text.bert._pretrained.bert_base": [
     {
       "kind": "module",
@@ -3139,6 +3247,12 @@
       "module": "lucid.models.text.bert"
     }
   ],
+  "lucid.models.text.bert._pretrained.bert_large_qa": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
   "lucid.models.text.bert._pretrained.bert_medium": [
     {
       "kind": "module",
@@ -3161,6 +3275,128 @@
     {
       "kind": "module",
       "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._tokenizer.BERTTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._tokenizer.BERTTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTBaseMLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTBaseNERWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTBaseQAWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTBaseWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTLargeMLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTLargeQAWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTMediumWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTMiniWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.bert._weights.BERTTinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.text.gpt": [
@@ -3253,6 +3489,26 @@
     {
       "kind": "module",
       "module": "lucid.models.text.gpt"
+    }
+  ],
+  "lucid.models.text.gpt._weights.GPTLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt._weights.GPTWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.text.gpt2": [
@@ -3383,6 +3639,86 @@
       "module": "lucid.models.text.gpt2"
     }
   ],
+  "lucid.models.text.gpt2._weights.GPT2LargeLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt2._weights.GPT2LargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt2._weights.GPT2MediumLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt2._weights.GPT2MediumWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt2._weights.GPT2SmallLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt2._weights.GPT2SmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt2._weights.GPT2XLargeLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.gpt2._weights.GPT2XLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.text.roformer": [
     {
       "kind": "module",
@@ -3489,6 +3825,26 @@
     {
       "kind": "module",
       "module": "lucid.models.text.roformer"
+    }
+  ],
+  "lucid.models.text.roformer._weights.RoFormerMLMWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.text.roformer._weights.RoFormerWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.text.transformer": [
@@ -3639,6 +3995,20 @@
       "module": "lucid.models.vision.alexnet"
     }
   ],
+  "lucid.models.vision.alexnet._weights.AlexNetWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.alexnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.alexnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.attention_unet": [
     {
       "kind": "module",
@@ -3722,6 +4092,90 @@
     }
   ],
   "lucid.models.vision.coatnet._pretrained.coatnet_0_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_1": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_1_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_2_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_3": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_3_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_4_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_5": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_5_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_6": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_6_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_7": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.coatnet"
+    }
+  ],
+  "lucid.models.vision.coatnet._pretrained.coatnet_7_cls": [
     {
       "kind": "module",
       "module": "lucid.models.vision.coatnet"
@@ -3825,6 +4279,76 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.convnext"
+    }
+  ],
+  "lucid.models.vision.convnext._weights.ConvNeXtBaseWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.convnext._weights.ConvNeXtLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.convnext._weights.ConvNeXtSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.convnext._weights.ConvNeXtTinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.convnext._weights.ConvNeXtXLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.crossvit": [
@@ -3939,6 +4463,90 @@
       "module": "lucid.models.vision.crossvit"
     }
   ],
+  "lucid.models.vision.crossvit._weights.CrossViT15Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.crossvit._weights.CrossViT18Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.crossvit._weights.CrossViT9Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.crossvit._weights.CrossViTBaseWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.crossvit._weights.CrossViTSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.crossvit._weights.CrossViTTinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.cspnet": [
     {
       "kind": "module",
@@ -3979,6 +4587,18 @@
       "module": "lucid.models.vision.cspnet._pretrained"
     }
   ],
+  "lucid.models.vision.cspnet._pretrained.cspdarknet_53": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet"
+    }
+  ],
+  "lucid.models.vision.cspnet._pretrained.cspdarknet_53_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet"
+    }
+  ],
   "lucid.models.vision.cspnet._pretrained.cspresnet_50": [
     {
       "kind": "module",
@@ -3989,6 +4609,60 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.cspnet"
+    }
+  ],
+  "lucid.models.vision.cspnet._pretrained.cspresnext_50": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet"
+    }
+  ],
+  "lucid.models.vision.cspnet._pretrained.cspresnext_50_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet"
+    }
+  ],
+  "lucid.models.vision.cspnet._weights.CSPDarknet53Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.cspnet._weights.CSPResNeXt50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.cspnet._weights.CSPResNet50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.cvt": [
@@ -4067,6 +4741,48 @@
       "module": "lucid.models.vision.cvt"
     }
   ],
+  "lucid.models.vision.cvt._weights.CvT13Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.cvt._weights.CvT21Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.cvt._weights.CvTW24Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.densenet": [
     {
       "kind": "module",
@@ -4119,6 +4835,18 @@
       "module": "lucid.models.vision.densenet"
     }
   ],
+  "lucid.models.vision.densenet._pretrained.densenet_161": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet"
+    }
+  ],
+  "lucid.models.vision.densenet._pretrained.densenet_161_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet"
+    }
+  ],
   "lucid.models.vision.densenet._pretrained.densenet_169": [
     {
       "kind": "module",
@@ -4153,6 +4881,62 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.densenet"
+    }
+  ],
+  "lucid.models.vision.densenet._weights.DenseNet121Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.densenet._weights.DenseNet161Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.densenet._weights.DenseNet169Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.densenet._weights.DenseNet201Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.detr": [
@@ -4195,6 +4979,34 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.detr"
+    }
+  ],
+  "lucid.models.vision.detr._weights.DETRResNet101Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.detr"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.detr._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.detr._weights.DETRResNet50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.detr"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.detr._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.efficientdet": [
@@ -4361,6 +5173,48 @@
       "module": "lucid.models.vision.efficientformer"
     }
   ],
+  "lucid.models.vision.efficientformer._weights.EfficientFormerL1Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientformer._weights.EfficientFormerL3Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientformer._weights.EfficientFormerL7Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.efficientnet": [
     {
       "kind": "module",
@@ -4497,6 +5351,118 @@
       "module": "lucid.models.vision.efficientnet"
     }
   ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB0Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB1Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB2Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB3Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB4Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB5Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB6Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.efficientnet._weights.EfficientNetB7Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.fast_rcnn": [
     {
       "kind": "module",
@@ -4573,6 +5539,26 @@
       "module": "lucid.models.vision.faster_rcnn"
     }
   ],
+  "lucid.models.vision.faster_rcnn._pretrained.faster_rcnn_resnet50_fpn": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.faster_rcnn"
+    }
+  ],
+  "lucid.models.vision.faster_rcnn._weights.FasterRCNNResNet50FPNWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.faster_rcnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.faster_rcnn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.fcn": [
     {
       "kind": "module",
@@ -4613,6 +5599,34 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.fcn"
+    }
+  ],
+  "lucid.models.vision.fcn._weights.FCNResNet101Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.fcn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.fcn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.fcn._weights.FCNResNet50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.fcn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.fcn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.googlenet": [
@@ -4673,6 +5687,20 @@
       "module": "lucid.models.vision.googlenet"
     }
   ],
+  "lucid.models.vision.googlenet._weights.GoogLeNetWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.googlenet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.googlenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.inception": [
     {
       "kind": "module",
@@ -4731,6 +5759,20 @@
       "module": "lucid.models.vision.inception"
     }
   ],
+  "lucid.models.vision.inception._weights.InceptionV3Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.inception_next": [
     {
       "kind": "module",
@@ -4771,6 +5813,30 @@
       "module": "lucid.models.vision.inception_next._pretrained"
     }
   ],
+  "lucid.models.vision.inception_next._pretrained.inception_next_base": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next"
+    }
+  ],
+  "lucid.models.vision.inception_next._pretrained.inception_next_base_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next"
+    }
+  ],
+  "lucid.models.vision.inception_next._pretrained.inception_next_small": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next"
+    }
+  ],
+  "lucid.models.vision.inception_next._pretrained.inception_next_small_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next"
+    }
+  ],
   "lucid.models.vision.inception_next._pretrained.inception_next_tiny": [
     {
       "kind": "module",
@@ -4781,6 +5847,48 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.inception_next"
+    }
+  ],
+  "lucid.models.vision.inception_next._weights.InceptionNeXtBaseWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.inception_next._weights.InceptionNeXtSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.inception_next._weights.InceptionNeXtTinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.inception_resnet": [
@@ -4839,6 +5947,20 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.inception_resnet"
+    }
+  ],
+  "lucid.models.vision.inception_resnet._weights.InceptionResNetV2Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_resnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.lenet": [
@@ -4947,6 +6069,62 @@
       "module": "lucid.models.vision.mask2former"
     }
   ],
+  "lucid.models.vision.mask2former._weights.Mask2FormerSwinBaseWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mask2former._weights.Mask2FormerSwinLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mask2former._weights.Mask2FormerSwinSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mask2former._weights.Mask2FormerSwinTinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.mask_rcnn": [
     {
       "kind": "module",
@@ -4981,6 +6159,26 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mask_rcnn"
+    }
+  ],
+  "lucid.models.vision.mask_rcnn._pretrained.mask_rcnn_resnet50_fpn": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask_rcnn"
+    }
+  ],
+  "lucid.models.vision.mask_rcnn._weights.MaskRCNNResNet50FPNWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask_rcnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask_rcnn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.maskformer": [
@@ -5023,6 +6221,34 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.maskformer"
+    }
+  ],
+  "lucid.models.vision.maskformer._weights.MaskFormerResNet101Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.maskformer._weights.MaskFormerResNet50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.maxvit": [
@@ -5125,6 +6351,62 @@
       "module": "lucid.models.vision.maxvit"
     }
   ],
+  "lucid.models.vision.maxvit._weights.MaxViTBaseWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.maxvit._weights.MaxViTLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.maxvit._weights.MaxViTSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.maxvit._weights.MaxViTTinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.mobilenet": [
     {
       "kind": "module",
@@ -5213,6 +6495,20 @@
       "module": "lucid.models.vision.mobilenet"
     }
   ],
+  "lucid.models.vision.mobilenet._weights.MobileNetV1Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.mobilenet_v2": [
     {
       "kind": "module",
@@ -5277,6 +6573,20 @@
       "module": "lucid.models.vision.mobilenet_v2"
     }
   ],
+  "lucid.models.vision.mobilenet_v2._weights.MobileNetV2Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.mobilenet_v3": [
     {
       "kind": "module",
@@ -5339,6 +6649,34 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v3._weights.MobileNetV3LargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v3._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v3._weights.MobileNetV3SmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v3._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.pvt": [
@@ -5463,6 +6801,90 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.pvt"
+    }
+  ],
+  "lucid.models.vision.pvt._weights.PVTv2B0Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.pvt._weights.PVTv2B1Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.pvt._weights.PVTv2B2Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.pvt._weights.PVTv2B3Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.pvt._weights.PVTv2B4Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.pvt._weights.PVTv2B5Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.rcnn": [
@@ -5613,6 +7035,62 @@
       "module": "lucid.models.vision.resnest"
     }
   ],
+  "lucid.models.vision.resnest._weights.ResNeSt101Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnest._weights.ResNeSt200Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnest._weights.ResNeSt269Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnest._weights.ResNeSt50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.resnet": [
     {
       "kind": "module",
@@ -5761,7 +7239,91 @@
       "module": "lucid.models.vision.resnet"
     }
   ],
+  "lucid.models.vision.resnet._weights.ResNet101Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnet._weights.ResNet152Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.resnet._weights.ResNet18Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnet._weights.ResNet34Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnet._weights.ResNet50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnet._weights.WideResNet101Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnet._weights.WideResNet50Weights": [
     {
       "kind": "module",
       "module": "lucid.models.vision.resnet"
@@ -5849,6 +7411,48 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.resnext"
+    }
+  ],
+  "lucid.models.vision.resnext._weights.ResNeXt101_32x4dWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnext._weights.ResNeXt101_32x8dWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.resnext._weights.ResNeXt50_32x4dWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.senet": [
@@ -5951,6 +7555,76 @@
       "module": "lucid.models.vision.senet"
     }
   ],
+  "lucid.models.vision.senet._weights.SEResNet101Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.senet._weights.SEResNet152Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.senet._weights.SEResNet18Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.senet._weights.SEResNet34Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.senet._weights.SEResNet50Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.sknet": [
     {
       "kind": "module",
@@ -6051,6 +7725,34 @@
       "module": "lucid.models.vision.sknet"
     }
   ],
+  "lucid.models.vision.sknet._weights.SKResNet18Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.sknet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.sknet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.sknet._weights.SKResNet34Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.sknet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.sknet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.swin": [
     {
       "kind": "module",
@@ -6137,6 +7839,62 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.swin"
+    }
+  ],
+  "lucid.models.vision.swin._weights.SwinBaseWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.swin._weights.SwinLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.swin._weights.SwinSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.swin._weights.SwinTinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.unet": [
@@ -6329,6 +8087,118 @@
       "module": "lucid.models.vision.vgg"
     }
   ],
+  "lucid.models.vision.vgg._weights.VGG11BNWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vgg._weights.VGG11Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vgg._weights.VGG13BNWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vgg._weights.VGG13Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vgg._weights.VGG16BNWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vgg._weights.VGG16Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vgg._weights.VGG19BNWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vgg._weights.VGG19Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.vit": [
     {
       "kind": "module",
@@ -6429,6 +8299,62 @@
       "module": "lucid.models.vision.vit"
     }
   ],
+  "lucid.models.vision.vit._weights.ViTBase16Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vit._weights.ViTBase32Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vit._weights.ViTLarge16Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.vit._weights.ViTLarge32Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.xception": [
     {
       "kind": "module",
@@ -6485,6 +8411,20 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.xception"
+    }
+  ],
+  "lucid.models.vision.xception._weights.XceptionWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.xception"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.xception._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.vision.yolo": [
@@ -10103,6 +12043,24 @@
       "module": "lucid.utils"
     }
   ],
+  "lucid.utils.data._mix.CutMixCollator": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.data"
+    }
+  ],
+  "lucid.utils.data._mix.MixupCollator": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.data"
+    }
+  ],
+  "lucid.utils.data._mix.RandomMixupCutMixCollator": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.data"
+    }
+  ],
   "lucid.utils.data._worker.WorkerInfo": [
     {
       "kind": "module",
@@ -10223,6 +12181,12 @@
       "module": "lucid.utils.data"
     }
   ],
+  "lucid.utils.data.sampler.RASampler": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.data"
+    }
+  ],
   "lucid.utils.data.sampler.RandomSampler": [
     {
       "kind": "module",
@@ -10263,6 +12227,1624 @@
     {
       "kind": "module",
       "module": "lucid.utils.data"
+    }
+  ],
+  "lucid.utils.tokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils"
+    }
+  ],
+  "lucid.utils.tokenizer._base.SpecialTokens": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._bpe"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._byte"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._byte_bpe"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._char"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._lookup_common"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._regex"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._unigram"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._whitespace"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._word"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._wordpiece"
+    }
+  ],
+  "lucid.utils.tokenizer._base.Tokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._bpe"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._byte"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._char"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._regex"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._unigram"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._whitespace"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._word"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._wordpiece"
+    }
+  ],
+  "lucid.utils.tokenizer._bpe.BPETokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._byte_bpe"
+    }
+  ],
+  "lucid.utils.tokenizer._bpe.BPETokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._byte_bpe"
+    }
+  ],
+  "lucid.utils.tokenizer._byte.ByteTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._byte.ByteTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._byte_bpe.ByteLevelBPETokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._byte_bpe.ByteLevelBPETokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._char.CharTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._char.CharTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._regex.RegexTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._regex.RegexTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._unigram.UnigramTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._unigram.UnigramTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._whitespace.WhitespaceTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._whitespace.WhitespaceTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._word.WordTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._word.WordTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._wordpiece.WordPieceTokenizer": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.tokenizer._wordpiece.WordPieceTokenizerFast": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._tokenizer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer"
+    }
+  ],
+  "lucid.utils.transforms": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ddpm._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.alexnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.detr._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.faster_rcnn._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.fcn._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.googlenet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_resnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask_rcnn._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v2._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v3._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.sknet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.xception._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.data._mix"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._autoaugment"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._base"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._blur"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._color"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._composition"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._crop"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._datatypes"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._distortion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._dropout"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._erasing"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._geometric"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._photometric"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._spatial"
+    }
+  ],
+  "lucid.utils.transforms._autoaugment.AutoAugment": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._autoaugment.RandAugment": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._autoaugment.TrivialAugmentWide": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._base.BboxParams": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._base.Compose": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._base.GeometricTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._crop"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._distortion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._geometric"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._spatial"
+    }
+  ],
+  "lucid.utils.transforms._base.PhotometricTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._autoaugment"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._blur"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._color"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._dropout"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._erasing"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._photometric"
+    }
+  ],
+  "lucid.utils.transforms._base.Transform": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._composition"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._blur.Blur": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.Defocus": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.Downscale": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.GaussNoise": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.GaussianBlur": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.ISONoise": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.MedianBlur": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.MotionBlur": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.MultiplicativeNoise": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._blur.ZoomBlur": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.CLAHE": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.ChannelDropout": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.ChannelShuffle": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.Emboss": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.Equalize": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.FancyPCA": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.HueSaturationValue": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.InvertImg": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.PixelDropout": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.Posterize": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.RGBShift": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.RandomBrightness": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.RandomBrightnessContrast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.RandomContrast": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.RandomGamma": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.RandomToneCurve": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.RingingOvershoot": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.Sharpen": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.Solarize": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.ToGray": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.ToSepia": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.UnsharpMask": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._color.XYMasking": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._composition.OneOf": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._composition.OneOrOther": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._composition.ReplayCompose": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._composition.Sequential": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._composition.SomeOf": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._crop.Crop": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
+    }
+  ],
+  "lucid.utils.transforms._crop.CropAndPad": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._crop.PadIfNeeded": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._crop.RandomSizedCrop": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._datatypes.BoundingBoxes": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._base"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._crop"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._distortion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._geometric"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._spatial"
+    }
+  ],
+  "lucid.utils.transforms._datatypes.Image": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._base"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
+    }
+  ],
+  "lucid.utils.transforms._datatypes.Keypoints": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._base"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._crop"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._distortion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._geometric"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._spatial"
+    }
+  ],
+  "lucid.utils.transforms._datatypes.Mask": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._base"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
+    }
+  ],
+  "lucid.utils.transforms._distortion.ElasticTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._distortion.GridDistortion": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._distortion.GridElasticDeform": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._distortion.OpticalDistortion": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._dropout.CoarseDropout": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._dropout.GridDropout": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._erasing.RandomErasing": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._geometric.CenterCrop": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._geometric.HorizontalFlip": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._geometric.LongestMaxSize": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._geometric.RandomCrop": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._geometric.RandomResizedCrop": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._geometric.Resize": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
+    }
+  ],
+  "lucid.utils.transforms._geometric.SmallestMaxSize": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._geometric.VerticalFlip": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._interpolation.Interpolation": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._autoaugment"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._crop"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._distortion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._geometric"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._spatial"
+    }
+  ],
+  "lucid.utils.transforms._misc.BBoxSafeRandomCrop": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._misc.Lambda": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._misc.MaskDropout": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._misc.RandomCropNearBBox": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._misc.RandomSizedBBoxSafeCrop": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._photometric.ColorJitter": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._photometric.FromFloat": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._photometric.Normalize": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._photometric.ToFloat": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._presets.AutoTransformsPreset": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._presets.Detection": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._presets.ImageClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._presets.ImageClassificationAugment": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._presets.Pose": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._presets.Segmentation": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._presets.TransformsPreset": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.Affine": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.D4": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.Flip": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.Perspective": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.RandomGridShuffle": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.RandomRotate90": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.RandomScale": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.Rotate": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.SafeRotate": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.ShiftScaleRotate": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.utils.transforms._spatial.Transpose": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
+  "lucid.weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ddpm._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ddpm._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.alexnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.alexnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.convnext._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.crossvit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cspnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.cvt._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.densenet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.detr._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.detr._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientformer._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.efficientnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.faster_rcnn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.faster_rcnn._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.fcn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.fcn._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.googlenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.googlenet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_next._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_resnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask2former._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask_rcnn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mask_rcnn._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maxvit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v2._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v3._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v3._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnest._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.senet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.sknet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.sknet._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.swin._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vgg._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.xception._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.xception._weights"
+    }
+  ],
+  "lucid.weights._base.WeightEntry": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.weights._loading"
+    }
+  ],
+  "lucid.weights._base.WeightsEnum": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.weights._loading"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.weights._registry"
+    }
+  ],
+  "lucid.weights._hub.download": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.weights._loading"
+    }
+  ],
+  "lucid.weights._loading.load_weight_entry": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    }
+  ],
+  "lucid.weights._loading.resolve_weights": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    }
+  ],
+  "lucid.weights._registry.get_weight": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    }
+  ],
+  "lucid.weights._registry.list_pretrained": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    }
+  ],
+  "lucid.weights._registry.register_weights": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
+    }
+  ],
+  "lucid.weights._registry.weights_for": [
+    {
+      "kind": "module",
+      "module": "lucid.weights"
     }
   ]
 }

@@ -16,7 +16,8 @@
     "lint": "eslint",
     "build:api": "python3 scripts/build-api-data.py",
     "build:api:module": "python3 scripts/build-api-data.py --module",
-    "validate:math": "node scripts/validate-math.mjs"
+    "validate:math": "node scripts/validate-math.mjs",
+    "audit:docs": "node scripts/audit-docs.mjs"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.2.8",
@@ -57,6 +58,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "node-html-parser": "^7.1.0",
     "typescript": "^5"
   }
 }

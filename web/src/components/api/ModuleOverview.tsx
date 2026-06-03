@@ -1,5 +1,7 @@
 import type * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/Card";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { FunctionCard } from "./FunctionSignature";
 import { ClassCard, ClassDoc } from "./ClassDoc";
 import { MathText } from "./MathText";
@@ -7,11 +9,68 @@ import { AnchorLink } from "./AnchorLink";
 import { ViewModeToggle } from "./ViewModeToggle";
 import type { ApiModule, ApiClassModule, ApiClass, FamilyGroup } from "@/lib/types";
 import { isApiClass, isApiFunction, isApiModule } from "@/lib/types";
-import { loadApiData } from "@/lib/api-loader";
+import { loadApiData, getAllModuleSlugs } from "@/lib/api-loader";
+import { packageLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 interface ModuleOverviewProps {
   data: ApiModule | ApiClassModule;
+}
+
+/** Direct documented sub-packages of a module slug: every slug exactly one
+ *  dotted level deeper that is itself a documented module.  This is the single
+ *  rule that surfaces sub-packages as cards in the main content for ANY package
+ *  with children — Model Zoo (Vision/Text/Generative → families), Utils
+ *  (Data/Tokenizers/Transforms), NN (Functional/Init/…), etc.  No per-package
+ *  special-casing; the card content adapts (rich model-family card when the
+ *  child carries ``@model_family_meta``, plain package card otherwise). */
+function directSubpackages(parentSlug: string): FamilyGroup[] {
+  const prefix = `${parentSlug}.`;
+  return getAllModuleSlugs()
+    .filter((s) => s.startsWith(prefix) && !s.slice(prefix.length).includes("."))
+    .map((slug) => ({ slug, label: packageLabel(slug) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+interface SubpackageSection {
+  title: string;
+  groups: FamilyGroup[];
+}
+
+/** Group a module's sub-package cards into titled sections.  The general rule
+ *  is one alphabetical "Sub-packages" section.  Model Zoo is the one curated
+ *  exception: the content families (Vision → Text → Generative, in that order)
+ *  sit up top under "Model Families", and the ``lucid.models.weights``
+ *  infrastructure package gets its own "Infrastructure" section below — it's
+ *  porting substrate, not a model family. */
+function sectionSubpackages(
+  parentSlug: string,
+  children: FamilyGroup[],
+): SubpackageSection[] {
+  if (children.length === 0) return [];
+
+  if (parentSlug === "lucid.models") {
+    const FAMILY_ORDER = [
+      "lucid.models.vision",
+      "lucid.models.text",
+      "lucid.models.generative",
+    ];
+    const rank = (slug: string) => {
+      const i = FAMILY_ORDER.indexOf(slug);
+      return i === -1 ? FAMILY_ORDER.length : i;
+    };
+    const families = children
+      .filter((c) => FAMILY_ORDER.includes(c.slug))
+      .sort((a, b) => rank(a.slug) - rank(b.slug));
+    const infra = children.filter((c) => !FAMILY_ORDER.includes(c.slug));
+    const sections: SubpackageSection[] = [];
+    if (families.length) sections.push({ title: "Model Families", groups: families });
+    if (infra.length) sections.push({ title: "Infrastructure", groups: infra });
+    return sections;
+  }
+
+  const title = parentSlug.startsWith("lucid.models") ? "Model Families" : "Sub-packages";
+  return [{ title, groups: children }];
 }
 
 export async function ModuleOverview({ data }: ModuleOverviewProps) {
@@ -45,6 +104,14 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
 
   const classes   = data.members.filter(isApiClass);
   const functions = data.members.filter(isApiFunction);
+
+  // Sub-package cards (Model Zoo families, Utils sub-packages, …).  Computed
+  // generically from the slug hierarchy — no per-package config — then split
+  // into titled sections (Model Zoo separates families from infrastructure).
+  const subpackageSections = sectionSubpackages(
+    data.slug,
+    directSubpackages(data.slug),
+  );
 
   // Family-leaf pages (e.g. lucid.models.vision.resnet) carry the full
   // ``citation`` + ``theory`` extracted from ``@model_family_meta``.
@@ -100,9 +167,9 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
           )}
         </section>
       )}
-      {data.family_groups && data.family_groups.length > 0 && (
-        <FamilyGroups groups={data.family_groups} />
-      )}
+      {subpackageSections.map((sec) => (
+        <SubpackageGrid key={sec.title} groups={sec.groups} title={sec.title} />
+      ))}
       {classes.length > 0 && (
         <MemberSection title="Classes" slug={data.slug} accent="primary">
           {classes.map((cls) => (
@@ -125,8 +192,9 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
 // Family groups (used by lucid.models to surface vision/text/generative)
 // ---------------------------------------------------------------------------
 
-interface FamilyGroupsProps {
+interface SubpackageGridProps {
   groups: FamilyGroup[];
+  title: string;
 }
 
 interface FamilyCardData extends FamilyGroup {
@@ -139,7 +207,7 @@ interface FamilyCardData extends FamilyGroup {
   unit: "members" | "families";
 }
 
-function FamilyGroups({ groups }: FamilyGroupsProps) {
+function SubpackageGrid({ groups, title }: SubpackageGridProps) {
   const cards: FamilyCardData[] = groups.map((g) => {
     let canonicalName = g.label;
     let citation: string | null = null;
@@ -179,9 +247,7 @@ function FamilyGroups({ groups }: FamilyGroupsProps) {
 
   return (
     <section className="mb-10">
-      <h2 className="text-xs font-semibold tracking-widest uppercase mb-3 text-lucid-text-disabled">
-        Model Families
-      </h2>
+      <SectionHeading>{title}</SectionHeading>
       <div className="space-y-4">
         {cards.map((c) => (
           <FamilyCard key={c.slug} card={c} />
@@ -308,10 +374,7 @@ function FamilyCard({ card }: { card: FamilyCardData }) {
   const theoryIntro = card.theory ? firstParagraph(card.theory) : null;
   const hasFallback = !theoryIntro && card.fallbackSummary;
   return (
-    <a
-      href={`/api/${card.slug}`}
-      className="group block rounded-lg border border-lucid-border bg-lucid-surface/40 hover:bg-lucid-surface hover:border-lucid-primary/40 transition-colors"
-    >
+    <Card href={`/api/${card.slug}`}>
       <header className="flex flex-wrap items-center gap-3 px-5 pt-4 pb-3 border-b border-lucid-border/60">
         <span className="text-[10px] font-semibold tracking-widest uppercase text-api-class/70">
           family
@@ -344,7 +407,7 @@ function FamilyCard({ card }: { card: FamilyCardData }) {
           </p>
         )}
       </div>
-    </a>
+    </Card>
   );
 }
 
@@ -455,13 +518,10 @@ function MemberSection({ title, children }: MemberSectionProps) {
   const id = _sectionId(title);
   return (
     <section id={id} className="group mb-10 scroll-mt-24">
-      <h2
-        id={id}
-        className="flex items-center gap-2 text-xs font-semibold tracking-widest uppercase mb-3 text-lucid-text-disabled"
-      >
+      <SectionHeading id={id} className="flex items-center gap-2">
         {title}
         <AnchorLink id={id} />
-      </h2>
+      </SectionHeading>
       <div className="space-y-2">{children}</div>
     </section>
   );

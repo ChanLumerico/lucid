@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { SeeAlsoItem } from "@/lib/types";
-import { getAllModuleSlugs } from "@/lib/api-loader";
+import { getAllModuleSlugs, loadApiData } from "@/lib/api-loader";
+import { isApiModule, isApiClassModule } from "@/lib/types";
 import { MathText } from "./MathText";
 
 interface SeeAlsoBlockProps {
@@ -19,6 +20,17 @@ interface SeeAlsoBlockProps {
  *       (``dropout`` → ``/api/lucid.nn.functional/dropout``) — best-effort.
  *    4. Otherwise: return ``null`` and the renderer falls back to
  *       plain text. */
+function moduleHasMember(slug: string, leaf: string): boolean {
+  try {
+    const data = loadApiData(slug);
+    if (isApiModule(data)) return data.members.some((m) => m.name === leaf);
+    if (isApiClassModule(data)) return data.methods.some((m) => m.name === leaf);
+  } catch {
+    // Missing JSON — treat as no member.
+  }
+  return false;
+}
+
 function resolveLink(name: string, slugs: Set<string>): string | null {
   if (slugs.has(name)) return `/api/${name}`;
   // Try splitting from the right: longest possible module slug + leaf.
@@ -27,7 +39,11 @@ function resolveLink(name: string, slugs: Set<string>): string | null {
     const candidate = parts.slice(0, i).join(".");
     if (slugs.has(candidate)) {
       const leaf = parts.slice(i).join(".");
-      return `/api/${candidate}/${leaf}`;
+      // Only link when the leaf is an actually-emitted member — otherwise the
+      // detail page doesn't exist and the link 404s.  A dotted leaf (a private
+      // module path like ``_meta.model_family_meta``) is never a member, so it
+      // correctly falls through to the plain-text rendering below.
+      return moduleHasMember(candidate, leaf) ? `/api/${candidate}/${leaf}` : null;
     }
   }
   return null;

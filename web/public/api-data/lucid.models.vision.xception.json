@@ -3,7 +3,7 @@
   "name": "xception",
   "path": "lucid.models.vision.xception",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/__init__.py#L1",
   "members": [
     {
       "name": "XceptionConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "XceptionConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "Xception(config: XceptionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L369",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L372",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: XceptionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L453",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L456",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L466",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L469",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L469",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L472",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L472",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L475",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -157,7 +157,7 @@
         }
       ],
       "summary": "Xception feature-extracting backbone (no classification head).",
-      "extended": "Implements the \"Extreme Inception\" topology from Chollet,\n\"Xception: Deep Learning with Depthwise Separable Convolutions\",\nCVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  The architecture replaces every\nInception module of Inception-v3 with a depthwise separable\nconvolution — the limiting case of an Inception block in which\nevery output channel of the pointwise convolution receives its\nown independent spatial filter.  This makes the cross-channel\nand spatial correlations *fully decoupled*, dramatically\nreducing parameters and FLOPs:\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\longrightarrow\\;\n    M \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\nThe body is organised into three phases — *entry flow* (3\nblocks, with 1×1 strided residuals and channel doubling from\n64 → 728), *middle flow* (8 identical 728-ch blocks with\nadditive identity shortcuts), and *exit flow* (1 strided\ntransition block plus two final separable convolutions\nexpanding to 1536 → 2048 channels).  Designed for a 299×299\ninput — the same crop size as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
+      "extended": "Implements the \"Extreme Inception\" topology from Chollet,\n\"Xception: Deep Learning with Depthwise Separable Convolutions\",\nCVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  The architecture replaces every\nInception module of Inception-v3 with a depthwise separable\nconvolution — the limiting case of an Inception block in which\nevery output channel of the pointwise convolution receives its\nown independent spatial filter.  This makes the cross-channel\nand spatial correlations *fully decoupled*, dramatically\nreducing parameters and FLOPs:\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\longrightarrow\\;\n    M \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\n\nThe body is organised into three phases — *entry flow* (3\nblocks, with 1×1 strided residuals and channel doubling from\n64 → 728), *middle flow* (8 identical 728-ch blocks with\nadditive identity shortcuts), and *exit flow* (1 strided\ntransition block plus two final separable convolutions\nexpanding to 1536 → 2048 channels).  Designed for a 299×299\ninput — the same crop size as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
       "parameters": [
         {
           "name": "config",
@@ -240,7 +240,7 @@
       ],
       "labels": [],
       "signature": "XceptionForImageClassification(config: XceptionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L481",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L484",
       "subcategory": "model",
       "methods": [
         {
@@ -249,7 +249,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: XceptionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L540",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L543",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -271,7 +271,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L546",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L549",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -304,7 +304,7 @@
         "Run inference at the native 299×299 input resolution:\n>>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls()\n>>> x = lucid.randn(4, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)"
       ],
       "notes": [
-        "The classification flow is\n\n$$\n\\text{logits} = W \\,\\operatorname{Drop}\\!\\left(\n    \\operatorname{GAP}(\\,\\mathrm{backbone}(x)\\,)\n\\right) + b.\n$$\nChollet (2017) reports 79.0% top-1 ImageNet validation\naccuracy with this configuration at the 299×299 input\nresolution, edging out Inception-v3's 78.2% at the same\nparameter count (~22.9M)."
+        "The classification flow is\n\n\n\n$$\n\\text{logits} = W \\,\\operatorname{Drop}\\!\\left(\n    \\operatorname{GAP}(\\,\\mathrm{backbone}(x)\\,)\n\\right) + b.\n$$\n\nChollet (2017) reports 79.0% top-1 ImageNet validation\naccuracy with this configuration at the 299×299 input\nresolution, edging out Inception-v3's 78.2% at the same\nparameter count (~22.9M)."
       ],
       "attributes": [
         {
@@ -334,7 +334,7 @@
       "bases": [],
       "labels": [],
       "signature": "XceptionOutput(logits: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L255",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L255",
       "subcategory": "model",
       "methods": [
         {
@@ -343,7 +343,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -392,7 +392,7 @@
       "kind": "function",
       "labels": [],
       "signature": "xception(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_pretrained.py#L13",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_pretrained.py#L15",
       "subcategory": "pretrained",
       "summary": "Xception feature-extracting backbone (no classification head).",
       "extended": "Builds an `Xception` with the paper-cited \"Extreme\nInception\" topology from Chollet, 2017: a 2-conv stem, three\nentry-flow blocks (1×1 strided residuals with channel\nprogression 64 → 128 → 256 → 728), eight middle-flow blocks at\n728 channels, one exit-flow transition block (728 → 1024),\nand two final separable convolutions expanding to 1536 → 2048\nchannels.  Approximately 22.9M parameters — the same budget as\nInception-v3 but with depthwise separable convolutions\nthroughout.",
@@ -423,679 +423,30 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "Xception",
-        "type": "Xception",
-        "params": 20806952,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "conv1",
-            "type": "Conv2d",
-            "params": 864,
-            "own_params": 864,
-            "children": []
-          },
-          {
-            "name": "bn1",
-            "type": "BatchNorm2d",
-            "params": 64,
-            "own_params": 64,
-            "children": []
-          },
-          {
-            "name": "conv2",
-            "type": "Conv2d",
-            "params": 18432,
-            "own_params": 18432,
-            "children": []
-          },
-          {
-            "name": "bn2",
-            "type": "BatchNorm2d",
-            "params": 128,
-            "own_params": 128,
-            "children": []
-          },
-          {
-            "name": "block1",
-            "type": "_EntryBlock",
-            "params": 35264,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 26816,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_SepConvOp",
-                    "params": 8768,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 576,
-                        "own_params": 576,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 8192,
-                        "own_params": 8192,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "_SepConvOp",
-                    "params": 17536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1152,
-                        "own_params": 1152,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "4",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  },
-                  {
-                    "name": "5",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 8192,
-                "own_params": 8192,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 256,
-                "own_params": 256,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "block2",
-            "type": "_EntryBlock",
-            "params": 136064,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 102784,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 33920,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1152,
-                        "own_params": 1152,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 67840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 2304,
-                        "own_params": 2304,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 32768,
-                "own_params": 32768,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 512,
-                "own_params": 512,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "block3",
-            "type": "_EntryBlock",
-            "params": 915944,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 728120,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 188672,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 2304,
-                        "own_params": 2304,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 186368,
-                        "own_params": 186368,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 186368,
-                "own_params": 186368,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 1456,
-                "own_params": 1456,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "block4",
-            "type": "_MiddleBlock",
-            "params": 1613976,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 1613976,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "7",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "8",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  }
-                ]
-              }
-            ],
-            "repeat": 8
-          },
-          {
-            "name": "block12",
-            "type": "_ExitBlock",
-            "params": 2039584,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 1292064,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 752024,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 745472,
-                        "own_params": 745472,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 745472,
-                "own_params": 745472,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 2048,
-                "own_params": 2048,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "conv3",
-            "type": "_ExitSepConv",
-            "params": 1582080,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 9216,
-                "own_params": 9216,
-                "children": []
-              },
-              {
-                "name": "pointwise",
-                "type": "Conv2d",
-                "params": 1572864,
-                "own_params": 1572864,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "bn3",
-            "type": "BatchNorm2d",
-            "params": 3072,
-            "own_params": 3072,
-            "children": []
-          },
-          {
-            "name": "conv4",
-            "type": "_ExitSepConv",
-            "params": 3159552,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 13824,
-                "own_params": 13824,
-                "children": []
-              },
-              {
-                "name": "pointwise",
-                "type": "Conv2d",
-                "params": 3145728,
-                "own_params": 3145728,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "bn4",
-            "type": "BatchNorm2d",
-            "params": 4096,
-            "own_params": 4096,
-            "children": []
-          },
-          {
-            "name": "avgpool",
-            "type": "AdaptiveAvgPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "xception_cls",
       "path": "lucid.models.vision.xception._pretrained.xception_cls",
       "kind": "function",
       "labels": [],
-      "signature": "xception_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/xception/_pretrained.py#L70",
+      "signature": "xception_cls(pretrained: bool | str = False, weights: XceptionWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_pretrained.py#L72",
       "subcategory": "pretrained",
       "summary": "Xception image classifier (backbone + dropout + linear head).",
       "extended": "Builds an `XceptionForImageClassification` with the\ncanonical Xception backbone (Chollet, 2017) followed by\ndropout ($p = 0.5$) and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\nApproximately 22.9M parameters and 79.0% ImageNet-1k top-1\naccuracy at 299×299 (paper, Table 5) — outperforming\nInception-v3 at the same parameter budget.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag (`XceptionWeights.TF_IN1K`); a tag\nstring (e.g. `\"TF_IN1K\"`) → that specific checkpoint.\nMutually exclusive with `weights` (which wins if both are\ngiven).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(XceptionWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member, e.g.\n`XceptionWeights.TF_IN1K`.  Takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1106,695 +457,42 @@
       ],
       "returns": {
         "annotation": "XceptionForImageClassification",
-        "description": "Classifier with the canonical Xception configuration\napplied (or with `overrides` merged on top of it)."
+        "description": "Classifier with the canonical Xception configuration\napplied (or with `overrides` merged on top of it),\noptionally initialised from pretrained weights."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
+        ">>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = xception_cls(pretrained=True)            # DEFAULT tag\n>>> from lucid.models.vision.xception import XceptionWeights\n>>> model = xception_cls(weights=XceptionWeights.TF_IN1K)"
       ],
       "notes": [
-        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)), Table 5."
+        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)), Table 5.  Pretrained\nweights are converted from timm's `legacy_xception.tf_in1k` and\nhosted on the Hugging Face Hub under `lucid-dl/xception`.  The\neval preset is 299 crop / 333 resize / bicubic / mean=std=0.5 (not\nImageNet stats)."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "XceptionForImageClassification",
-        "type": "XceptionForImageClassification",
-        "params": 22855952,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "conv1",
-            "type": "Conv2d",
-            "params": 864,
-            "own_params": 864,
-            "children": []
-          },
-          {
-            "name": "bn1",
-            "type": "BatchNorm2d",
-            "params": 64,
-            "own_params": 64,
-            "children": []
-          },
-          {
-            "name": "conv2",
-            "type": "Conv2d",
-            "params": 18432,
-            "own_params": 18432,
-            "children": []
-          },
-          {
-            "name": "bn2",
-            "type": "BatchNorm2d",
-            "params": 128,
-            "own_params": 128,
-            "children": []
-          },
-          {
-            "name": "block1",
-            "type": "_EntryBlock",
-            "params": 35264,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 26816,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_SepConvOp",
-                    "params": 8768,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 576,
-                        "own_params": 576,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 8192,
-                        "own_params": 8192,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "_SepConvOp",
-                    "params": 17536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1152,
-                        "own_params": 1152,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "4",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  },
-                  {
-                    "name": "5",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 8192,
-                "own_params": 8192,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 256,
-                "own_params": 256,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "block2",
-            "type": "_EntryBlock",
-            "params": 136064,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 102784,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 33920,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1152,
-                        "own_params": 1152,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 67840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 2304,
-                        "own_params": 2304,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 32768,
-                "own_params": 32768,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 512,
-                "own_params": 512,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "block3",
-            "type": "_EntryBlock",
-            "params": 915944,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 728120,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 188672,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 2304,
-                        "own_params": 2304,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 186368,
-                        "own_params": 186368,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 186368,
-                "own_params": 186368,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 1456,
-                "own_params": 1456,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "block4",
-            "type": "_MiddleBlock",
-            "params": 1613976,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 1613976,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "7",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "8",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  }
-                ]
-              }
-            ],
-            "repeat": 8
-          },
-          {
-            "name": "block12",
-            "type": "_ExitBlock",
-            "params": 2039584,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "rep",
-                "type": "Sequential",
-                "params": 1292064,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "_SepConvOp",
-                    "params": 536536,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 529984,
-                        "own_params": 529984,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "2",
-                    "type": "BatchNorm2d",
-                    "params": 1456,
-                    "own_params": 1456,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "_SepConvOp",
-                    "params": 752024,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 6552,
-                        "own_params": 6552,
-                        "children": []
-                      },
-                      {
-                        "name": "pointwise",
-                        "type": "Conv2d",
-                        "params": 745472,
-                        "own_params": 745472,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "5",
-                    "type": "BatchNorm2d",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "skip",
-                "type": "Conv2d",
-                "params": 745472,
-                "own_params": 745472,
-                "children": []
-              },
-              {
-                "name": "skipbn",
-                "type": "BatchNorm2d",
-                "params": 2048,
-                "own_params": 2048,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "conv3",
-            "type": "_ExitSepConv",
-            "params": 1582080,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 9216,
-                "own_params": 9216,
-                "children": []
-              },
-              {
-                "name": "pointwise",
-                "type": "Conv2d",
-                "params": 1572864,
-                "own_params": 1572864,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "bn3",
-            "type": "BatchNorm2d",
-            "params": 3072,
-            "own_params": 3072,
-            "children": []
-          },
-          {
-            "name": "conv4",
-            "type": "_ExitSepConv",
-            "params": 3159552,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 13824,
-                "own_params": 13824,
-                "children": []
-              },
-              {
-                "name": "pointwise",
-                "type": "Conv2d",
-                "params": 3145728,
-                "own_params": 3145728,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "bn4",
-            "type": "BatchNorm2d",
-            "params": 4096,
-            "own_params": 4096,
-            "children": []
-          },
-          {
-            "name": "avgpool",
-            "type": "AdaptiveAvgPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Sequential",
-            "params": 2049000,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Dropout",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "Linear",
-                "params": 2049000,
-                "own_params": 2049000,
-                "children": []
-              }
-            ]
-          }
-        ]
-      }
+      "see_also": []
+    },
+    {
+      "name": "XceptionWeights",
+      "path": "lucid.models.vision.xception._weights.XceptionWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "XceptionWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/xception/_weights.py#L25",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.xception_cls`.",
+      "extended": "Ships a single ImageNet-1k checkpoint (`TF_IN1K`) converted\nfrom timm's `legacy_xception.tf_in1k`, re-hosted under\n`huggingface.co/lucid-dl/xception`.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
     }
   ],
   "summary": "Xception family — Chollet, 2017.",

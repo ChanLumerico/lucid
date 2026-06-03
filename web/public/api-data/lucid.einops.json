@@ -3,7 +3,7 @@
   "name": "einops",
   "path": "lucid.einops",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/einops/__init__.py#L1",
   "members": [
     {
       "name": "rearrange",
@@ -11,7 +11,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rearrange(tensor: Tensor, pattern: str, axes_lengths: int = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L14",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/einops/__init__.py#L14",
       "subcategory": null,
       "summary": "Rearrange axes of `tensor` according to an einops pattern.",
       "extended": "Performs arbitrary axis manipulation — transpose, reshape,\ncomposition, and decomposition — expressed in a single readable\npattern string. The notation makes the intent explicit and removes\nthe chain of `transpose`/`view` calls that obscure dimensionality\ntransforms in raw tensor code.",
@@ -56,7 +56,7 @@
       "kind": "function",
       "labels": [],
       "signature": "reduce(tensor: Tensor, pattern: str, reduction: str, axes_lengths: int = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L55",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/einops/__init__.py#L55",
       "subcategory": null,
       "summary": "Reduce `tensor` along axes implied by an einops pattern.",
       "extended": "Generalises standard `sum` / `mean` / `max` / `min` /\n`prod` reductions to arbitrary axes selected by symbolic pattern.\nAny axis present on the left-hand side of `->` but absent on the\nright-hand side is collapsed by the chosen reduction.",
@@ -95,7 +95,7 @@
         ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.reduce(x, \"b h w -> b w\", \"mean\").shape\n(2, 4)"
       ],
       "notes": [
-        "Conceptually equivalent to a permutation followed by a reduction\nalong contiguous trailing axes. For `reduction=\"mean\"` the result\nis\n\n$$\ny_{b w} = \\frac{1}{H} \\sum_{h=1}^{H} x_{b h w}.\n$$"
+        "Conceptually equivalent to a permutation followed by a reduction\nalong contiguous trailing axes. For `reduction=\"mean\"` the result\nis\n\n\n\n$$\ny_{b w} = \\frac{1}{H} \\sum_{h=1}^{H} x_{b h w}.\n$$"
       ],
       "attributes": [],
       "warns": [],
@@ -107,7 +107,7 @@
       "kind": "function",
       "labels": [],
       "signature": "repeat(tensor: Tensor, pattern: str, axes_lengths: int = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L105",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/einops/__init__.py#L105",
       "subcategory": null,
       "summary": "Repeat `tensor` along new or existing axes via an einops pattern.",
       "extended": "Provides a single notation for both tiling along existing axes and\nbroadcasting into entirely new axes. The pattern's right-hand side\nenumerates the desired output axes; any axis appearing on the right\nbut not on the left is introduced and must be given an explicit\nlength through `**axes_lengths`.",
@@ -140,7 +140,7 @@
         ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.repeat(x, \"b h w -> b h w c\", c=5).shape\n(2, 3, 4, 5)"
       ],
       "notes": [
-        "For an axis $c$ of size $C$ introduced via `repeat`,\n\n$$\ny_{b h w c} = x_{b h w}, \\quad c = 1, \\ldots, C.\n$$\nNo data is materialised until reading — internally the new axis is\nexpressed as a broadcast / stride manipulation when possible."
+        "For an axis $c$ of size $C$ introduced via `repeat`,\n\n\n\n$$\ny_{b h w c} = x_{b h w}, \\quad c = 1, \\ldots, C.\n$$\n\nNo data is materialised until reading — internally the new axis is\nexpressed as a broadcast / stride manipulation when possible."
       ],
       "attributes": [],
       "warns": [],
@@ -152,7 +152,7 @@
       "kind": "function",
       "labels": [],
       "signature": "einsum(equation: str, operands: Tensor = ())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/einops/__init__.py#L149",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/einops/__init__.py#L149",
       "subcategory": null,
       "summary": "Evaluate an Einstein-summation expression over the given tensors.",
       "extended": "Implements the general tensor contraction operator: each input is\nindexed by labels declared in `equation` and the output retains\nonly the labels appearing on the right-hand side. Repeated labels\nare summed; matching labels broadcast.",
@@ -179,7 +179,7 @@
         ">>> import lucid\n>>> a = lucid.randn(2, 3)\n>>> b = lucid.randn(3, 4)\n>>> lucid.einops.einsum(\"ij,jk->ik\", a, b).shape\n(2, 4)"
       ],
       "notes": [
-        "Matrix multiplication is the canonical example: `\"ij,jk->ik\"`\nrealises\n\n$$\nC_{ik} = \\sum_{j} A_{ij} \\, B_{jk}.\n$$\nMore generally, einsum expresses traces (`\"ii->\"`), batched\ncontractions (`\"bij,bjk->bik\"`), and outer products\n(`\"i,j->ij\"`) within one consistent notation."
+        "Matrix multiplication is the canonical example: `\"ij,jk->ik\"`\nrealises\n\n\n\n$$\nC_{ik} = \\sum_{j} A_{ij} \\, B_{jk}.\n$$\n\nMore generally, einsum expresses traces (`\"ii->\"`), batched\ncontractions (`\"bij,bjk->bik\"`), and outer products\n(`\"i,j->ij\"`) within one consistent notation."
       ],
       "attributes": [],
       "warns": [],

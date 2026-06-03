@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { buildIssueUrl } from "@/lib/error-report";
 
@@ -55,7 +56,7 @@ export default function ApiError({
       <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
         <Button onClick={reset}>Try again</Button>
         <Button variant="secondary" asChild>
-          <a href="/api">API home</a>
+          <Link href="/api">API home</Link>
         </Button>
         <Button variant="ghost" asChild>
           <a href={issueUrl} target="_blank" rel="noopener noreferrer">

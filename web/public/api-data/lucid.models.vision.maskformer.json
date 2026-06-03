@@ -3,7 +3,7 @@
   "name": "maskformer",
   "path": "lucid.models.vision.maskformer",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/__init__.py#L1",
   "members": [
     {
       "name": "MaskFormerConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerConfig(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -132,7 +132,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerForSemanticSegmentation(config: MaskFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/_model.py#L317",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_model.py#L678",
       "subcategory": "model",
       "methods": [
         {
@@ -141,7 +141,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MaskFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/_model.py#L403",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_model.py#L753",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -163,7 +163,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: dict[str, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/_model.py#L445",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_model.py#L782",
           "subcategory": "model",
           "summary": "Run MaskFormer.",
           "extended": null,
@@ -183,7 +183,7 @@
           ],
           "returns": {
             "annotation": "SemanticSegmentationOutput",
-            "description": "`SemanticSegmentationOutput`:\n`logits`: (B, K+1, H, W) per-pixel class logits.\n`loss`:   training loss when targets provided."
+            "description": "`SemanticSegmentationOutput`:\n`logits`: (B, K, H, W) per-pixel class logits (no-object\n          slot dropped — matches the reference semantic\n          post-processing).\n`loss`:   training loss when targets provided."
           },
           "raises": [],
           "examples": [],
@@ -193,8 +193,8 @@
           "see_also": []
         }
       ],
-      "summary": "MaskFormer semantic / panoptic segmentation model (Cheng et al., NeurIPS 2021).",
-      "extended": "Recasts semantic segmentation as **mask classification**: instead of\nper-pixel cross-entropy, the model predicts a fixed set of\n$N$ (mask, class-probability) pairs, computes the per-pixel\nclass probability as\n\n$$\np_\\mathrm{px}(c) = \\sum_{i=1}^{N} p_i(c)\\, m_i(\\mathrm{px}),\n$$\nand supervises the set with bipartite (Hungarian) matching to ground-\ntruth masks.  This unification lets a single architecture handle\nsemantic, instance, and panoptic segmentation with the same training\nobjective — the breakthrough that the follow-up Mask2Former extends\nwith masked attention.\n\nArchitecturally: a ResNet backbone -> FPN-style pixel decoder\nproduces a per-pixel embedding of dimension `d_model`, and a\ntransformer decoder operates on $N$ query embeddings, attending\nto the encoder memory; sibling heads then produce $(N, K+1)$\nclass logits and $(N, d)$ mask embeddings.  Each query's binary\nmask is recovered by a dot product with the pixel embedding.",
+      "summary": "MaskFormer semantic-segmentation model (Cheng et al., NeurIPS 2021).",
+      "extended": "Recasts semantic segmentation as **mask classification**: instead of\nper-pixel cross-entropy, the model predicts a fixed set of\n$N$ (mask, class-probability) pairs, computes the per-pixel\nclass probability as\n\n$$\np_\\mathrm{px}(c) = \\sum_{i=1}^{N} p_i(c)\\, m_i(\\mathrm{px}),\n$$\n\nand supervises the set with bipartite (Hungarian) matching to ground-\ntruth masks.  This unification lets a single architecture handle\nsemantic, instance, and panoptic segmentation with the same training\nobjective — the breakthrough that the follow-up Mask2Former extends\nwith masked attention.\n\nArchitecturally: a ResNet backbone -> FPN-style pixel decoder\nproduces a per-pixel embedding of dimension `mask_feature_size`, and\na DETR-style transformer decoder operates on $N$ query\nembeddings, cross-attending to the projected backbone `C5` feature\nmap; sibling heads then produce $(N, K+1)$ class logits and a\n3-layer-MLP mask embedding.  Each query's binary mask is recovered by\na dot product with the pixel embedding.",
       "parameters": [
         {
           "name": "config",
@@ -206,10 +206,10 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet50\n>>> model = maskformer_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape   # (B, K + 1, H, W)\n(1, 151, 512, 512)"
+        ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet50\n>>> model = maskformer_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape   # (B, K, H, W)\n(1, 150, 512, 512)"
       ],
       "notes": [
-        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  The total\nloss combines a CE term over query class predictions and a per-mask\nbinary CE + dice term, summed only over the Hungarian-matched query\npermutation $\\hat{\\sigma}$:\n\n$$\n\\mathcal{L} = \\sum_{i=1}^{N}\n    \\bigl[\\mathcal{L}_\\mathrm{cls}\\bigl(c_i, p_{\\hat{\\sigma}(i)}\\bigr)\n    + \\mathbb{1}_{c_i \\ne \\varnothing}\\,\n      \\mathcal{L}_\\mathrm{mask}\\bigl(m_i, \\hat{m}_{\\hat{\\sigma}(i)}\\bigr)\n    \\bigr].\n$$\nFor semantic-segmentation inference the model collapses queries by\nsoftmax-weighted summation into a standard $(B, K + 1, H, W)$\nlogit map for direct argmax evaluation."
+        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  The total\nloss combines a CE term over query class predictions and a per-mask\nbinary CE + dice term, summed only over the Hungarian-matched query\npermutation $\\hat{\\sigma}$.\n\nFor semantic-segmentation inference the model drops the \"no-object\"\nslot and collapses queries by softmax-weighted summation into a\nstandard $(B, K, H, W)$ logit map for direct argmax evaluation."
       ],
       "attributes": [
         {
@@ -218,34 +218,24 @@
           "description": "Stored copy of the config that built this model."
         },
         {
-          "name": "backbone",
-          "annotation": "_ResNetBackbone",
-          "description": "ResNet trunk producing multi-scale features `C2-C5`."
+          "name": "pixel_level_module",
+          "annotation": "_PixelLevelModule",
+          "description": "ResNet `encoder` + FPN pixel `decoder` yielding the raw `C5`\nfeature and a per-pixel embedding $(B, d, H/4, W/4)$."
         },
         {
-          "name": "pixel_decoder",
-          "annotation": "_FPNPixelDecoder",
-          "description": "FPN-style top-down decoder yielding a per-pixel embedding\n$(B, d, H/4, W/4)$."
+          "name": "transformer_module",
+          "annotation": "_TransformerModule",
+          "description": "Learned queries + `input_projection` + a 6-layer DETR-style\ndecoder."
         },
         {
-          "name": "query_embed",
-          "annotation": "nn.Embedding",
-          "description": "Learned segmentation queries `(num_queries, d_model)`."
-        },
-        {
-          "name": "transformer_decoder",
-          "annotation": "nn.TransformerDecoder",
-          "description": "`num_decoder_layers`-layer transformer decoder applied to the\nqueries with memory drawn from the backbone's final stage."
-        },
-        {
-          "name": "class_head",
+          "name": "class_predictor",
           "annotation": "nn.Linear",
           "description": "Per-query $(K + 1)$ classification head (`+1` for the\n\"no object\" class)."
         },
         {
-          "name": "mask_embed",
-          "annotation": "nn.Linear",
-          "description": "Per-query embedding producing the dot-product mask weights."
+          "name": "mask_embedder",
+          "annotation": "_MaskEmbedder",
+          "description": "Per-query 3-layer MLP producing the dot-product mask weights."
         }
       ],
       "warns": [],
@@ -256,17 +246,23 @@
       "path": "lucid.models.vision.maskformer._pretrained.maskformer_resnet50",
       "kind": "function",
       "labels": [],
-      "signature": "maskformer_resnet50(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/_pretrained.py#L44",
+      "signature": "maskformer_resnet50(pretrained: bool | str = False, weights: MaskFormerResNet50Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_pretrained.py#L49",
       "subcategory": "pretrained",
       "summary": "MaskFormer with ResNet-50 backbone (Cheng et al., NeurIPS 2021).",
       "extended": "Builds a `MaskFormerForSemanticSegmentation` with the paper-cited\nResNet-50 configuration: 100 segmentation queries, a 6-layer transformer\ndecoder with `d_model = 256`, 8 attention heads, `dim_feedforward =\n2048`, and a 256-channel FPN pixel decoder.  Default targets ADE20K\n(150 semantic classes); reaches ADE20K validation mIoU of 44.5%\n(paper Table 3, MaskFormer-R50 row) — competitive with much heavier\nper-pixel baselines.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag (`MaskFormerResNet50Weights.ADE20K`); a\ntag string → that specific checkpoint.  Mutually exclusive with\n`weights` (which wins if both are given).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(MaskFormerResNet50Weights, optional, keyword - only)",
+          "description": "Explicit weights enum member.  Takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -281,733 +277,37 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet50\n>>> model = maskformer_resnet50(num_classes=21)\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n22"
+        ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet50\n>>> model = maskformer_resnet50(num_classes=21)\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n21"
       ],
       "notes": [
-        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  The\nunification of semantic / instance / panoptic under mask\nclassification is the conceptual key idea."
+        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  The\nunification of semantic / instance / panoptic under mask\nclassification is the conceptual key idea.  Pretrained weights are\nconverted from the `facebook/maskformer-resnet50-ade` checkpoint and\nhosted under `lucid-dl/maskformer-resnet-50`."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "MaskFormerForSemanticSegmentation",
-        "type": "MaskFormerForSemanticSegmentation",
-        "params": 36586711,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "backbone",
-            "type": "_ResNetBackbone",
-            "params": 23508032,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 9408,
-                "own_params": 9408,
-                "children": []
-              },
-              {
-                "name": "bn1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "pool",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "layer1",
-                "type": "Sequential",
-                "params": 215808,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 75008,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 16896,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 16384,
-                            "own_params": 16384,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 512,
-                            "own_params": 512,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 70400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "layer2",
-                "type": "Sequential",
-                "params": 1219584,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 379392,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 132096,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 131072,
-                            "own_params": 131072,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 280064,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 3
-                  }
-                ]
-              },
-              {
-                "name": "layer3",
-                "type": "Sequential",
-                "params": 7098368,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 1512448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 131072,
-                        "own_params": 131072,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 526336,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 524288,
-                            "own_params": 524288,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 1117184,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 5
-                  }
-                ]
-              },
-              {
-                "name": "layer4",
-                "type": "Sequential",
-                "params": 14964736,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 6039552,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 524288,
-                        "own_params": 524288,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 2101248,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 2097152,
-                            "own_params": 2097152,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 4096,
-                            "own_params": 4096,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 4462592,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "pixel_decoder",
-            "type": "_FPNPixelDecoder",
-            "params": 3410176,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "lat5",
-                "type": "Conv2d",
-                "params": 524544,
-                "own_params": 524544,
-                "children": []
-              },
-              {
-                "name": "lat4",
-                "type": "Conv2d",
-                "params": 262400,
-                "own_params": 262400,
-                "children": []
-              },
-              {
-                "name": "lat3",
-                "type": "Conv2d",
-                "params": 131328,
-                "own_params": 131328,
-                "children": []
-              },
-              {
-                "name": "lat2",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "out5",
-                "type": "Conv2d",
-                "params": 590080,
-                "own_params": 590080,
-                "children": [],
-                "repeat": 4
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "up",
-                "type": "Upsample",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "query_embed",
-            "type": "Embedding",
-            "params": 25600,
-            "own_params": 25600,
-            "children": []
-          },
-          {
-            "name": "transformer_decoder",
-            "type": "TransformerDecoder",
-            "params": 9472512,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "TransformerDecoderLayer",
-                "params": 1578752,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "self_attn",
-                    "type": "MultiheadAttention",
-                    "params": 263168,
-                    "own_params": 263168,
-                    "children": [],
-                    "repeat": 2
-                  },
-                  {
-                    "name": "linear1",
-                    "type": "Linear",
-                    "params": 526336,
-                    "own_params": 526336,
-                    "children": []
-                  },
-                  {
-                    "name": "linear2",
-                    "type": "Linear",
-                    "params": 524544,
-                    "own_params": 524544,
-                    "children": []
-                  },
-                  {
-                    "name": "norm1",
-                    "type": "LayerNorm",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": [],
-                    "repeat": 3
-                  },
-                  {
-                    "name": "dropout1",
-                    "type": "Dropout",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": [],
-                    "repeat": 4
-                  }
-                ],
-                "repeat": 6
-              }
-            ]
-          },
-          {
-            "name": "class_head",
-            "type": "Linear",
-            "params": 38807,
-            "own_params": 38807,
-            "children": []
-          },
-          {
-            "name": "mask_embed",
-            "type": "Linear",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
-          },
-          {
-            "name": "pixel_proj",
-            "type": "Conv2d",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "maskformer_resnet101",
       "path": "lucid.models.vision.maskformer._pretrained.maskformer_resnet101",
       "kind": "function",
       "labels": [],
-      "signature": "maskformer_resnet101(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/maskformer/_pretrained.py#L100",
+      "signature": "maskformer_resnet101(pretrained: bool | str = False, weights: MaskFormerResNet101Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_pretrained.py#L119",
       "subcategory": "pretrained",
       "summary": "MaskFormer with ResNet-101 backbone (Cheng et al., NeurIPS 2021).",
       "extended": "Builds a `MaskFormerForSemanticSegmentation` with the same\ntransformer head as `maskformer_resnet50` but a deeper ResNet-101\nbackbone (`[3, 4, 23, 3]` bottleneck blocks).  Reaches ADE20K\nvalidation mIoU of 45.5% (paper Table 3, MaskFormer-R101 row).",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag (`MaskFormerResNet101Weights.ADE20K`);\na tag string → that specific checkpoint.  Mutually exclusive with\n`weights` (which wins if both are given).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(MaskFormerResNet101Weights, optional, keyword - only)",
+          "description": "Explicit weights enum member.  Takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1022,716 +322,62 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet101\n>>> model = maskformer_resnet101()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n151"
+        ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet101\n>>> model = maskformer_resnet101()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n150"
       ],
       "notes": [
-        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  Switching\nbackbones is the only change versus `maskformer_resnet50`; all\ntransformer-head hyperparameters are shared."
+        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  Switching\nbackbones is the only change versus `maskformer_resnet50`; all\ntransformer-head hyperparameters are shared.  Pretrained weights are\nconverted from the `facebook/maskformer-resnet101-ade` checkpoint\nand hosted under `lucid-dl/maskformer-resnet-101`."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "MaskFormerForSemanticSegmentation",
-        "type": "MaskFormerForSemanticSegmentation",
-        "params": 55578839,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "backbone",
-            "type": "_ResNetBackbone",
-            "params": 42500160,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 9408,
-                "own_params": 9408,
-                "children": []
-              },
-              {
-                "name": "bn1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "pool",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "layer1",
-                "type": "Sequential",
-                "params": 215808,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 75008,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 16896,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 16384,
-                            "own_params": 16384,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 512,
-                            "own_params": 512,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 70400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "layer2",
-                "type": "Sequential",
-                "params": 1219584,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 379392,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 132096,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 131072,
-                            "own_params": 131072,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 280064,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 3
-                  }
-                ]
-              },
-              {
-                "name": "layer3",
-                "type": "Sequential",
-                "params": 26090496,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 1512448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 131072,
-                        "own_params": 131072,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 526336,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 524288,
-                            "own_params": 524288,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 1117184,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 22
-                  }
-                ]
-              },
-              {
-                "name": "layer4",
-                "type": "Sequential",
-                "params": 14964736,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 6039552,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 524288,
-                        "own_params": 524288,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 2101248,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 2097152,
-                            "own_params": 2097152,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 4096,
-                            "own_params": 4096,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 4462592,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "pixel_decoder",
-            "type": "_FPNPixelDecoder",
-            "params": 3410176,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "lat5",
-                "type": "Conv2d",
-                "params": 524544,
-                "own_params": 524544,
-                "children": []
-              },
-              {
-                "name": "lat4",
-                "type": "Conv2d",
-                "params": 262400,
-                "own_params": 262400,
-                "children": []
-              },
-              {
-                "name": "lat3",
-                "type": "Conv2d",
-                "params": 131328,
-                "own_params": 131328,
-                "children": []
-              },
-              {
-                "name": "lat2",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "out5",
-                "type": "Conv2d",
-                "params": 590080,
-                "own_params": 590080,
-                "children": [],
-                "repeat": 4
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "up",
-                "type": "Upsample",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "query_embed",
-            "type": "Embedding",
-            "params": 25600,
-            "own_params": 25600,
-            "children": []
-          },
-          {
-            "name": "transformer_decoder",
-            "type": "TransformerDecoder",
-            "params": 9472512,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "TransformerDecoderLayer",
-                "params": 1578752,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "self_attn",
-                    "type": "MultiheadAttention",
-                    "params": 263168,
-                    "own_params": 263168,
-                    "children": [],
-                    "repeat": 2
-                  },
-                  {
-                    "name": "linear1",
-                    "type": "Linear",
-                    "params": 526336,
-                    "own_params": 526336,
-                    "children": []
-                  },
-                  {
-                    "name": "linear2",
-                    "type": "Linear",
-                    "params": 524544,
-                    "own_params": 524544,
-                    "children": []
-                  },
-                  {
-                    "name": "norm1",
-                    "type": "LayerNorm",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": [],
-                    "repeat": 3
-                  },
-                  {
-                    "name": "dropout1",
-                    "type": "Dropout",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": [],
-                    "repeat": 4
-                  }
-                ],
-                "repeat": 6
-              }
-            ]
-          },
-          {
-            "name": "class_head",
-            "type": "Linear",
-            "params": 38807,
-            "own_params": 38807,
-            "children": []
-          },
-          {
-            "name": "mask_embed",
-            "type": "Linear",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
-          },
-          {
-            "name": "pixel_proj",
-            "type": "Conv2d",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
+    },
+    {
+      "name": "MaskFormerResNet50Weights",
+      "path": "lucid.models.vision.maskformer._weights.MaskFormerResNet50Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "MaskFormerResNet50Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_weights.py#L24",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.maskformer_resnet50`.",
+      "extended": "Single ADE20k semantic checkpoint converted from\n`facebook/maskformer-resnet50-ade` (Cheng et al., 2021; ~41.3M\nparams, 44.5 mIoU on the ADE20k validation set).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MaskFormerResNet101Weights",
+      "path": "lucid.models.vision.maskformer._weights.MaskFormerResNet101Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "MaskFormerResNet101Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/maskformer/_weights.py#L49",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.maskformer_resnet101`.",
+      "extended": "Single ADE20k semantic checkpoint converted from\n`facebook/maskformer-resnet101-ade` (Cheng et al., 2021; ~60.3M\nparams, 45.5 mIoU on the ADE20k validation set).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
     }
   ],
   "summary": "MaskFormer (Cheng et al., NeurIPS 2021).",
@@ -1746,7 +392,7 @@
   "see_also": [],
   "canonical_name": "MaskFormer",
   "citation": "Cheng, Bowen, et al. \"Per-Pixel Classification is Not All You Need for Semantic Segmentation.\" Advances in Neural Information Processing Systems, 2021.",
-  "theory": "MaskFormer recasts **semantic segmentation** as a\n*mask-classification* problem rather than the standard\nper-pixel-classification one.  Instead of predicting a\n$K$-way softmax at every pixel, the model emits $N$\nqueries; each query produces a class label and a binary mask,\nand the final segmentation is the soft sum\n\n\n\n$$\n\\mathrm{seg}_{k}[h, w] =\n    \\sum_{n=1}^{N} \\mathrm{softmax}(\\hat{c}_n)_k \\,\n    \\sigma(\\hat{m}_n[h, w]),\n$$\n\nwhere $\\hat{c}_n \\in \\mathbb{R}^{K+1}$ is the per-query\nclass logit and $\\hat{m}_n$ is its binary mask logit.  The\nargmax over $k$ yields the predicted label map.\n\nThe architecture has three modules:\n\n- **Pixel decoder** — an FPN-like up-sampler that produces a\n  per-pixel embedding $\\mathcal{E}_{\\mathrm{pixel}} \\in\n  \\mathbb{R}^{C_\\epsilon \\times H/4 \\times W/4}$.\n- **Transformer decoder** — $N$ learnable queries attend\n  to a flattened backbone feature, producing per-query\n  embeddings $\\mathcal{E}_{\\mathrm{query}} \\in\n  \\mathbb{R}^{N \\times C_\\epsilon}$.\n- **Heads** — a linear classifier on each query and a\n  dot-product $\\mathcal{E}_{\\mathrm{query}} \\cdot\n  \\mathcal{E}_{\\mathrm{pixel}}$ to produce per-query masks.\n\nTraining uses Hungarian matching (as in DETR) between predicted\nand ground-truth segments and combines cross-entropy on the\nclass logits with focal/BCE + Dice losses on the mask logits.\n\nThe key insight — that mask classification subsumes per-pixel\nclassification — also unifies *semantic* and *instance*\nsegmentation under one model, foreshadowing the more general\nMask2Former.",
+  "theory": "MaskFormer recasts **semantic segmentation** as a\n*mask-classification* problem rather than the standard\nper-pixel-classification one.  Instead of predicting a\n$K$-way softmax at every pixel, the model emits $N$\nqueries; each query produces a class label and a binary mask,\nand the final segmentation is the soft sum\n\n\n\n$$\n\\mathrm{seg}_{k}[h, w] =\n    \\sum_{n=1}^{N} \\mathrm{softmax}(\\hat{c}_n)_k \\,\n    \\sigma(\\hat{m}_n[h, w]),\n$$\n\nwhere $\\hat{c}_n \\in \\mathbb{R}^{K+1}$ is the per-query\nclass logit and $\\hat{m}_n$ is its binary mask logit.  The\nargmax over $k$ yields the predicted label map.\n\nThe architecture has three modules:\n\n- **Pixel decoder** — an FPN-like up-sampler that produces a\n  per-pixel embedding $\\mathcal{E}_{\\mathrm{pixel}} \\in \\mathbb{R}^{C_\\epsilon \\times H/4 \\times W/4}$.\n- **Transformer decoder** — $N$ learnable queries attend\n  to a flattened backbone feature, producing per-query\n  embeddings $\\mathcal{E}_{\\mathrm{query}} \\in \\mathbb{R}^{N \\times C_\\epsilon}$.\n- **Heads** — a linear classifier on each query and a\n  dot-product $\\mathcal{E}_{\\mathrm{query}} \\cdot \\mathcal{E}_{\\mathrm{pixel}}$ to produce per-query masks.\n\nTraining uses Hungarian matching (as in DETR) between predicted\nand ground-truth segments and combines cross-entropy on the\nclass logits with focal/BCE + Dice losses on the mask logits.\n\nThe key insight — that mask classification subsumes per-pixel\nclassification — also unifies *semantic* and *instance*\nsegmentation under one model, foreshadowing the more general\nMask2Former.",
   "tasks": [
     "semantic-segmentation"
   ]

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -25,6 +24,7 @@ import {
 } from "lucide-react";
 import { FadeIn, FadeInStagger } from "@/components/motion/FadeIn";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { loadApiData } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule } from "@/lib/types";
@@ -193,13 +193,7 @@ function ModuleCardLink({ mod }: { mod: ModuleCard }) {
   const bg = `color-mix(in srgb, ${ACCENT} 14%, transparent)`;
   const ring = `color-mix(in srgb, ${ACCENT} 38%, transparent)`;
   return (
-    <Link
-      href={`/api/${mod.slug}`}
-      className={cn(
-        "group block rounded-xl border border-lucid-border bg-lucid-surface/40",
-        "transition-colors hover:bg-lucid-surface hover:border-lucid-primary/40",
-      )}
-    >
+    <Card href={`/api/${mod.slug}`}>
       <div className="px-5 pt-4 pb-4 flex items-start gap-3">
         <span
           className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border"
@@ -227,7 +221,7 @@ function ModuleCardLink({ mod }: { mod: ModuleCard }) {
           </p>
         </div>
       </div>
-    </Link>
+    </Card>
   );
 }
 
@@ -267,7 +261,16 @@ export default function ApiPage() {
                   {category}
                 </h2>
               </FadeIn>
-              <FadeInStagger staggerDelay={0.04} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FadeInStagger
+                staggerDelay={0.04}
+                className={cn(
+                  "grid gap-3",
+                  // A single-module category renders one card; in a 2-col grid
+                  // that card fills only one column and reads as a stray
+                  // half-width tile.  Give lone cards the full row.
+                  modules.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2",
+                )}
+              >
                 {modules.map((mod) => (
                   <ModuleCardLink key={mod.slug} mod={mod} />
                 ))}

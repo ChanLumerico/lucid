@@ -28,6 +28,7 @@ import textwrap
 import threading
 import time
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 try:
@@ -456,60 +457,235 @@ _LUCID_NAME_OVERRIDES: dict[str, str] = _load_lucid_name_overrides()
 
 
 def _annotation_str(ann: Any) -> str | None:
-    """Convert a griffe annotation expression to a plain string."""
+    """Convert a griffe annotation expression to a plain string.
+
+    Strips reST inline markup — attribute / param annotations occasionally
+    carry prose-y type lines like ``Parameter, shape ``(N, *)``` that would
+    otherwise leak double-backticks into the rendered type pill."""
     if ann is None:
         return None
     try:
-        return str(ann)
+        return _rst_strip_for_code(str(ann))
     except Exception:
         return None
+
+
+def _rst_inline_markup(text: str) -> str:
+    """Non-math reST inline markup → markdown.  Shared by ``_rst_to_text``
+    (docstring bodies) and ``_rst_math_to_markdown`` (family ``theory`` /
+    ``citation`` blocks) so every prose surface gets identical treatment —
+    otherwise roles like ``:func:`` leak only on the family theory pages.
+
+    Order matters: hyperlinks first (they own the backticks), then
+    double-backtick code, then ``:cite:`` removal, then the generic role pass
+    (so a citation never collapses into stray inline code)."""
+    # reST external hyperlinks: `text <url>`_ / `text <url>`__ → [text](url).
+    # Must run before the single-backtick text reaches the markdown renderer,
+    # which would otherwise treat the whole ``text <url>`` as an inline-code
+    # span and leak the trailing ``_`` (the citation links in model docstrings).
+    text = re.sub(
+        r"`([^`<]+?)\s*<((?:https?|ftp|mailto):[^>]+)>`__?",
+        r"[\1](\2)",
+        text,
+    )
+    # Double-backtick code: ``code`` → `code`
+    text = re.sub(r"``([^`]+)``", r"`\1`", text)
+    # Remove citations first so the generic role pass below doesn't collapse
+    # them into stray inline code.  Covers :cite:`k`, :cite:t:`k`, :cite:p:`k`.
+    text = re.sub(r":cite:[a-z]*:?`[^`]+`", "", text)
+    # Cross-references / inline roles → `target`.  Generic over ANY Sphinx
+    # role (:class:`Foo`, :func:`bar`, :file:`p`, :py:meth:`x`, …) so a role we
+    # never enumerated can't leak to the reader as raw ``:role:`x``` text — it
+    # was an un-handled :file: role that surfaced on the compile page.
+    text = re.sub(
+        r":[a-zA-Z][\w.+-]*(?::[a-zA-Z][\w.+-]*)*:`~?([^`]+)`",
+        r"`\1`",
+        text,
+    )
+    # reST literal-block marker ``::`` at end of a line → ``:`` (the indented
+    # block that follows is already a 4-space code block markdown renders
+    # verbatim); a lone ``::`` line is dropped.  Only matches line-end so an
+    # inline ``std::vector`` mid-sentence is left intact.
+    text = re.sub(r"(\S)[ \t]*::([ \t]*(?:\n|$))", r"\1:\2", text)
+    text = re.sub(r"(?m)^[ \t]*::[ \t]*$", "", text)
+    return text
+
+
+def _rst_strip_for_code(text: str) -> str:
+    """Strip reST inline markup down to the *bare* token — for content that
+    renders inside a code block (Examples), where inline-code backticks would
+    show up literally.  ``:class:`BatchNorm1d``` → ``BatchNorm1d``."""
+    if not text:
+        return text
+    text = re.sub(
+        r"`([^`<]+?)\s*<((?:https?|ftp|mailto):[^>]+)>`__?", r"\1 (\2)", text
+    )
+    text = re.sub(r"``([^`]+)``", r"\1", text)
+    text = re.sub(r":cite:[a-z]*:?`[^`]+`", "", text)
+    text = re.sub(
+        r":[a-zA-Z][\w.+-]*(?::[a-zA-Z][\w.+-]*)*:`~?([^`]+)`", r"\1", text
+    )
+    # reST literal-block marker at line end (``form::`` → ``form:``); lone ``::``
+    # line dropped.  Inline ``std::vector`` mid-line is left intact.
+    text = re.sub(r"(\S)[ \t]*::([ \t]*(?:\n|$))", r"\1:\2", text)
+    text = re.sub(r"(?m)^[ \t]*::[ \t]*$", "", text)
+    return text
+
+
+# Header of a reST explicit-markup directive: ``.. <name>:: <arg>`` at the
+# start of a line.  The body is the following block indented deeper than the
+# directive itself (reST's indentation-delimited block rule), captured by the
+# walk in ``_convert_directive_blocks``.
+_DIRECTIVE_HEADER = re.compile(
+    r"^(?P<indent>[ \t]*)\.\.[ \t]+(?P<name>[\w+-]+)::(?P<arg>[^\n]*)\n",
+    re.MULTILINE,
+)
+
+# reST admonitions → a markdown blockquote with a bold label.
+_ADMONITIONS = {
+    "note": "Note", "warning": "Warning", "tip": "Tip", "hint": "Hint",
+    "important": "Important", "caution": "Caution", "attention": "Attention",
+    "danger": "Danger", "error": "Error", "seealso": "See also",
+    "admonition": "Note",
+}
+
+
+def _convert_directive_blocks(text: str) -> str:
+    """Convert reST explicit-markup directives to markdown.
+
+    Handles the block forms whose body is indentation-delimited (a pure regex
+    can't honour that rule — blank lines share the zero-indent state), so we
+    walk line-by-line:
+
+      - ``.. math::``                  → ``$$ … $$``      (display math)
+      - ``.. code-block:: <lang>`` /
+        ``.. code:: <lang>`` /
+        ``.. sourcecode:: <lang>``     → fenced ```` ```<lang> … ``` ````
+      - ``.. note:: / .. warning:: …`` → ``> **Label:** …`` (blockquote)
+      - any other directive            → body kept, header dropped
+
+    Generic so a directive we haven't special-cased never leaks its
+    ``.. name::`` header as raw text on the page.
+    """
+    out: list[str] = []
+    cursor = 0
+    for m in _DIRECTIVE_HEADER.finditer(text):
+        if m.start() < cursor:
+            continue
+        out.append(text[cursor:m.start()])
+        name = m.group("name").lower()
+        arg = m.group("arg").strip()
+        directive_indent = len(m.group("indent").expandtabs(4))
+
+        # Walk the body: blank lines, or lines indented strictly deeper than
+        # the directive.  Stop at the first non-blank line at/under its indent.
+        lines: list[str] = []
+        scan = m.end()
+        while scan < len(text):
+            nl = text.find("\n", scan)
+            line = text[scan : nl if nl != -1 else len(text)]
+            if not line.strip():
+                lines.append(line)
+                scan = nl + 1 if nl != -1 else len(text)
+                continue
+            lead = len(line) - len(line.lstrip(" \t"))
+            if len(line[:lead].expandtabs(4)) > directive_indent:
+                lines.append(line)
+                scan = nl + 1 if nl != -1 else len(text)
+                continue
+            break
+        while lines and not lines[-1].strip():
+            lines.pop()
+        body = textwrap.dedent("\n".join(lines)).strip("\n")
+
+        if name == "math":
+            b = body.strip()
+            # KaTeX renders TeX quote ligatures (``word'') literally — normalise
+            # the paired form to straight quotes so they don't show as backticks.
+            b = re.sub(r"``([^`']+?)''", r'"\1"', b)
+            if "&" in b and "\\begin{" not in b and "\\end{" not in b:
+                b = f"\\begin{{aligned}}\n{b}\n\\end{{aligned}}"
+            out.append(f"\n\n$$\n{b}\n$$\n\n")
+        elif name in ("code-block", "code", "sourcecode"):
+            lang = arg if re.fullmatch(r"[A-Za-z0-9_+-]+", arg) else ""
+            out.append(f"\n\n```{lang}\n{body}\n```\n\n")
+        elif name in _ADMONITIONS:
+            quoted = "\n".join(
+                f"> {ln}" if ln.strip() else ">" for ln in body.split("\n")
+            )
+            out.append(f"\n\n> **{_ADMONITIONS[name]}:**\n>\n{quoted}\n\n")
+        else:
+            # Unknown directive: keep the (dedented) body, drop the header.
+            out.append(f"\n\n{body}\n\n" if body else "\n\n")
+        cursor = scan
+    out.append(text[cursor:])
+    return "".join(out)
+
+
+def _fence_doctests(text: str) -> str:
+    """Wrap doctest blocks (consecutive ``>>>`` / ``...`` lines) in a fenced
+    ```` ```python ```` code block.  Without this, a doctest authored in prose
+    (not under an ``Examples`` header) renders as a markdown blockquote — the
+    ``>>>`` triggers ``>`` blockquote nesting — and the code collapses into a
+    run-on line (the transforms module overview)."""
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].lstrip().startswith(">>>"):
+            block: list[str] = []
+            while i < len(lines) and lines[i].lstrip().startswith((">>>", "...")):
+                block.append(lines[i])
+                i += 1
+            out.append("```python")
+            out.extend(block)
+            out.append("```")
+        else:
+            out.append(lines[i])
+            i += 1
+    return "\n".join(out)
+
+
+def _inline_math_sub(text: str) -> str:
+    """Inline math ``:math:`expr``` → ``$expr$`` (multi-line collapsed)."""
+    def _repl(m: re.Match[str]) -> str:
+        inner = " ".join(m.group(1).split())
+        inner = re.sub(r"``([^`']+?)''", r'"\1"', inner)   # TeX quotes → "
+        return f"${inner}$"
+    return re.sub(r":math:`([^`]+)`", _repl, text, flags=re.DOTALL)
+
+
+def _apply_outside_protected(text: str, fn: Callable[[str], str]) -> str:
+    r"""Apply ``fn`` to every segment of ``text`` that is NOT inside a protected
+    region — a fenced code block (```` ```…``` ````) or math (``$$…$$`` /
+    ``$…$``).  The inline-markup passes (double-backtick collapse, ``::``,
+    roles) must not run inside these: they would corrupt code fences and mangle
+    LaTeX markup (e.g. ``\text{``mean''}`` — LaTeX left-quotes — would lose a
+    backtick)."""
+    parts = re.split(r"(```[\s\S]*?```|\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)", text)
+    return "".join(p if i % 2 else fn(p) for i, p in enumerate(parts))
 
 
 def _rst_to_text(text: str) -> str:
     """Convert reST markup to markdown-friendly text with $...$ math notation.
 
     Converts:
-      - ``.. math::`` blocks           → $$...$$  (display math)
+      - ``.. math::`` / ``.. code-block::`` / ``.. note::`` …  block directives
+      - ``>>>`` doctest blocks         → fenced ```` ```python ``` ````
       - ``:math:`expr```               → $expr$   (inline math)
       - ````code````                   → `code`   (inline code)
-      - ``:class:`Foo```, etc.         → `Foo`    (cross-references as inline code)
+      - ``:cite:`k```, ``:cite:t:`k``` → (removed)
+      - ``\\`text <url>\\`_``            → [text](url)  (reST hyperlink)
+      - ``::`` literal-block markers    → ``:``
+      - ANY other role ``:role:`Foo``` → `Foo`    (generic cross-reference pass)
     """
-    # Block math: .. math::\n\n   expr  →  $$\nexpr\n$$
-    # If the body uses `&` (column alignment) or contains an explicit `\\`
-    # line break, wrap it in an `aligned` environment — KaTeX requires the
-    # explicit environment for these alignment markers to parse, whereas
-    # docstrings in the wild tend to omit it.
-    def _block_math(m: re.Match[str]) -> str:
-        body = textwrap.dedent(m.group(1)).strip()
-        needs_aligned = (
-            "&" in body
-            and "\\begin{" not in body
-            and "\\end{" not in body
-        )
-        if needs_aligned:
-            body = f"\\begin{{aligned}}\n{body}\n\\end{{aligned}}"
-        return f"$$\n{body}\n$$"
-    text = re.sub(r"\.\. math::\n\n((?:[ \t]+.+\n?)+)", _block_math, text)
-
-    # Inline math: :math:`expr` → $expr$ (join multi-line math to single line)
-    def _inline_math(m: re.Match[str]) -> str:
-        inner = " ".join(m.group(1).split())   # collapse whitespace/newlines
-        return f"${inner}$"
-    text = re.sub(r":math:`([^`]+)`", _inline_math, text, flags=re.DOTALL)
-
-    # Double-backtick code: ``code`` → `code`
-    text = re.sub(r"``([^`]+)``", r"`\1`", text)
-
-    # Cross-references: :class:`Tensor` → `Tensor`
-    text = re.sub(
-        r":(?:class|func|meth|attr|mod|ref|data|exc|obj):`~?([^`]+)`",
-        r"`\1`",
-        text,
+    text = _convert_directive_blocks(text)   # .. math:: / code-block:: / note::
+    text = _fence_doctests(text)             # >>> blocks → ```python fences
+    # Inline passes (math + roles/code/cite/::) run only OUTSIDE fenced code so
+    # they never mangle the ``` fences produced above.
+    text = _apply_outside_protected(
+        text, lambda seg: _rst_inline_markup(_inline_math_sub(seg))
     )
-
-    # Remove citations
-    text = re.sub(r":cite:t?:`[^`]+`", "", text)
-
     return text.strip()
 
 
@@ -712,7 +888,7 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
                     "name":        item.name,
                     "annotation":  _annotation_str(item.annotation),
                     "description": _rst_to_text(item.description or ""),
-                    "default":     str(item.default) if item.default is not None and str(item.default) != "required" else None,
+                    "default":     _rst_strip_for_code(str(item.default)) if item.default is not None and str(item.default) != "required" else None,
                 })
 
         elif kind == K.returns:
@@ -749,7 +925,9 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
             if not block:
                 block = str(val).strip()
             if block:
-                result["examples"].append(block)
+                # Examples render as a shiki code block, so strip reST roles to
+                # the bare name (inline-code backticks would show literally).
+                result["examples"].append(_rst_strip_for_code(block))
 
         elif kind in (K.admonition,):
             # Notes / warnings / See-Also blocks all arrive as
@@ -783,7 +961,10 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
                         n = raw_name.strip()
                         if n:
                             result["see_also"].append({
-                                "name":        n,
+                                # Names are usually symbol refs, but docstrings
+                                # sometimes use prose with reST code (``x``);
+                                # strip to bare so it renders cleanly.
+                                "name":        _rst_strip_for_code(n),
                                 "description": _rst_to_text(desc),
                             })
                 continue
@@ -800,7 +981,9 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
         elif kind == K.attributes:
             for item in val:
                 result["attributes"].append({
-                    "name":        item.name,
+                    # Usually an identifier, but some docstrings document naming
+                    # conventions as prose attribute names with reST code.
+                    "name":        _rst_strip_for_code(item.name),
                     "annotation":  _annotation_str(item.annotation),
                     "description": _rst_to_text(item.description or ""),
                 })
@@ -1146,64 +1329,19 @@ def _parse_dunder_all(mod: Any) -> set[str] | None:
     return None
 
 
-_RST_INLINE_MATH = re.compile(r":math:`([^`]+)`")
-_RST_BLOCK_MATH_HEADER = re.compile(r"^(?P<indent>[ \t]*)\.\.\s*math::\s*\n", re.MULTILINE)
-
-
 def _rst_math_to_markdown(text: str) -> str:
-    """Convert rST math directives to markdown / remark-math syntax.
+    """Convert a family ``theory`` body (reST) to markdown / remark-math.
 
-    ``MathText`` (remark-math + KaTeX) expects markdown math syntax —
-    ``$x$`` for inline and ``$$...$$`` for block.  Theory bodies on
-    family Configs are written in rST style (``:math:`x``` /
-    ``.. math::``), so we translate here at build time.
-
-    Block math is delimited by indentation, not an explicit terminator:
-    the block ends at the first non-blank line whose indent is *not*
-    strictly greater than the directive's own indent.  A pure-regex
-    pass can't honour that rule (blank lines and trailing prose share
-    the same indent-equals-zero state), so we walk line-by-line for the
-    block form.
+    Same pipeline as ``_rst_to_text`` — block directives (``.. math::`` /
+    ``.. code-block::`` / admonitions), doctest fencing, inline math, then the
+    shared inline-markup pass — so theory pages render identically to docstring
+    prose with no reST leaking through.
     """
-    import textwrap
-
-    out_parts: list[str] = []
-    cursor = 0
-    for m in _RST_BLOCK_MATH_HEADER.finditer(text):
-        out_parts.append(text[cursor : m.start()])
-        directive_indent = len(m.group("indent").expandtabs(4))
-
-        # Walk forward over lines that either (a) are blank or (b) have
-        # an indent strictly greater than the directive.  Stop at the
-        # first non-blank line whose indent is <= directive_indent.
-        lines: list[str] = []
-        scan = m.end()
-        while scan < len(text):
-            nl = text.find("\n", scan)
-            line = text[scan : nl if nl != -1 else len(text)]
-            stripped = line.strip()
-            line_indent = len(line) - len(line.lstrip(" \t"))
-            line_indent = len(line[:line_indent].expandtabs(4))
-            if not stripped:
-                lines.append(line)
-                scan = nl + 1 if nl != -1 else len(text)
-                continue
-            if line_indent > directive_indent:
-                lines.append(line)
-                scan = nl + 1 if nl != -1 else len(text)
-                continue
-            break
-        # Strip trailing blank lines we may have absorbed.
-        while lines and not lines[-1].strip():
-            lines.pop()
-        body = textwrap.dedent("\n".join(lines)).strip()
-        if body:
-            out_parts.append(f"\n\n$$\n{body}\n$$\n\n")
-        cursor = scan
-
-    out_parts.append(text[cursor:])
-    text = "".join(out_parts)
-    text = _RST_INLINE_MATH.sub(r"$\1$", text)
+    text = _convert_directive_blocks(text)
+    text = _fence_doctests(text)
+    text = _apply_outside_protected(
+        text, lambda seg: _rst_inline_markup(_inline_math_sub(seg))
+    )
     return text
 
 
@@ -1342,7 +1480,8 @@ def _extract_family_meta(slug: str) -> dict[str, str]:
                         val = textwrap.dedent(val).strip("\n")
                         val = _rst_math_to_markdown(val)
                     else:
-                        val = val.strip()
+                        # citation: convert reST hyperlinks / roles to markdown.
+                        val = _rst_inline_markup(val.strip())
                     if val:
                         out[kw.arg] = val
                 if out:

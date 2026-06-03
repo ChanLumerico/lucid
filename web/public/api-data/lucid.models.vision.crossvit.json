@@ -3,7 +3,7 @@
   "name": "crossvit",
   "path": "lucid.models.vision.crossvit",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/__init__.py#L1",
   "members": [
     {
       "name": "CrossViTConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "CrossViTConfig(num_classes: int = 1000, in_channels: int = 3, image_size: int = 224, small_patch: int = 12, large_patch: int = 16, small_dim: int = 192, large_dim: int = 384, small_heads: int = 3, large_heads: int = 6, depth: int = 4, mlp_ratio: float = 4.0, dropout: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_config.py#L10",
+      "signature": "CrossViTConfig(num_classes: int = 1000, in_channels: int = 3, image_size: int = 240, img_scale: tuple[float, float] = (1.0, 224.0 / 240.0), crop_scale: bool = False, patch_sizes: tuple[int, int] = (12, 16), embed_dims: tuple[int, int] = (96, 192), depths: tuple[tuple[int, int, int], ...] = ((1, 4, 0), (1, 4, 0), (1, 4, 0)), num_heads: tuple[int, int] = (3, 3), mlp_ratio: tuple[float, float, float] = (4.0, 4.0, 1.0), qkv_bias: bool = True, drop_path_rate: float = 0.0, dropout: float = 0.0, layer_norm_eps: float = 1e-06)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.crossvit._config.CrossViTConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, image_size: int = 224, small_patch: int = 12, large_patch: int = 16, small_dim: int = 192, large_dim: int = 384, small_heads: int = 3, large_heads: int = 6, depth: int = 4, mlp_ratio: float = 4.0, dropout: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, image_size: int = 240, img_scale: tuple[float, float] = (1.0, 224.0 / 240.0), crop_scale: bool = False, patch_sizes: tuple[int, int] = (12, 16), embed_dims: tuple[int, int] = (96, 192), depths: tuple[tuple[int, int, int], ...] = ((1, 4, 0), (1, 4, 0), (1, 4, 0)), num_heads: tuple[int, int] = (3, 3), mlp_ratio: tuple[float, float, float] = (4.0, 4.0, 1.0), qkv_bias: bool = True, drop_path_rate: float = 0.0, dropout: float = 0.0, layer_norm_eps: float = 1e-06)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -41,97 +41,99 @@
           "see_also": []
         }
       ],
-      "summary": "Configuration dataclass for every CrossViT variant.",
-      "extended": "`CrossViTConfig` is an immutable container that fully specifies\nthe architecture of a CrossViT (Chen et al., 2021).  CrossViT\ncouples two ViT branches that operate on *different patch sizes*\n(`small_patch` and `large_patch`) and exchanges information\nonly through their CLS tokens via lightweight cross-attention.",
+      "summary": "Configuration for every paper-cited CrossViT variant.",
+      "extended": null,
       "parameters": [
         {
           "name": "num_classes",
           "annotation": "int",
-          "description": "Number of output classes for the classification head.\nDefaults to `1000` (ImageNet-1k).",
+          "description": "Output-class count of the classification heads.",
           "default": "1000"
         },
         {
           "name": "in_channels",
           "annotation": "int",
-          "description": "Number of input image channels.  Defaults to `3` (RGB).",
+          "description": "Number of input image channels.",
           "default": "3"
         },
         {
           "name": "image_size",
           "annotation": "int",
-          "description": "Spatial side length of the square input image.  Both\n`small_patch` and `large_patch` must divide `image_size`.\nDefaults to `224`.",
-          "default": "224"
+          "description": "Spatial side of the small-branch input.  The large-branch\ninput is rescaled from this via `img_scale`.",
+          "default": "240"
         },
         {
-          "name": "small_patch",
-          "annotation": "int",
-          "description": "Patch size for the *small-patch* branch (fine-grained tokens).\nDefaults to `12`.",
-          "default": "12"
+          "name": "img_scale",
+          "annotation": "tuple of float",
+          "description": "Per-branch scale relative to `image_size` — the first entry\ntargets the small-patch branch (always 1.0 in paper-cited\nvariants), the second the large-patch branch (224/240 in the\ncanonical recipe so the large branch consumes 224×224 from a\n240×240 input).",
+          "default": "(1.0, 224/240)"
         },
         {
-          "name": "large_patch",
-          "annotation": "int",
-          "description": "Patch size for the *large-patch* branch (coarse tokens).\nDefaults to `16`.",
-          "default": "16"
+          "name": "crop_scale",
+          "annotation": "bool",
+          "description": "Method used to rescale the large-branch input.  `False` ⇒\nbilinear resize (paper default); `True` ⇒ center-crop.",
+          "default": "False"
         },
         {
-          "name": "small_dim",
-          "annotation": "int",
-          "description": "Hidden width of the small-patch branch.  Defaults to `192`.",
-          "default": "192"
+          "name": "patch_sizes",
+          "annotation": "tuple of int",
+          "description": "Patch sizes for the (small, large) branches.",
+          "default": "(12, 16)"
         },
         {
-          "name": "large_dim",
-          "annotation": "int",
-          "description": "Hidden width of the large-patch branch.  Defaults to `384`.",
-          "default": "384"
+          "name": "embed_dims",
+          "annotation": "tuple of int",
+          "description": "Per-branch embedding dimensions (small, large).",
+          "default": "(96, 192)"
         },
         {
-          "name": "small_heads",
-          "annotation": "int",
-          "description": "Number of attention heads in the small-patch branch.  Defaults\nto `3`.",
-          "default": "3"
+          "name": "depths",
+          "annotation": "tuple of tuple of int",
+          "description": "Per-stage block counts `(N_s, N_l, N_cross)` for each of the\n`K` MultiScaleBlocks.  Defaults to `((1, 4, 0)) × 3` (the\nCrossViT-Ti recipe).  `N_cross` is the number of *extra*\ncross-attention transformer blocks the stage runs after the\nsingle mandatory cross-attention fusion — paper-cited variants\nkeep this at 0.",
+          "default": "((1, 4, 0), (1, 4, 0), (1, 4, 0))"
         },
         {
-          "name": "large_heads",
-          "annotation": "int",
-          "description": "Number of attention heads in the large-patch branch.  Defaults\nto `6`.",
-          "default": "6"
-        },
-        {
-          "name": "depth",
-          "annotation": "int",
-          "description": "Number of CrossViT stages.  Each stage applies a self-attention\nblock on both branches followed by a bidirectional CLS-token\ncross-attention exchange.  Defaults to `4`.",
-          "default": "4"
+          "name": "num_heads",
+          "annotation": "tuple of int",
+          "description": "Per-branch attention head counts (small, large).",
+          "default": "(3, 3)"
         },
         {
           "name": "mlp_ratio",
+          "annotation": "tuple of float",
+          "description": "MLP expansion ratios for the (small self-attn, large\nself-attn, cross-attention) sub-modules within a\nMultiScaleBlock.",
+          "default": "(4.0, 4.0, 1.0)"
+        },
+        {
+          "name": "qkv_bias",
+          "annotation": "bool",
+          "description": "",
+          "default": "True"
+        },
+        {
+          "name": "drop_path_rate",
           "annotation": "float",
-          "description": "MLP expansion ratio inside both branches.  Defaults to `4.0`.",
-          "default": "4.0"
+          "description": "Stochastic-depth rate, linearly scheduled across the whole\ntrunk (sum of all blocks across all stages).",
+          "default": "0.0"
         },
         {
           "name": "dropout",
           "annotation": "float",
-          "description": "Dropout probability after positional embeddings and inside\nthe MLP blocks.  Defaults to `0.0`.",
+          "description": "Dropout probability inside attention + MLP modules.",
           "default": "0.0"
+        },
+        {
+          "name": "layer_norm_eps",
+          "annotation": "float",
+          "description": "`eps` for every LayerNorm in the trunk (paper / timm use\n`1e-6`; matches the reference checkpoints exactly).",
+          "default": "1e-6"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [
-        "Build a CrossViT-9 configuration with a 10-class head for CIFAR-10:\n>>> from lucid.models.vision.crossvit import CrossViTConfig\n>>> cfg = CrossViTConfig(\n...     depth=3, small_dim=128, large_dim=256,\n...     small_heads=4, large_heads=4, mlp_ratio=3.0,\n...     num_classes=10,\n... )\n>>> cfg.small_dim, cfg.large_dim, cfg.depth, cfg.num_classes\n(128, 256, 3, 10)"
-      ],
-      "notes": [
-        "Reference: Chun-Fu (Richard) Chen *et al.*, *\"CrossViT:\nCross-Attention Multi-Scale Vision Transformer for Image\nClassification\"*, ICCV 2021,\n`[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
-      ],
-      "attributes": [
-        {
-          "name": "model_type",
-          "annotation": "ClassVar[str]",
-          "description": "Constant string `\"crossvit\"` used by the model registry."
-        }
-      ],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
       "warns": [],
       "see_also": []
     },
@@ -146,7 +148,7 @@
       ],
       "labels": [],
       "signature": "CrossViT(config: CrossViTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L207",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L474",
       "subcategory": "model",
       "methods": [
         {
@@ -155,7 +157,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CrossViTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L292",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L493",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -179,7 +181,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L323",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L561",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -200,13 +202,13 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L326",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L575",
           "subcategory": "model",
           "summary": null,
           "extended": null,
           "parameters": [],
           "returns": {
-            "annotation": "Tensor",
+            "annotation": "tuple[Tensor, Tensor]",
             "description": ""
           },
           "raises": [],
@@ -222,27 +224,14 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L343",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L591",
           "subcategory": "model",
-          "summary": "Update src CLS token using cross-attention over tgt tokens.",
+          "summary": null,
           "extended": null,
-          "parameters": [
-            {
-              "name": "src",
-              "annotation": null,
-              "description": "(B, N_src, dim_src) — source branch tokens (CLS at index 0)",
-              "default": null
-            },
-            {
-              "name": "tgt",
-              "annotation": null,
-              "description": "(B, N_tgt, dim_tgt) — target branch tokens",
-              "default": null
-            }
-          ],
+          "parameters": [],
           "returns": {
             "annotation": "BaseModelOutput",
-            "description": "Updated (B, N_src, dim_src) source tokens."
+            "description": ""
           },
           "raises": [],
           "examples": [],
@@ -252,61 +241,17 @@
           "see_also": []
         }
       ],
-      "summary": "CrossViT backbone (Chen et al., 2021).",
-      "extended": "CrossViT runs *two parallel ViT branches* with different patch\nsizes (`small_patch` and `large_patch`), each maintaining its\nown learnable CLS token and positional embedding.  Within each\nCrossViT stage every branch first performs ordinary self-attention,\nthen the two branches exchange information *only through their CLS\ntokens* using bidirectional cross-attention:\n\n$$\n\\tilde{x}_{\\text{cls}}^{\\,l} = x_{\\text{cls}}^{l} +\n    \\mathrm{Attn}\\!\\bigl(W_q x_{\\text{cls}}^{l},\\,\n    W_k x_{\\text{patch}}^{s},\\, W_v x_{\\text{patch}}^{s}\\bigr),\n$$\nand symmetrically for the large-to-small direction.  Because\ncross-attention only updates the CLS tokens, the multi-scale fusion\ncost is $\\mathcal{O}(N_s + N_l)$ instead of\n$\\mathcal{O}(N_s \\cdot N_l)$.\n\n`forward_features` returns the *large-branch* CLS token after\nthe final LayerNorm — a flat $(B, \\texttt{large\\_dim})$\nfeature.  For end-to-end classification use\n`CrossViTForImageClassification`, which averages the logits\nfrom both per-branch heads.",
-      "parameters": [
-        {
-          "name": "config",
-          "annotation": "CrossViTConfig",
-          "description": "Frozen dataclass specifying `image_size`, `small_patch`,\n`large_patch`, `small_dim`, `large_dim`, `small_heads`,\n`large_heads`, `depth`, `mlp_ratio`, `dropout`, and\n`in_channels`.  See `CrossViTConfig`.",
-          "default": null
-        }
-      ],
-      "returns": null,
+      "summary": "CrossViT backbone (Chen et al., ICCV 2021).",
+      "extended": "Builds two parallel ViT branches that operate on different\nresolutions and exchange information through K=3 cross-attention\nfusion blocks.  See `CrossViTConfig` for the per-variant\nhyperparameters.",
+      "parameters": [],
+      "returns": {
+        "annotation": "BaseModelOutput",
+        "description": "`last_hidden_state` carries the concatenation of the two\nper-branch CLS tokens along the channel dimension.  Use\n`forward_features` to get the two CLS tokens separately."
+      },
       "raises": [],
-      "examples": [
-        "Build a CrossViT-9 backbone and run a forward pass:\n>>> import lucid\n>>> from lucid.models.vision.crossvit import CrossViT, CrossViTConfig\n>>> cfg = CrossViTConfig(\n...     depth=3, small_dim=128, large_dim=256,\n...     small_heads=4, large_heads=4, mlp_ratio=3.0,\n... )\n>>> model = CrossViT(cfg)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape                       # (B, large_dim)\n(1, 256)"
-      ],
-      "notes": [
-        "Reference: Chun-Fu Chen *et al.*, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*,\nICCV 2021, `[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
-      ],
-      "attributes": [
-        {
-          "name": "embed_s, embed_l",
-          "annotation": "_PatchEmbed",
-          "description": "Patch-embedding convolutions for the small / large branches."
-        },
-        {
-          "name": "cls_s, cls_l",
-          "annotation": "Tensor",
-          "description": "Learnable CLS tokens for the small / large branches."
-        },
-        {
-          "name": "pos_s, pos_l",
-          "annotation": "Tensor",
-          "description": "Learnable positional embeddings for each branch."
-        },
-        {
-          "name": "pos_drop",
-          "annotation": "nn.Dropout",
-          "description": "Dropout applied right after the positional embedding sum."
-        },
-        {
-          "name": "stages",
-          "annotation": "nn.ModuleList",
-          "description": "`config.depth` stacked `_CrossViTStage` modules."
-        },
-        {
-          "name": "norm_s, norm_l",
-          "annotation": "nn.LayerNorm",
-          "description": "Final LayerNorms applied to each branch before extracting the\nCLS token."
-        },
-        {
-          "name": "feature_info",
-          "annotation": "list[FeatureInfo]",
-          "description": "Single-stage feature description with channel count\n`config.large_dim` and reduction `config.large_patch`."
-        }
-      ],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
       "warns": [],
       "see_also": []
     },
@@ -321,7 +266,7 @@
       ],
       "labels": [],
       "signature": "CrossViTForImageClassification(config: CrossViTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L353",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L601",
       "subcategory": "model",
       "methods": [
         {
@@ -330,7 +275,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CrossViTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L433",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L611",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -352,48 +297,13 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L465",
-          "subcategory": "model",
-          "summary": "Update src CLS token using cross-attention over tgt tokens.",
-          "extended": null,
-          "parameters": [
-            {
-              "name": "src",
-              "annotation": null,
-              "description": "(B, N_src, dim_src) — source branch tokens (CLS at index 0)",
-              "default": null
-            },
-            {
-              "name": "tgt",
-              "annotation": null,
-              "description": "(B, N_tgt, dim_tgt) — target branch tokens",
-              "default": null
-            }
-          ],
-          "returns": {
-            "annotation": "ImageClassificationOutput",
-            "description": "Updated (B, N_src, dim_src) source tokens."
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        },
-        {
-          "name": "reset_classifier",
-          "path": "lucid.models.vision.crossvit._model.CrossViTForImageClassification.reset_classifier",
-          "kind": "function",
-          "labels": [],
-          "signature": "reset_classifier(num_classes: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_model.py#L493",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_model.py#L680",
           "subcategory": "model",
           "summary": null,
           "extended": null,
           "parameters": [],
           "returns": {
-            "annotation": "None",
+            "annotation": "ImageClassificationOutput",
             "description": ""
           },
           "raises": [],
@@ -404,66 +314,14 @@
           "see_also": []
         }
       ],
-      "summary": "CrossViT with a dual-head classifier (Chen et al., 2021).",
-      "extended": "Wraps the same two-branch trunk as `CrossViT` and attaches\n*one independent linear head per branch*.  Per paper §3.3, the\nfinal prediction averages the two per-branch logits:\n\n$$\n\\text{logits} = \\tfrac{1}{2}\\bigl(\n    W_s\\, z_{\\text{cls}}^{s,(L)}\n    + W_l\\, z_{\\text{cls}}^{l,(L)}\n\\bigr) + \\tfrac{1}{2}(b_s + b_l),\n$$\nwhere $z_{\\text{cls}}^{\\cdot,(L)}$ denotes the post-LayerNorm\nCLS token at the final stage of each branch.\n\nPass `labels` to `forward` to compute the cross-entropy\nloss in the same pass.",
-      "parameters": [
-        {
-          "name": "config",
-          "annotation": "CrossViTConfig",
-          "description": "Architecture specification.  Must set `num_classes` to the\ndesired number of output categories.  See `CrossViTConfig`.",
-          "default": null
-        }
-      ],
+      "summary": "CrossViT with two per-branch linear heads, output averaged.",
+      "extended": "Paper §3.3 — the final prediction is the *mean* of the two\nbranch-specific logits, an implicit two-model ensemble.",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [
-        "End-to-end inference with a CrossViT-9 classifier:\n>>> import lucid\n>>> from lucid.models.vision.crossvit import (\n...     CrossViTConfig, CrossViTForImageClassification,\n... )\n>>> cfg = CrossViTConfig(\n...     depth=3, small_dim=128, large_dim=256,\n...     small_heads=4, large_heads=4, mlp_ratio=3.0,\n... )\n>>> model = CrossViTForImageClassification(cfg)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
-      ],
-      "notes": [
-        "Reference: Chen *et al.*, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021."
-      ],
-      "attributes": [
-        {
-          "name": "embed_s, embed_l",
-          "annotation": "_PatchEmbed",
-          "description": "Patch-embedding convolutions for the small / large branches."
-        },
-        {
-          "name": "cls_s, cls_l",
-          "annotation": "Tensor",
-          "description": "Learnable CLS tokens for each branch."
-        },
-        {
-          "name": "pos_s, pos_l",
-          "annotation": "Tensor",
-          "description": "Learnable positional embeddings for each branch."
-        },
-        {
-          "name": "pos_drop",
-          "annotation": "nn.Dropout",
-          "description": "Dropout applied right after positional embedding."
-        },
-        {
-          "name": "stages",
-          "annotation": "nn.ModuleList",
-          "description": "Stacked CrossViT stages (self-attention + cross-attention)."
-        },
-        {
-          "name": "norm_s, norm_l",
-          "annotation": "nn.LayerNorm",
-          "description": "Final LayerNorms per branch."
-        },
-        {
-          "name": "classifier",
-          "annotation": "nn.Linear",
-          "description": "Small-branch classification head of shape\n`(num_classes, small_dim)`."
-        },
-        {
-          "name": "head_l",
-          "annotation": "nn.Linear",
-          "description": "Large-branch classification head of shape\n`(num_classes, large_dim)`, kept in sync with `classifier`\nby `reset_classifier`."
-        }
-      ],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
       "warns": [],
       "see_also": []
     },
@@ -473,675 +331,66 @@
       "kind": "function",
       "labels": [],
       "signature": "crossvit_9(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L105",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L138",
       "subcategory": "pretrained",
-      "summary": "CrossViT-9 backbone (Chen et al., 2021).",
-      "extended": "Builds the canonical *CrossViT-9* configuration: `depth=3`,\n`small_dim=128`, `large_dim=256`, `small_patch=12`,\n`large_patch=16`, `mlp_ratio=3.0`.  Approximately **8.6M\nparameters** — the smallest variant in the paper.",
-      "parameters": [
-        {
-          "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable in the model zoo.  Defaults to `False`.",
-          "default": "False"
-        },
-        {
-          "name": "**overrides",
-          "annotation": "object",
-          "description": "Keyword overrides applied on top of the canonical CrossViT-9\nconfig.  Each override must match a field of\n`CrossViTConfig`.",
-          "default": "{}"
-        }
-      ],
+      "summary": "CrossViT-9 backbone — `embed_dims=(128, 256)`, depths\n`((1, 3, 0))×3`, 4 heads.  ~8.6M params (paper Table 2).",
+      "extended": null,
+      "parameters": [],
       "returns": {
         "annotation": "CrossViT",
-        "description": "A `CrossViT` backbone returning a flat $(B, 256)$\nlarge-branch CLS feature."
+        "description": ""
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_9\n>>> model = crossvit_9()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape\n(1, 256)"
-      ],
-      "notes": [
-        "CrossViT-9 reaches **73.9% top-1 on ImageNet-1k** (Chen et al.,\n2021, Table 5).  See\n`[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
-      ],
+      "examples": [],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViT",
-        "type": "CrossViT",
-        "params": 4206976,
-        "own_params": 92416,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 55424,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 55424,
-                "own_params": 55424,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 196864,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 196864,
-                "own_params": 196864,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 3861504,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 1287168,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 165376,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 66048,
-                        "own_params": 66048,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 98816,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 49536,
-                            "own_params": 49536,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 49280,
-                            "own_params": 49280,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 658432,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 394240,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 197376,
-                            "own_params": 197376,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 196864,
-                            "own_params": 196864,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 330112,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 33024,
-                        "own_params": 33024,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 32896,
-                        "own_params": 32896,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 133248,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 32896,
-                        "own_params": 32896,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 66048,
-                        "own_params": 66048,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 33024,
-                        "own_params": 33024,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 256,
-            "own_params": 256,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 512,
-            "own_params": 512,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 8600000
     },
     {
       "name": "crossvit_9_cls",
       "path": "lucid.models.vision.crossvit._pretrained.crossvit_9_cls",
       "kind": "function",
       "labels": [],
-      "signature": "crossvit_9_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L386",
+      "signature": "crossvit_9_cls(pretrained: bool | str = False, weights: CrossViT9Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L332",
       "subcategory": "pretrained",
-      "summary": "CrossViT-9 image classifier (Chen et al., 2021).",
-      "extended": "Combines the `crossvit_9` backbone with two per-branch\nlinear heads whose logits are averaged (paper §3.3).  Default\noutput is `num_classes=1000` (ImageNet-1k).  ~8.6M parameters.",
+      "summary": "CrossViT-9 image classifier — `embed_dims=(128, 256)`, depths\n`((1, 3, 0)) x 3`, 4 heads per branch.  ~8.6M params; paper\nTable 2 reports **73.9%** ImageNet-1k top-1 at 240x240.",
+      "extended": null,
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CrossViT9Weights`; a string\nselects a named entry from that enum.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CrossViT9Weights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-9 config.",
+          "description": "Per-field overrides forwarded to `CrossViTConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "CrossViTForImageClassification",
-        "description": "Classifier returning `ImageClassificationOutput` whose\n`logits` has shape `(B, num_classes)`."
+        "description": "The configured classifier."
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_9_cls\n>>> model = crossvit_9_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
-      ],
+      "examples": [],
       "notes": [
-        "CrossViT-9 reaches **73.9% top-1 on ImageNet-1k** (Chen et al.,\n2021, Table 5)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViTForImageClassification",
-        "type": "CrossViTForImageClassification",
-        "params": 4592976,
-        "own_params": 92416,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 55424,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 55424,
-                "own_params": 55424,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 196864,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 196864,
-                "own_params": 196864,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 3861504,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 1287168,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 165376,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 66048,
-                        "own_params": 66048,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 98816,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 49536,
-                            "own_params": 49536,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 49280,
-                            "own_params": 49280,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 658432,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 394240,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 197376,
-                            "own_params": 197376,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 196864,
-                            "own_params": 196864,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 330112,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 33024,
-                        "own_params": 33024,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 32896,
-                        "own_params": 32896,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 133248,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 32896,
-                        "own_params": 32896,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 66048,
-                        "own_params": 66048,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 33024,
-                        "own_params": 33024,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 256,
-            "own_params": 256,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 512,
-            "own_params": 512,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 129000,
-            "own_params": 129000,
-            "children": []
-          },
-          {
-            "name": "head_l",
-            "type": "Linear",
-            "params": 257000,
-            "own_params": 257000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 8600000
     },
     {
       "name": "crossvit_tiny",
@@ -1149,673 +398,66 @@
       "kind": "function",
       "labels": [],
       "signature": "crossvit_tiny(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L155",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L96",
       "subcategory": "pretrained",
-      "summary": "CrossViT-Tiny backbone (Chen et al., 2021).",
-      "extended": "Tiny dual-branch ViT with a *single* CrossViT stage\n(`depth=1`), `small_dim=96`, `large_dim=192`,\n`mlp_ratio=4.0`.  Approximately **7.0M parameters** — useful for\nrapid prototyping and mobile baselines.",
-      "parameters": [
-        {
-          "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
-          "default": "False"
-        },
-        {
-          "name": "**overrides",
-          "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-Tiny config.",
-          "default": "{}"
-        }
-      ],
+      "summary": "CrossViT-Ti backbone — `embed_dims=(96, 192)`, depths\n`((1, 4, 0))×3`, 3 heads.  ~7M params (paper Table 2).",
+      "extended": null,
+      "parameters": [],
       "returns": {
         "annotation": "CrossViT",
-        "description": "A `CrossViT` backbone returning a flat $(B, 192)$\nlarge-branch CLS feature."
+        "description": ""
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_tiny\n>>> model = crossvit_tiny()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 192)"
-      ],
-      "notes": [
-        "See `[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
-      ],
+      "examples": [],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViT",
-        "type": "CrossViT",
-        "params": 1077312,
-        "own_params": 69312,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 41568,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 41568,
-                "own_params": 41568,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 147648,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 147648,
-                "own_params": 147648,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 818208,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 818208,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 111840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 37248,
-                        "own_params": 37248,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 74208,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 37248,
-                            "own_params": 37248,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 36960,
-                            "own_params": 36960,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 444864,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 186144,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 18624,
-                        "own_params": 18624,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 18528,
-                        "own_params": 18528,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 75360,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 18528,
-                        "own_params": 18528,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 37248,
-                        "own_params": 37248,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 18624,
-                        "own_params": 18624,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 192,
-            "own_params": 192,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 7000000
     },
     {
       "name": "crossvit_tiny_cls",
       "path": "lucid.models.vision.crossvit._pretrained.crossvit_tiny_cls",
       "kind": "function",
       "labels": [],
-      "signature": "crossvit_tiny_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L433",
+      "signature": "crossvit_tiny_cls(pretrained: bool | str = False, weights: CrossViTTinyWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L185",
       "subcategory": "pretrained",
-      "summary": "CrossViT-Tiny image classifier (Chen et al., 2021).",
-      "extended": "Combines the `crossvit_tiny` backbone (`depth=1`,\n`small_dim=96`, `large_dim=192`) with two per-branch linear\nheads whose logits are averaged.  ~7.0M parameters — useful as a\nfast baseline for mobile / latency-sensitive applications.",
+      "summary": "CrossViT-Ti image classifier (Chen et al., ICCV 2021).",
+      "extended": "Two-branch ViT with embedding dims `(96, 192)`, per-stage depths\n`((1, 4, 0)) x 3`, and 3 attention heads per branch.  ~7M\nparameters; paper Table 2 reports **72.6%** ImageNet-1k top-1 at\n240x240.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CrossViTTinyWeights`; a string\nselects a named entry from that enum.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CrossViTTinyWeights",
+          "description": "Explicit weight-enum member.  Mutually exclusive with a string\n`pretrained`; raises if both resolve to different entries.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-Tiny config.",
+          "description": "Per-field overrides forwarded to `CrossViTConfig` (e.g.\n`num_classes=10` to retarget the head).",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "CrossViTForImageClassification",
-        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+        "description": "The configured classifier, ready for `model(x)` inference or\nfine-tuning."
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_tiny_cls\n>>> model = crossvit_tiny_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
-      ],
+      "examples": [],
       "notes": [
-        "See `[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViTForImageClassification",
-        "type": "CrossViTForImageClassification",
-        "params": 1367312,
-        "own_params": 69312,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 41568,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 41568,
-                "own_params": 41568,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 147648,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 147648,
-                "own_params": 147648,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 818208,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 818208,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 111840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 37248,
-                        "own_params": 37248,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 74208,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 37248,
-                            "own_params": 37248,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 36960,
-                            "own_params": 36960,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 444864,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 186144,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 18624,
-                        "own_params": 18624,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 18528,
-                        "own_params": 18528,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 75360,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 18528,
-                        "own_params": 18528,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 37248,
-                        "own_params": 37248,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 18624,
-                        "own_params": 18624,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 192,
-            "own_params": 192,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 97000,
-            "own_params": 97000,
-            "children": []
-          },
-          {
-            "name": "head_l",
-            "type": "Linear",
-            "params": 193000,
-            "own_params": 193000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 7000000
     },
     {
       "name": "crossvit_small",
@@ -1823,675 +465,66 @@
       "kind": "function",
       "labels": [],
       "signature": "crossvit_small(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L200",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L110",
       "subcategory": "pretrained",
-      "summary": "CrossViT-Small backbone (Chen et al., 2021).",
-      "extended": "Wider / deeper CrossViT with `depth=4`, `small_dim=192`,\n`large_dim=384`, `mlp_ratio=4.0`.  Approximately **26.9M\nparameters** — the standard small-class variant in the paper.",
-      "parameters": [
-        {
-          "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
-          "default": "False"
-        },
-        {
-          "name": "**overrides",
-          "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-Small config.",
-          "default": "{}"
-        }
-      ],
+      "summary": "CrossViT-S backbone — `embed_dims=(192, 384)`, depths\n`((1, 4, 0))×3`, 6 heads.  ~26.7M params (paper Table 2).",
+      "extended": null,
+      "parameters": [],
       "returns": {
         "annotation": "CrossViT",
-        "description": "A `CrossViT` backbone returning a flat $(B, 384)$\nlarge-branch CLS feature."
+        "description": ""
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_small\n>>> model = crossvit_small()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 384)"
-      ],
-      "notes": [
-        "See `[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
-      ],
+      "examples": [],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViT",
-        "type": "CrossViT",
-        "params": 13551936,
-        "own_params": 138624,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 83136,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 83136,
-                "own_params": 83136,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 295296,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 295296,
-                "own_params": 295296,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 13033728,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 3258432,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 444864,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 1774464,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1181568,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 591360,
-                            "own_params": 591360,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 590208,
-                            "own_params": 590208,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 740928,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 298176,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 4
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 768,
-            "own_params": 768,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 26700000
     },
     {
       "name": "crossvit_small_cls",
       "path": "lucid.models.vision.crossvit._pretrained.crossvit_small_cls",
       "kind": "function",
       "labels": [],
-      "signature": "crossvit_small_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L479",
+      "signature": "crossvit_small_cls(pretrained: bool | str = False, weights: CrossViTSmallWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L238",
       "subcategory": "pretrained",
-      "summary": "CrossViT-Small image classifier (Chen et al., 2021).",
-      "extended": "Combines the `crossvit_small` backbone (`depth=4`,\n`small_dim=192`, `large_dim=384`) with two per-branch linear\nheads whose logits are averaged.  ~26.9M parameters.",
+      "summary": "CrossViT-S image classifier — `embed_dims=(192, 384)`, depths\n`((1, 4, 0)) x 3`, 6 heads per branch.  ~26.7M params; paper\nTable 2 reports **81.0%** ImageNet-1k top-1 at 240x240.",
+      "extended": null,
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CrossViTSmallWeights`; a string\nselects a named entry from that enum.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CrossViTSmallWeights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-Small config.",
+          "description": "Per-field overrides forwarded to `CrossViTConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "CrossViTForImageClassification",
-        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+        "description": "The configured classifier."
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_small_cls\n>>> model = crossvit_small_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
-      ],
+      "examples": [],
       "notes": [
-        "See `[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViTForImageClassification",
-        "type": "CrossViTForImageClassification",
-        "params": 14129936,
-        "own_params": 138624,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 83136,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 83136,
-                "own_params": 83136,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 295296,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 295296,
-                "own_params": 295296,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 13033728,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 3258432,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 444864,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 1774464,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1181568,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 591360,
-                            "own_params": 591360,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 590208,
-                            "own_params": 590208,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 740928,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 298176,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 4
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 768,
-            "own_params": 768,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 193000,
-            "own_params": 193000,
-            "children": []
-          },
-          {
-            "name": "head_l",
-            "type": "Linear",
-            "params": 385000,
-            "own_params": 385000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 26700000
     },
     {
       "name": "crossvit_base",
@@ -2499,675 +532,66 @@
       "kind": "function",
       "labels": [],
       "signature": "crossvit_base(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L244",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L124",
       "subcategory": "pretrained",
-      "summary": "CrossViT-Base backbone (Chen et al., 2021).",
-      "extended": "Deeper variant with `depth=10` CrossViT stages,\n`small_dim=192`, `large_dim=384`, `mlp_ratio=4.0`.\nApproximately **105M parameters** — trades parameter count for\naccuracy by lengthening the trunk rather than widening it.",
-      "parameters": [
-        {
-          "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
-          "default": "False"
-        },
-        {
-          "name": "**overrides",
-          "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-Base config.",
-          "default": "{}"
-        }
-      ],
+      "summary": "CrossViT-B backbone — `embed_dims=(384, 768)`, depths\n`((1, 4, 0))×3`, 12 heads.  ~105M params (paper Table 2).",
+      "extended": null,
+      "parameters": [],
       "returns": {
         "annotation": "CrossViT",
-        "description": "A `CrossViT` backbone returning a flat $(B, 384)$\nlarge-branch CLS feature."
+        "description": ""
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_base\n>>> model = crossvit_base()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 384)"
-      ],
-      "notes": [
-        "See `[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
-      ],
+      "examples": [],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViT",
-        "type": "CrossViT",
-        "params": 33102528,
-        "own_params": 138624,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 83136,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 83136,
-                "own_params": 83136,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 295296,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 295296,
-                "own_params": 295296,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 32584320,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 3258432,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 444864,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 1774464,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1181568,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 591360,
-                            "own_params": 591360,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 590208,
-                            "own_params": 590208,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 740928,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 298176,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 10
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 768,
-            "own_params": 768,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 105000000
     },
     {
       "name": "crossvit_base_cls",
       "path": "lucid.models.vision.crossvit._pretrained.crossvit_base_cls",
       "kind": "function",
       "labels": [],
-      "signature": "crossvit_base_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L524",
+      "signature": "crossvit_base_cls(pretrained: bool | str = False, weights: CrossViTBaseWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L285",
       "subcategory": "pretrained",
-      "summary": "CrossViT-Base image classifier (Chen et al., 2021).",
-      "extended": "Combines the `crossvit_base` backbone (`depth=10`,\n`small_dim=192`, `large_dim=384`) with two per-branch linear\nheads whose logits are averaged.  ~105M parameters.",
+      "summary": "CrossViT-B image classifier — `embed_dims=(384, 768)`, depths\n`((1, 4, 0)) x 3`, 12 heads per branch.  ~105M params; paper\nTable 2 reports **82.2%** ImageNet-1k top-1 at 240x240.",
+      "extended": null,
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CrossViTBaseWeights`; a string\nselects a named entry from that enum.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CrossViTBaseWeights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-Base config.",
+          "description": "Per-field overrides forwarded to `CrossViTConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "CrossViTForImageClassification",
-        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+        "description": "The configured classifier."
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_base_cls\n>>> model = crossvit_base_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
-      ],
+      "examples": [],
       "notes": [
-        "See `[arXiv:2103.14899](https://arxiv.org/abs/2103.14899) <https://arxiv.org/abs/2103.14899>`_."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViTForImageClassification",
-        "type": "CrossViTForImageClassification",
-        "params": 33680528,
-        "own_params": 138624,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 83136,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 83136,
-                "own_params": 83136,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 295296,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 295296,
-                "own_params": 295296,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 32584320,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 3258432,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 444864,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 1774464,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1181568,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 591360,
-                            "own_params": 591360,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 590208,
-                            "own_params": 590208,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 740928,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 298176,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 10
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 768,
-            "own_params": 768,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 193000,
-            "own_params": 193000,
-            "children": []
-          },
-          {
-            "name": "head_l",
-            "type": "Linear",
-            "params": 385000,
-            "own_params": 385000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 105000000
     },
     {
       "name": "crossvit_15",
@@ -3175,675 +599,66 @@
       "kind": "function",
       "labels": [],
       "signature": "crossvit_15(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L289",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L152",
       "subcategory": "pretrained",
-      "summary": "CrossViT-15 backbone (Chen et al., 2021).",
-      "extended": "Builds the *CrossViT-15* configuration: `depth=3`,\n`small_dim=192`, `large_dim=384`, `small_heads=6`,\n`large_heads=6`, `mlp_ratio=3.0`.  Approximately **27.5M\nparameters**.",
-      "parameters": [
-        {
-          "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
-          "default": "False"
-        },
-        {
-          "name": "**overrides",
-          "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-15 config.",
-          "default": "{}"
-        }
-      ],
+      "summary": "CrossViT-15 backbone — `embed_dims=(192, 384)`, depths\n`((1, 5, 0))×3`, 6 heads.  ~27.4M params (paper Table 2).",
+      "extended": null,
+      "parameters": [],
       "returns": {
         "annotation": "CrossViT",
-        "description": "A `CrossViT` backbone returning a flat $(B, 384)$\nlarge-branch CLS feature."
+        "description": ""
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_15\n>>> model = crossvit_15()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 384)"
-      ],
-      "notes": [
-        "CrossViT-15 reaches **81.5% top-1 on ImageNet-1k** (Chen et al.,\n2021, Table 5)."
-      ],
+      "examples": [],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViT",
-        "type": "CrossViT",
-        "params": 9185856,
-        "own_params": 138624,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 83136,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 83136,
-                "own_params": 83136,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 295296,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 295296,
-                "own_params": 295296,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 8667648,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 2889216,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 370944,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 221952,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 111168,
-                            "own_params": 111168,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 110784,
-                            "own_params": 110784,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 1479168,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 886272,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 443520,
-                            "own_params": 443520,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 442752,
-                            "own_params": 442752,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 740928,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 298176,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 768,
-            "own_params": 768,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 27400000
     },
     {
       "name": "crossvit_15_cls",
       "path": "lucid.models.vision.crossvit._pretrained.crossvit_15_cls",
       "kind": "function",
       "labels": [],
-      "signature": "crossvit_15_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L569",
+      "signature": "crossvit_15_cls(pretrained: bool | str = False, weights: CrossViT15Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L379",
       "subcategory": "pretrained",
-      "summary": "CrossViT-15 image classifier (Chen et al., 2021).",
-      "extended": "Combines the `crossvit_15` backbone (`depth=3`,\n`small_dim=192`, `large_dim=384`, `mlp_ratio=3.0`) with two\nper-branch linear heads whose logits are averaged.  ~27.5M\nparameters.",
+      "summary": "CrossViT-15 image classifier — `embed_dims=(192, 384)`, depths\n`((1, 5, 0)) x 3`, 6 heads per branch.  ~27.4M params; paper\nTable 2 reports **81.5%** ImageNet-1k top-1 at 240x240.",
+      "extended": null,
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CrossViT15Weights`; a string\nselects a named entry from that enum.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CrossViT15Weights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-15 config.",
+          "description": "Per-field overrides forwarded to `CrossViTConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "CrossViTForImageClassification",
-        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+        "description": "The configured classifier."
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_15_cls\n>>> model = crossvit_15_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
-      ],
+      "examples": [],
       "notes": [
-        "CrossViT-15 reaches **81.5% top-1 on ImageNet-1k** (Chen et al.,\n2021, Table 5)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViTForImageClassification",
-        "type": "CrossViTForImageClassification",
-        "params": 9763856,
-        "own_params": 138624,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 83136,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 83136,
-                "own_params": 83136,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 295296,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 295296,
-                "own_params": 295296,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 8667648,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 2889216,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 370944,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 221952,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 111168,
-                            "own_params": 111168,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 110784,
-                            "own_params": 110784,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 1479168,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 886272,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 443520,
-                            "own_params": 443520,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 442752,
-                            "own_params": 442752,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 740928,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 298176,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 73920,
-                        "own_params": 73920,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 148224,
-                        "own_params": 148224,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 74112,
-                        "own_params": 74112,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 384,
-            "own_params": 384,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 768,
-            "own_params": 768,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 193000,
-            "own_params": 193000,
-            "children": []
-          },
-          {
-            "name": "head_l",
-            "type": "Linear",
-            "params": 385000,
-            "own_params": 385000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 27400000
     },
     {
       "name": "crossvit_18",
@@ -3851,675 +666,300 @@
       "kind": "function",
       "labels": [],
       "signature": "crossvit_18(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L335",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L166",
       "subcategory": "pretrained",
-      "summary": "CrossViT-18 backbone (Chen et al., 2021).",
-      "extended": "Builds the *CrossViT-18* configuration: `depth=3`,\n`small_dim=224`, `large_dim=448`, `small_heads=7`,\n`large_heads=7`, `mlp_ratio=3.0`.  Approximately **43.3M\nparameters** — the largest variant in the paper.",
-      "parameters": [
-        {
-          "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
-          "default": "False"
-        },
-        {
-          "name": "**overrides",
-          "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-18 config.",
-          "default": "{}"
-        }
-      ],
+      "summary": "CrossViT-18 backbone — `embed_dims=(224, 448)`, depths\n`((1, 6, 0))×3`, 7 heads.  ~43.3M params (paper Table 2).",
+      "extended": null,
+      "parameters": [],
       "returns": {
         "annotation": "CrossViT",
-        "description": "A `CrossViT` backbone returning a flat $(B, 448)$\nlarge-branch CLS feature."
+        "description": ""
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_18\n>>> model = crossvit_18()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 448)"
-      ],
-      "notes": [
-        "CrossViT-18 reaches **82.5% top-1 on ImageNet-1k** (Chen et al.,\n2021, Table 5)."
-      ],
+      "examples": [],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViT",
-        "type": "CrossViT",
-        "params": 12394144,
-        "own_params": 161728,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 96992,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 96992,
-                "own_params": 96992,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 344512,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 344512,
-                "own_params": 344512,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 11789568,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 3929856,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 504448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 201600,
-                        "own_params": 201600,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 301952,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 151200,
-                            "own_params": 151200,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 150752,
-                            "own_params": 150752,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 2012416,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 804608,
-                        "own_params": 804608,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1206016,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 603456,
-                            "own_params": 603456,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 602560,
-                            "own_params": 602560,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 1007776,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 100800,
-                        "own_params": 100800,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 804608,
-                        "own_params": 804608,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 100576,
-                        "own_params": 100576,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 405216,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 100576,
-                        "own_params": 100576,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 201600,
-                        "own_params": 201600,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 100800,
-                        "own_params": 100800,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 448,
-            "own_params": 448,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 896,
-            "own_params": 896,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 43300000
     },
     {
       "name": "crossvit_18_cls",
       "path": "lucid.models.vision.crossvit._pretrained.crossvit_18_cls",
       "kind": "function",
       "labels": [],
-      "signature": "crossvit_18_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/crossvit/_pretrained.py#L616",
+      "signature": "crossvit_18_cls(pretrained: bool | str = False, weights: CrossViT18Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_pretrained.py#L426",
       "subcategory": "pretrained",
-      "summary": "CrossViT-18 image classifier (Chen et al., 2021).",
-      "extended": "Combines the `crossvit_18` backbone (`depth=3`,\n`small_dim=224`, `large_dim=448`, `mlp_ratio=3.0`) with two\nper-branch linear heads whose logits are averaged.  ~43.3M\nparameters — the largest variant in the paper.",
+      "summary": "CrossViT-18 image classifier — `embed_dims=(224, 448)`, depths\n`((1, 6, 0)) x 3`, 7 heads per branch.  ~43.3M params; paper\nTable 2 reports **82.5%** ImageNet-1k top-1 at 240x240.",
+      "extended": null,
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "`False` returns randomly-initialised weights; `True` loads\nthe default entry of `CrossViT18Weights`; a string\nselects a named entry from that enum.",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "CrossViT18Weights",
+          "description": "Explicit weight-enum member overriding `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides on top of the canonical CrossViT-18 config.",
+          "description": "Per-field overrides forwarded to `CrossViTConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "CrossViTForImageClassification",
-        "description": "Classifier whose `logits` has shape `(B, num_classes)`."
+        "description": "The configured classifier."
       },
       "raises": [],
-      "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.crossvit import crossvit_18_cls\n>>> model = crossvit_18_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
-      ],
+      "examples": [],
       "notes": [
-        "CrossViT-18 reaches **82.5% top-1 on ImageNet-1k** (Chen et al.,\n2021, Table 5) — the headline result of the paper."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CrossViTForImageClassification",
-        "type": "CrossViTForImageClassification",
-        "params": 13068144,
-        "own_params": 161728,
-        "children": [
-          {
-            "name": "embed_s",
-            "type": "_PatchEmbed",
-            "params": 96992,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 96992,
-                "own_params": 96992,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "embed_l",
-            "type": "_PatchEmbed",
-            "params": 344512,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 344512,
-                "own_params": 344512,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "pos_drop",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 11789568,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_CrossViTStage",
-                "params": 3929856,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "small_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 504448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 201600,
-                        "own_params": 201600,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 301952,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 151200,
-                            "own_params": 151200,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 150752,
-                            "own_params": 150752,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "large_block",
-                    "type": "_SelfAttnBlock",
-                    "params": 2012416,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 804608,
-                        "own_params": 804608,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1206016,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 603456,
-                            "own_params": 603456,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 602560,
-                            "own_params": 602560,
-                            "children": []
-                          },
-                          {
-                            "name": "drop",
-                            "type": "Dropout",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_s2l",
-                    "type": "_CrossAttention",
-                    "params": 1007776,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 100800,
-                        "own_params": 100800,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 804608,
-                        "own_params": 804608,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 100576,
-                        "own_params": 100576,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "cross_l2s",
-                    "type": "_CrossAttention",
-                    "params": 405216,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm_src",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_tgt",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "q_proj",
-                        "type": "Linear",
-                        "params": 100576,
-                        "own_params": 100576,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 201600,
-                        "own_params": 201600,
-                        "children": []
-                      },
-                      {
-                        "name": "out_proj",
-                        "type": "Linear",
-                        "params": 100800,
-                        "own_params": 100800,
-                        "children": []
-                      },
-                      {
-                        "name": "norm_out",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      }
-                    ]
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "norm_s",
-            "type": "LayerNorm",
-            "params": 448,
-            "own_params": 448,
-            "children": []
-          },
-          {
-            "name": "norm_l",
-            "type": "LayerNorm",
-            "params": 896,
-            "own_params": 896,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 225000,
-            "own_params": 225000,
-            "children": []
-          },
-          {
-            "name": "head_l",
-            "type": "Linear",
-            "params": 449000,
-            "own_params": 449000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 43300000
+    },
+    {
+      "name": "CrossViT9Weights",
+      "path": "lucid.models.vision.crossvit._weights.CrossViT9Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CrossViT9Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_weights.py#L145",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.crossvit_9_cls`.",
+      "extended": "9-block CrossViT variant (Chen et al. ICCV 2021; 8.6 M params, top-1 73.9%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import crossvit_9_cls\n>>> model = crossvit_9_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
+      ],
+      "attributes": [
+        {
+          "name": "IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k checkpoint (top-1 73.9%), sourced from\n`timm/crossvit_9_240.in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CrossViT15Weights",
+      "path": "lucid.models.vision.crossvit._weights.CrossViT15Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CrossViT15Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_weights.py#L187",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.crossvit_15_cls`.",
+      "extended": "15-block CrossViT variant (Chen et al. ICCV 2021; 27.5 M params, top-1 81.5%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import crossvit_15_cls\n>>> model = crossvit_15_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
+      ],
+      "attributes": [
+        {
+          "name": "IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k checkpoint (top-1 81.5%), sourced from\n`timm/crossvit_15_240.in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CrossViT18Weights",
+      "path": "lucid.models.vision.crossvit._weights.CrossViT18Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CrossViT18Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_weights.py#L229",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.crossvit_18_cls`.",
+      "extended": "18-block CrossViT variant (Chen et al. ICCV 2021; 43.3 M params, top-1 82.5%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import crossvit_18_cls\n>>> model = crossvit_18_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
+      ],
+      "attributes": [
+        {
+          "name": "IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k checkpoint (top-1 82.5%), sourced from\n`timm/crossvit_18_240.in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CrossViTBaseWeights",
+      "path": "lucid.models.vision.crossvit._weights.CrossViTBaseWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CrossViTBaseWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_weights.py#L103",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.crossvit_base_cls`.",
+      "extended": "Chen et al. ICCV 2021 dual-branch ViT (105 M params, top-1 82.2%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import crossvit_base_cls\n>>> model = crossvit_base_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
+      ],
+      "attributes": [
+        {
+          "name": "IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k checkpoint (top-1 82.2%), sourced from\n`timm/crossvit_base_240.in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CrossViTSmallWeights",
+      "path": "lucid.models.vision.crossvit._weights.CrossViTSmallWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CrossViTSmallWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_weights.py#L61",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.crossvit_small_cls`.",
+      "extended": "Chen et al. ICCV 2021 dual-branch ViT (26.9 M params, top-1 81.0%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import crossvit_small_cls\n>>> model = crossvit_small_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
+      ],
+      "attributes": [
+        {
+          "name": "IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k checkpoint (top-1 81.0%), sourced from\n`timm/crossvit_small_240.in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CrossViTTinyWeights",
+      "path": "lucid.models.vision.crossvit._weights.CrossViTTinyWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CrossViTTinyWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/crossvit/_weights.py#L19",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.crossvit_tiny_cls`.",
+      "extended": "Chen et al. ICCV 2021 dual-branch ViT (7.0 M params, top-1 72.6%).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import crossvit_tiny_cls\n>>> model = crossvit_tiny_cls(pretrained=True).eval()"
+      ],
+      "notes": [
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
+      ],
+      "attributes": [
+        {
+          "name": "IN1K",
+          "annotation": "WeightEntry",
+          "description": "ImageNet-1k checkpoint (top-1 72.6%), sourced from\n`timm/crossvit_tiny_240.in1k`."
+        },
+        {
+          "name": "DEFAULT",
+          "annotation": "WeightEntry",
+          "description": "Alias for `IN1K`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
     }
   ],
   "summary": "CrossViT family — backbone + image classification (Chen et al., 2021).",
@@ -4534,7 +974,7 @@
   "see_also": [],
   "canonical_name": "CrossViT",
   "citation": "Chen, Chun-Fu (Richard), et al. \"CrossViT: Cross-Attention Multi-Scale Vision Transformer for Image Classification.\" Proceedings of the IEEE/CVF International Conference on Computer Vision, 2021, pp. 357-366.",
-  "theory": "CrossViT explicitly models *multi-scale* visual information by\nrunning two parallel ViT branches with different patch sizes and\nfusing them through a lightweight cross-attention mechanism.  A\n*small-patch* branch (e.g. patch size 12) processes a long sequence\nof fine-grained tokens, while a *large-patch* branch (e.g. patch\nsize 16) processes a short sequence of coarse tokens.  Each branch\nhas its own class token $x_{\\text{cls}}^{s}$ /\n$x_{\\text{cls}}^{l}$ and is independently transformer-encoded\nfor $L$ blocks.\n\nInformation is exchanged between branches only through the class\ntokens, using *cross-attention*: the class token of one branch\nattends to the patch tokens of the *other* branch as queries,\nleaving the other branch's patch tokens unchanged.  Concretely, for\nthe small-to-large direction,\n\n\n\n$$\n\\tilde{x}_{\\text{cls}}^{\\,l} = x_{\\text{cls}}^{l} +\n    \\mathrm{Attn}\\!\\bigl(W_q x_{\\text{cls}}^{l},\n    W_k x_{\\text{patch}}^{s}, W_v x_{\\text{patch}}^{s}\\bigr),\n$$\n\nand symmetrically for large-to-small.  Because cross-attention is\nonly $\\mathcal{O}(N_s + N_l)$ per direction, multi-scale\nfusion is essentially free relative to the per-branch self-attention\ncost.  The final classifier averages the two updated class tokens.\nThe variants CrossViT-9 / 15 / 18 trade depth and width along this\ntwo-branch skeleton.",
+  "theory": "CrossViT explicitly models *multi-scale* visual information by\nrunning two parallel ViT branches with different patch sizes and\nfusing them through a lightweight cross-attention mechanism.  A\n*small-patch* branch (patch size 12) processes a long sequence of\nfine-grained tokens, while a *large-patch* branch (patch size 16)\nprocesses a short sequence of coarse tokens.  The two branches\noperate on *different* input resolutions — the small-patch branch\non the full image (e.g. $240\\times240$), the large-patch\nbranch on a slightly down-sampled version (e.g. $224\\times224$)\n— and each has its own class token plus learnable positional\nembedding.\n\nEach branch is independently transformer-encoded for\n$N_s$ / $N_l$ standard self-attention blocks; the two\nbranches then exchange information at the **end of every stage**\nvia a *MultiScaleBlock*: the CLS token from one branch is\nprojected into the other branch's embedding space, cross-attends\nto that branch's patch tokens, and is projected back.  Concretely,\nfor the small-to-large direction,\n\n\n\n$$\n\\tilde{x}_{\\text{cls}}^{\\,l} = x_{\\text{cls}}^{l} +\n    \\mathrm{CrossAttn}\\!\\bigl(W_q x_{\\text{cls}}^{l},\n    W_k x_{\\text{patch}}^{s}, W_v x_{\\text{patch}}^{s}\\bigr),\n$$\n\nand symmetrically for large-to-small.  Because cross-attention is\nonly $\\mathcal{O}(N_s + N_l)$ per direction, multi-scale\nfusion is essentially free relative to the per-branch\nself-attention cost.  The complete network is $K=3$ such\nMultiScaleBlocks stacked back-to-back; the final classifier head\naverages the logits of the two per-branch linear layers.\n\nThe variants CrossViT-Ti / -S / -B / -9 / -15 / -18 trade depth and\nwidth along this two-branch skeleton (paper Table 2).",
   "tasks": [
     "image-classification"
   ]

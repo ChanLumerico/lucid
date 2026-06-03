@@ -10,6 +10,15 @@
 import { getAllModuleSlugs, loadApiData } from "@/lib/api-loader";
 import { isApiClass, isApiClassModule, isApiModule } from "@/lib/types";
 
+// Mirror of ``next.config.ts``'s ``basePath`` (``/lucid`` in prod, ``""`` in
+// dev).  The type-link map stores base-relative hrefs (``/api/…``) because
+// its other consumer — ``TypeAnnotation`` — feeds them to Next's ``<Link>``,
+// which prepends the basePath itself.  ``linkifyTypesInHtml`` instead emits a
+// raw ``<a>`` into a ``dangerouslySetInnerHTML`` string, which Next does NOT
+// rewrite, so it must prepend the basePath manually (otherwise every linked
+// type in a code signature 404s on GitHub Pages, escaping the ``/lucid`` base).
+const BASE_PATH = process.env.NODE_ENV === "production" ? "/lucid" : "";
+
 /** Type name (basename, e.g. ``"Tensor"`` / ``"Module"``) → docs URL. */
 let _typeLinkCache: ReadonlyMap<string, string> | null = null;
 
@@ -83,7 +92,7 @@ export function linkifyTypesInHtml(html: string): string {
       // underlines so users can tell linked types apart from primitive
       // shiki tokens.
       return (
-        `<a href="${href}" class="hover:underline decoration-dotted underline-offset-2">` +
+        `<a href="${BASE_PATH}${href}" class="hover:underline decoration-dotted underline-offset-2">` +
         openTag +
         name +
         closeTag +

@@ -3,7 +3,7 @@
   "name": "efficientformer",
   "path": "lucid.models.vision.efficientformer",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/__init__.py#L1",
   "members": [
     {
       "name": "EfficientFormerConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "EfficientFormerConfig(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (3, 2, 6, 4), embed_dims: tuple[int, ...] = (48, 96, 224, 448), mlp_ratios: tuple[float, ...] = (4.0, 4.0, 4.0, 4.0), drop_path_rate: float = 0.0, layer_scale_init: float = 1e-05)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_config.py#L10",
+      "signature": "EfficientFormerConfig(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (3, 2, 6, 4), embed_dims: tuple[int, ...] = (48, 96, 224, 448), mlp_ratios: tuple[float, ...] = (4.0, 4.0, 4.0, 4.0), num_vit: int = 1, pool_size: int = 3, key_dim: int = 32, num_heads: int = 8, attn_ratio: float = 4.0, resolution: int = 7, drop_path_rate: float = 0.0, layer_scale_init: float = 1e-05)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.efficientformer._config.EfficientFormerConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (3, 2, 6, 4), embed_dims: tuple[int, ...] = (48, 96, 224, 448), mlp_ratios: tuple[float, ...] = (4.0, 4.0, 4.0, 4.0), drop_path_rate: float = 0.0, layer_scale_init: float = 1e-05)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (3, 2, 6, 4), embed_dims: tuple[int, ...] = (48, 96, 224, 448), mlp_ratios: tuple[float, ...] = (4.0, 4.0, 4.0, 4.0), num_vit: int = 1, pool_size: int = 3, key_dim: int = 32, num_heads: int = 8, attn_ratio: float = 4.0, resolution: int = 7, drop_path_rate: float = 0.0, layer_scale_init: float = 1e-05)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -75,6 +75,42 @@
           "default": "(4.0, 4.0, 4.0, 4.0)"
         },
         {
+          "name": "num_vit",
+          "annotation": "int",
+          "description": "Number of trailing blocks in the *last* stage that run 3-D\nmulti-head self-attention (the remainder run the 4-D pooling\ntoken mixer).  Defaults to `1` (EfficientFormer-L1); L3 uses\n`4` and L7 uses `8`.",
+          "default": "1"
+        },
+        {
+          "name": "pool_size",
+          "annotation": "int",
+          "description": "Spatial extent of the average-pool token mixer in the 4-D\npooling blocks.  Defaults to `3`.",
+          "default": "3"
+        },
+        {
+          "name": "key_dim",
+          "annotation": "int",
+          "description": "Per-head query/key dimension in the attention token mixer.\nDefaults to `32` (fixed across all paper variants).",
+          "default": "32"
+        },
+        {
+          "name": "num_heads",
+          "annotation": "int",
+          "description": "Number of attention heads in the attention token mixer.\nDefaults to `8` (fixed across all paper variants).",
+          "default": "8"
+        },
+        {
+          "name": "attn_ratio",
+          "annotation": "float",
+          "description": "Value/key dimension ratio in the attention token mixer; the\nper-head value dimension is `attn_ratio * key_dim`.  Defaults\nto `4.0`.",
+          "default": "4.0"
+        },
+        {
+          "name": "resolution",
+          "annotation": "int",
+          "description": "Side length of the (square) token grid feeding the attention\nstage; the learned attention-bias table has\n`resolution ** 2` entries per head.  Defaults to `7`\n(a `7 x 7` grid at the default `224` input).",
+          "default": "7"
+        },
+        {
           "name": "drop_path_rate",
           "annotation": "float",
           "description": "Maximum stochastic-depth rate; linearly scheduled across all\nblocks of the trunk.  The paper uses `0.0` for L1, `0.1`\nfor L3, `0.2` for L7.  Defaults to `0.0`.",
@@ -93,7 +129,7 @@
         "Build an EfficientFormer-L1 configuration with a 100-class head:\n>>> from lucid.models.vision.efficientformer import EfficientFormerConfig\n>>> cfg = EfficientFormerConfig(num_classes=100)\n>>> cfg.depths, cfg.embed_dims, cfg.num_classes\n((3, 2, 6, 4), (48, 96, 224, 448), 100)"
       ],
       "notes": [
-        "The canonical variants registered as factory functions in\n`lucid.models.vision.efficientformer` are:\n\n============================ ================ ===================\nVariant                      depths           embed_dims\n============================ ================ ===================\nEfficientFormer-L1           (3, 2, 6, 4)     (48, 96, 224, 448)\nEfficientFormer-L3           (4, 4, 12, 6)    (64, 128, 320, 512)\nEfficientFormer-L7           (6, 6, 18, 8)    (96, 192, 384, 768)\n============================ ================ ===================\n\nReference: Yanyu Li *et al.*, *\"EfficientFormer: Vision\nTransformers at MobileNet Speed\"*, NeurIPS 2022,\n`[arXiv:2206.01191](https://arxiv.org/abs/2206.01191) <https://arxiv.org/abs/2206.01191>`_."
+        "The canonical variants registered as factory functions in\n`lucid.models.vision.efficientformer` are:\n\n============================ ================ ===================\nVariant                      depths           embed_dims\n============================ ================ ===================\nEfficientFormer-L1           (3, 2, 6, 4)     (48, 96, 224, 448)\nEfficientFormer-L3           (4, 4, 12, 6)    (64, 128, 320, 512)\nEfficientFormer-L7           (6, 6, 18, 8)    (96, 192, 384, 768)\n============================ ================ ===================\n\nReference: Yanyu Li *et al.*, *\"EfficientFormer: Vision\nTransformers at MobileNet Speed\"*, NeurIPS 2022,\n[arXiv:2206.01191](https://arxiv.org/abs/2206.01191)."
       ],
       "attributes": [
         {
@@ -116,7 +152,7 @@
       ],
       "labels": [],
       "signature": "EfficientFormer(config: EfficientFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L256",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L481",
       "subcategory": "model",
       "methods": [
         {
@@ -125,7 +161,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: EfficientFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L330",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L555",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -149,7 +185,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L341",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L565",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -170,7 +206,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L344",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L568",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -192,7 +228,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L369",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L572",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -210,12 +246,12 @@
         }
       ],
       "summary": "EfficientFormer backbone (Li et al., 2022).",
-      "extended": "EfficientFormer is a *mobile-grade* vision backbone designed so\nthat its on-device latency, rather than its FLOP count, matches\nMobileNet on the same hardware while retaining transformer-level\naccuracy.  The trunk has four stages preceded by a 2x stride-2\nconvolutional stem.  Stages 1-3 are MetaFormer-style *pooling*\nblocks operating in $(B, C, H, W)$ layout — no reshape, no\nself-attention:\n\n$$\n\\begin{aligned}\nx &\\leftarrow x + \\gamma_1 \\odot \\bigl(\n    \\mathrm{AvgPool}_{3 \\times 3}(x) - x\\bigr), \\\\\nx &\\leftarrow x + \\gamma_2 \\odot \\mathrm{MLP}(x),\n\\end{aligned}\n$$\nwith $\\gamma_1, \\gamma_2$ initialised to $10^{-5}$\n(CaiT-style layer scale).  Stage 4 is the only stage that pays the\ncost of a reshape and runs standard multi-head self-attention on\nthe now-tiny token grid.\n\n`forward_features` returns the mean-pooled\n$(B, \\texttt{embed\\_dims[-1]})$ feature.",
+      "extended": "EfficientFormer is a *mobile-grade* vision backbone designed so\nthat its on-device latency, rather than its FLOP count, matches\nMobileNet on the same hardware while retaining transformer-level\naccuracy.  The trunk has four stages preceded by a two stride-2\nconvolutional stem.  Stages 1-3 are MetaFormer-style *pooling*\nblocks operating in $(B, C, H, W)$ layout — no reshape, no\nself-attention:\n\n$$\n\\begin{aligned}\nx &\\leftarrow x + \\gamma_1 \\odot \\bigl(\n    \\mathrm{AvgPool}_{3 \\times 3}(x) - x\\bigr), \\\\\nx &\\leftarrow x + \\gamma_2 \\odot \\mathrm{ConvMLP}(x),\n\\end{aligned}\n$$\n\nwith $\\gamma_1, \\gamma_2$ initialised to $10^{-5}$\n(CaiT-style layer scale).  The last stage switches its trailing\n$\\texttt{num\\_vit}$ blocks to standard multi-head\nself-attention with a learned relative-position bias on the\nnow-tiny token grid.\n\n`forward_features` returns the mean-pooled\n$(B, \\texttt{embed\\_dims[-1]})$ feature.",
       "parameters": [
         {
           "name": "config",
           "annotation": "EfficientFormerConfig",
-          "description": "Frozen dataclass specifying `depths`, `embed_dims`,\n`mlp_ratios`, `drop_path_rate`, `layer_scale_init`,\n`in_channels`, and `num_classes`.  See\n`EfficientFormerConfig`.",
+          "description": "Frozen dataclass specifying `depths`, `embed_dims`,\n`mlp_ratios`, `num_vit`, `drop_path_rate`,\n`layer_scale_init`, `in_channels`, and `num_classes`.\nSee `EfficientFormerConfig`.",
           "default": null
         }
       ],
@@ -225,28 +261,23 @@
         "Build an EfficientFormer-L1 backbone and run a forward pass:\n>>> import lucid\n>>> from lucid.models.vision.efficientformer import (\n...     EfficientFormer, EfficientFormerConfig,\n... )\n>>> model = EfficientFormer(EfficientFormerConfig())\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape                       # (B, embed_dims[-1])\n(1, 448)"
       ],
       "notes": [
-        "Reference: Yanyu Li *et al.*, *\"EfficientFormer: Vision\nTransformers at MobileNet Speed\"*, NeurIPS 2022,\n`[arXiv:2206.01191](https://arxiv.org/abs/2206.01191) <https://arxiv.org/abs/2206.01191>`_."
+        "Reference: Yanyu Li *et al.*, *\"EfficientFormer: Vision\nTransformers at MobileNet Speed\"*, NeurIPS 2022,\n[arXiv:2206.01191](https://arxiv.org/abs/2206.01191)."
       ],
       "attributes": [
         {
           "name": "stem",
-          "annotation": "nn.Sequential",
+          "annotation": "_Stem",
           "description": "Two stride-2 $3 \\times 3$ convolutions reducing the\ninput by 4x."
         },
         {
           "name": "stages",
           "annotation": "nn.ModuleList",
-          "description": "Four stages — three pooling stages and one attention stage."
+          "description": "Four stages — three pooling stages and one mixed\npooling/attention stage; stages 1-3 carry a downsample."
         },
         {
-          "name": "downsamplers",
-          "annotation": "nn.ModuleList",
-          "description": "Three between-stage stride-2 convolutional downsamplers."
-        },
-        {
-          "name": "head_norm",
+          "name": "norm",
           "annotation": "nn.LayerNorm",
-          "description": "Final LayerNorm applied to the channel-last pooled feature map."
+          "description": "Final LayerNorm applied to the channel-last token sequence."
         },
         {
           "name": "feature_info",
@@ -268,7 +299,7 @@
       ],
       "labels": [],
       "signature": "EfficientFormerForImageClassification(config: EfficientFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L379",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L582",
       "subcategory": "model",
       "methods": [
         {
@@ -277,7 +308,29 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: EfficientFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L443",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L652",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset_classifier",
+          "path": "lucid.models.vision.efficientformer._model.EfficientFormerForImageClassification.reset_classifier",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset_classifier(num_classes: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L661",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -299,7 +352,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_model.py#L452",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_model.py#L666",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -316,8 +369,8 @@
           "see_also": []
         }
       ],
-      "summary": "EfficientFormer with a linear classification head (Li et al., 2022).",
-      "extended": "Wraps the same trunk as `EfficientFormer` (stem + three\npooling stages + one attention stage) and adds a mean pool over\ntokens, a final LayerNorm, and a single `nn.Linear`\nclassification head:\n\n$$\n\\text{logits} = W_{\\text{head}}\\,\n    \\mathrm{Mean}(\\mathrm{LN}(z^{L}))\n    + b_{\\text{head}}.\n$$\nPass `labels` to `forward` to compute the cross-entropy\nloss in the same pass.",
+      "summary": "EfficientFormer with a distilled dual classification head (Li et al., 2022).",
+      "extended": "Wraps the same trunk as `EfficientFormer` and adds a final\nLayerNorm, a mean pool over tokens, and *two* linear heads — the\nclassification head and the distillation head — whose logits are\naveraged at inference:\n\n$$\n\\text{logits} = \\tfrac{1}{2}\\bigl(\n    W_{\\text{head}}\\,z + b_{\\text{head}}\n    + W_{\\text{dist}}\\,z + b_{\\text{dist}}\\bigr),\n\\qquad\nz = \\mathrm{Mean}(\\mathrm{LN}(z^{L})).\n$$\n\nThe published EfficientFormer checkpoints were trained with hard\nknowledge distillation (DeiT-style), so reproducing the reported\ntop-1 accuracy requires averaging both heads.\n\nPass `labels` to `forward` to compute the cross-entropy\nloss in the same pass.",
       "parameters": [
         {
           "name": "config",
@@ -337,28 +390,28 @@
       "attributes": [
         {
           "name": "stem",
-          "annotation": "nn.Sequential",
+          "annotation": "_Stem",
           "description": "Two stride-2 convolutions."
         },
         {
           "name": "stages",
           "annotation": "nn.ModuleList",
-          "description": "Three pooling stages + one attention stage."
+          "description": "Three pooling stages + one mixed pooling/attention stage."
         },
         {
-          "name": "downsamplers",
-          "annotation": "nn.ModuleList",
-          "description": "Three between-stage downsamplers."
-        },
-        {
-          "name": "head_norm",
+          "name": "norm",
           "annotation": "nn.LayerNorm",
           "description": "Final LayerNorm."
         },
         {
-          "name": "classifier",
+          "name": "head",
           "annotation": "nn.Linear",
-          "description": "Final linear projection of width\n`(num_classes, embed_dims[-1])`."
+          "description": "Classification head `(num_classes, embed_dims[-1])`."
+        },
+        {
+          "name": "head_dist",
+          "annotation": "nn.Linear",
+          "description": "Distillation head `(num_classes, embed_dims[-1])`; averaged\nwith `head` at inference."
         }
       ],
       "warns": [],
@@ -370,7 +423,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientformer_l1(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_pretrained.py#L51",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_pretrained.py#L60",
       "subcategory": "pretrained",
       "summary": "EfficientFormer-L1 backbone (Li et al., 2022).",
       "extended": "Builds the canonical *EfficientFormer-L1* configuration:\n`depths=(3, 2, 6, 4)`, `embed_dims=(48, 96, 224, 448)`,\n`mlp_ratios=(4.0, 4.0, 4.0, 4.0)`, `drop_path_rate=0.0`.\nApproximately **12.3M parameters** — the smallest, lowest-latency\nvariant in the paper.",
@@ -397,520 +450,34 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientformer import efficientformer_l1\n>>> model = efficientformer_l1()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape\n(1, 448)"
       ],
       "notes": [
-        "EfficientFormer-L1 reaches **79.2% top-1 on ImageNet-1k** at\nMobileNetV2-class on-device latency (Li et al., 2022, Table 4).\nSee `[arXiv:2206.01191](https://arxiv.org/abs/2206.01191) <https://arxiv.org/abs/2206.01191>`_."
+        "EfficientFormer-L1 reaches **79.2% top-1 on ImageNet-1k** at\nMobileNetV2-class on-device latency (Li et al., 2022, Table 4).\nSee [arXiv:2206.01191](https://arxiv.org/abs/2206.01191)."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "EfficientFormer",
-        "type": "EfficientFormer",
-        "params": 13459760,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 11232,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 672,
-                "own_params": 672,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 48,
-                "own_params": 48,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 10416,
-                "own_params": 10416,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 96,
-                "own_params": 96,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 12307152,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Sequential",
-                "params": 58320,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 19440,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 480,
-                        "own_params": 480,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 18672,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 9408,
-                            "own_params": 9408,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 9264,
-                            "own_params": 9264,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 48,
-                        "own_params": 48,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 3
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "Sequential",
-                "params": 151488,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 75744,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 960,
-                        "own_params": 960,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 74208,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 37248,
-                            "own_params": 37248,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 36960,
-                            "own_params": 36960,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "Sequential",
-                "params": 2436672,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 406112,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 2240,
-                        "own_params": 2240,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 402528,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 201600,
-                            "own_params": 201600,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 200928,
-                            "own_params": 200928,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 224,
-                        "own_params": 224,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              },
-              {
-                "name": "3",
-                "type": "Sequential",
-                "params": 9660672,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerAttnBlock",
-                    "params": 2415168,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 804608,
-                        "own_params": 804608,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1607872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 804608,
-                            "own_params": 804608,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 803264,
-                            "own_params": 803264,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "downsamplers",
-            "type": "ModuleList",
-            "params": 1140480,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_Downsample",
-                "params": 41760,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 41568,
-                    "own_params": 41568,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 192,
-                    "own_params": 192,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_Downsample",
-                "params": 194208,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 193760,
-                    "own_params": 193760,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 448,
-                    "own_params": 448,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "_Downsample",
-                "params": 904512,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 903616,
-                    "own_params": 903616,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 896,
-                    "own_params": 896,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "head_norm",
-            "type": "LayerNorm",
-            "params": 896,
-            "own_params": 896,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "efficientformer_l1_cls",
       "path": "lucid.models.vision.efficientformer._pretrained.efficientformer_l1_cls",
       "kind": "function",
       "labels": [],
-      "signature": "efficientformer_l1_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_pretrained.py#L201",
+      "signature": "efficientformer_l1_cls(pretrained: bool | str = False, weights: EfficientFormerL1Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_pretrained.py#L210",
       "subcategory": "pretrained",
       "summary": "EfficientFormer-L1 image classifier (Li et al., 2022).",
-      "extended": "Combines the `efficientformer_l1` backbone with a mean pool\n+ LayerNorm + single `nn.Linear` classification head.\nDefault output is `num_classes=1000` (ImageNet-1k).  ~12.3M\nparameters.",
+      "extended": "Combines the `efficientformer_l1` backbone with a final\nLayerNorm, a mean pool over tokens, and a distilled dual head\n(`head` + `head_dist`) averaged at inference.  Default output is\n`num_classes=1000` (ImageNet-1k).  ~12.3M parameters.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag\n(`EfficientFormerL1Weights.SNAP_DIST_IN1K`); a tag string\n→ that specific checkpoint.  Mutually exclusive with `weights`\n(which wins if both are given).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(EfficientFormerL1Weights, optional, keyword - only)",
+          "description": "Explicit weights enum member.  Takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -928,510 +495,11 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientformer import efficientformer_l1_cls\n>>> model = efficientformer_l1_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "EfficientFormer-L1 reaches **79.2% top-1 on ImageNet-1k** at\nMobileNetV2-class latency (Li et al., 2022, Table 4)."
+        "EfficientFormer-L1 reaches **79.2% top-1 on ImageNet-1k** at\nMobileNetV2-class latency (Li et al., 2022, Table 4).  Pretrained\nweights are converted from timm's\n`efficientformer_l1.snap_dist_in1k` and hosted under\n`lucid-dl/efficientformer-l1`."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "EfficientFormerForImageClassification",
-        "type": "EfficientFormerForImageClassification",
-        "params": 13908760,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 11232,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 672,
-                "own_params": 672,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 48,
-                "own_params": 48,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 10416,
-                "own_params": 10416,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 96,
-                "own_params": 96,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 12307152,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Sequential",
-                "params": 58320,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 19440,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 480,
-                        "own_params": 480,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 18672,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 9408,
-                            "own_params": 9408,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 9264,
-                            "own_params": 9264,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 48,
-                        "own_params": 48,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 3
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "Sequential",
-                "params": 151488,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 75744,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 960,
-                        "own_params": 960,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 74208,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 37248,
-                            "own_params": 37248,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 36960,
-                            "own_params": 36960,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "Sequential",
-                "params": 2436672,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 406112,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 2240,
-                        "own_params": 2240,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 402528,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 201600,
-                            "own_params": 201600,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 200928,
-                            "own_params": 200928,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 224,
-                        "own_params": 224,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              },
-              {
-                "name": "3",
-                "type": "Sequential",
-                "params": 9660672,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerAttnBlock",
-                    "params": 2415168,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 804608,
-                        "own_params": 804608,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 896,
-                        "own_params": 896,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1607872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 804608,
-                            "own_params": 804608,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 803264,
-                            "own_params": 803264,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 448,
-                        "own_params": 448,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "downsamplers",
-            "type": "ModuleList",
-            "params": 1140480,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_Downsample",
-                "params": 41760,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 41568,
-                    "own_params": 41568,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 192,
-                    "own_params": 192,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_Downsample",
-                "params": 194208,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 193760,
-                    "own_params": 193760,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 448,
-                    "own_params": 448,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "_Downsample",
-                "params": 904512,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 903616,
-                    "own_params": 903616,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 896,
-                    "own_params": 896,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "head_norm",
-            "type": "LayerNorm",
-            "params": 896,
-            "own_params": 896,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 449000,
-            "own_params": 449000,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "efficientformer_l3",
@@ -1439,7 +507,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientformer_l3(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_pretrained.py#L103",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_pretrained.py#L112",
       "subcategory": "pretrained",
       "summary": "EfficientFormer-L3 backbone (Li et al., 2022).",
       "extended": "Builds the canonical *EfficientFormer-L3* configuration:\n`depths=(4, 4, 12, 6)`, `embed_dims=(64, 128, 320, 512)`,\n`drop_path_rate=0.1`.  Approximately **30.9M parameters**.",
@@ -1470,516 +538,30 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "EfficientFormer",
-        "type": "EfficientFormer",
-        "params": 31443392,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 19584,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 896,
-                "own_params": 896,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 64,
-                "own_params": 64,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 18496,
-                "own_params": 18496,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 29502976,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Sequential",
-                "params": 136448,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 34112,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 640,
-                        "own_params": 640,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 33088,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 16640,
-                            "own_params": 16640,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 16448,
-                            "own_params": 16448,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "Sequential",
-                "params": 535040,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 133760,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 1280,
-                        "own_params": 1280,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 131712,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 66048,
-                            "own_params": 66048,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 65664,
-                            "own_params": 65664,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "Sequential",
-                "params": 9911040,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 825920,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 3200,
-                        "own_params": 3200,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 640,
-                        "own_params": 640,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 640,
-                        "own_params": 640,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 820800,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 410880,
-                            "own_params": 410880,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 409920,
-                            "own_params": 409920,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 320,
-                        "own_params": 320,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 12
-                  }
-                ]
-              },
-              {
-                "name": "3",
-                "type": "Sequential",
-                "params": 18920448,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerAttnBlock",
-                    "params": 3153408,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 1050624,
-                        "own_params": 1050624,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 2099712,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 1050624,
-                            "own_params": 1050624,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 1049088,
-                            "own_params": 1049088,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "downsamplers",
-            "type": "ModuleList",
-            "params": 1919808,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_Downsample",
-                "params": 74112,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 73856,
-                    "own_params": 73856,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_Downsample",
-                "params": 369600,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 368960,
-                    "own_params": 368960,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 640,
-                    "own_params": 640,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "_Downsample",
-                "params": 1476096,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 1475072,
-                    "own_params": 1475072,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 1024,
-                    "own_params": 1024,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "head_norm",
-            "type": "LayerNorm",
-            "params": 1024,
-            "own_params": 1024,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "efficientformer_l3_cls",
       "path": "lucid.models.vision.efficientformer._pretrained.efficientformer_l3_cls",
       "kind": "function",
       "labels": [],
-      "signature": "efficientformer_l3_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_pretrained.py#L249",
+      "signature": "efficientformer_l3_cls(pretrained: bool | str = False, weights: EfficientFormerL3Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_pretrained.py#L274",
       "subcategory": "pretrained",
       "summary": "EfficientFormer-L3 image classifier (Li et al., 2022).",
-      "extended": "Combines the `efficientformer_l3` backbone (`depths=\n(4, 4, 12, 6)`, `embed_dims=(64, 128, 320, 512)`) with a mean\npool + LayerNorm + linear classification head.  ~30.9M parameters.",
+      "extended": "Combines the `efficientformer_l3` backbone (`depths=\n(4, 4, 12, 6)`, `embed_dims=(64, 128, 320, 512)`) with a final\nLayerNorm, mean pool, and a distilled dual head (`head` +\n`head_dist`) averaged at inference.  ~31.4M parameters.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag\n(`EfficientFormerL3Weights.SNAP_DIST_IN1K`); a tag string\n→ that specific checkpoint.  Mutually exclusive with `weights`\n(which wins if both are given).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(EfficientFormerL3Weights, optional, keyword - only)",
+          "description": "Explicit weights enum member.  Takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -1997,510 +579,11 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientformer import efficientformer_l3_cls\n>>> model = efficientformer_l3_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "EfficientFormer-L3 reaches **82.4% top-1 on ImageNet-1k** (Li\net al., 2022, Table 4)."
+        "EfficientFormer-L3 reaches **82.4% top-1 on ImageNet-1k** (Li\net al., 2022, Table 4).  Pretrained weights are converted from\ntimm's `efficientformer_l3.snap_dist_in1k` and hosted under\n`lucid-dl/efficientformer-l3`."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "EfficientFormerForImageClassification",
-        "type": "EfficientFormerForImageClassification",
-        "params": 31956392,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 19584,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 896,
-                "own_params": 896,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 64,
-                "own_params": 64,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 18496,
-                "own_params": 18496,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 29502976,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Sequential",
-                "params": 136448,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 34112,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 640,
-                        "own_params": 640,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 33088,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 16640,
-                            "own_params": 16640,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 16448,
-                            "own_params": 16448,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 64,
-                        "own_params": 64,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "Sequential",
-                "params": 535040,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 133760,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 1280,
-                        "own_params": 1280,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 131712,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 66048,
-                            "own_params": 66048,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 65664,
-                            "own_params": 65664,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 4
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "Sequential",
-                "params": 9911040,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 825920,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 3200,
-                        "own_params": 3200,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 640,
-                        "own_params": 640,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 640,
-                        "own_params": 640,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 820800,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 410880,
-                            "own_params": 410880,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 409920,
-                            "own_params": 409920,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 320,
-                        "own_params": 320,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 12
-                  }
-                ]
-              },
-              {
-                "name": "3",
-                "type": "Sequential",
-                "params": 18920448,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerAttnBlock",
-                    "params": 3153408,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 1050624,
-                        "own_params": 1050624,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 2099712,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 1050624,
-                            "own_params": 1050624,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 1049088,
-                            "own_params": 1049088,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "downsamplers",
-            "type": "ModuleList",
-            "params": 1919808,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_Downsample",
-                "params": 74112,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 73856,
-                    "own_params": 73856,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 256,
-                    "own_params": 256,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_Downsample",
-                "params": 369600,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 368960,
-                    "own_params": 368960,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 640,
-                    "own_params": 640,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "_Downsample",
-                "params": 1476096,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 1475072,
-                    "own_params": 1475072,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 1024,
-                    "own_params": 1024,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "head_norm",
-            "type": "LayerNorm",
-            "params": 1024,
-            "own_params": 1024,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 513000,
-            "own_params": 513000,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "efficientformer_l7",
@@ -2508,7 +591,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientformer_l7(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_pretrained.py#L150",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_pretrained.py#L159",
       "subcategory": "pretrained",
       "summary": "EfficientFormer-L7 backbone (Li et al., 2022).",
       "extended": "Builds the canonical *EfficientFormer-L7* configuration:\n`depths=(6, 6, 18, 8)`, `embed_dims=(96, 192, 384, 768)`,\n`drop_path_rate=0.2`.  Approximately **81.5M parameters** — the\nlargest variant in the paper.",
@@ -2539,516 +622,30 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "EfficientFormer",
-        "type": "EfficientFormer",
-        "params": 83874624,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 43200,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 1344,
-                "own_params": 1344,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 96,
-                "own_params": 96,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 41568,
-                "own_params": 41568,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 192,
-                "own_params": 192,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 80342208,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Sequential",
-                "params": 454464,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 75744,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 960,
-                        "own_params": 960,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 74208,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 37248,
-                            "own_params": 37248,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 36960,
-                            "own_params": 36960,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "Sequential",
-                "params": 1793664,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 298944,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 1920,
-                        "own_params": 1920,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "Sequential",
-                "params": 21378816,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 1187712,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 3840,
-                        "own_params": 3840,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1181568,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 591360,
-                            "own_params": 591360,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 590208,
-                            "own_params": 590208,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 18
-                  }
-                ]
-              },
-              {
-                "name": "3",
-                "type": "Sequential",
-                "params": 56715264,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerAttnBlock",
-                    "params": 7089408,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 2362368,
-                        "own_params": 2362368,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 4722432,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 2362368,
-                            "own_params": 2362368,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 2360064,
-                            "own_params": 2360064,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 8
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "downsamplers",
-            "type": "ModuleList",
-            "params": 3487680,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_Downsample",
-                "params": 166464,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 166080,
-                    "own_params": 166080,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_Downsample",
-                "params": 664704,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 663936,
-                    "own_params": 663936,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "_Downsample",
-                "params": 2656512,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 2654976,
-                    "own_params": 2654976,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "head_norm",
-            "type": "LayerNorm",
-            "params": 1536,
-            "own_params": 1536,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "efficientformer_l7_cls",
       "path": "lucid.models.vision.efficientformer._pretrained.efficientformer_l7_cls",
       "kind": "function",
       "labels": [],
-      "signature": "efficientformer_l7_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/efficientformer/_pretrained.py#L295",
+      "signature": "efficientformer_l7_cls(pretrained: bool | str = False, weights: EfficientFormerL7Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_pretrained.py#L336",
       "subcategory": "pretrained",
       "summary": "EfficientFormer-L7 image classifier (Li et al., 2022).",
-      "extended": "Combines the `efficientformer_l7` backbone (`depths=\n(6, 6, 18, 8)`, `embed_dims=(96, 192, 384, 768)`) with a mean\npool + LayerNorm + linear classification head.  ~81.5M parameters\n— the largest EfficientFormer variant.",
+      "extended": "Combines the `efficientformer_l7` backbone (`depths=\n(6, 6, 18, 8)`, `embed_dims=(96, 192, 384, 768)`) with a final\nLayerNorm, mean pool, and a distilled dual head (`head` +\n`head_dist`) averaged at inference.  ~82.2M parameters — the\nlargest EfficientFormer variant.",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "If `True`, loads ImageNet-1k pretrained weights when\navailable.  Defaults to `False`.",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag\n(`EfficientFormerL7Weights.SNAP_DIST_IN1K`); a tag string\n→ that specific checkpoint.  Mutually exclusive with `weights`\n(which wins if both are given).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(EfficientFormerL7Weights, optional, keyword - only)",
+          "description": "Explicit weights enum member.  Takes precedence over\n`pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
@@ -3066,510 +663,83 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientformer import efficientformer_l7_cls\n>>> model = efficientformer_l7_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "EfficientFormer-L7 reaches **83.3% top-1 on ImageNet-1k** (Li\net al., 2022, Table 4) — the headline result of the paper."
+        "EfficientFormer-L7 reaches **83.3% top-1 on ImageNet-1k** (Li\net al., 2022, Table 4) — the headline result of the paper.\nPretrained weights are converted from timm's\n`efficientformer_l7.snap_dist_in1k` and hosted under\n`lucid-dl/efficientformer-l7`."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "EfficientFormerForImageClassification",
-        "type": "EfficientFormerForImageClassification",
-        "params": 84643624,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 43200,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 1344,
-                "own_params": 1344,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 96,
-                "own_params": 96,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 41568,
-                "own_params": 41568,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 192,
-                "own_params": 192,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "stages",
-            "type": "ModuleList",
-            "params": 80342208,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Sequential",
-                "params": 454464,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 75744,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 960,
-                        "own_params": 960,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 74208,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 37248,
-                            "own_params": 37248,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 36960,
-                            "own_params": 36960,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 96,
-                        "own_params": 96,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "Sequential",
-                "params": 1793664,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 298944,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 1920,
-                        "own_params": 1920,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 295872,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 148224,
-                            "own_params": 148224,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 147648,
-                            "own_params": 147648,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 192,
-                        "own_params": 192,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 6
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "Sequential",
-                "params": 21378816,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerPoolBlock",
-                    "params": 1187712,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "dwconv",
-                        "type": "Conv2d",
-                        "params": 3840,
-                        "own_params": 3840,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "pool_mixer",
-                        "type": "_PoolingBlock",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "pool",
-                            "type": "AvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "norm",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 1181568,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 591360,
-                            "own_params": 591360,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 590208,
-                            "own_params": 590208,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 384,
-                        "own_params": 384,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 18
-                  }
-                ]
-              },
-              {
-                "name": "3",
-                "type": "Sequential",
-                "params": 56715264,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_EfficientFormerAttnBlock",
-                    "params": 7089408,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "attn",
-                        "type": "MultiheadAttention",
-                        "params": 2362368,
-                        "own_params": 2362368,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "mlp",
-                        "type": "_MLP",
-                        "params": 4722432,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc1",
-                            "type": "Linear",
-                            "params": 2362368,
-                            "own_params": 2362368,
-                            "children": []
-                          },
-                          {
-                            "name": "fc2",
-                            "type": "Linear",
-                            "params": 2360064,
-                            "own_params": 2360064,
-                            "children": []
-                          }
-                        ]
-                      },
-                      {
-                        "name": "ls1",
-                        "type": "LayerScale",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "drop_path",
-                        "type": "DropPath",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 8
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "downsamplers",
-            "type": "ModuleList",
-            "params": 3487680,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_Downsample",
-                "params": 166464,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 166080,
-                    "own_params": 166080,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_Downsample",
-                "params": 664704,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 663936,
-                    "own_params": 663936,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "2",
-                "type": "_Downsample",
-                "params": 2656512,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv",
-                    "type": "Conv2d",
-                    "params": 2654976,
-                    "own_params": 2654976,
-                    "children": []
-                  },
-                  {
-                    "name": "bn",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "head_norm",
-            "type": "LayerNorm",
-            "params": 1536,
-            "own_params": 1536,
-            "children": []
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 769000,
-            "own_params": 769000,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
+    },
+    {
+      "name": "EfficientFormerL1Weights",
+      "path": "lucid.models.vision.efficientformer._weights.EfficientFormerL1Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "EfficientFormerL1Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_weights.py#L21",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.efficientformer_l1_cls`.",
+      "extended": "Single ImageNet-1k checkpoint converted from timm's\n`efficientformer_l1.snap_dist_in1k` (Li et al., 2022; ~12.3M params,\n79.2% top-1).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "EfficientFormerL3Weights",
+      "path": "lucid.models.vision.efficientformer._weights.EfficientFormerL3Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "EfficientFormerL3Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_weights.py#L49",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.efficientformer_l3_cls`.",
+      "extended": "Single ImageNet-1k checkpoint converted from timm's\n`efficientformer_l3.snap_dist_in1k` (Li et al., 2022; ~31.4M params,\n82.4% top-1).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "EfficientFormerL7Weights",
+      "path": "lucid.models.vision.efficientformer._weights.EfficientFormerL7Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "EfficientFormerL7Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/efficientformer/_weights.py#L77",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.efficientformer_l7_cls`.",
+      "extended": "Single ImageNet-1k checkpoint converted from timm's\n`efficientformer_l7.snap_dist_in1k` (Li et al., 2022; ~82.2M params,\n83.3% top-1).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
     }
   ],
   "summary": "EfficientFormer — Li et al., 2022.",

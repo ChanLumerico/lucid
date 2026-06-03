@@ -79,6 +79,15 @@ jobs:
           SKIP_API_BUILD: "1"   # JSON tree is committed; never rebuild on CI
         run: pnpm build
 
+      # Component-contract audit (scripts/audit-docs.mjs): crawls every built
+      # page, enforces the structural + UI design-language contracts, and fails
+      # the deploy on any unregistered violation.  Keeps the docs site from
+      # drifting (broken links, reST leaks, off-recipe cards, off-palette
+      # colours).  Registered exceptions live in scripts/audit/exceptions.mjs.
+      - name: Audit docs (component contracts)
+        working-directory: web
+        run: node scripts/audit-docs.mjs
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

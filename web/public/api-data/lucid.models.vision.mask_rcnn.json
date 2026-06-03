@@ -3,7 +3,7 @@
   "name": "mask_rcnn",
   "path": "lucid.models.vision.mask_rcnn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/__init__.py#L1",
   "members": [
     {
       "name": "MaskRCNNConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "MaskRCNNConfig(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 2000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 1.0, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, roi_det_size: int = 7, roi_representation: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), roi_mask_size: int = 14, mask_hidden_channels: int = 256, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100, mask_thresh: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/_config.py#L10",
+      "signature": "MaskRCNNConfig(num_classes: int = 91, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_bn_eps: float = 0.0, fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 1000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 0.001, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, roi_det_size: int = 7, roi_sampling_ratio: int = 2, roi_representation: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), canonical_scale: int = 224, canonical_level: int = 4, roi_mask_size: int = 14, mask_hidden_channels: int = 256, mask_num_convs: int = 4, mask_predictor_hidden: int = 256, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100, mask_thresh: float = 0.5)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.mask_rcnn._config.MaskRCNNConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 2000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 1.0, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, roi_det_size: int = 7, roi_representation: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), roi_mask_size: int = 14, mask_hidden_channels: int = 256, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100, mask_thresh: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/_config.py#L1",
+          "signature": "__init__(num_classes: int = 91, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_bn_eps: float = 0.0, fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 1000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 0.001, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, roi_det_size: int = 7, roi_sampling_ratio: int = 2, roi_representation: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), canonical_scale: int = 224, canonical_level: int = 4, roi_mask_size: int = 14, mask_hidden_channels: int = 256, mask_num_convs: int = 4, mask_predictor_hidden: int = 256, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100, mask_thresh: float = 0.5)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -48,7 +48,7 @@
           "name": "num_classes",
           "annotation": "int",
           "description": "Foreground categories (background = class 0).",
-          "default": "80"
+          "default": "91"
         },
         {
           "name": "in_channels",
@@ -61,6 +61,12 @@
           "annotation": "tuple[int, int, int, int]",
           "description": "ResNet layer counts (default ResNet-50 = 3,4,6,3).",
           "default": "(3, 4, 6, 3)"
+        },
+        {
+          "name": "backbone_bn_eps",
+          "annotation": "float",
+          "description": "FrozenBatchNorm2d epsilon (reference uses 0).",
+          "default": "0.0"
         },
         {
           "name": "fpn_out_channels",
@@ -84,7 +90,7 @@
           "name": "rpn_pre_nms_top_n",
           "annotation": "int",
           "description": "Proposals kept per level before NMS.",
-          "default": "2000"
+          "default": "1000"
         },
         {
           "name": "rpn_post_nms_top_n",
@@ -102,7 +108,7 @@
           "name": "rpn_min_size",
           "annotation": "float",
           "description": "Minimum proposal side length (feature pixels).",
-          "default": "1.0"
+          "default": "0.001"
         },
         {
           "name": "rpn_score_thresh",
@@ -129,6 +135,12 @@
           "default": "7"
         },
         {
+          "name": "roi_sampling_ratio",
+          "annotation": "int",
+          "description": "RoI Align sub-bin sampling ratio (2).",
+          "default": "2"
+        },
+        {
           "name": "roi_representation",
           "annotation": "int",
           "description": "Hidden size of the 2-FC detection head.",
@@ -153,6 +165,18 @@
           "default": "(10.0, 10.0, 5.0, 5.0)"
         },
         {
+          "name": "canonical_scale",
+          "annotation": "int",
+          "description": "FPN level-assignment canonical scale (224).",
+          "default": "224"
+        },
+        {
+          "name": "canonical_level",
+          "annotation": "int",
+          "description": "FPN level-assignment canonical level (4).",
+          "default": "4"
+        },
+        {
           "name": "roi_mask_size",
           "annotation": "int",
           "description": "RoI Align output for the mask branch (14 → 14×14).",
@@ -162,6 +186,18 @@
           "name": "mask_hidden_channels",
           "annotation": "int",
           "description": "Channel width inside the mask FCN.",
+          "default": "256"
+        },
+        {
+          "name": "mask_num_convs",
+          "annotation": "int",
+          "description": "Number of 3×3 convs in the mask head (4).",
+          "default": "4"
+        },
+        {
+          "name": "mask_predictor_hidden",
+          "annotation": "int",
+          "description": "Channel width of the deconv upsampler (256).",
           "default": "256"
         },
         {
@@ -209,7 +245,7 @@
       ],
       "labels": [],
       "signature": "MaskRCNNForObjectDetection(config: MaskRCNNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/_model.py#L332",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_model.py#L182",
       "subcategory": "model",
       "methods": [
         {
@@ -218,7 +254,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MaskRCNNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/_model.py#L424",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_model.py#L241",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -239,28 +275,28 @@
           "path": "lucid.models.vision.mask_rcnn._model.MaskRCNNForObjectDetection.forward",
           "kind": "function",
           "labels": [],
-          "signature": "forward(x: Tensor, targets: list[dict[str, Tensor]] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/_model.py#L807",
+          "signature": "forward(x: Tensor, proposals: list[Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_model.py#L305",
           "subcategory": "model",
-          "summary": "Run Mask R-CNN.",
+          "summary": "Run Mask R-CNN on a (pre-processed) image batch.",
           "extended": null,
           "parameters": [
             {
               "name": "x",
               "annotation": "Tensor",
-              "description": "(B, C, H, W) image batch.",
+              "description": "(B, C, H, W) resized + normalised image batch.",
               "default": null
             },
             {
-              "name": "targets",
-              "annotation": "list[dict[str, Tensor]] | None",
-              "description": "Optional training targets (list of dicts with\n     \"boxes\", \"labels\", and optionally \"masks\").",
+              "name": "proposals",
+              "annotation": "list[Tensor] | None",
+              "description": "Optional precomputed per-image proposals.  When\n       `None` the RPN generates them.",
               "default": "None"
             }
           ],
           "returns": {
             "annotation": "InstanceSegmentationOutput",
-            "description": "`InstanceSegmentationOutput`:\n`logits`     : (Σ proposals, K+1) class logits.\n`pred_boxes` : (Σ proposals, 4) decoded xyxy boxes.\n`pred_masks` : (Σ proposals, K, 28, 28) mask logits.\n`loss`       : total loss when targets provided."
+            "description": "`InstanceSegmentationOutput` with raw RoI-head outputs:\n`logits`     : (Σ proposals, num_classes) class logits.\n`pred_boxes` : (Σ proposals, num_classes, 4) per-class boxes.\n`pred_masks` : (Σ proposals, num_classes, 28, 28) mask logits."
           },
           "raises": [],
           "examples": [],
@@ -274,28 +310,40 @@
           "path": "lucid.models.vision.mask_rcnn._model.MaskRCNNForObjectDetection.postprocess",
           "kind": "function",
           "labels": [],
-          "signature": "postprocess(output: InstanceSegmentationOutput, proposals: list[Tensor])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/_model.py#L949",
+          "signature": "postprocess(output: InstanceSegmentationOutput, image_sizes: list[tuple[int, int]] | None = None, proposals: list[Tensor] | None = None, features: list[Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_model.py#L400",
           "subcategory": "model",
-          "summary": "Per-class NMS + mask binarisation.",
-          "extended": null,
+          "summary": "Box post-process → per-detection mask gather.",
+          "extended": "Mirrors the reference inference flow: run the box branch\npost-processing (softmax → per-class score filter → per-class NMS →\ntop-`max_detections`), then sigmoid the per-RoI mask logits and\ngather the channel for each detection's predicted class.",
           "parameters": [
             {
               "name": "output",
               "annotation": "InstanceSegmentationOutput",
-              "description": "Raw head outputs — box logits / deltas + per-RoI mask\nlogits — from `forward`.",
+              "description": "Raw RoI-head outputs from `forward`.",
               "default": null
+            },
+            {
+              "name": "image_sizes",
+              "annotation": "list of (H, W)",
+              "description": "Unused (boxes are already clipped); accepted for API symmetry.",
+              "default": "None"
             },
             {
               "name": "proposals",
               "annotation": "list of Tensor",
-              "description": "Per-image `(N_i, 4)` xyxy proposal boxes that the\nRoI-aligned features in `output` were sampled from.",
-              "default": null
+              "description": "Per-image proposals the RoI features were sampled from\n(required — pass the same list `forward` used).",
+              "default": "None"
+            },
+            {
+              "name": "features",
+              "annotation": "list of Tensor",
+              "description": "Multi-scale FPN feature maps; accepted for API symmetry with\nthe detector-stage post-processor but not consumed here (mask\nlogits are already gathered onto the proposals).",
+              "default": "None"
             }
           ],
           "returns": {
             "annotation": "list of dict",
-            "description": "One entry per image with keys `\"boxes\"` (`(K, 4)` xyxy),\n`\"scores\"` (`(K,)`), `\"labels\"` (`(K,)` int64), and\n`\"masks\"` (`(K, H, W)` bool — binarised per RoI)."
+            "description": "One dict per image with `\"boxes\"` `(D, 4)`, `\"scores\"`\n`(D,)`, `\"labels\"` `(D,)` int64, and `\"masks\"`\n`(D, 1, 28, 28)` sigmoid mask probabilities (the channel of\neach detection's predicted class)."
           },
           "raises": [],
           "examples": [],
@@ -305,23 +353,23 @@
           "see_also": []
         }
       ],
-      "summary": "Mask R-CNN end-to-end instance segmentation model (He et al., ICCV 2017).",
-      "extended": "Extends Faster R-CNN with two changes that together unlock high-quality\ninstance segmentation: (1) `roi_align` replaces RoI Pool to remove\nquantisation artefacts that hurt fine localisation, and (2) a third\nparallel head — the FCN-style mask head — predicts a binary\n`28 x 28` mask per class for each detected instance.  The backbone is\nResNet-50 with a 5-level Feature Pyramid Network (FPN) on top\n(`P2-P6`); anchors are assigned to FPN levels by size, RPN runs once\nacross all levels, and per-RoI detection / mask heads run on the\nlevel-appropriate FPN feature map.",
+      "summary": "Mask R-CNN with a ResNet-50-FPN backbone (He et al., ICCV 2017).",
+      "extended": "The two-stage instance-segmentation detector in its modern reference\nconfiguration: Faster R-CNN's ResNet-50-FPN backbone, RPN, and Fast\nR-CNN box head, plus a parallel FCN mask branch on the RoI heads.  The\nsubmodule layout mirrors the reference detector so the COCO `box AP\n37.9 / mask AP 34.6` checkpoint loads strict (307 keys) and reproduces\ninference.",
       "parameters": [
         {
           "name": "config",
           "annotation": "MaskRCNNConfig",
-          "description": "Frozen architecture spec.  Use the `mask_rcnn` factory for\nthe paper-cited ResNet-50-FPN configuration (80 COCO classes,\n100 max detections per image).",
+          "description": "Frozen architecture spec.  Use the\n`mask_rcnn_resnet50_fpn` factory for the COCO-pretrained\nconfiguration (`num_classes = 91`).",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
       "examples": [
-        "Inference forward pass on an 800x800 image:\n>>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn\n>>> model = mask_rcnn(num_classes=80)\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.pred_masks.shape[-2:]\n(28, 28)\nTraining pass with full annotations (boxes + labels + masks):\n>>> targets = [{\n...     \"boxes\":  lucid.tensor([[100.0, 100.0, 400.0, 400.0]]),\n...     \"labels\": lucid.tensor([5], dtype=lucid.int64),\n...     \"masks\":  lucid.zeros((1, 800, 800)),\n... }]\n>>> out = model(x, targets=targets)\n>>> out.loss.shape\n()"
+        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn\n>>> model = mask_rcnn_resnet50_fpn()\n>>> model.eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape[-1]   # num_classes\n91\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
       ],
       "notes": [
-        "See He et al., \"Mask R-CNN\", ICCV 2017 ([arXiv:1703.06870](https://arxiv.org/abs/1703.06870)).  Mask R-CNN's\nmulti-task loss adds a binary cross-entropy mask term to the\nFaster R-CNN losses:\n\n$$\nL = L_{\\mathrm{cls}} + L_{\\mathrm{box}} + L_{\\mathrm{mask}},\n$$\nwhere $L_{\\mathrm{mask}}$ is averaged over the foreground-class\nchannel only (`ground-truth class` slice of the K-channel mask\noutput), keeping the mask prediction decoupled from class prediction\n— the central insight that gives Mask R-CNN its quality edge over\nearlier joint approaches.  RoI Align uses bilinear interpolation\nover four sampling points per output bin to preserve sub-pixel\naccuracy:\n\n$$\ny_{ij} = \\frac{1}{4} \\sum_{(u, v) \\in S_{ij}}\n         \\mathrm{bilinear}(x; u, v).\n$$"
+        "See He et al., \"Mask R-CNN\", ICCV 2017 ([arXiv:1703.06870](https://arxiv.org/abs/1703.06870)), Ren et al.,\n\"Faster R-CNN\", NeurIPS 2015, and Lin et al., \"Feature Pyramid Networks\nfor Object Detection\", CVPR 2017.  The model expects an already resized\n+ normalised image batch; final per-instance detections + masks come\nfrom `postprocess`."
       ],
       "attributes": [
         {
@@ -331,28 +379,18 @@
         },
         {
           "name": "backbone",
-          "annotation": "_ResNet50Backbone",
-          "description": "ResNet-50 trunk producing multi-scale features `C2-C5` at\nstrides 4 / 8 / 16 / 32."
+          "annotation": "_BackboneWithFPN",
+          "description": "ResNet-50 `body` + `fpn` producing five feature maps\n`[P2, P3, P4, P5, pool]` at strides `4/8/16/32/64` (reused\nfrom Faster R-CNN)."
         },
         {
-          "name": "fpn",
-          "annotation": "FPN",
-          "description": "Top-down feature pyramid producing `P2-P6` at the same\nFPN width (default 256) — `P6` is used by RPN only, `P2-P5`\nby the detection and mask heads."
+          "name": "rpn",
+          "annotation": "_RegionProposalNetwork",
+          "description": "Proposal head shared across all pyramid levels (reused)."
         },
         {
-          "name": "_rpn",
-          "annotation": "RPN",
-          "description": "Anchor-based proposal generator shared across all FPN levels;\nproduces 1000 post-NMS proposals at inference."
-        },
-        {
-          "name": "det_head",
-          "annotation": "RoIHead",
-          "description": "7x7 RoI Align -> 2-layer FC (1024 units) -> sibling K+1\nclass and 4K class-specific box heads."
-        },
-        {
-          "name": "mask_head",
-          "annotation": "_MaskHead",
-          "description": "14x14 RoI Align -> four 3x3 conv (`mask_hidden_channels`)\n-> 2x2 transpose conv (28x28 upsample) -> 1x1 conv producing\n`(N, K, 28, 28)` per-class mask logits."
+          "name": "roi_heads",
+          "annotation": "_MaskRoIHeads",
+          "description": "`box_head` + `box_predictor` (reused) plus `mask_head`\n(MaskRCNNHeads) + `mask_predictor` (MaskRCNNPredictor)."
         }
       ],
       "warns": [],
@@ -363,837 +401,116 @@
       "path": "lucid.models.vision.mask_rcnn._pretrained.mask_rcnn",
       "kind": "function",
       "labels": [],
-      "signature": "mask_rcnn(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/models/vision/mask_rcnn/_pretrained.py#L41",
+      "signature": "mask_rcnn(pretrained: bool | str = False, weights: MaskRCNNResNet50FPNWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_pretrained.py#L20",
       "subcategory": "pretrained",
-      "summary": "Mask R-CNN with ResNet-50-FPN backbone (He et al., ICCV 2017).",
-      "extended": "Builds a `MaskRCNNForObjectDetection` with the paper-cited\nResNet-50 + FPN topology: 256-channel FPN over `C2-C5`, 5-scale\nanchors (sizes 32 / 64 / 128 / 256 / 512 over P2-P6 with ratios\n0.5 / 1.0 / 2.0), 7x7 RoI Align detection head, and 14x14 RoI Align\n-> four-conv -> deconv 28x28 mask head.  Reaches COCO test-dev mask\nAP of 33.6% (paper Table 1, R50-FPN row) and is the canonical\nbaseline for instance / panoptic segmentation research.",
+      "summary": "Mask R-CNN with a ResNet-50-FPN backbone (He et al., ICCV 2017).",
+      "extended": "Alias of `mask_rcnn_resnet50_fpn` — the canonical reference\nconfiguration: Faster R-CNN's ResNet-50 trunk (frozen BN) + Feature\nPyramid Network + Region Proposal Network + Fast R-CNN box head, plus\na parallel FCN mask branch.  The COCO config uses `num_classes = 91`.\nReaches COCO box AP 37.9 / mask AP 34.6 (reference\n`maskrcnn_resnet50_fpn`).",
       "parameters": [
         {
           "name": "pretrained",
-          "annotation": "bool",
-          "description": "Reserved for future pretrained-weight loading.  Currently ignored.",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True` →\nthe `DEFAULT` tag (`MaskRCNNResNet50FPNWeights.COCO_V1`);\na tag string → that specific checkpoint.  Mutually exclusive with\n`weights` (which wins if both are given).",
           "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(MaskRCNNResNet50FPNWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member.  Takes precedence over `pretrained`.",
+          "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MaskRCNNConfig` —\ncommon knobs include `num_classes`, `backbone_layers`\n(e.g. `(3, 4, 23, 3)` for ResNet-101), `fpn_out_channels`,\n`max_detections`, and `mask_thresh`.",
+          "description": "Keyword overrides forwarded into `MaskRCNNConfig`\n(`num_classes`, `rpn_pre_nms_top_n`, `score_thresh`, ...).",
           "default": "{}"
         }
       ],
       "returns": {
         "annotation": "MaskRCNNForObjectDetection",
-        "description": "Detector with the Mask R-CNN ResNet-50-FPN configuration applied\n(or with `overrides` merged on top of it)."
+        "description": "Detector with the ResNet-50-FPN configuration applied (or with\n`overrides` merged on top of it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn\n>>> model = mask_rcnn(num_classes=80)\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
+        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn\n>>> model = mask_rcnn(num_classes=91)\n>>> model.eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "mask_rcnn_resnet50_fpn",
+      "path": "lucid.models.vision.mask_rcnn._pretrained.mask_rcnn_resnet50_fpn",
+      "kind": "function",
+      "labels": [],
+      "signature": "mask_rcnn_resnet50_fpn(pretrained: bool | str = False, weights: MaskRCNNResNet50FPNWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_pretrained.py#L79",
+      "subcategory": "pretrained",
+      "summary": "Mask R-CNN with a ResNet-50-FPN backbone (COCO-pretrained).",
+      "extended": "Builds the reference `maskrcnn_resnet50_fpn` detector: Faster\nR-CNN's ResNet-50 backbone with frozen batch-norm, a 5-level Feature\nPyramid Network (P2-P5 + a parameter-free pool level for RPN), anchors\nat sizes `((32,),(64,),(128,),(256,),(512,))` and ratios\n`(0.5, 1.0, 2.0)`, a Fast R-CNN box head (TwoMLPHead +\nFastRCNNPredictor) over MultiScale RoI Align (7×7), and a parallel\nmask branch (MaskRCNNHeads + MaskRCNNPredictor) over MultiScale RoI\nAlign (14×14) emitting `28×28` per-class masks.  COCO box AP 37.9 /\nmask AP 34.6, ~44.4M parameters.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "Pretrained-weight selector.  `False` → random init; `True` →\nthe `DEFAULT` tag (`MaskRCNNResNet50FPNWeights.COCO_V1`);\na tag string → that specific checkpoint.  Mutually exclusive with\n`weights` (which wins if both are given).",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(MaskRCNNResNet50FPNWeights, optional, keyword - only)",
+          "description": "Explicit weights enum member.  Takes precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `MaskRCNNConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MaskRCNNForObjectDetection",
+        "description": "Detector with the ResNet-50-FPN configuration applied (or with\n`overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn\n>>> model = mask_rcnn_resnet50_fpn()\n>>> model.eval()\n>>> out = model(lucid.randn(1, 3, 224, 224))\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
       ],
       "notes": [
-        "See He et al., \"Mask R-CNN\", ICCV 2017 ([arXiv:1703.06870](https://arxiv.org/abs/1703.06870)).  The two\nkey contributions over Faster R-CNN are RoI Align (replacing RoI Pool\nto remove quantisation, which costs ~3 AP on small objects) and the\nparallel mask head, which decouples mask and class prediction to\navoid competition between the two tasks."
+        "Pretrained weights are converted from the reference\n`MaskRCNN_ResNet50_FPN_Weights.COCO_V1` checkpoint and hosted under\n`lucid-dl/mask-rcnn-resnet-50-fpn`.  The detector expects an already\nresized + normalised image batch (the\n`lucid.utils.transforms.Detection` preset)."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "MaskRCNNForObjectDetection",
-        "type": "MaskRCNNForObjectDetection",
-        "params": 44986416,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "backbone",
-            "type": "_ResNet50Backbone",
-            "params": 23508032,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 9408,
-                "own_params": 9408,
-                "children": []
-              },
-              {
-                "name": "bn1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "pool",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "layer1",
-                "type": "Sequential",
-                "params": 215808,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 75008,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 16896,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 16384,
-                            "own_params": 16384,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 512,
-                            "own_params": 512,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 70400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "layer2",
-                "type": "Sequential",
-                "params": 1219584,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 379392,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 132096,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 131072,
-                            "own_params": 131072,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 280064,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 3
-                  }
-                ]
-              },
-              {
-                "name": "layer3",
-                "type": "Sequential",
-                "params": 7098368,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 1512448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 131072,
-                        "own_params": 131072,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 526336,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 524288,
-                            "own_params": 524288,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 1117184,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 5
-                  }
-                ]
-              },
-              {
-                "name": "layer4",
-                "type": "Sequential",
-                "params": 14964736,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 6039552,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 524288,
-                        "own_params": 524288,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 2101248,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 2097152,
-                            "own_params": 2097152,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 4096,
-                            "own_params": 4096,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 4462592,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "fpn",
-            "type": "FPN",
-            "params": 3934464,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "lateral_convs",
-                "type": "ModuleList",
-                "params": 984064,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 65792,
-                    "own_params": 65792,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "Conv2d",
-                    "params": 131328,
-                    "own_params": 131328,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "Conv2d",
-                    "params": 262400,
-                    "own_params": 262400,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "Conv2d",
-                    "params": 524544,
-                    "own_params": 524544,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "output_convs",
-                "type": "ModuleList",
-                "params": 2360320,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 590080,
-                    "own_params": 590080,
-                    "children": [],
-                    "repeat": 4
-                  }
-                ]
-              },
-              {
-                "name": "extra_convs",
-                "type": "ModuleList",
-                "params": 590080,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 590080,
-                    "own_params": 590080,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "_anchor_gen",
-            "type": "AnchorGenerator",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "_rpn",
-            "type": "RPN",
-            "params": 593935,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "conv",
-                "type": "Conv2d",
-                "params": 590080,
-                "own_params": 590080,
-                "children": []
-              },
-              {
-                "name": "cls_logits",
-                "type": "Conv2d",
-                "params": 771,
-                "own_params": 771,
-                "children": []
-              },
-              {
-                "name": "bbox_pred",
-                "type": "Conv2d",
-                "params": 3084,
-                "own_params": 3084,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "det_head",
-            "type": "RoIHead",
-            "params": 14306705,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "fc6",
-                "type": "Linear",
-                "params": 12846080,
-                "own_params": 12846080,
-                "children": []
-              },
-              {
-                "name": "fc7",
-                "type": "Linear",
-                "params": 1049600,
-                "own_params": 1049600,
-                "children": []
-              },
-              {
-                "name": "cls_score",
-                "type": "Linear",
-                "params": 83025,
-                "own_params": 83025,
-                "children": []
-              },
-              {
-                "name": "bbox_pred",
-                "type": "Linear",
-                "params": 328000,
-                "own_params": 328000,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "mask_head",
-            "type": "_MaskHead",
-            "params": 2643280,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "fcn",
-                "type": "Sequential",
-                "params": 2360320,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "Conv2d",
-                    "params": 590080,
-                    "own_params": 590080,
-                    "children": []
-                  },
-                  {
-                    "name": "1",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "2",
-                    "type": "Conv2d",
-                    "params": 590080,
-                    "own_params": 590080,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
-                    "type": "Conv2d",
-                    "params": 590080,
-                    "own_params": 590080,
-                    "children": []
-                  },
-                  {
-                    "name": "5",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "Conv2d",
-                    "params": 590080,
-                    "own_params": 590080,
-                    "children": []
-                  },
-                  {
-                    "name": "7",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "deconv",
-                "type": "ConvTranspose2d",
-                "params": 262400,
-                "own_params": 262400,
-                "children": []
-              },
-              {
-                "name": "predictor",
-                "type": "Conv2d",
-                "params": 20560,
-                "own_params": 20560,
-                "children": []
-              }
-            ]
-          }
-        ]
-      }
+      "see_also": []
+    },
+    {
+      "name": "MaskRCNNResNet50FPNWeights",
+      "path": "lucid.models.vision.mask_rcnn._weights.MaskRCNNResNet50FPNWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "MaskRCNNResNet50FPNWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/mask_rcnn/_weights.py#L22",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.mask_rcnn_resnet50_fpn`.",
+      "extended": "Single COCO checkpoint converted from the reference\n`MaskRCNN_ResNet50_FPN_Weights.COCO_V1` (91 classes, box AP 37.9 /\nmask AP 34.6).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
     }
   ],
   "summary": "Mask R-CNN — instance segmentation (He et al., ICCV 2017).",
-  "extended": "Paper: \"Mask R-CNN\"",
+  "extended": "Paper: \"Mask R-CNN\"\n\nResNet-50-FPN reference configuration (Faster R-CNN backbone + parallel\nmask branch) with a COCO-pretrained checkpoint.",
   "parameters": [],
   "returns": null,
   "raises": [],
@@ -1204,7 +521,7 @@
   "see_also": [],
   "canonical_name": "Mask R-CNN",
   "citation": "He, Kaiming, et al. \"Mask R-CNN.\" Proceedings of the IEEE International Conference on Computer Vision, 2017, pp. 2961–2969.",
-  "theory": "Mask R-CNN extends Faster R-CNN with a **parallel mask branch**\nthat predicts a per-RoI binary segmentation, turning the\ntwo-stage detector into a unified instance-segmentation model\nwith negligible runtime overhead.\n\nThree design changes are critical:\n\n1. **Feature Pyramid Network backbone.**  Lateral $1 \\times 1$\n   convolutions fuse top-down semantically strong features with\n   bottom-up spatially precise ones, yielding multi-scale outputs\n   $\\{P_2, \\dots, P_6\\}$ all at the same channel depth (256).\n   Each RoI is routed to the level\n\n\n\n$$\nk = \\lfloor k_0 + \\log_2(\\sqrt{wh}/224) \\rfloor,\n$$\n\n   so small objects use high-resolution maps and large ones use\n   deeper, semantically richer features.\n\n2. **RoI Align.**  RoI Pool quantises coordinates twice\n   (proposal → feature grid, then feature grid → output cells),\n   which misaligns mask predictions by several pixels.  RoI Align\n   removes both quantisations and bilinearly interpolates four\n   regularly-sampled points per cell.  This single change adds\n   $\\sim 10\\%$ AP on the mask task.\n\n3. **Decoupled mask head.**  Unlike FCN-style approaches that\n   compete classes via per-pixel softmax, Mask R-CNN emits a\n   $K \\times m \\times m$ tensor of *per-class* binary masks\n   and applies sigmoid + binary cross-entropy.  The classification\n   branch alone chooses *which* class's mask to use at inference,\n   avoiding inter-class competition during training.\n\nThe total loss is a sum of the Faster R-CNN classification +\nregression terms and an additional mean BCE on the predicted\nmask channel of the ground-truth class, $L = L_{\\mathrm{cls}}\n+ L_{\\mathrm{box}} + L_{\\mathrm{mask}}$.",
+  "theory": "Mask R-CNN extends Faster R-CNN with a **parallel mask branch**\nthat predicts a per-RoI binary segmentation, turning the\ntwo-stage detector into a unified instance-segmentation model\nwith negligible runtime overhead.\n\nThree design changes are critical:\n\n1. **Feature Pyramid Network backbone.**  Lateral $1 \\times 1$\n   convolutions fuse top-down semantically strong features with\n   bottom-up spatially precise ones, yielding multi-scale outputs\n   $\\{P_2, \\dots, P_6\\}$ all at the same channel depth (256).\n   Each RoI is routed to the level\n\n\n\n$$\nk = \\lfloor k_0 + \\log_2(\\sqrt{wh}/224) \\rfloor,\n$$\n\n   so small objects use high-resolution maps and large ones use\n   deeper, semantically richer features.\n\n2. **RoI Align.**  RoI Pool quantises coordinates twice\n   (proposal → feature grid, then feature grid → output cells),\n   which misaligns mask predictions by several pixels.  RoI Align\n   removes both quantisations and bilinearly interpolates four\n   regularly-sampled points per cell.  This single change adds\n   $\\sim 10\\%$ AP on the mask task.\n\n3. **Decoupled mask head.**  Unlike FCN-style approaches that\n   compete classes via per-pixel softmax, Mask R-CNN emits a\n   $K \\times m \\times m$ tensor of *per-class* binary masks\n   and applies sigmoid + binary cross-entropy.  The classification\n   branch alone chooses *which* class's mask to use at inference,\n   avoiding inter-class competition during training.\n\nThe total loss is a sum of the Faster R-CNN classification +\nregression terms and an additional mean BCE on the predicted\nmask channel of the ground-truth class, $L = L_{\\mathrm{cls}} + L_{\\mathrm{box}} + L_{\\mathrm{mask}}$.",
   "tasks": [
     "object-detection"
   ]

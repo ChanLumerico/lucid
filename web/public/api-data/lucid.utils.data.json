@@ -3,7 +3,7 @@
   "name": "data",
   "path": "lucid.utils.data",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/__init__.py#L1",
   "members": [
     {
       "name": "Dataset",
@@ -13,7 +13,7 @@
       "bases": [],
       "labels": [],
       "signature": "Dataset()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L11",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L11",
       "subcategory": "dataset",
       "methods": [
         {
@@ -22,7 +22,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__getitem__(index: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L39",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L39",
           "subcategory": "dataset",
           "summary": "Retrieve a single sample by integer index.",
           "extended": null,
@@ -51,7 +51,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L57",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L57",
           "subcategory": "dataset",
           "summary": "Return the number of samples in the dataset.",
           "extended": null,
@@ -73,7 +73,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__add__(other: Dataset)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L67",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L67",
           "subcategory": "dataset",
           "summary": "Concatenate this dataset with another via the `+` operator.",
           "extended": null,
@@ -120,7 +120,7 @@
       "bases": [],
       "labels": [],
       "signature": "IterableDataset()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L83",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L83",
       "subcategory": "dataset",
       "methods": [
         {
@@ -129,7 +129,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L111",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L111",
           "subcategory": "dataset",
           "summary": "Yield samples one at a time.",
           "extended": null,
@@ -151,7 +151,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__add__(other: IterableDataset)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L124",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L124",
           "subcategory": "dataset",
           "summary": "Concatenation via `+` — not supported for iterable datasets.",
           "extended": "Use `ChainDataset` to chain iterable datasets end-to-end.",
@@ -198,7 +198,7 @@
       ],
       "labels": [],
       "signature": "TensorDataset(tensors: Tensor = ())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L137",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L137",
       "subcategory": "dataset",
       "methods": [
         {
@@ -207,7 +207,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(tensors: Tensor = ())",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L172",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L172",
           "subcategory": "dataset",
           "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -229,7 +229,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__getitem__(index: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L185",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L185",
           "subcategory": "dataset",
           "summary": "Return `(t[index] for t in self.tensors)` as a tuple.",
           "extended": null,
@@ -258,7 +258,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L260",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L260",
           "subcategory": "dataset",
           "summary": "Return the leading-dimension size shared by all wrapped tensors.",
           "extended": null,
@@ -312,7 +312,7 @@
       ],
       "labels": [],
       "signature": "ConcatDataset(datasets: list[Dataset])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L265",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L265",
       "subcategory": "dataset",
       "methods": [
         {
@@ -321,7 +321,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(datasets: list[Dataset])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L292",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L292",
           "subcategory": "dataset",
           "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -343,7 +343,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L306",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L306",
           "subcategory": "dataset",
           "summary": "Return the total length — sum of all child dataset lengths.",
           "extended": null,
@@ -365,7 +365,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__getitem__(idx: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L310",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L310",
           "subcategory": "dataset",
           "summary": "Return the sample at the given global index.",
           "extended": null,
@@ -421,7 +421,7 @@
       ],
       "labels": [],
       "signature": "ChainDataset(datasets: list[IterableDataset])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L479",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L479",
       "subcategory": "dataset",
       "methods": [
         {
@@ -430,7 +430,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(datasets: list[IterableDataset])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L514",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L514",
           "subcategory": "dataset",
           "summary": "Build a chain over the given iterable datasets.",
           "extended": null,
@@ -464,7 +464,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L537",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L537",
           "subcategory": "dataset",
           "summary": "Iterate through each child dataset in registration order.",
           "extended": null,
@@ -513,7 +513,7 @@
       ],
       "labels": [],
       "signature": "StackDataset(args: Dataset = (), kwargs: Dataset = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L549",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L549",
       "subcategory": "dataset",
       "methods": [
         {
@@ -522,7 +522,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(args: Dataset = (), kwargs: Dataset = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L587",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L587",
           "subcategory": "dataset",
           "summary": "Bundle child datasets either positionally or by keyword.",
           "extended": null,
@@ -562,7 +562,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L622",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L622",
           "subcategory": "dataset",
           "summary": "Return the common length shared by all bundled child datasets.",
           "extended": null,
@@ -584,7 +584,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__getitem__(idx: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L626",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L626",
           "subcategory": "dataset",
           "summary": "Return one sample drawn from each child at index `idx`.",
           "extended": null,
@@ -646,7 +646,7 @@
       ],
       "labels": [],
       "signature": "Subset(dataset: Dataset, indices: list[int])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L339",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L339",
       "subcategory": "dataset",
       "methods": [
         {
@@ -655,7 +655,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(dataset: Dataset, indices: list[int])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L368",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L368",
           "subcategory": "dataset",
           "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -677,7 +677,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L373",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L373",
           "subcategory": "dataset",
           "summary": "Return the number of indices in the subset.",
           "extended": null,
@@ -699,7 +699,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__getitem__(idx: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L377",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L377",
           "subcategory": "dataset",
           "summary": "Return `dataset[indices[idx]]`.",
           "extended": null,
@@ -757,7 +757,7 @@
       "kind": "function",
       "labels": [],
       "signature": "random_split(dataset: Dataset, lengths: list[int] | list[float], generator: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataset.py#L393",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataset.py#L393",
       "subcategory": "dataset",
       "summary": "Randomly split a dataset into non-overlapping `Subset` views.",
       "extended": "Shuffles `range(len(dataset))` and slices it into chunks of the\nrequested lengths, wrapping each slice in a `Subset`.  The\nchildren do not copy the underlying samples — they hold the parent\ndataset by reference.",
@@ -809,7 +809,7 @@
       "bases": [],
       "labels": [],
       "signature": "Sampler()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L11",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L12",
       "subcategory": "sampler",
       "methods": [
         {
@@ -818,7 +818,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L36",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L37",
           "subcategory": "sampler",
           "summary": "Yield integer sample indices.",
           "extended": null,
@@ -840,7 +840,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L47",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L48",
           "subcategory": "sampler",
           "summary": "Return the number of indices yielded in one full pass.",
           "extended": null,
@@ -882,7 +882,7 @@
       ],
       "labels": [],
       "signature": "SequentialSampler(data_source: Dataset)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L52",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L53",
       "subcategory": "sampler",
       "methods": [
         {
@@ -891,7 +891,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(data_source: Dataset)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L77",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L78",
           "subcategory": "sampler",
           "summary": "Store `data_source` for length introspection.",
           "extended": null,
@@ -920,7 +920,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L87",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L88",
           "subcategory": "sampler",
           "summary": "Yield `0, 1, ..., len(data_source) - 1` in order.",
           "extended": null,
@@ -942,7 +942,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L91",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L92",
           "subcategory": "sampler",
           "summary": "Return `len(data_source)`.",
           "extended": null,
@@ -991,7 +991,7 @@
       ],
       "labels": [],
       "signature": "RandomSampler(data_source: Dataset, replacement: bool = False, num_samples: int | None = None, generator: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L96",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L97",
       "subcategory": "sampler",
       "methods": [
         {
@@ -1000,7 +1000,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(data_source: Dataset, replacement: bool = False, num_samples: int | None = None, generator: object = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L131",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L132",
           "subcategory": "sampler",
           "summary": "Configure the random sampler.",
           "extended": null,
@@ -1049,7 +1049,7 @@
             "property"
           ],
           "signature": "num_samples: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L157",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L158",
           "summary": "Effective number of samples per epoch.",
           "extended": "Returns the explicit `num_samples` argument if provided,\notherwise `len(data_source)`.",
           "parameters": [],
@@ -1070,7 +1070,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L169",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L170",
           "subcategory": "sampler",
           "summary": "Yield `num_samples` indices according to the configured strategy.",
           "extended": "With `replacement=True` each index is drawn uniformly with\nreplacement using a seeded `random.Random`. With\n`replacement=False` a fresh permutation of `range(n)` is\nproduced via the module-level `random.shuffle` and truncated\nto `num_samples`.",
@@ -1092,7 +1092,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L189",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L190",
           "subcategory": "sampler",
           "summary": "Return `num_samples`.",
           "extended": null,
@@ -1159,7 +1159,7 @@
       ],
       "labels": [],
       "signature": "SubsetRandomSampler(indices: list[int], generator: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L194",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L195",
       "subcategory": "sampler",
       "methods": [
         {
@@ -1168,7 +1168,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(indices: list[int], generator: object = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L224",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L225",
           "subcategory": "sampler",
           "summary": "Store the index pool and optional generator handle.",
           "extended": null,
@@ -1203,7 +1203,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L237",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L238",
           "subcategory": "sampler",
           "summary": "Yield `self.indices` in a freshly shuffled order each epoch.",
           "extended": null,
@@ -1225,7 +1225,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L243",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L244",
           "subcategory": "sampler",
           "summary": "Return the size of the index pool.",
           "extended": null,
@@ -1280,7 +1280,7 @@
       ],
       "labels": [],
       "signature": "WeightedRandomSampler(weights: list[float], num_samples: int, replacement: bool = True, generator: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L248",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L249",
       "subcategory": "sampler",
       "methods": [
         {
@@ -1289,7 +1289,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(weights: list[float], num_samples: int, replacement: bool = True, generator: object = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L297",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L298",
           "subcategory": "sampler",
           "summary": "Store sampling configuration.",
           "extended": null,
@@ -1336,7 +1336,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L322",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L323",
           "subcategory": "sampler",
           "summary": "Yield `num_samples` indices proportional to the weights.",
           "extended": "With `replacement=True` indices are produced by inverse-CDF\nsampling against the normalised weight vector. With\n`replacement=False` `random.choices` is used with the raw\nweights.",
@@ -1358,7 +1358,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L351",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L352",
           "subcategory": "sampler",
           "summary": "Return `num_samples`.",
           "extended": null,
@@ -1409,7 +1409,7 @@
         ">>> # 3 classes, counts [900, 90, 10]; upweight rare classes\n>>> weights = [1/900]*900 + [1/90]*90 + [1/10]*10\n>>> sampler = WeightedRandomSampler(weights, num_samples=1000)\n>>> for idx in sampler:\n...     x, y = my_dataset[idx]"
       ],
       "notes": [
-        "Each index $i$ is selected with probability\n\n$$\nP(i) = \\frac{w_i}{\\sum_j w_j},\n$$\nso the user-supplied weights need not be normalised.  The classic\nuse case is *class-imbalance correction*: set `w_i = 1 /\nclass_count[label_i]` so under-represented classes are upsampled\nto roughly uniform frequency.  Sampling with replacement is the\ndefault — it preserves the target marginal exactly and is the only\nfully consistent option when `num_samples` exceeds the number of\nnonzero-weight indices."
+        "Each index $i$ is selected with probability\n\n\n\n$$\nP(i) = \\frac{w_i}{\\sum_j w_j},\n$$\n\nso the user-supplied weights need not be normalised.  The classic\nuse case is *class-imbalance correction*: set `w_i = 1 /\nclass_count[label_i]` so under-represented classes are upsampled\nto roughly uniform frequency.  Sampling with replacement is the\ndefault — it preserves the target marginal exactly and is the only\nfully consistent option when `num_samples` exceeds the number of\nnonzero-weight indices."
       ],
       "attributes": [],
       "warns": [],
@@ -1425,7 +1425,7 @@
       ],
       "labels": [],
       "signature": "BatchSampler(sampler: Sampler, batch_size: int, drop_last: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L356",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L357",
       "subcategory": "sampler",
       "methods": [
         {
@@ -1434,7 +1434,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sampler: Sampler, batch_size: int, drop_last: bool)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L393",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L394",
           "subcategory": "sampler",
           "summary": "Store the inner sampler and batching configuration.",
           "extended": null,
@@ -1475,7 +1475,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L409",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L410",
           "subcategory": "sampler",
           "summary": "Yield successive batches of indices.",
           "extended": null,
@@ -1497,7 +1497,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L427",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L428",
           "subcategory": "sampler",
           "summary": "Return the number of batches produced per epoch.",
           "extended": "Computed as `floor(n / batch_size)` when `drop_last` is\n`True`, else `ceil(n / batch_size)`.",
@@ -1558,7 +1558,7 @@
       ],
       "labels": [],
       "signature": "DistributedSampler(dataset: Dataset, num_replicas: int = 1, rank: int = 0, shuffle: bool = True, seed: int = 0, drop_last: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L439",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L440",
       "subcategory": "sampler",
       "methods": [
         {
@@ -1567,7 +1567,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(dataset: Dataset, num_replicas: int = 1, rank: int = 0, shuffle: bool = True, seed: int = 0, drop_last: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L473",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L474",
           "subcategory": "sampler",
           "summary": "Configure the distributed sampler.",
           "extended": null,
@@ -1631,7 +1631,7 @@
           "kind": "function",
           "labels": [],
           "signature": "set_epoch(epoch: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L534",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L535",
           "subcategory": "sampler",
           "summary": "Set the epoch number — affects the shuffling RNG seed.",
           "extended": null,
@@ -1653,7 +1653,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L538",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L539",
           "subcategory": "sampler",
           "summary": "Yield this replica's slab of indices for the current epoch.",
           "extended": "Indices are optionally shuffled with seed `self.seed + self.epoch`,\nthen either truncated to `total_size` (`drop_last=True`) or\nwrap-padded (`drop_last=False`). The replica picks every\n`num_replicas`-th index starting at `rank`.",
@@ -1675,7 +1675,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/sampler.py#L561",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L562",
           "subcategory": "sampler",
           "summary": "Return per-replica sample count — same on every rank.",
           "extended": null,
@@ -1708,6 +1708,167 @@
       "see_also": []
     },
     {
+      "name": "RASampler",
+      "path": "lucid.utils.data.sampler.RASampler",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Sampler"
+      ],
+      "labels": [],
+      "signature": "RASampler(dataset: Dataset, num_replicas: int = 1, rank: int = 0, shuffle: bool = True, seed: int = 0, num_repeats: int = 3)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L567",
+      "subcategory": "sampler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.data.sampler.RASampler.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(dataset: Dataset, num_replicas: int = 1, rank: int = 0, shuffle: bool = True, seed: int = 0, num_repeats: int = 3)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L625",
+          "subcategory": "sampler",
+          "summary": "Store `data_source` for length introspection.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "data_source",
+              "annotation": "Dataset",
+              "description": "Dataset to be iterated sequentially.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "set_epoch",
+          "path": "lucid.utils.data.sampler.RASampler.set_epoch",
+          "kind": "function",
+          "labels": [],
+          "signature": "set_epoch(epoch: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L655",
+          "subcategory": "sampler",
+          "summary": "Set the epoch — affects the shuffling RNG seed.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__iter__",
+          "path": "lucid.utils.data.sampler.RASampler.__iter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__iter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L659",
+          "subcategory": "sampler",
+          "summary": "Yield integer sample indices.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Iterator[int]",
+            "description": "Iterator over `0 <= i < len(data_source)` values, in an\norder defined by the concrete sampler."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__len__",
+          "path": "lucid.utils.data.sampler.RASampler.__len__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__len__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/sampler.py#L680",
+          "subcategory": "sampler",
+          "summary": "Return per-replica yield count — `floor(len(dataset) / num_replicas)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Repeated-augmentation sampler (Hoffer et al., 2020 — [arXiv:1901.09335](https://arxiv.org/abs/1901.09335)).",
+      "extended": "Each dataset sample appears `num_repeats` times consecutively in\nthe index stream, so that — when combined with a stochastic\naugmentation pipeline — the model sees several different augmented\nviews of the same image inside each batch.  Empirically lifts\nImageNet accuracy at no extra labelled-data cost.\n\nThe sampler is also distributed-aware (single-process here, but\nsharding by `rank` is preserved for parity with the reference\nframework — see `DistributedSampler`).  Per-epoch shuffling\nis deterministic given `seed` + the epoch counter\n(`set_epoch`).",
+      "parameters": [
+        {
+          "name": "dataset",
+          "annotation": "Dataset",
+          "description": "Dataset whose `__len__` defines the unique-index range.",
+          "default": null
+        },
+        {
+          "name": "num_replicas",
+          "annotation": "int",
+          "description": "Number of distributed replicas.  `1` is the single-process\ncase (the default Lucid context).",
+          "default": "1"
+        },
+        {
+          "name": "rank",
+          "annotation": "int",
+          "description": "Replica id in `[0, num_replicas)`.",
+          "default": "0"
+        },
+        {
+          "name": "shuffle",
+          "annotation": "bool",
+          "description": "If `True`, the unique indices are shuffled before being\nrepeated.  Identical seeds reproduce the same epoch order.",
+          "default": "True"
+        },
+        {
+          "name": "seed",
+          "annotation": "int",
+          "description": "Base seed for the per-epoch RNG (combined with the epoch\ncounter via `set_epoch`).",
+          "default": "0"
+        },
+        {
+          "name": "num_repeats",
+          "annotation": "int",
+          "description": "How many consecutive copies of each index to emit.  The\noriginal paper recommends `3` for ImageNet.",
+          "default": "3"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.utils.data import RASampler, DataLoader\n>>> sampler = RASampler(dataset, num_repeats=3, shuffle=True, seed=0)\n>>> loader = DataLoader(dataset, batch_size=64, sampler=sampler)\n>>> for x, y in loader:                      # each batch may contain\n...     ...                                  # ≤3 augmented views of\n...     # ...train step...                   # the same underlying image"
+      ],
+      "notes": [
+        "Two derived sizes (matching the reference-framework convention):\n\n* `num_samples = ceil(len(dataset) * num_repeats / num_replicas)`\n  — number of indices this replica's slab contains *before*\n  truncation.  Used as `total_size = num_samples * num_replicas`\n  for the full repeated-and-padded index list.\n* `num_selected_samples = floor(len(dataset) / num_replicas)`\n  — number of indices this replica actually *yields* per epoch.\n  Iteration truncates the slab to this length so the effective\n  epoch size (per rank) matches an un-repeated pass — repetition\n  diversifies *within* the epoch rather than extending it."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "DataLoader",
       "path": "lucid.utils.data.dataloader.DataLoader",
       "kind": "class",
@@ -1715,7 +1876,7 @@
       "bases": [],
       "labels": [],
       "signature": "DataLoader(dataset: Dataset, batch_size: int = 1, shuffle: bool | None = None, sampler: Sampler | None = None, batch_sampler: Sampler | None = None, num_workers: int = 0, collate_fn: Callable[..., object] | None = None, drop_last: bool = False, timeout: float = 0.0, worker_init_fn: Callable[..., object] | None = None, multiprocessing_context: object = None, generator: object = None, prefetch_factor: int | None = None, persistent_workers: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataloader.py#L435",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataloader.py#L435",
       "subcategory": "dataloader",
       "methods": [
         {
@@ -1724,7 +1885,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(dataset: Dataset, batch_size: int = 1, shuffle: bool | None = None, sampler: Sampler | None = None, batch_sampler: Sampler | None = None, num_workers: int = 0, collate_fn: Callable[..., object] | None = None, drop_last: bool = False, timeout: float = 0.0, worker_init_fn: Callable[..., object] | None = None, multiprocessing_context: object = None, generator: object = None, prefetch_factor: int | None = None, persistent_workers: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataloader.py#L504",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataloader.py#L504",
           "subcategory": "dataloader",
           "summary": "Configure a `DataLoader`; see the class docstring for parameter\nsemantics.",
           "extended": null,
@@ -1753,7 +1914,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataloader.py#L583",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataloader.py#L583",
           "subcategory": "dataloader",
           "summary": "Yield collated mini-batches for one full pass over the dataset.",
           "extended": "Dispatches to either the single-process iterator (`num_workers ==\n0`) or the multi-process iterator. When `persistent_workers` is\nenabled the multi-process worker pool survives between epochs;\notherwise workers are spawned and joined per call.",
@@ -1775,7 +1936,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataloader.py#L621",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataloader.py#L621",
           "subcategory": "dataloader",
           "summary": "Return the number of batches per epoch (`len(batch_sampler)`).",
           "extended": null,
@@ -1898,7 +2059,7 @@
       "kind": "function",
       "labels": [],
       "signature": "collate(batch: list[object], collate_fn_map: dict[type, Callable[..., object]] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataloader.py#L97",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataloader.py#L97",
       "subcategory": "dataloader",
       "summary": "Composable collate dispatcher with user-overridable type handlers.",
       "extended": "Same dispatch behaviour as `default_collate` plus an optional\n`collate_fn_map` that overrides handling for specific element\ntypes.  Use this when a custom record type needs special-case\nbatching while everything else (tensors, dicts, namedtuples, ...)\nshould follow the default rules.",
@@ -1937,7 +2098,7 @@
       "kind": "function",
       "labels": [],
       "signature": "default_collate(batch: list[object])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataloader.py#L144",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataloader.py#L144",
       "subcategory": "dataloader",
       "summary": "Collate a list of samples into a batched tensor or nested structure.",
       "extended": "The default `collate_fn` used by `DataLoader`.  Walks the\nfirst element of `batch` to decide how to combine the remaining\nelements, preserving the original nested container structure.",
@@ -1970,7 +2131,7 @@
       "kind": "function",
       "labels": [],
       "signature": "default_convert(data: object)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/dataloader.py#L42",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/dataloader.py#L42",
       "subcategory": "dataloader",
       "summary": "Recursively convert a single sample's elements to Lucid Tensors.",
       "extended": "The inverse-flavour partner of `default_collate`:\n`default_collate` stacks a *batch list* into batched tensors,\nwhile `default_convert` walks a *single sample* (possibly\nnested in lists / tuples / dicts / named tuples) and turns leaf\nndarrays / Python scalars into `Tensor` leaves.  Existing\nTensors / strings / bytes pass through unchanged.",
@@ -1998,12 +2159,352 @@
       "see_also": []
     },
     {
+      "name": "CutMixCollator",
+      "path": "lucid.utils.data._mix.CutMixCollator",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "CutMixCollator(alpha: float = 1.0, num_classes: int, p: float = 1.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L140",
+      "subcategory": "mix",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.data._mix.CutMixCollator.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(alpha: float = 1.0, num_classes: int, p: float = 1.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L167",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.utils.data._mix.CutMixCollator.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(batch: list[object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L179",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.utils.data._mix.CutMixCollator.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L222",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "CutMix collator (Yun et al., 2019 — [arXiv:1905.04899](https://arxiv.org/abs/1905.04899)).",
+      "extended": "Same lambda-sampling scheme as `MixupCollator`, but instead\nof blending pixels globally, a rectangular patch of one image is\npasted onto another.  The effective $\\lambda$ is recomputed\nfrom the actual patch area (after border clamping) so soft\ntargets stay calibrated.",
+      "parameters": [
+        {
+          "name": "alpha",
+          "annotation": "float",
+          "description": "Beta-distribution concentration.  Reference-framework recipes\nuse `1.0` for ImageNet (uniform $\\lambda$).",
+          "default": "1.0"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Output class count.",
+          "default": null
+        },
+        {
+          "name": "p",
+          "annotation": "float",
+          "description": "Probability of applying CutMix per batch.",
+          "default": "1.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Patch placement uses a multiplicative keep-mask + additive paste\n(the same composition pattern as\n`lucid.utils.transforms.RandomErasing`) — fully\ndifferentiable, no in-place writes."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MixupCollator",
+      "path": "lucid.utils.data._mix.MixupCollator",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "MixupCollator(alpha: float = 0.2, num_classes: int, p: float = 1.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L63",
+      "subcategory": "mix",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.data._mix.MixupCollator.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(alpha: float = 0.2, num_classes: int, p: float = 1.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L99",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.utils.data._mix.MixupCollator.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(batch: list[object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L111",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.utils.data._mix.MixupCollator.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L130",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Mixup collator (Zhang et al., 2018 — [arXiv:1710.09412](https://arxiv.org/abs/1710.09412)).",
+      "extended": "For each batch:\n\n1. Run `default_collate` to get `(images, labels)`.\n2. One-hot encode `labels` to `(B, num_classes)` soft targets.\n3. With probability `p`, sample\n   $\\lambda \\sim \\mathrm{Beta}(\\alpha, \\alpha)$, choose a\n   random permutation of the batch, and produce\n\n$$\n\\begin{aligned}\nx_{\\mathrm{mix}} &= \\lambda x + (1 - \\lambda) x_{\\pi} \\\\\ny_{\\mathrm{mix}} &= \\lambda y + (1 - \\lambda) y_{\\pi}\n\\end{aligned}\n$$\n\nOtherwise the batch passes through with one-hot soft targets.",
+      "parameters": [
+        {
+          "name": "alpha",
+          "annotation": "float",
+          "description": "Beta-distribution concentration.  Reference-framework\nrecipes use `0.2` for ImageNet, `1.0` for CIFAR.",
+          "default": "0.2"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Output class count — required so soft targets have the right\nwidth.",
+          "default": null
+        },
+        {
+          "name": "p",
+          "annotation": "float",
+          "description": "Probability of applying Mixup per batch.",
+          "default": "1.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The companion loss is `lucid.nn.functional.cross_entropy`\nwith the soft target shape `(B, num_classes)` — Lucid's\n`cross_entropy` accepts that natively."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "RandomMixupCutMixCollator",
+      "path": "lucid.utils.data._mix.RandomMixupCutMixCollator",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "RandomMixupCutMixCollator(mixup_alpha: float = 0.2, cutmix_alpha: float = 1.0, num_classes: int, p: float = 1.0, switch_prob: float = 0.5)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L232",
+      "subcategory": "mix",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.data._mix.RandomMixupCutMixCollator.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(mixup_alpha: float = 0.2, cutmix_alpha: float = 1.0, num_classes: int, p: float = 1.0, switch_prob: float = 0.5)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L252",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.utils.data._mix.RandomMixupCutMixCollator.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(batch: list[object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L271",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.utils.data._mix.RandomMixupCutMixCollator.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_mix.py#L284",
+          "subcategory": "mix",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Pick `MixupCollator` or `CutMixCollator` per batch.",
+      "extended": "The reference-framework \"RandomMixup+CutMix\" recipe: each batch\nindependently chooses one of the two collators uniformly, then\nthat collator decides whether to fire (per its own `p`).",
+      "parameters": [
+        {
+          "name": "mixup_alpha",
+          "annotation": "float",
+          "description": "",
+          "default": "0.2"
+        },
+        {
+          "name": "cutmix_alpha",
+          "annotation": "float",
+          "description": "",
+          "default": "1.0"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "",
+          "default": null
+        },
+        {
+          "name": "p",
+          "annotation": "float",
+          "description": "Probability that *either* collator runs (vs the batch being\nreturned unchanged with soft labels).",
+          "default": "1.0"
+        },
+        {
+          "name": "switch_prob",
+          "annotation": "float",
+          "description": "When the policy fires, probability of choosing CutMix over\nMixup.",
+          "default": "0.5"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "get_worker_info",
       "path": "lucid.utils.data._worker.get_worker_info",
       "kind": "function",
       "labels": [],
       "signature": "get_worker_info()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/_worker.py#L56",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_worker.py#L56",
       "subcategory": "worker",
       "summary": "Return a `WorkerInfo` object in a worker process, else `None`.",
       "extended": "Inside the `worker_init_fn` or dataset `__getitem__` /\n`__iter__` of a multi-process `DataLoader`, this returns\nthe `WorkerInfo` for the current worker.  In the main\nprocess — or when `num_workers=0` — it returns `None`.",
@@ -2031,7 +2532,7 @@
       "bases": [],
       "labels": [],
       "signature": "WorkerInfo(id: int, num_workers: int, seed: int, dataset: Dataset)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/_worker.py#L13",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_worker.py#L13",
       "subcategory": "worker",
       "methods": [
         {
@@ -2040,7 +2541,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(id: int, num_workers: int, seed: int, dataset: Dataset)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/a1b7e85f3/lucid/utils/data/_worker.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/utils/data/_worker.py#L1",
           "subcategory": "worker",
           "summary": "Configure a `DataLoader`; see the class docstring for parameter\nsemantics.",
           "extended": null,

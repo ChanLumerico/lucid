@@ -4,12 +4,14 @@ import { Sidebar, type SidebarItem } from "@/components/layout/Sidebar";
 import { MobileSidebarProvider } from "@/components/layout/MobileSidebarContext";
 import { loadApiData, getAllModuleSlugs } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule, isApiClass } from "@/lib/types";
+import { packageLabel, segmentLabel, titleize } from "@/lib/labels";
 import type { ApiMember, ApiModule } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
-// Subcategory display: per-module ordering + friendly labels.
-// Slugs come from build-api-data.py (file-basename fallback or explicit rules).
-// Per-slug labels are best-effort — anything not listed gets auto-titlecased.
+// Display labels (slug aliases + subcategory/segment labels + acronym-aware
+// titleization) all live in ``@/lib/labels`` — the single source of truth.
+// This file owns only the *navigation-specific* policy: ordering, tags, and
+// the synthetic-parent / sub-package nesting that shapes the sidebar tree.
 // ---------------------------------------------------------------------------
 
 // Explicit display order for the `lucid` top-level (mirrors lucid/ on disk).
@@ -19,182 +21,6 @@ const LUCID_ORDER: string[] = [
   "autograd", "predicates", "serialization",
   "globals", "threads", "dispatch", "vmap",
 ];
-
-// Friendly display labels keyed by subcategory slug.  Anything missing here
-// falls back to ``titleize(slug)``.
-const LABEL_OVERRIDES: Record<string, string> = {
-  // lucid top-level
-  tensor: "Tensor",
-  types: "Types & Protocols",
-  dtypes: "Data Types",
-  device: "Device",
-  factories: "Tensor Creation",
-  ops: "Tensor Operations",
-  composite: "Composite Ops",
-  autograd: "Autograd",
-  predicates: "Predicates",
-  serialization: "Serialization",
-  globals: "Global Settings",
-  threads: "Threading",
-  dispatch: "Dispatch",
-  vmap: "vmap",
-  // nn / nn.functional file basenames
-  modules: "Modules",
-  hooks: "Hooks",
-  activations: "Activations",
-  activation: "Activations",
-  attention: "Attention",
-  container: "Containers",
-  conv: "Convolution",
-  dropout: "Dropout",
-  flatten: "Flatten",
-  linear: "Linear",
-  loss: "Loss",
-  normalization: "Normalization",
-  padding: "Padding",
-  pooling: "Pooling",
-  rnn: "Recurrent",
-  sparse: "Sparse",
-  transformer: "Transformer",
-  upsampling: "Upsampling",
-  sampling: "Sampling",
-  // optim
-  sgd: "SGD",
-  adam: "Adam / AdamW",
-  lbfgs: "L-BFGS",
-  lr_scheduler: "LR Schedulers",
-  others: "Other Optimizers",
-  // autograd
-  function: "Function",
-  graph: "Graph",
-  gradcheck: "Gradient Check",
-  checkpoint: "Checkpointing",
-  profiler: "Profiler",
-  // utils.data
-  dataloader: "DataLoader",
-  dataset: "Dataset",
-  sampler: "Sampler",
-  // amp
-  autocast: "Autocast",
-  grad_scaler: "Gradient Scaler",
-  // nn.utils
-  clip_grad: "Gradient Clipping",
-  convert_parameters: "Parameter Conversion",
-  fusion: "Fusion",
-  parametrize: "Parametrization",
-  parametrizations: "Parametrizations",
-  prune: "Pruning",
-  skip_init: "Skip Init",
-  spectral_norm: "Spectral Norm",
-  weight_norm: "Weight Norm",
-  // lucid.ops arity buckets
-  unary: "Unary",
-  binary: "Binary",
-  ternary: "Ternary",
-  variadic: "Variadic",
-  // C++ engine subcategory buckets (mirror the lucid/_C/ directory tree)
-  core: "Core",
-  nn: "Neural Networks",
-  ufunc: "Unary Ops",
-  bfunc: "Binary Ops",
-  gfunc: "Generic Ops",
-  cfunc: "Composite Ops",
-  kernel: "Kernels",
-  primitives: "Primitives",
-  backend: "Backend",
-  cpu: "CPU (Accelerate)",
-  gpu: "GPU (MLX)",
-  mps: "MPS",
-  bindings: "Bindings",
-  helpers: "Helpers",
-  random: "Random",
-  complex: "Complex",
-  einops: "Einops",
-  fft: "FFT",
-  linalg: "Linear Algebra",
-  optim: "Optimizers",
-  test: "Test",
-  utils: "Utils",
-  // distributions
-  transforms: "Transforms",
-  kl: "KL Divergence",
-  normal: "Normal",
-  bernoulli: "Bernoulli",
-  categorical: "Categorical",
-  uniform: "Uniform",
-  exponential: "Exponential",
-  gamma: "Gamma",
-  student: "Student-t",
-  multivariate: "Multivariate",
-  matrix: "Matrix",
-  discrete: "Discrete",
-  continuous_extra: "Continuous (extra)",
-  independent: "Independent",
-  mixture: "Mixture",
-  relaxed: "Relaxed",
-  extra: "Extra",
-};
-
-function titleize(slug: string): string {
-  return slug
-    .split(/[_\-]/)
-    .map((s) => (s.length === 0 ? s : s[0].toUpperCase() + s.slice(1)))
-    .join(" ");
-}
-
-function labelFor(slug: string): string {
-  return LABEL_OVERRIDES[slug] ?? titleize(slug);
-}
-
-// ---------------------------------------------------------------------------
-// Top-level package aliases — every sidebar entry uses a human-friendly name
-// instead of the raw Python slug.  Keeps the namespace consistent: half the
-// slugs (lucid.creation, lucid.ops, lucid.ops.composite) are synthesised and
-// don't exist in real Python anyway; showing all aliases avoids the
-// confusion of "is lucid.creation a real package?" vs "is lucid.nn?".
-// The slug (and therefore the URL like /api/lucid.nn/Linear) stays the same;
-// only the displayed title changes.
-// ---------------------------------------------------------------------------
-
-const PACKAGE_LABELS: Record<string, string> = {
-  "lucid.tensor":         "Tensor",
-  "lucid.creation":       "Tensor Creation",
-  "lucid.ops":            "Tensor Operations",
-  "lucid.ops.composite":  "Composite Ops",
-  "lucid.nn":             "Neural Networks",
-  "lucid.nn.functional":  "Functional",
-  "lucid.nn.init":        "Init",
-  "lucid.nn.utils":       "NN Utils",
-  "lucid.optim":          "Optimizers",
-  "lucid.autograd":       "Autograd",
-  "lucid.func":           "Functional Transforms",
-  "lucid.linalg":         "Linear Algebra",
-  "lucid.fft":            "FFT",
-  "lucid.signal":         "Signal",
-  "lucid.special":        "Special Functions",
-  "lucid.distributions":  "Distributions",
-  "lucid.einops":         "Einops",
-  "lucid.amp":            "Mixed Precision",
-  "lucid.profiler":       "Profiler",
-  "lucid.serialization":  "Serialization",
-  "lucid.utils":          "Utils",         // synthetic parent
-  "lucid.utils.data":     "Data",
-  "lucid.models":         "Model Zoo",
-  "lucid.models.vision":  "Vision Models",
-  "lucid.models.text":    "Text Models",
-  "lucid.models.generative": "Generative Models",
-  // C++ engine — generated by ``web/scripts/build-cpp-data.py`` via
-  // libclang AST parse of ``lucid/_C/**/*.h``.  Same ApiModule / ApiClass
-  // schema as the Python side so the existing renderer Just Works.
-  "lucid._C.engine":      "C++ Engine",
-};
-
-function packageLabel(slug: string): string {
-  if (PACKAGE_LABELS[slug]) return PACKAGE_LABELS[slug];
-  // Fallback: strip "lucid." prefix, titleize.
-  const stripped = slug.startsWith("lucid.") ? slug.slice(6) : slug;
-  return titleize(stripped);
-}
 
 // Real Python path tag shown next to the alias label.
 //
@@ -246,15 +72,6 @@ const TOP_PINNED: string[] = [
 const BOTTOM_PINNED: string[] = [
   "lucid._C.engine",
 ];
-
-// ---------------------------------------------------------------------------
-// Sidebar — flat package-per-entry, no artificial meta-categories
-// ---------------------------------------------------------------------------
-//
-// Each module slug discovered by ``getAllModuleSlugs()`` becomes a top-level
-// sidebar entry.  Sort order: ``lucid`` first, then ``lucid.tensor``, then
-// the remaining slugs alphabetically.  No hardcoded category mapping — the
-// sidebar shape mirrors exactly the set of packages produced by the build.
 
 // ---------------------------------------------------------------------------
 // Build sidebar tree — server-side, reads public/api-data/*.json
@@ -367,7 +184,7 @@ function groupMembers(
       const group = buckets.get(cat);
       if (!group?.length) continue;
       seen.add(cat);
-      pushBucket(labelFor(cat), group);
+      pushBucket(segmentLabel(cat), group);
     }
   }
 
@@ -375,7 +192,7 @@ function groupMembers(
   const remaining: Array<{ cat: string; label: string }> = [];
   for (const cat of buckets.keys()) {
     if (cat === null || seen.has(cat)) continue;
-    remaining.push({ cat, label: labelFor(cat) });
+    remaining.push({ cat, label: segmentLabel(cat) });
   }
   remaining.sort((a, b) => a.label.localeCompare(b.label));
   for (const { cat, label } of remaining) {
@@ -405,16 +222,6 @@ function isFamilyLeaf(slug: string): boolean {
   return parts[2] === "vision" || parts[2] === "text" || parts[2] === "generative";
 }
 
-// Pretty-print a family directory name when ``_canonical_name`` is absent.
-// ``mobilenet_v4`` → ``Mobilenet V4``.  Crude but never wrong (unlike the
-// algorithmic ``.title()`` for paper-cased names like ConvNeXt / ResNeXt).
-function familyDirToLabel(dirName: string): string {
-  return dirName
-    .split("_")
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(" ");
-}
-
 /** Build the 4-slot family-leaf sidebar item:
  *
  *   <CanonicalName>
@@ -432,7 +239,7 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
   const dirName = slug.split(".").pop() ?? slug;
   const title = data.canonical_name && data.canonical_name.length > 0
     ? data.canonical_name
-    : familyDirToLabel(dirName);
+    : titleize(dirName);
 
   const allMembers = data.members.filter(
     (m) => isApiClass(m) || m.kind === "function",

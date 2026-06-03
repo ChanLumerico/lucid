@@ -3,7 +3,7 @@
   "name": "coatnet",
   "path": "lucid.models.vision.coatnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/__init__.py#L1",
   "members": [
     {
       "name": "CoAtNetConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "CoAtNetConfig(num_classes: int = 1000, in_channels: int = 3, image_size: int = 224, variant: str = 'coatnet_0', blocks_per_stage: tuple[int, ...] = (2, 3, 5, 2), dims: tuple[int, ...] = (96, 192, 384, 768), stem_width: int = 64, attn_heads: tuple[int, ...] = (12, 24), mbconv_expand: int = 4, head_hidden_size: int | None = 768, dropout: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_config.py#L10",
+      "signature": "CoAtNetConfig(num_classes: int = 1000, in_channels: int = 3, image_size: int = 224, variant: str = 'coatnet_0', blocks_per_stage: tuple[int, ...] = (2, 3, 5, 2), dims: tuple[int, ...] = (96, 192, 384, 768), stem_width: int = 64, attn_heads: tuple[int, ...] = (12, 24), mbconv_expand: int = 4, head_hidden_size: int | None = 768, dropout: float = 0.0, mixed_s3: tuple[int, int, int] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.coatnet._config.CoAtNetConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, image_size: int = 224, variant: str = 'coatnet_0', blocks_per_stage: tuple[int, ...] = (2, 3, 5, 2), dims: tuple[int, ...] = (96, 192, 384, 768), stem_width: int = 64, attn_heads: tuple[int, ...] = (12, 24), mbconv_expand: int = 4, head_hidden_size: int | None = 768, dropout: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, image_size: int = 224, variant: str = 'coatnet_0', blocks_per_stage: tuple[int, ...] = (2, 3, 5, 2), dims: tuple[int, ...] = (96, 192, 384, 768), stem_width: int = 64, attn_heads: tuple[int, ...] = (12, 24), mbconv_expand: int = 4, head_hidden_size: int | None = 768, dropout: float = 0.0, mixed_s3: tuple[int, int, int] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -117,7 +117,7 @@
         "Build a CoAtNet-0 configuration with a 10-class head for CIFAR-10:\n>>> from lucid.models.vision.coatnet import CoAtNetConfig\n>>> cfg = CoAtNetConfig(num_classes=10)\n>>> cfg.dims, cfg.blocks_per_stage, cfg.num_classes\n((96, 192, 384, 768), (2, 3, 5, 2), 10)"
       ],
       "notes": [
-        "The canonical CoAtNet-0 (registered as `coatnet_0`) has\napproximately **25.6M parameters** and reaches **81.6% top-1 on\nImageNet-1k** at 224x224 (Dai et al., 2021, Table 5).\n\nReference: Zihang Dai *et al.*, *\"CoAtNet: Marrying Convolution\nand Attention for All Data Sizes\"*, NeurIPS 2021,\n`[arXiv:2106.04803](https://arxiv.org/abs/2106.04803) <https://arxiv.org/abs/2106.04803>`_."
+        "The canonical CoAtNet-0 (registered as `coatnet_0`) has\napproximately **25.6M parameters** and reaches **81.6% top-1 on\nImageNet-1k** at 224x224 (Dai et al., 2021, Table 5).\n\nReference: Zihang Dai *et al.*, *\"CoAtNet: Marrying Convolution\nand Attention for All Data Sizes\"*, NeurIPS 2021,\n[arXiv:2106.04803](https://arxiv.org/abs/2106.04803)."
       ],
       "attributes": [
         {
@@ -140,7 +140,7 @@
       ],
       "labels": [],
       "signature": "CoAtNet(config: CoAtNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L341",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L391",
       "subcategory": "model",
       "methods": [
         {
@@ -149,7 +149,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CoAtNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L417",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L467",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -173,7 +173,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L428",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L478",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -194,7 +194,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L431",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L481",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -216,7 +216,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L439",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L489",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -234,7 +234,7 @@
         }
       ],
       "summary": "CoAtNet backbone (Dai et al., 2021).",
-      "extended": "CoAtNet is a *hybrid* backbone that interleaves depthwise\nconvolutions and relative self-attention in a single four-stage\npyramid (preceded by a two-layer convolutional stem).  The first\ntwo stages ($S_1, S_2$) use *MBConv* blocks (squeeze-and-\nexcitation, expansion ratio 4) and the last two stages\n($S_3, S_4$) use *relative-attention* transformer blocks\noperating on flattened token sequences:\n\n$$\n\\mathrm{Attn}(Q, K, V)_{ij} = \\mathrm{softmax}\\!\\left(\n    \\frac{Q_i K_j^\\top}{\\sqrt{d}} + r_{i - j}\n\\right) V_j,\n$$\nwhere $r_{i-j}$ is a learned bias indexed by the *relative*\nspatial offset between tokens.  This recovers the translation\nequivariance that convolutions provide while still permitting\nglobal, data-dependent mixing.  Each stage downsamples\n$2\\times$, so the final feature map is\n$(B, d_{S_4}, H/32, W/32)$.\n\n`forward_features` returns the raw spatial feature map from\nthe last attention stage.  Use this backbone when you need\nmulti-scale or spatial features for detection / segmentation; for\nend-to-end classification use\n`CoAtNetForImageClassification`.",
+      "extended": "CoAtNet is a *hybrid* backbone that interleaves depthwise\nconvolutions and relative self-attention in a single four-stage\npyramid (preceded by a two-layer convolutional stem).  The first\ntwo stages ($S_1, S_2$) use *MBConv* blocks (squeeze-and-\nexcitation, expansion ratio 4) and the last two stages\n($S_3, S_4$) use *relative-attention* transformer blocks\noperating on flattened token sequences:\n\n$$\n\\mathrm{Attn}(Q, K, V)_{ij} = \\mathrm{softmax}\\!\\left(\n    \\frac{Q_i K_j^\\top}{\\sqrt{d}} + r_{i - j}\n\\right) V_j,\n$$\n\nwhere $r_{i-j}$ is a learned bias indexed by the *relative*\nspatial offset between tokens.  This recovers the translation\nequivariance that convolutions provide while still permitting\nglobal, data-dependent mixing.  Each stage downsamples\n$2\\times$, so the final feature map is\n$(B, d_{S_4}, H/32, W/32)$.\n\n`forward_features` returns the raw spatial feature map from\nthe last attention stage.  Use this backbone when you need\nmulti-scale or spatial features for detection / segmentation; for\nend-to-end classification use\n`CoAtNetForImageClassification`.",
       "parameters": [
         {
           "name": "config",
@@ -249,7 +249,7 @@
         "Build a CoAtNet-0 backbone and run a forward pass:\n>>> import lucid\n>>> from lucid.models.vision.coatnet import CoAtNet, CoAtNetConfig\n>>> model = CoAtNet(CoAtNetConfig())\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape                       # (B, dims[-1], H/32, W/32)\n(1, 768, 7, 7)"
       ],
       "notes": [
-        "Reference: Zihang Dai *et al.*, *\"CoAtNet: Marrying Convolution\nand Attention for All Data Sizes\"*, NeurIPS 2021,\n`[arXiv:2106.04803](https://arxiv.org/abs/2106.04803) <https://arxiv.org/abs/2106.04803>`_."
+        "Reference: Zihang Dai *et al.*, *\"CoAtNet: Marrying Convolution\nand Attention for All Data Sizes\"*, NeurIPS 2021,\n[arXiv:2106.04803](https://arxiv.org/abs/2106.04803)."
       ],
       "attributes": [
         {
@@ -297,7 +297,7 @@
       ],
       "labels": [],
       "signature": "CoAtNetForImageClassification(config: CoAtNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L448",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L498",
       "subcategory": "model",
       "methods": [
         {
@@ -306,7 +306,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CoAtNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L518",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L568",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -328,7 +328,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_model.py#L541",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_model.py#L591",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -346,7 +346,7 @@
         }
       ],
       "summary": "CoAtNet with a linear classification head (Dai et al., 2021).",
-      "extended": "Wraps the same conv + attention trunk as `CoAtNet` (stem\n+ two MBConv stages + two relative-attention transformer stages)\nand adds the standard reference recipe head: global average pool\n→ LayerNorm → optional pre-logits Linear + Tanh → linear\nclassifier.\n\n$$\n\\text{logits} = W_{\\text{cls}}\\,\n    \\mathrm{Tanh}\\!\\bigl(W_{\\text{pre}}\\,\n    \\mathrm{LN}(\\mathrm{GAP}(z^{S_4}))\\bigr) + b_{\\text{cls}}.\n$$\nPass `labels` to `forward` to compute the cross-entropy\nloss in the same pass.",
+      "extended": "Wraps the same conv + attention trunk as `CoAtNet` (stem\n+ two MBConv stages + two relative-attention transformer stages)\nand adds the standard reference recipe head: global average pool\n→ LayerNorm → optional pre-logits Linear + Tanh → linear\nclassifier.\n\n$$\n\\text{logits} = W_{\\text{cls}}\\,\n    \\mathrm{Tanh}\\!\\bigl(W_{\\text{pre}}\\,\n    \\mathrm{LN}(\\mathrm{GAP}(z^{S_4}))\\bigr) + b_{\\text{cls}}.\n$$\n\nPass `labels` to `forward` to compute the cross-entropy\nloss in the same pass.",
       "parameters": [
         {
           "name": "config",
@@ -409,7 +409,7 @@
       "kind": "function",
       "labels": [],
       "signature": "coatnet_0(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_pretrained.py#L26",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L104",
       "subcategory": "pretrained",
       "summary": "CoAtNet-0 backbone (Dai et al., 2021).",
       "extended": "Builds the canonical *CoAtNet-0* configuration:\n`blocks_per_stage=(2, 3, 5, 2)`, `dims=(96, 192, 384, 768)`,\n`stem_width=64`, `attn_heads=(12, 24)`,\n`head_hidden_size=768`.  The first two stages are MBConv with\nexpansion ratio 4 and the last two stages are relative-attention\ntransformers with head dim 32.  Approximately **25.6M parameters**.",
@@ -436,608 +436,11 @@
         ">>> import lucid\n>>> from lucid.models.vision.coatnet import coatnet_0\n>>> model = coatnet_0()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape\n(1, 768, 7, 7)"
       ],
       "notes": [
-        "CoAtNet-0 reaches **81.6% top-1 on ImageNet-1k** at 224x224 (Dai\net al., 2021, Table 5).  See\n`[arXiv:2106.04803](https://arxiv.org/abs/2106.04803) <https://arxiv.org/abs/2106.04803>`_."
+        "CoAtNet-0 reaches **81.6% top-1 on ImageNet-1k** at 224x224 (Dai\net al., 2021, Table 5).  See\n[arXiv:2106.04803](https://arxiv.org/abs/2106.04803)."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "CoAtNet",
-        "type": "CoAtNet",
-        "params": 24785196,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 38848,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 1728,
-                "own_params": 1728,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "GELU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 36864,
-                "own_params": 36864,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "GELU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "s1",
-            "type": "Sequential",
-            "params": 189584,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_MBConv",
-                "params": 91736,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 24576,
-                    "own_params": 24576,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 3456,
-                    "own_params": 3456,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 18840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 9240,
-                        "own_params": 9240,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 9600,
-                        "own_params": 9600,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 36960,
-                    "own_params": 36960,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 6240,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "AvgPool2d",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Conv2d",
-                        "params": 6240,
-                        "own_params": 6240,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_MBConv",
-                "params": 97848,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 192,
-                    "own_params": 192,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 36864,
-                    "own_params": 36864,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 3456,
-                    "own_params": 3456,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 18840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 9240,
-                        "own_params": 9240,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 9600,
-                        "own_params": 9600,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 36960,
-                    "own_params": 36960,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "s2",
-            "type": "Sequential",
-            "params": 1084752,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_MBConv",
-                "params": 324720,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 192,
-                    "own_params": 192,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 73728,
-                    "own_params": 73728,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 6912,
-                    "own_params": 6912,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 74544,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 36912,
-                        "own_params": 36912,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 37632,
-                        "own_params": 37632,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 147648,
-                    "own_params": 147648,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 18624,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "AvgPool2d",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Conv2d",
-                        "params": 18624,
-                        "own_params": 18624,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_MBConv",
-                "params": 380016,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 147456,
-                    "own_params": 147456,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 6912,
-                    "own_params": 6912,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 74544,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 36912,
-                        "own_params": 36912,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 37632,
-                        "own_params": 37632,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 147648,
-                    "own_params": 147648,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 2
-              }
-            ]
-          },
-          {
-            "name": "s3",
-            "type": "_TransformerStage",
-            "params": 8990940,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "pool",
-                "type": "AvgPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Linear",
-                "params": 74112,
-                "own_params": 74112,
-                "children": []
-              },
-              {
-                "name": "blocks",
-                "type": "ModuleList",
-                "params": 8916060,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_RelAttnBlock",
-                    "params": 1783212,
-                    "own_params": 8748,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "qkv",
-                        "type": "Linear",
-                        "params": 443520,
-                        "own_params": 443520,
-                        "children": []
-                      },
-                      {
-                        "name": "proj",
-                        "type": "Linear",
-                        "params": 147840,
-                        "own_params": 147840,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 590208,
-                        "own_params": 590208,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 5
-                  }
-                ]
-              },
-              {
-                "name": "norm",
-                "type": "LayerNorm",
-                "params": 768,
-                "own_params": 768,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "s4",
-            "type": "_TransformerStage",
-            "params": 14481072,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "pool",
-                "type": "AvgPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Linear",
-                "params": 295680,
-                "own_params": 295680,
-                "children": []
-              },
-              {
-                "name": "blocks",
-                "type": "ModuleList",
-                "params": 14183856,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_RelAttnBlock",
-                    "params": 7091928,
-                    "own_params": 4056,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "qkv",
-                        "type": "Linear",
-                        "params": 1771776,
-                        "own_params": 1771776,
-                        "children": []
-                      },
-                      {
-                        "name": "proj",
-                        "type": "Linear",
-                        "params": 590592,
-                        "own_params": 590592,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 2362368,
-                        "own_params": 2362368,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 2360064,
-                        "own_params": 2360064,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "norm",
-                "type": "LayerNorm",
-                "params": 1536,
-                "own_params": 1536,
-                "children": []
-              }
-            ]
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "coatnet_0_cls",
@@ -1045,7 +448,7 @@
       "kind": "function",
       "labels": [],
       "signature": "coatnet_0_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/coatnet/_pretrained.py#L85",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L163",
       "subcategory": "pretrained",
       "summary": "CoAtNet-0 image classifier (Dai et al., 2021).",
       "extended": "Combines the `coatnet_0` backbone with the standard CoAtNet\nhead: global average pool → LayerNorm → `Linear(768) + Tanh` →\nfinal linear classifier.  Default output is `num_classes=1000`\n(ImageNet-1k).  Approximately **25.6M parameters**.",
@@ -1076,647 +479,335 @@
       ],
       "attributes": [],
       "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "coatnet_1",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_1",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_1(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L222",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-1 backbone (Dai et al., 2021).",
+      "extended": "Same channel widths as CoAtNet-0 but with substantially deeper\nstages: `blocks_per_stage=(2, 6, 14, 2)`, `dims=(96, 192, 384, 768)`,\n`stem_width=64`, `attn_heads=(12, 24)`.  Approximately **42M\nparameters**.",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Reaches **83.3% ImageNet-1k top-1** at 224×224 (Table 5, NeurIPS\n2021).  See [arXiv:2106.04803](https://arxiv.org/abs/2106.04803)."
+      ],
+      "attributes": [],
+      "warns": [],
       "see_also": [],
-      "model_summary": {
-        "name": "CoAtNetForImageClassification",
-        "type": "CoAtNetForImageClassification",
-        "params": 26146324,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "stem",
-            "type": "Sequential",
-            "params": 38848,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 1728,
-                "own_params": 1728,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "GELU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "Conv2d",
-                "params": 36864,
-                "own_params": 36864,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "GELU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "s1",
-            "type": "Sequential",
-            "params": 189584,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_MBConv",
-                "params": 91736,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 24576,
-                    "own_params": 24576,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 3456,
-                    "own_params": 3456,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 18840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 9240,
-                        "own_params": 9240,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 9600,
-                        "own_params": 9600,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 36960,
-                    "own_params": 36960,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 6240,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "AvgPool2d",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Conv2d",
-                        "params": 6240,
-                        "own_params": 6240,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_MBConv",
-                "params": 97848,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 192,
-                    "own_params": 192,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 36864,
-                    "own_params": 36864,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 3456,
-                    "own_params": 3456,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 18840,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 9240,
-                        "own_params": 9240,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 9600,
-                        "own_params": 9600,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 36960,
-                    "own_params": 36960,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "s2",
-            "type": "Sequential",
-            "params": 1084752,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_MBConv",
-                "params": 324720,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 192,
-                    "own_params": 192,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 73728,
-                    "own_params": 73728,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 6912,
-                    "own_params": 6912,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 74544,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 36912,
-                        "own_params": 36912,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 37632,
-                        "own_params": 37632,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 147648,
-                    "own_params": 147648,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 18624,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "AvgPool2d",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "Conv2d",
-                        "params": 18624,
-                        "own_params": 18624,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "name": "1",
-                "type": "_MBConv",
-                "params": 380016,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "bn_pre",
-                    "type": "BatchNorm2d",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
-                  },
-                  {
-                    "name": "expand",
-                    "type": "Conv2d",
-                    "params": 147456,
-                    "own_params": 147456,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_exp",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "dw",
-                    "type": "Conv2d",
-                    "params": 6912,
-                    "own_params": 6912,
-                    "children": []
-                  },
-                  {
-                    "name": "bn_dw",
-                    "type": "BatchNorm2d",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
-                  },
-                  {
-                    "name": "se",
-                    "type": "_SE",
-                    "params": 74544,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 36912,
-                        "own_params": 36912,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 37632,
-                        "own_params": 37632,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "project",
-                    "type": "Conv2d",
-                    "params": 147648,
-                    "own_params": 147648,
-                    "children": []
-                  },
-                  {
-                    "name": "shortcut",
-                    "type": "Sequential",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 2
-              }
-            ]
-          },
-          {
-            "name": "s3",
-            "type": "_TransformerStage",
-            "params": 8990940,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "pool",
-                "type": "AvgPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Linear",
-                "params": 74112,
-                "own_params": 74112,
-                "children": []
-              },
-              {
-                "name": "blocks",
-                "type": "ModuleList",
-                "params": 8916060,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_RelAttnBlock",
-                    "params": 1783212,
-                    "own_params": 8748,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "qkv",
-                        "type": "Linear",
-                        "params": 443520,
-                        "own_params": 443520,
-                        "children": []
-                      },
-                      {
-                        "name": "proj",
-                        "type": "Linear",
-                        "params": 147840,
-                        "own_params": 147840,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 768,
-                        "own_params": 768,
-                        "children": []
-                      },
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 591360,
-                        "own_params": 591360,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 590208,
-                        "own_params": 590208,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 5
-                  }
-                ]
-              },
-              {
-                "name": "norm",
-                "type": "LayerNorm",
-                "params": 768,
-                "own_params": 768,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "s4",
-            "type": "_TransformerStage",
-            "params": 14481072,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "pool",
-                "type": "AvgPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Linear",
-                "params": 295680,
-                "own_params": 295680,
-                "children": []
-              },
-              {
-                "name": "blocks",
-                "type": "ModuleList",
-                "params": 14183856,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_RelAttnBlock",
-                    "params": 7091928,
-                    "own_params": 4056,
-                    "children": [
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "qkv",
-                        "type": "Linear",
-                        "params": 1771776,
-                        "own_params": 1771776,
-                        "children": []
-                      },
-                      {
-                        "name": "proj",
-                        "type": "Linear",
-                        "params": 590592,
-                        "own_params": 590592,
-                        "children": []
-                      },
-                      {
-                        "name": "norm2",
-                        "type": "LayerNorm",
-                        "params": 1536,
-                        "own_params": 1536,
-                        "children": []
-                      },
-                      {
-                        "name": "fc1",
-                        "type": "Linear",
-                        "params": 2362368,
-                        "own_params": 2362368,
-                        "children": []
-                      },
-                      {
-                        "name": "fc2",
-                        "type": "Linear",
-                        "params": 2360064,
-                        "own_params": 2360064,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "norm",
-                "type": "LayerNorm",
-                "params": 1536,
-                "own_params": 1536,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "avgpool",
-            "type": "AdaptiveAvgPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "norm",
-            "type": "LayerNorm",
-            "params": 1536,
-            "own_params": 1536,
-            "children": []
-          },
-          {
-            "name": "pre_logits",
-            "type": "Sequential",
-            "params": 590592,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Linear",
-                "params": 590592,
-                "own_params": 590592,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "Tanh",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 769000,
-            "own_params": 769000,
-            "children": []
-          }
-        ]
-      }
+      "param_count": 42000000
+    },
+    {
+      "name": "coatnet_1_cls",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_1_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_1_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L247",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-1 image classifier (Dai et al., 2021).",
+      "extended": "Backbone + standard CoAtNet head (GAP → LayerNorm → Linear+Tanh →\nclassifier).  Approximately **42M parameters**, 83.3% ImageNet-1k\ntop-1 at 224x224 (Table 5).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNetForImageClassification",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 42000000
+    },
+    {
+      "name": "coatnet_2",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_2",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_2(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L273",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-2 backbone (Dai et al., 2021).",
+      "extended": "Wider variant: `blocks_per_stage=(2, 6, 14, 2)`,\n`dims=(128, 256, 512, 1024)`, `stem_width=128`,\n`attn_heads=(16, 32)`.  Approximately **75M parameters**, **84.1%\nImageNet-1k top-1** at 224×224 (Table 5).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 75000000
+    },
+    {
+      "name": "coatnet_2_cls",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_2_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_2_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L293",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-2 image classifier (Dai et al., 2021).",
+      "extended": "Wider variant — `dims=(128, 256, 512, 1024)` — with the standard\nCoAtNet head.  Approximately **75M parameters**, 84.1% ImageNet-1k\ntop-1 at 224x224 (Table 5).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNetForImageClassification",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 75000000
+    },
+    {
+      "name": "coatnet_3",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_3",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_3(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L319",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-3 backbone (Dai et al., 2021).",
+      "extended": "Larger variant: `blocks_per_stage=(2, 6, 14, 2)`,\n`dims=(192, 384, 768, 1536)`, `stem_width=192`,\n`attn_heads=(24, 48)`.  Approximately **168M parameters**, **84.5%\nImageNet-1k top-1** at 224×224 (Table 5).  With ImageNet-21k or\nJFT-3B pretraining the paper reports 86.5% / 87.8% at 384x384.",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 168000000
+    },
+    {
+      "name": "coatnet_3_cls",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_3_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_3_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L340",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-3 image classifier (Dai et al., 2021).",
+      "extended": "Larger variant — `dims=(192, 384, 768, 1536)` — with the standard\nCoAtNet head.  Approximately **168M parameters**, 84.5% ImageNet-1k\ntop-1 at 224x224 (Table 5).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNetForImageClassification",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 168000000
+    },
+    {
+      "name": "coatnet_4",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_4",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_4(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L366",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-4 backbone (Dai et al., 2021).",
+      "extended": "Even deeper variant: `blocks_per_stage=(2, 12, 28, 2)`,\n`dims=(192, 384, 768, 1536)`, `stem_width=192`,\n`attn_heads=(24, 48)`.  Approximately **275M parameters**, **85.0%\nImageNet-1k top-1** at 224×224 (Table 5).  Paper headline with\nJFT-3B pretrain reaches 88.4% at 512x512.",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 275000000
+    },
+    {
+      "name": "coatnet_4_cls",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_4_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_4_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L387",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-4 image classifier (Dai et al., 2021).",
+      "extended": "Deepest of the CoAtNet-0..4 series — same dims as CoAtNet-3 but with\n`blocks_per_stage=(2, 12, 28, 2)`.  Approximately **275M\nparameters**, 85.0% ImageNet-1k top-1 at 224x224 (Table 5).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNetForImageClassification",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 275000000
+    },
+    {
+      "name": "coatnet_5",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_5",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_5(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L413",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-5 backbone (Dai et al., 2021).",
+      "extended": "Widest paper-cited variant: `blocks_per_stage=(2, 12, 28, 2)`,\n`dims=(256, 512, 1280, 2048)`, `stem_width=192`,\n`attn_heads=(40, 64)`.  Approximately **688M parameters**, **85.8%\nImageNet-1k top-1** at 224×224 (Table 5).  With JFT-3B pretraining\nthe paper reports 89.0% at 512x512.",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Memory footprint at default `image_size=224` is non-trivial — a\nforward pass of a single 3×224×224 input materialises stage-3/4\nactivations on the order of `B × D × H/32 × W/32` channels with\nD=2048.  Instantiating + running this variant on a 16 GB host is\nnear-the-edge; prefer measuring on a larger GPU."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 688000000
+    },
+    {
+      "name": "coatnet_5_cls",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_5_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_5_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L442",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-5 image classifier (Dai et al., 2021).",
+      "extended": "Widest paper-cited variant — `dims=(256, 512, 1280, 2048)` — with\nthe standard CoAtNet head.  Approximately **688M parameters**,\n85.8% ImageNet-1k top-1 at 224x224 (Table 5).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNetForImageClassification",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 688000000
+    },
+    {
+      "name": "coatnet_6",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_6",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_6(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L468",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-6 backbone (Dai et al., 2021).",
+      "extended": "Mixed-stage variant: S3 carries an MBConv sub-stage *and* a\ntransformer sub-stage at a wider dimension.  Spec from paper §A.2 /\nTable 12:\n\n- S0 conv stem: D=192, L=2 (handled by `stem_width`)\n- S1 MBConv: L=2, D=192\n- S2 MBConv: L=4, D=384\n- S3 *mixed*: MBConv L=8 D=768  →  expand→1536  →  TFMRel L=42 D=1536\n- S4 TFMRel: L=2, D=2048\n\nApproximately **1.5B parameters** — only meaningful with very large\npretraining (the paper's headline 88.4-89.0% ImageNet numbers come\nfrom JFT-3B pretraining + 512×512 finetune).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Footprint at default `image_size=224` exceeds what a 16 GB host\ncan comfortably instantiate (≈ 6 GB of params alone before\nactivations); use a larger GPU.  Building this variant is\nreserved for inference on dedicated hardware."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 1470000000
+    },
+    {
+      "name": "coatnet_6_cls",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_6_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_6_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L504",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-6 image classifier (Dai et al., 2021).",
+      "extended": "Mixed-S3 variant.  Approximately **1.5B parameters**.",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNetForImageClassification",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 1470000000
+    },
+    {
+      "name": "coatnet_7",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_7",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_7(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L528",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-7 backbone (Dai et al., 2021).",
+      "extended": "Widest mixed-stage variant.  Spec from paper §A.2 / Table 12:\n\n- S0 conv stem: D=192, L=2\n- S1 MBConv: L=2, D=256\n- S2 MBConv: L=4, D=512\n- S3 *mixed*: MBConv L=8 D=1024  →  expand→2048  →  TFMRel L=42 D=2048\n- S4 TFMRel: L=2, D=3072\n\nApproximately **2.4B parameters** — paper's strongest published\nCoAtNet, only usable with JFT-3B pretraining.  Not buildable on a\n16 GB host (param footprint alone is ≈ 9.7 GB before activations).",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNet",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 2440000000
+    },
+    {
+      "name": "coatnet_7_cls",
+      "path": "lucid.models.vision.coatnet._pretrained.coatnet_7_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "coatnet_7_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/coatnet/_pretrained.py#L555",
+      "subcategory": "pretrained",
+      "summary": "CoAtNet-7 image classifier (Dai et al., 2021).",
+      "extended": "Widest mixed-S3 variant.  Approximately **2.4B parameters**.",
+      "parameters": [],
+      "returns": {
+        "annotation": "CoAtNetForImageClassification",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 2440000000
     }
   ],
   "summary": "CoAtNet family — backbone + image classification (Dai et al., 2021).",

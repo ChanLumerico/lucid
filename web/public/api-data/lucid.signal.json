@@ -3,7 +3,7 @@
   "name": "windows",
   "path": "lucid.signal.windows",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L1",
   "members": [
     {
       "name": "bartlett",
@@ -11,7 +11,7 @@
       "kind": "function",
       "labels": [],
       "signature": "bartlett(M: int, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L63",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L63",
       "subcategory": "windows",
       "summary": "Bartlett (triangular) window.",
       "extended": "Generates a triangular taper that ramps linearly from 0 to 1 and\nback to 0 across the window length.  Equivalent to the convolution\nof two boxcar windows, the Bartlett window provides the simplest\nnon-trivial reduction of spectral leakage at the price of a wider\nmain lobe.",
@@ -50,7 +50,7 @@
         ">>> from lucid.signal.windows import bartlett\n>>> bartlett(5)\nTensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = 1 - \\left| \\frac{2n}{N - 1} - 1 \\right|, \\qquad\n0 \\le n < N,\n$$\nwhere $N = M$ (symmetric) or $N = M + 1$ (periodic).\nThe main-lobe width is roughly $8\\pi / N$ (about twice that\nof the rectangular window) and the peak side-lobe attenuation is\n$\\approx -26.5\\, \\text{dB}$."
+        "Sample formula:\n\n\n\n$$\nw[n] = 1 - \\left| \\frac{2n}{N - 1} - 1 \\right|, \\qquad\n0 \\le n < N,\n$$\n\nwhere $N = M$ (symmetric) or $N = M + 1$ (periodic).\nThe main-lobe width is roughly $8\\pi / N$ (about twice that\nof the rectangular window) and the peak side-lobe attenuation is\n$\\approx -26.5\\, \\text{dB}$."
       ],
       "attributes": [],
       "warns": [],
@@ -62,7 +62,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cosine(M: int, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L125",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L125",
       "subcategory": "windows",
       "summary": "Cosine (half-sine) window.",
       "extended": "Produces a single arch of a sine curve over the window length,\nsometimes called the \"sine\" or \"half-cosine\" window.  It is a\nsmoother taper than the triangular window with comparable main-lobe\nwidth but significantly lower side lobes.",
@@ -101,7 +101,7 @@
         ">>> from lucid.signal.windows import cosine\n>>> cosine(4)\nTensor([0.3827, 0.9239, 0.9239, 0.3827])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = \\sin\\!\\left( \\frac{\\pi (n + 1/2)}{N} \\right),\n\\qquad 0 \\le n < N.\n$$\nPeak side-lobe attenuation is $\\approx -23\\, \\text{dB}$ and\nthe main-lobe width is $4\\pi/N$.  Sometimes used as the\nsquare root of the Hann window for analysis/synthesis pairs."
+        "Sample formula:\n\n\n\n$$\nw[n] = \\sin\\!\\left( \\frac{\\pi (n + 1/2)}{N} \\right),\n\\qquad 0 \\le n < N.\n$$\n\nPeak side-lobe attenuation is $\\approx -23\\, \\text{dB}$ and\nthe main-lobe width is $4\\pi/N$.  Sometimes used as the\nsquare root of the Hann window for analysis/synthesis pairs."
       ],
       "attributes": [],
       "warns": [],
@@ -113,7 +113,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hann(M: int, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L182",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L182",
       "subcategory": "windows",
       "summary": "Hann (raised-cosine) window.",
       "extended": "The Hann window is a single full cycle of a raised cosine.  Its\nside-lobes roll off at $-18\\,\\text{dB/octave}$, the fastest\nasymptotic decay among the simple cosine-sum windows, which makes\nit a popular default for STFT analysis when temporal localisation\nmatters more than peak side-lobe suppression.",
@@ -152,7 +152,7 @@
         ">>> from lucid.signal.windows import hann\n>>> hann(5)\nTensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])"
       ],
       "notes": [
-        "Sample formula (special case of `general_hamming` with\n$\\alpha = 0.5$):\n\n$$\nw[n] = \\tfrac{1}{2}\\left(\n         1 - \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right)\\right),\n\\qquad 0 \\le n < N.\n$$\nMain-lobe width $8\\pi/N$, peak side-lobe attenuation\n$-31.5\\,\\text{dB}$.  Vanishes at both endpoints."
+        "Sample formula (special case of `general_hamming` with\n$\\alpha = 0.5$):\n\n\n\n$$\nw[n] = \\tfrac{1}{2}\\left(\n         1 - \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right)\\right),\n\\qquad 0 \\le n < N.\n$$\n\nMain-lobe width $8\\pi/N$, peak side-lobe attenuation\n$-31.5\\,\\text{dB}$.  Vanishes at both endpoints."
       ],
       "attributes": [],
       "warns": [],
@@ -164,7 +164,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hamming(M: int, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L236",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L236",
       "subcategory": "windows",
       "summary": "Hamming window.",
       "extended": "The Hamming window is a raised cosine on a nonzero pedestal, chosen\nso that the first side-lobe is suppressed about $-43\\, \\text{dB}$ — substantially better than the Hann window at the cost\nof slower asymptotic side-lobe decay (only $-6\\, \\text{dB/octave}$).",
@@ -203,7 +203,7 @@
         ">>> from lucid.signal.windows import hamming\n>>> hamming(5)\nTensor([0.0800, 0.5400, 1.0000, 0.5400, 0.0800])"
       ],
       "notes": [
-        "Special case of `general_hamming` with $\\alpha = 0.54$:\n\n$$\nw[n] = 0.54 - 0.46 \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right),\n\\qquad 0 \\le n < N.\n$$\nMain-lobe width $8\\pi/N$.  Endpoint values are `0.08`\nrather than `0`."
+        "Special case of `general_hamming` with $\\alpha = 0.54$:\n\n\n\n$$\nw[n] = 0.54 - 0.46 \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right),\n\\qquad 0 \\le n < N.\n$$\n\nMain-lobe width $8\\pi/N$.  Endpoint values are `0.08`\nrather than `0`."
       ],
       "attributes": [],
       "warns": [],
@@ -215,7 +215,7 @@
       "kind": "function",
       "labels": [],
       "signature": "general_hamming(M: int, alpha: float, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L288",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L288",
       "subcategory": "windows",
       "summary": "Generalised Hamming-family window.",
       "extended": "Parametric two-term cosine window covering the Hann\n($\\alpha = 0.5$) / Hamming ($\\alpha = 0.54$) family.\nThe free parameter $\\alpha$ controls the trade-off between\nthe level of the first side-lobe and the asymptotic side-lobe\nroll-off rate.",
@@ -260,7 +260,7 @@
         ">>> from lucid.signal.windows import general_hamming\n>>> general_hamming(5, alpha=0.5)\nTensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = \\alpha - (1 - \\alpha)\\,\n       \\cos\\!\\left( \\frac{2\\pi n}{N - 1} \\right),\n\\qquad 0 \\le n < N.\n$$\nWith $\\alpha = 25/46 \\approx 0.5435$ the first side-lobe is\nminimised in absolute level (the so-called \"optimal\" Hamming)."
+        "Sample formula:\n\n\n\n$$\nw[n] = \\alpha - (1 - \\alpha)\\,\n       \\cos\\!\\left( \\frac{2\\pi n}{N - 1} \\right),\n\\qquad 0 \\le n < N.\n$$\n\nWith $\\alpha = 25/46 \\approx 0.5435$ the first side-lobe is\nminimised in absolute level (the so-called \"optimal\" Hamming)."
       ],
       "attributes": [],
       "warns": [],
@@ -272,7 +272,7 @@
       "kind": "function",
       "labels": [],
       "signature": "general_cosine(M: int, a: list[float] | tuple[float, ...], sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L353",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L353",
       "subcategory": "windows",
       "summary": "Generic weighted sum of cosines.",
       "extended": "Builds a window of the form\n$\\sum_k a_k (-1)^k \\cos(2\\pi k n / (N - 1))$, the parent\nfamily from which Hann, Hamming, Blackman, Nuttall, and the\nflat-top window all derive.  Allows custom coefficient designs for\nbespoke side-lobe characteristics.",
@@ -317,7 +317,7 @@
         ">>> from lucid.signal.windows import general_cosine\n>>> general_cosine(5, [0.5, 0.5])\nTensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = \\sum_{k=0}^{K-1} (-1)^k a_k\n       \\cos\\!\\left( \\frac{2\\pi k n}{N - 1} \\right),\n\\qquad 0 \\le n < N.\n$$\nCommon special cases:\n\n* Hann: `[0.5, 0.5]`.\n* Hamming: `[0.54, 0.46]`.\n* Blackman: `[0.42, 0.50, 0.08]`.\n* Nuttall: `[0.3635819, 0.4891775, 0.1365995, 0.0106411]`."
+        "Sample formula:\n\n\n\n$$\nw[n] = \\sum_{k=0}^{K-1} (-1)^k a_k\n       \\cos\\!\\left( \\frac{2\\pi k n}{N - 1} \\right),\n\\qquad 0 \\le n < N.\n$$\n\nCommon special cases:\n\n* Hann: `[0.5, 0.5]`.\n* Hamming: `[0.54, 0.46]`.\n* Blackman: `[0.42, 0.50, 0.08]`.\n* Nuttall: `[0.3635819, 0.4891775, 0.1365995, 0.0106411]`."
       ],
       "attributes": [],
       "warns": [],
@@ -329,7 +329,7 @@
       "kind": "function",
       "labels": [],
       "signature": "blackman(M: int, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L424",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L424",
       "subcategory": "windows",
       "summary": "Blackman window.",
       "extended": "Three-term cosine-sum window designed by Blackman and Tukey to\ndrive the first three side-lobes substantially below the Hann\nlevel.  Peak side-lobe attenuation is $\\approx -58\\, \\text{dB}$ with a main-lobe roughly twice as wide as the Hann\nwindow.",
@@ -368,7 +368,7 @@
         ">>> from lucid.signal.windows import blackman\n>>> blackman(5)\nTensor([0.0000, 0.3400, 1.0000, 0.3400, 0.0000])"
       ],
       "notes": [
-        "Sample formula (special case of `general_cosine` with\ncoefficients `[0.42, 0.50, 0.08]`):\n\n$$\nw[n] = 0.42 - 0.50 \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right)\n        + 0.08 \\cos\\!\\left(\\frac{4\\pi n}{N - 1}\\right),\n\\qquad 0 \\le n < N.\n$$\nThe slightly different \"exact Blackman\" uses coefficients derived\nfrom the first two zeros of the side-lobe envelope; the standard\n`[0.42, 0.50, 0.08]` truncation used here is the textbook form."
+        "Sample formula (special case of `general_cosine` with\ncoefficients `[0.42, 0.50, 0.08]`):\n\n\n\n$$\nw[n] = 0.42 - 0.50 \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right)\n        + 0.08 \\cos\\!\\left(\\frac{4\\pi n}{N - 1}\\right),\n\\qquad 0 \\le n < N.\n$$\n\nThe slightly different \"exact Blackman\" uses coefficients derived\nfrom the first two zeros of the side-lobe envelope; the standard\n`[0.42, 0.50, 0.08]` truncation used here is the textbook form."
       ],
       "attributes": [],
       "warns": [],
@@ -380,7 +380,7 @@
       "kind": "function",
       "labels": [],
       "signature": "nuttall(M: int, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L479",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L479",
       "subcategory": "windows",
       "summary": "Nuttall four-term window.",
       "extended": "A four-term cosine-sum window with coefficients optimised by\nNuttall to drive the peak side-lobe to approximately $-98\\, \\text{dB}$, the deepest practical suppression among four-term\nwindows.  Useful for very-high-dynamic-range spectral analysis at\nthe cost of a wider main lobe.",
@@ -419,7 +419,7 @@
         ">>> from lucid.signal.windows import nuttall\n>>> nuttall(5)\nTensor([0.0004, 0.2270, 1.0000, 0.2270, 0.0004])"
       ],
       "notes": [
-        "Sample formula (four-term `general_cosine` with coefficients\n`[0.3635819, 0.4891775, 0.1365995, 0.0106411]`):\n\n$$\nw[n] = 0.3635819\n     - 0.4891775 \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right)\n     + 0.1365995 \\cos\\!\\left(\\frac{4\\pi n}{N - 1}\\right)\n     - 0.0106411 \\cos\\!\\left(\\frac{6\\pi n}{N - 1}\\right).\n$$\nThe main-lobe is roughly $16\\pi/N$ wide."
+        "Sample formula (four-term `general_cosine` with coefficients\n`[0.3635819, 0.4891775, 0.1365995, 0.0106411]`):\n\n\n\n$$\nw[n] = 0.3635819\n     - 0.4891775 \\cos\\!\\left(\\frac{2\\pi n}{N - 1}\\right)\n     + 0.1365995 \\cos\\!\\left(\\frac{4\\pi n}{N - 1}\\right)\n     - 0.0106411 \\cos\\!\\left(\\frac{6\\pi n}{N - 1}\\right).\n$$\n\nThe main-lobe is roughly $16\\pi/N$ wide."
       ],
       "attributes": [],
       "warns": [],
@@ -431,7 +431,7 @@
       "kind": "function",
       "labels": [],
       "signature": "gaussian(M: int, std: float = 7.0, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L542",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L542",
       "subcategory": "windows",
       "summary": "Gaussian window.",
       "extended": "Produces a Gaussian-shaped taper centred on the window midpoint.\nBecause the Fourier transform of a Gaussian is itself a Gaussian,\nthis window achieves the (continuous-time) time-frequency\nuncertainty bound and is the basis of the Gabor / short-time\nFourier transform.",
@@ -476,7 +476,7 @@
         ">>> from lucid.signal.windows import gaussian\n>>> gaussian(5, std=1.0)\nTensor([0.1353, 0.6065, 1.0000, 0.6065, 0.1353])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = \\exp\\!\\left(\n         -\\frac{1}{2}\n          \\left(\\frac{n - (N-1)/2}{\\sigma}\\right)^2\n       \\right), \\qquad 0 \\le n < N.\n$$\nTruncating an infinite Gaussian to length `M` produces shallow\ndiscontinuities at the ends; choose `std` small enough that the\nwindow has decayed substantially by the boundary."
+        "Sample formula:\n\n\n\n$$\nw[n] = \\exp\\!\\left(\n         -\\frac{1}{2}\n          \\left(\\frac{n - (N-1)/2}{\\sigma}\\right)^2\n       \\right), \\qquad 0 \\le n < N.\n$$\n\nTruncating an infinite Gaussian to length `M` produces shallow\ndiscontinuities at the ends; choose `std` small enough that the\nwindow has decayed substantially by the boundary."
       ],
       "attributes": [],
       "warns": [],
@@ -488,7 +488,7 @@
       "kind": "function",
       "labels": [],
       "signature": "general_gaussian(M: int, p: float = 1.0, sig: float = 7.0, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L608",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L608",
       "subcategory": "windows",
       "summary": "Generalised Gaussian window.",
       "extended": "Family parametrised by a shape exponent `p` and width `sig`,\ninterpolating between the standard Gaussian (`p = 1`) and an\nincreasingly flat-topped, sharper-edged window as `p` grows\nlarge.  Useful when a Gaussian-like taper is desired but with more\nenergy concentration in the centre samples.",
@@ -539,7 +539,7 @@
         ">>> from lucid.signal.windows import general_gaussian\n>>> general_gaussian(5, p=2.0, sig=1.5)\nTensor([0.4111, 0.9023, 1.0000, 0.9023, 0.4111])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = \\exp\\!\\left(\n         -\\frac{1}{2}\n          \\frac{|n - (N-1)/2|^{2p}}{\\sigma^{2p}}\n       \\right), \\qquad 0 \\le n < N.\n$$\nAs $p \\to \\infty$ the window approaches a rectangular shape\nof half-width $\\sigma$."
+        "Sample formula:\n\n\n\n$$\nw[n] = \\exp\\!\\left(\n         -\\frac{1}{2}\n          \\frac{|n - (N-1)/2|^{2p}}{\\sigma^{2p}}\n       \\right), \\qquad 0 \\le n < N.\n$$\n\nAs $p \\to \\infty$ the window approaches a rectangular shape\nof half-width $\\sigma$."
       ],
       "attributes": [],
       "warns": [],
@@ -551,7 +551,7 @@
       "kind": "function",
       "labels": [],
       "signature": "exponential(M: int, center: float | None = None, tau: float = 1.0, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L679",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L679",
       "subcategory": "windows",
       "summary": "Exponential (Poisson) window.",
       "extended": "Two-sided exponential decay centred at a user-controllable point.\nUseful for emphasising one end of a frame (e.g., the most recent\nsample in an online buffer when `center = M - 1`), or as the\nimpulse-response window of an exponentially-decaying filter.",
@@ -602,7 +602,7 @@
         ">>> from lucid.signal.windows import exponential\n>>> exponential(5, tau=2.0)\nTensor([0.3679, 0.6065, 1.0000, 0.6065, 0.3679])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = \\exp\\!\\left( -\\frac{|n - n_c|}{\\tau} \\right),\n\\qquad 0 \\le n < N,\n$$\nwhere $n_c$ is `center`.  The double-sided exponential\ncorresponds to the impulse response of a symmetric one-pole IIR\nfilter pair."
+        "Sample formula:\n\n\n\n$$\nw[n] = \\exp\\!\\left( -\\frac{|n - n_c|}{\\tau} \\right),\n\\qquad 0 \\le n < N,\n$$\n\nwhere $n_c$ is `center`.  The double-sided exponential\ncorresponds to the impulse response of a symmetric one-pole IIR\nfilter pair."
       ],
       "attributes": [],
       "warns": [],
@@ -614,7 +614,7 @@
       "kind": "function",
       "labels": [],
       "signature": "kaiser(M: int, beta: float = 12.0, sym: bool = True, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/signal/windows.py#L755",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/signal/windows.py#L755",
       "subcategory": "windows",
       "summary": "Kaiser–Bessel window.",
       "extended": "Near-optimal window in the sense that it provides the largest\nfraction of energy in the main lobe for a given main-lobe width.\nA single parameter $\\beta$ smoothly traverses the trade-off\nbetween time and frequency resolution; popular choices include\n$\\beta \\approx 5$ (≈ −37 dB side-lobes), $\\beta \\approx 8.6$ (≈ −90 dB), and $\\beta \\approx 12$ (≈ −124 dB).",
@@ -659,7 +659,7 @@
         ">>> from lucid.signal.windows import kaiser\n>>> kaiser(5, beta=8.0)\nTensor([0.0046, 0.3464, 1.0000, 0.3464, 0.0046])"
       ],
       "notes": [
-        "Sample formula:\n\n$$\nw[n] = \\frac{I_0\\!\\left(\\beta\\,\n          \\sqrt{1 - \\left(\\frac{2n}{N-1} - 1\\right)^2}\\right)}\n          {I_0(\\beta)}, \\qquad 0 \\le n < N,\n$$\nwhere $I_0$ is the modified Bessel function of the first\nkind, order 0.  The Kaiser-Bessel window is the discrete-time\napproximation to the continuous prolate-spheroidal window; the\nside-lobe attenuation in dB is approximately $8.7\\,\\beta$ for\nmoderate $\\beta$."
+        "Sample formula:\n\n\n\n$$\nw[n] = \\frac{I_0\\!\\left(\\beta\\,\n          \\sqrt{1 - \\left(\\frac{2n}{N-1} - 1\\right)^2}\\right)}\n          {I_0(\\beta)}, \\qquad 0 \\le n < N,\n$$\n\nwhere $I_0$ is the modified Bessel function of the first\nkind, order 0.  The Kaiser-Bessel window is the discrete-time\napproximation to the continuous prolate-spheroidal window; the\nside-lobe attenuation in dB is approximately $8.7\\,\\beta$ for\nmoderate $\\beta$."
       ],
       "attributes": [],
       "warns": [],

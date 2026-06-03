@@ -254,6 +254,28 @@ def _parse_examples(block: str) -> list[str]:
     return [p.strip("\n") for p in re.split(r"\n\s*\n", text) if p.strip()]
 
 
+def _rst_inline_markup(text: str) -> str:
+    """Non-math reST inline markup → markdown.  Mirrors the helper of the same
+    name in ``build-api-data.py`` (kept as a local copy because the two build
+    scripts are standalone entrypoints).  Without it, cross-reference roles in
+    C++ doc-comments (``:class:`CpuBackend```) leak as raw text on the engine
+    page."""
+    if not text:
+        return text
+    # reST external hyperlinks: `text <url>`_ → [text](url)
+    text = re.sub(
+        r"`([^`<]+?)\s*<((?:https?|ftp|mailto):[^>]+)>`__?", r"[\1](\2)", text
+    )
+    # double-backtick code: ``code`` → `code`
+    text = re.sub(r"``([^`]+)``", r"`\1`", text)
+    # remove citations, then collapse any remaining role to inline code
+    text = re.sub(r":cite:[a-z]*:?`[^`]+`", "", text)
+    text = re.sub(
+        r":[a-zA-Z][\w.+-]*(?::[a-zA-Z][\w.+-]*)*:`~?([^`]+)`", r"`\1`", text
+    )
+    return text
+
+
 def _split_sections(comment: str) -> dict[str, Any]:
     """Map a NumPy-style ``//`` comment block to the docstring schema the
     web site renders.
@@ -298,14 +320,24 @@ def _split_sections(comment: str) -> dict[str, Any]:
             extended_parts.append(f"**{label}**\n\n{txt}")
 
     extended = "\n\n".join(extended_parts) if extended_parts else None
+
+    # Normalise reST cross-reference roles / hyperlinks in every prose field so
+    # they don't leak as raw ``:role:`x``` text on the rendered engine page.
+    for _fl in (parameters, attributes, raises_list, warns_list):
+        for _item in _fl:
+            if _item.get("description"):
+                _item["description"] = _rst_inline_markup(_item["description"])
+    if returns and returns.get("description"):
+        returns["description"] = _rst_inline_markup(returns["description"])
+
     return {
-        "summary": summary,
-        "extended": extended,
+        "summary": _rst_inline_markup(summary) if summary else summary,
+        "extended": _rst_inline_markup(extended) if extended else extended,
         "parameters": parameters,
         "returns": returns,
         "raises": raises_list,
         "examples": examples,
-        "notes": notes,
+        "notes": [_rst_inline_markup(n) for n in notes],
         "attributes": attributes,
         "warns": warns_list,
     }

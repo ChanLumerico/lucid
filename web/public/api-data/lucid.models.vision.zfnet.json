@@ -3,7 +3,7 @@
   "name": "zfnet",
   "path": "lucid.models.vision.zfnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/__init__.py#L1",
   "members": [
     {
       "name": "ZFNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "ZFNetConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "ZFNet(config: ZFNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L57",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L57",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ZFNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L122",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L122",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L135",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L135",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L138",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L138",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,27 +139,14 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L142",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L142",
           "subcategory": "model",
-          "summary": "Run Faster R-CNN on a batch of images.",
+          "summary": null,
           "extended": null,
-          "parameters": [
-            {
-              "name": "x",
-              "annotation": null,
-              "description": "(B, C, H, W) image batch.",
-              "default": null
-            },
-            {
-              "name": "targets",
-              "annotation": null,
-              "description": "Optional training targets (list of dicts with\n     \"boxes\" and \"labels\").",
-              "default": null
-            }
-          ],
+          "parameters": [],
           "returns": {
             "annotation": "BaseModelOutput",
-            "description": "`ObjectDetectionOutput`:\n`logits`     : (Σ proposals, num_classes+1) raw class logits.\n`pred_boxes` : (Σ proposals, 4) decoded xyxy boxes.\n`loss`       : total loss when targets provided."
+            "description": ""
           },
           "raises": [],
           "examples": [],
@@ -223,7 +210,7 @@
       ],
       "labels": [],
       "signature": "ZFNetForImageClassification(config: ZFNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L151",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L151",
       "subcategory": "model",
       "methods": [
         {
@@ -232,7 +219,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ZFNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L205",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L205",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -254,7 +241,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_model.py#L215",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_model.py#L215",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -325,7 +312,7 @@
       "kind": "function",
       "labels": [],
       "signature": "zfnet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_pretrained.py#L19",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_pretrained.py#L19",
       "subcategory": "pretrained",
       "summary": "ZFNet feature-extracting backbone (no fully-connected head).",
       "extended": "Builds a `ZFNet` with the paper-cited Zeiler & Fergus 2014\ntopology: five convolutional blocks with a tightened\n$7\\times7$ stride-2 first convolution and a $5\\times5$\nstride-2 second convolution (versus AlexNet's $11\\times11$\nstride-4 and $5\\times5$ stride-1).  Approximately 62 M\nparameters in the full classifier variant — the topology difference\nversus AlexNet does not change the headline parameter count.",
@@ -356,135 +343,7 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "ZFNet",
-        "type": "ZFNet",
-        "params": 3726464,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "features",
-            "type": "Sequential",
-            "params": 3726464,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 14208,
-                "own_params": 14208,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "LocalResponseNorm",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "Conv2d",
-                "params": 614656,
-                "own_params": 614656,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "6",
-                "type": "LocalResponseNorm",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "7",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "8",
-                "type": "Conv2d",
-                "params": 885120,
-                "own_params": 885120,
-                "children": []
-              },
-              {
-                "name": "9",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "10",
-                "type": "Conv2d",
-                "params": 1327488,
-                "own_params": 1327488,
-                "children": []
-              },
-              {
-                "name": "11",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "12",
-                "type": "Conv2d",
-                "params": 884992,
-                "own_params": 884992,
-                "children": []
-              },
-              {
-                "name": "13",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "14",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "avgpool",
-            "type": "AdaptiveAvgPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     },
     {
       "name": "zfnet_cls",
@@ -492,7 +351,7 @@
       "kind": "function",
       "labels": [],
       "signature": "zfnet_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/models/vision/zfnet/_pretrained.py#L80",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/zfnet/_pretrained.py#L80",
       "subcategory": "pretrained",
       "summary": "ZFNet image classifier (backbone + FC6 + FC7 + linear head).",
       "extended": "Builds a `ZFNetForImageClassification` with the paper-cited\nZeiler & Fergus 2014 topology and the AlexNet-style two-layer\n4096-dim FC head.  Approximately 62 M parameters total.  Achieves\na top-5 ImageNet-1k validation error of 11.7% in the original\npaper.",
@@ -523,164 +382,7 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": [],
-      "model_summary": {
-        "name": "ZFNetForImageClassification",
-        "type": "ZFNetForImageClassification",
-        "params": 62357608,
-        "own_params": 0,
-        "children": [
-          {
-            "name": "features",
-            "type": "Sequential",
-            "params": 3726464,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "Conv2d",
-                "params": 14208,
-                "own_params": 14208,
-                "children": []
-              },
-              {
-                "name": "1",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "2",
-                "type": "LocalResponseNorm",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "3",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "4",
-                "type": "Conv2d",
-                "params": 614656,
-                "own_params": 614656,
-                "children": []
-              },
-              {
-                "name": "5",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "6",
-                "type": "LocalResponseNorm",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "7",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "8",
-                "type": "Conv2d",
-                "params": 885120,
-                "own_params": 885120,
-                "children": []
-              },
-              {
-                "name": "9",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "10",
-                "type": "Conv2d",
-                "params": 1327488,
-                "own_params": 1327488,
-                "children": []
-              },
-              {
-                "name": "11",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "12",
-                "type": "Conv2d",
-                "params": 884992,
-                "own_params": 884992,
-                "children": []
-              },
-              {
-                "name": "13",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "14",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "avgpool",
-            "type": "AdaptiveAvgPool2d",
-            "params": 0,
-            "own_params": 0,
-            "children": []
-          },
-          {
-            "name": "fc6",
-            "type": "Linear",
-            "params": 37752832,
-            "own_params": 37752832,
-            "children": []
-          },
-          {
-            "name": "fc7",
-            "type": "Linear",
-            "params": 16781312,
-            "own_params": 16781312,
-            "children": []
-          },
-          {
-            "name": "drop6",
-            "type": "Dropout",
-            "params": 0,
-            "own_params": 0,
-            "children": [],
-            "repeat": 2
-          },
-          {
-            "name": "classifier",
-            "type": "Linear",
-            "params": 4097000,
-            "own_params": 4097000,
-            "children": []
-          }
-        ]
-      }
+      "see_also": []
     }
   ],
   "summary": "ZFNet family — backbone + image classification.",

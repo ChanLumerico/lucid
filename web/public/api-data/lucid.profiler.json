@@ -3,7 +3,7 @@
   "name": "profiler",
   "path": "lucid.profiler",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L1",
   "members": [
     {
       "name": "OpEvent",
@@ -13,7 +13,7 @@
       "bases": [],
       "labels": [],
       "signature": "OpEvent(impl: _C_engine.OpEvent)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L20",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L20",
       "subcategory": null,
       "methods": [
         {
@@ -22,7 +22,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(impl: _C_engine.OpEvent)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L49",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L49",
           "subcategory": null,
           "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -46,7 +46,7 @@
             "property"
           ],
           "signature": "name: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L54",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L54",
           "summary": "Operation name (e.g. 'matmul', 'add').",
           "extended": null,
           "parameters": [],
@@ -69,7 +69,7 @@
             "property"
           ],
           "signature": "time_ns: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L59",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L59",
           "summary": "Wall-clock duration of the operation in nanoseconds.",
           "extended": null,
           "parameters": [],
@@ -92,7 +92,7 @@
             "property"
           ],
           "signature": "time_us: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L64",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L64",
           "summary": "Wall-clock duration in microseconds.",
           "extended": null,
           "parameters": [],
@@ -115,7 +115,7 @@
             "property"
           ],
           "signature": "time_ms: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L69",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L69",
           "summary": "Wall-clock duration in milliseconds.",
           "extended": null,
           "parameters": [],
@@ -138,7 +138,7 @@
             "property"
           ],
           "signature": "shape: list[int]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L74",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L74",
           "summary": "Output tensor shape.",
           "extended": null,
           "parameters": [],
@@ -161,7 +161,7 @@
             "property"
           ],
           "signature": "flops: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L79",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L79",
           "summary": "Estimated FLOPs for this operation.",
           "extended": null,
           "parameters": [],
@@ -184,7 +184,7 @@
             "property"
           ],
           "signature": "memory_delta_bytes: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L84",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L84",
           "summary": "Net memory allocated by this operation in bytes.",
           "extended": null,
           "parameters": [],
@@ -205,7 +205,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__repr__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L88",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L88",
           "subcategory": null,
           "summary": "Return a developer-facing string representation of the instance.",
           "extended": null,
@@ -252,7 +252,7 @@
       "bases": [],
       "labels": [],
       "signature": "ProfileSummary(name: str, events: list[OpEvent])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L96",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L96",
       "subcategory": null,
       "methods": [
         {
@@ -261,7 +261,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(name: str, events: list[OpEvent])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L132",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L132",
           "subcategory": null,
           "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -285,7 +285,7 @@
             "property"
           ],
           "signature": "count: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L138",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L138",
           "summary": "Number of times this operation was called.",
           "extended": null,
           "parameters": [],
@@ -308,7 +308,7 @@
             "property"
           ],
           "signature": "total_time_us: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L143",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L143",
           "summary": "Total time in microseconds across all calls.",
           "extended": null,
           "parameters": [],
@@ -331,7 +331,7 @@
             "property"
           ],
           "signature": "avg_time_us: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L148",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L148",
           "summary": "Average time in microseconds per call.",
           "extended": null,
           "parameters": [],
@@ -354,7 +354,7 @@
             "property"
           ],
           "signature": "total_flops: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L153",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L153",
           "summary": "Total FLOPs across all calls.",
           "extended": null,
           "parameters": [],
@@ -375,7 +375,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__repr__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L157",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L157",
           "subcategory": null,
           "summary": "Return a developer-facing string representation of the instance.",
           "extended": null,
@@ -414,7 +414,7 @@
         ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     for _ in range(10):\n...         y = lucid.randn(64, 64) @ lucid.randn(64, 64)\n>>> for summary in prof.key_averages()[:3]:\n...     print(summary)"
       ],
       "notes": [
-        "The average is computed as\n\n$$\n\\bar{t} = \\frac{1}{N} \\sum_{i=1}^{N} t_i,\n$$\nwhere $N$ is the call count and $t_i$ is the per-call\nduration in microseconds."
+        "The average is computed as\n\n\n\n$$\n\\bar{t} = \\frac{1}{N} \\sum_{i=1}^{N} t_i,\n$$\n\nwhere $N$ is the call count and $t_i$ is the per-call\nduration in microseconds."
       ],
       "attributes": [],
       "warns": [],
@@ -428,7 +428,7 @@
       "bases": [],
       "labels": [],
       "signature": "MemoryStats(impl: _C_engine.MemoryStats)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L165",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L165",
       "subcategory": null,
       "methods": [
         {
@@ -437,7 +437,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(impl: _C_engine.MemoryStats)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L193",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L193",
           "subcategory": null,
           "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -461,7 +461,7 @@
             "property"
           ],
           "signature": "current_bytes: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L198",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L198",
           "summary": "Currently allocated bytes.",
           "extended": null,
           "parameters": [],
@@ -484,7 +484,7 @@
             "property"
           ],
           "signature": "peak_bytes: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L203",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L203",
           "summary": "Peak allocated bytes since last reset.",
           "extended": null,
           "parameters": [],
@@ -507,7 +507,7 @@
             "property"
           ],
           "signature": "alloc_count: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L208",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L208",
           "summary": "Number of allocations.",
           "extended": null,
           "parameters": [],
@@ -530,7 +530,7 @@
             "property"
           ],
           "signature": "free_count: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L213",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L213",
           "summary": "Number of deallocations.",
           "extended": null,
           "parameters": [],
@@ -551,7 +551,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__repr__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L217",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L217",
           "subcategory": null,
           "summary": "Return a developer-facing string representation of the instance.",
           "extended": null,
@@ -598,7 +598,7 @@
       "bases": [],
       "labels": [],
       "signature": "Profiler(with_memory: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L225",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L225",
       "subcategory": null,
       "methods": [
         {
@@ -607,7 +607,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(with_memory: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L260",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L260",
           "subcategory": null,
           "summary": "Initialise the instance.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -629,7 +629,7 @@
           "kind": "function",
           "labels": [],
           "signature": "start()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L266",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L266",
           "subcategory": null,
           "summary": "Start recording operations.",
           "extended": null,
@@ -651,7 +651,7 @@
           "kind": "function",
           "labels": [],
           "signature": "stop()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L272",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L272",
           "subcategory": null,
           "summary": "Stop recording operations.",
           "extended": null,
@@ -673,7 +673,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__enter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L278",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L278",
           "subcategory": null,
           "summary": "Enter the context.  Returns self so the value can be bound via `with ... as`.",
           "extended": null,
@@ -695,7 +695,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__exit__(args: object = ())",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L283",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L283",
           "subcategory": null,
           "summary": "Exit the context, restoring any state that was modified on entry.",
           "extended": null,
@@ -717,7 +717,7 @@
           "kind": "function",
           "labels": [],
           "signature": "events()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L287",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L287",
           "subcategory": null,
           "summary": "Return all recorded OpEvents.",
           "extended": null,
@@ -739,7 +739,7 @@
           "kind": "function",
           "labels": [],
           "signature": "key_averages()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L291",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L291",
           "subcategory": null,
           "summary": "Return per-operation-name summaries sorted by total time.",
           "extended": null,
@@ -761,7 +761,7 @@
           "kind": "function",
           "labels": [],
           "signature": "memory_stats()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L301",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L301",
           "subcategory": null,
           "summary": "Return memory stats if available.",
           "extended": null,
@@ -783,7 +783,7 @@
           "kind": "function",
           "labels": [],
           "signature": "export_chrome_trace(path: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L309",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L309",
           "subcategory": null,
           "summary": "Export events as a Chrome trace JSON file.",
           "extended": "Open with chrome://tracing or https://ui.perfetto.dev.",
@@ -805,7 +805,7 @@
           "kind": "function",
           "labels": [],
           "signature": "clear()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L332",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L332",
           "subcategory": null,
           "summary": "Clear all recorded events.",
           "extended": null,
@@ -838,7 +838,7 @@
         ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     y = lucid.randn(64, 64) @ lucid.randn(64, 64)\n>>> top = prof.key_averages()[:5]"
       ],
       "notes": [
-        "Total recorded time can be summarised per op as\n\n$$\nT_{\\text{op}} = \\sum_{i : \\text{name}(e_i) = \\text{op}} t_i,\n$$\nvia `key_averages`. Only one `Profiler` may be active\nat a time; entering a nested instance overwrites the engine's\ncurrent profiler pointer until the outer context exits."
+        "Total recorded time can be summarised per op as\n\n\n\n$$\nT_{\\text{op}} = \\sum_{i : \\text{name}(e_i) = \\text{op}} t_i,\n$$\n\nvia `key_averages`. Only one `Profiler` may be active\nat a time; entering a nested instance overwrites the engine's\ncurrent profiler pointer until the outer context exits."
       ],
       "attributes": [],
       "warns": [],
@@ -850,7 +850,7 @@
       "kind": "function",
       "labels": [],
       "signature": "profile(activities: list[str] | None = None, with_memory: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L337",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L337",
       "subcategory": null,
       "summary": "Context manager that records ops executed within the `with` block.",
       "extended": "The canonical entry point for ad-hoc profiling: enter the context,\nrun any Lucid computation, exit, then inspect `prof.events()` or\n`prof.key_averages()`. The `activities` parameter is accepted\nfor parity with the conventional profiling API but is not\ninterpreted.",
@@ -877,7 +877,7 @@
         ">>> import lucid\n>>> with lucid.profiler.profile() as prof:\n...     out = lucid.randn(128, 128) @ lucid.randn(128, 128)\n>>> for row in prof.key_averages():\n...     print(row)"
       ],
       "notes": [
-        "Internally instantiates a `Profiler` and routes its lifecycle\nthrough `__enter__` / `__exit__`. Equivalent to::\n\n    prof = Profiler(with_memory=with_memory)\n    prof.start()\n    try: ...\n    finally: prof.stop()"
+        "Internally instantiates a `Profiler` and routes its lifecycle\nthrough `__enter__` / `__exit__`. Equivalent to:\n\n    prof = Profiler(with_memory=with_memory)\n    prof.start()\n    try: ...\n    finally: prof.stop()"
       ],
       "attributes": [],
       "warns": [],
@@ -889,7 +889,7 @@
       "kind": "function",
       "labels": [],
       "signature": "record_function(name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/dbb2f29b4/lucid/profiler/__init__.py#L387",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/profiler/__init__.py#L387",
       "subcategory": null,
       "summary": "Annotate an enclosing region with a name visible to the profiler.",
       "extended": "Lets user code carve the trace into semantically meaningful regions\n(e.g. `\"encoder\"`, `\"decoder\"`, `\"loss\"`) alongside the\nautomatic per-op events. The hook is a no-op when no profiler is\nactive and when the engine does not yet support named regions, so\nits presence is always safe.",

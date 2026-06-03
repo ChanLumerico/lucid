@@ -25,7 +25,25 @@ export interface ChangelogVersion {
 
 // ── Inline markdown renderer ──────────────────────────────────────────────────
 
-function renderInline(text: string): React.ReactNode[] {
+/** Normalise reST markup that leaks from ``CHANGELOG.md`` into Markdown the
+ *  inline renderer below understands.  The changelog is authored with reST
+ *  artifacts (``::role:`X```, double-backtick code, ``\`text <url>\`_`` links)
+ *  that would otherwise render as raw text — mirrors ``_rst_to_text`` in
+ *  ``scripts/build-api-data.py``. */
+function normalizeRst(text: string): string {
+  return text
+    // reST external hyperlink: `text <url>`_ / `text <url>`__ → [text](url)
+    .replace(/`([^`<]+?)\s*<((?:https?|ftp|mailto):[^>]+)>`__?/g, "[$1]($2)")
+    // citation roles → removed
+    .replace(/:cite:[a-z]*:?`[^`]+`/g, "")
+    // any other Sphinx role :class:`Foo` / :func:`bar` / :file:`p` → `Foo`
+    .replace(/:[a-zA-Z][\w.+-]*(?::[a-zA-Z][\w.+-]*)*:`~?([^`]+)`/g, "`$1`")
+    // double-backtick code ``x`` → `x`
+    .replace(/``([^`]+)``/g, "`$1`");
+}
+
+function renderInline(raw: string): React.ReactNode[] {
+  const text = normalizeRst(raw);
   const pattern = /(\*\*`[^`]+`\*\*|\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
   return text.split(pattern).map((part, i) => {
     if (/^\*\*`[^`]+`\*\*$/.test(part))
@@ -191,7 +209,7 @@ function VersionSection({
             <div className="pt-3">
               {description && (
                 <p className="mb-4 max-w-xl text-sm leading-relaxed text-lucid-text-low">
-                  {description}
+                  {renderInline(description)}
                 </p>
               )}
 
