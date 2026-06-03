@@ -32,11 +32,13 @@ jobs:
 
       # Post-process scripts (cross-links / used-by / link-citations /
       # build-bibtex / build-meta) all run during ``pnpm prebuild`` and
-      # need Python — but not Griffe, and not Lucid itself.
+      # need Python — but not Griffe, not Lucid, and not pip. The pip
+      # cache option is intentionally omitted because we install zero
+      # packages here; with it set, the post-run cleanup fails on an
+      # empty ~/.cache/pip and tanks the whole job.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-          cache: pip
 
       - uses: actions/setup-node@v4
         with:
