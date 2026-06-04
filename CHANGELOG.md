@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.5.0 unreleased] — 2026-05-31
+## [3.5.0] — 2026-06-05
 
 ### Fixed — Inference no longer leaks the autograd graph (saved-output self-cycle)
 
@@ -2714,5 +2714,6 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.5.0...HEAD
+[3.5.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.5.0
 [3.0.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.0.0
