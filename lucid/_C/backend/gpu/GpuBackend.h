@@ -76,9 +76,9 @@
 #include <mlx/array.h>
 #include <mlx/compile.h>
 #include <mlx/fast.h>
-#include <mlx/random.h>
 #include <mlx/linalg.h>
 #include <mlx/ops.h>
+#include <mlx/random.h>
 
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
@@ -195,8 +195,10 @@ public:
     // via ``mlx::core::random::bernoulli`` — replacing the per-element CPU
     // Philox loop + host->device upload that made Dropout the dominant cost in
     // training-mode forward passes (~19 ms -> <1 ms for a (32,128,768) mask).
-    Storage
-    bernoulli_mask(double keep_prob, const Shape& shape, Dtype dt, std::uint64_t key_seed) override {
+    Storage bernoulli_mask(double keep_prob,
+                           const Shape& shape,
+                           Dtype dt,
+                           std::uint64_t key_seed) override {
         auto key = ::mlx::core::random::key(key_seed);
         auto mask = ::mlx::core::random::bernoulli(
             ::mlx::core::array(static_cast<float>(keep_prob)), gpu::to_mlx_shape(shape), key);
@@ -210,29 +212,33 @@ public:
     Storage random_uniform(
         const Shape& shape, double lo, double hi, Dtype dt, std::uint64_t key_seed) override {
         auto key = ::mlx::core::random::key(key_seed);
-        auto arr = ::mlx::core::random::uniform(static_cast<float>(lo), static_cast<float>(hi),
-                                                gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt), key);
+        auto arr =
+            ::mlx::core::random::uniform(static_cast<float>(lo), static_cast<float>(hi),
+                                         gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt), key);
         return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
     Storage random_normal(
         const Shape& shape, double mean, double std, Dtype dt, std::uint64_t key_seed) override {
         auto key = ::mlx::core::random::key(key_seed);
-        auto arr = ::mlx::core::random::normal(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt),
-                                               static_cast<float>(mean), static_cast<float>(std),
-                                               key);
+        auto arr =
+            ::mlx::core::random::normal(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt),
+                                        static_cast<float>(mean), static_cast<float>(std), key);
         return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
     Storage
     random_bernoulli(const Shape& shape, double p, Dtype dt, std::uint64_t key_seed) override {
         auto key = ::mlx::core::random::key(key_seed);
-        auto arr = ::mlx::core::random::bernoulli(
-            ::mlx::core::array(static_cast<float>(p)), gpu::to_mlx_shape(shape), key);
+        auto arr = ::mlx::core::random::bernoulli(::mlx::core::array(static_cast<float>(p)),
+                                                  gpu::to_mlx_shape(shape), key);
         return Storage{gpu::wrap_mlx_array(::mlx::core::astype(arr, gpu::to_mlx_dtype(dt)), dt)};
     }
 
-    Storage random_randint(const Shape& shape, std::int64_t low, std::int64_t high, Dtype dt,
+    Storage random_randint(const Shape& shape,
+                           std::int64_t low,
+                           std::int64_t high,
+                           Dtype dt,
                            std::uint64_t key_seed) override {
         auto key = ::mlx::core::random::key(key_seed);
         // MLX draws int32 in [low, high); cast to the requested integer dtype.
@@ -533,19 +539,18 @@ public:
     // Math
     // ----
     // $\partial y/\partial x = \sigma(x) \, (1 + x \, (1 - \sigma(x)))$.
-    Storage
-    silu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+    Storage silu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
         // dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy — fused into one kernel.
-        return mlx_binary_fused(
-            a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
-                ::mlx::core::array one(1.0, x.dtype());
-                auto sx = ::mlx::core::sigmoid(x);
-                auto one_m_sx = ::mlx::core::subtract(one, sx);
-                auto x_omsx = ::mlx::core::multiply(x, one_m_sx);
-                auto one_p = ::mlx::core::add(one, x_omsx);
-                auto dx = ::mlx::core::multiply(sx, one_p);
-                return ::mlx::core::multiply(dx, g);
-            });
+        return mlx_binary_fused(a, grad, dt,
+                                [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
+                                    ::mlx::core::array one(1.0, x.dtype());
+                                    auto sx = ::mlx::core::sigmoid(x);
+                                    auto one_m_sx = ::mlx::core::subtract(one, sx);
+                                    auto x_omsx = ::mlx::core::multiply(x, one_m_sx);
+                                    auto one_p = ::mlx::core::add(one, x_omsx);
+                                    auto dx = ::mlx::core::multiply(sx, one_p);
+                                    return ::mlx::core::multiply(dx, g);
+                                });
     }
 
     // GELU forward (tanh approximation).
@@ -619,8 +624,7 @@ public:
             });
     }
 
-    Storage
-    gelu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+    Storage gelu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
         return mlx_binary_fused(
             a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
                 auto d = x.dtype();
@@ -712,8 +716,7 @@ public:
         });
     }
 
-    Storage
-    selu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+    Storage selu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
         return mlx_binary_fused(
             a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
                 constexpr double kS = 1.0507009873554805;
@@ -740,8 +743,7 @@ public:
         });
     }
 
-    Storage
-    mish_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+    Storage mish_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
         return mlx_binary_fused(
             a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
                 ::mlx::core::array zero(0.0, x.dtype());
@@ -4265,20 +4267,18 @@ public:
             auto arw = ::mlx::core::reshape(::mlx::core::arange(0, Kw, 1, idt),
                                             ::mlx::core::Shape{1, 1, 1, 1, Kw});
             // onehot_h (B,C,Oh,Ow,Kh,1) ; onehot_w (B,C,Oh,Ow,1,Kw)
-            auto oh_h = ::mlx::core::reshape(
-                ::mlx::core::astype(::mlx::core::equal(kh, arh), mdt),
-                ::mlx::core::Shape{B, C, Oh, Ow, Kh, 1});
-            auto oh_w = ::mlx::core::reshape(
-                ::mlx::core::astype(::mlx::core::equal(kw, arw), mdt),
-                ::mlx::core::Shape{B, C, Oh, Ow, 1, Kw});
+            auto oh_h = ::mlx::core::reshape(::mlx::core::astype(::mlx::core::equal(kh, arh), mdt),
+                                             ::mlx::core::Shape{B, C, Oh, Ow, Kh, 1});
+            auto oh_w = ::mlx::core::reshape(::mlx::core::astype(::mlx::core::equal(kw, arw), mdt),
+                                             ::mlx::core::Shape{B, C, Oh, Ow, 1, Kw});
             auto g6 = ::mlx::core::reshape(*gG.arr, ::mlx::core::Shape{B, C, Oh, Ow, 1, 1});
             // dxw (B,C,Oh,Ow,Kh,Kw) = grad * onehot_h * onehot_w
             auto dxw = ::mlx::core::multiply(::mlx::core::multiply(g6, oh_h), oh_w);
             // interleave (Oh,Kh,Ow,Kw) -> reshape to (B,C,H,W)
             auto dxw_t = ::mlx::core::transpose(dxw, {0, 1, 2, 4, 3, 5});
-            auto dx = ::mlx::core::reshape(
-                dxw_t, ::mlx::core::Shape{B, C, static_cast<SE2>(Oh * Kh),
-                                          static_cast<SE2>(Ow * Kw)});
+            auto dx =
+                ::mlx::core::reshape(dxw_t, ::mlx::core::Shape{B, C, static_cast<SE2>(Oh * Kh),
+                                                               static_cast<SE2>(Ow * Kw)});
             return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
         }
 
@@ -4519,16 +4519,15 @@ public:
         {
             bool pointwise = (opts.groups == 1);
             for (int i = 0; i < N && pointwise; ++i)
-                if (K[i] != 1 || opts.stride[i] != 1 || opts.pad[i] != 0 ||
-                    opts.dilation[i] != 1)
+                if (K[i] != 1 || opts.stride[i] != 1 || opts.pad[i] != 0 || opts.dilation[i] != 1)
                     pointwise = false;
             if (pointwise) {
                 const int Cout_pw = static_cast<int>(out_shape[1]);
                 auto x_nhwc_pw =
                     ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N));  // (B,*S,Cin)
-                auto W_cico = ::mlx::core::transpose(
-                    ::mlx::core::reshape(*gW.arr, {Cout, Cin}), {1, 0});        // (Cin,Cout)
-                auto y_pw = ::mlx::core::matmul(x_nhwc_pw, W_cico);             // (B,*S,Cout)
+                auto W_cico = ::mlx::core::transpose(::mlx::core::reshape(*gW.arr, {Cout, Cin}),
+                                                     {1, 0});        // (Cin,Cout)
+                auto y_pw = ::mlx::core::matmul(x_nhwc_pw, W_cico);  // (B,*S,Cout)
                 ::mlx::core::Shape b_brd(N + 2, 1);
                 b_brd[N + 1] = Cout_pw;
                 y_pw = ::mlx::core::add(y_pw, ::mlx::core::reshape(*gb.arr, b_brd));
@@ -4612,9 +4611,11 @@ public:
                     pointwise = false;
             if (pointwise) {
                 using SEpw = ::mlx::core::ShapeElem;
-                auto g_nhwc = ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N));  // (B,*S,Cout)
-                auto x_nhwc = ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N));  // (B,*S,Cin)
-                auto W_2d = ::mlx::core::reshape(*gW.arr, {Cout, Cin});                   // (Cout,Cin)
+                auto g_nhwc =
+                    ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N));  // (B,*S,Cout)
+                auto x_nhwc =
+                    ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N));  // (B,*S,Cin)
+                auto W_2d = ::mlx::core::reshape(*gW.arr, {Cout, Cin});         // (Cout,Cin)
                 // dx = grad @ W : (B,*S,Cout) @ (Cout,Cin) -> (B,*S,Cin)
                 auto dx_pw = ::mlx::core::transpose(::mlx::core::matmul(g_nhwc, W_2d),
                                                     gpu_nhwc_to_nchw_perm(N));
@@ -5201,8 +5202,9 @@ private:
         static const std::function<std::vector<::mlx::core::array>(
             const std::vector<::mlx::core::array>&)>
             compiled = ::mlx::core::compile(
-                [](const std::vector<::mlx::core::array>& ins)
-                    -> std::vector<::mlx::core::array> { return {Fn{}(ins[0])}; },
+                [](const std::vector<::mlx::core::array>& ins) -> std::vector<::mlx::core::array> {
+                    return {Fn{}(ins[0])};
+                },
                 /*shapeless=*/true);
         const auto& gs = std::get<GpuStorage>(a);
         return Storage{gpu::wrap_mlx_array(std::move(compiled({*gs.arr})[0]), dt)};
@@ -5216,8 +5218,9 @@ private:
         static const std::function<std::vector<::mlx::core::array>(
             const std::vector<::mlx::core::array>&)>
             compiled = ::mlx::core::compile(
-                [](const std::vector<::mlx::core::array>& ins)
-                    -> std::vector<::mlx::core::array> { return {Fn{}(ins[0], ins[1])}; },
+                [](const std::vector<::mlx::core::array>& ins) -> std::vector<::mlx::core::array> {
+                    return {Fn{}(ins[0], ins[1])};
+                },
                 /*shapeless=*/true);
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gb = std::get<GpuStorage>(b);

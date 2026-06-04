@@ -417,8 +417,8 @@ std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImp
     // formula is still exact.
     TensorImplPtr out_impl = this->saved_impl_output_.lock();
     if (!out_impl && storage_nbytes(this->saved_output_) > 0) {
-        out_impl = std::make_shared<TensorImpl>(this->saved_output_, this->out_shape_,
-                                                this->dtype_, this->device_, false);
+        out_impl = std::make_shared<TensorImpl>(this->saved_output_, this->out_shape_, this->dtype_,
+                                                this->device_, false);
     }
     auto dx = static_cast<Derived*>(this)->grad_formula_impl(grad_out, a, out_impl);
 

@@ -2013,7 +2013,8 @@ public:
         (void)p;
         (void)dt;
         (void)key_seed;
-        ErrorBuilder("IBackend::random_bernoulli").not_implemented("not implemented on this backend");
+        ErrorBuilder("IBackend::random_bernoulli")
+            .not_implemented("not implemented on this backend");
         return {};
     }
 
