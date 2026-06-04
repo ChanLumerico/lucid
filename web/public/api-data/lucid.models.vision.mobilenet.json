@@ -3,7 +3,7 @@
   "name": "mobilenet",
   "path": "lucid.models.vision.mobilenet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/__init__.py#L1",
   "members": [
     {
       "name": "MobileNetV1Config",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "MobileNetV1Config(num_classes: int = 1000, in_channels: int = 3, width_mult: float = 1.0, dropout: float = 0.001)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, width_mult: float = 1.0, dropout: float = 0.001)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "MobileNetV1(config: MobileNetV1Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L97",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L97",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MobileNetV1Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L180",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L180",
           "subcategory": "model",
           "summary": "Initialise the ReLU module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L201",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L201",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L204",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L204",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L208",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L208",
           "subcategory": "model",
           "summary": "Apply the activation function element-wise.",
           "extended": null,
@@ -217,7 +217,7 @@
       ],
       "labels": [],
       "signature": "MobileNetV1ForImageClassification(config: MobileNetV1Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L217",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L217",
       "subcategory": "model",
       "methods": [
         {
@@ -226,7 +226,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MobileNetV1Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L292",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L292",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -248,7 +248,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_model.py#L300",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_model.py#L300",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -319,7 +319,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L33",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L33",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 1.0$.",
       "extended": "Builds a `MobileNetV1` with the canonical paper topology:\na 3×3 stem (stride 2) followed by 13 depthwise+pointwise blocks,\nyielding approximately 4.2M parameters.  Howard et al., 2017\nreport a 70.6% ImageNet-1k top-1 validation accuracy with this\nconfiguration (Table 7).  The default choice when the full\naccuracy budget is available.",
@@ -379,7 +379,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -406,7 +406,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -427,7 +427,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -456,7 +456,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -477,7 +477,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -506,7 +506,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -527,7 +527,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -556,7 +556,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -577,7 +577,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -606,7 +606,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -627,7 +627,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -656,7 +656,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -677,7 +677,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -706,7 +706,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -727,7 +727,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -757,7 +757,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -778,7 +778,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -807,7 +807,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -828,7 +828,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -853,7 +853,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1_cls(pretrained: bool | str = False, weights: MobileNetV1Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L237",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L237",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 1.0$.",
       "extended": "Builds a `MobileNetV1ForImageClassification` with the\ncanonical paper topology (13 depthwise+pointwise blocks) followed\nby global average pooling and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\nApproximately 4.2M parameters and 70.6% ImageNet-1k top-1 in\nHoward et al., 2017 (Table 7).",
@@ -919,7 +919,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -946,7 +946,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -967,7 +967,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -996,7 +996,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1017,7 +1017,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1046,7 +1046,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1067,7 +1067,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1096,7 +1096,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1117,7 +1117,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1146,7 +1146,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1167,7 +1167,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1196,7 +1196,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1217,7 +1217,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1246,7 +1246,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1267,7 +1267,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1297,7 +1297,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1318,7 +1318,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1347,7 +1347,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1368,7 +1368,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1407,7 +1407,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1_075(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L85",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L85",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 0.75$.",
       "extended": "Builds a `MobileNetV1` with every channel count multiplied\nby 0.75 — approximately 2.6M parameters.  Howard et al., 2017\nreport 68.4% ImageNet-1k top-1 accuracy with this configuration\n(Table 7), at roughly 60% of the FLOPs of the full-width model.",
@@ -1467,7 +1467,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -1494,7 +1494,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1515,7 +1515,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1544,7 +1544,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1565,7 +1565,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1594,7 +1594,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1615,7 +1615,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1644,7 +1644,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1665,7 +1665,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1694,7 +1694,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1715,7 +1715,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1744,7 +1744,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1765,7 +1765,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1794,7 +1794,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1815,7 +1815,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1845,7 +1845,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1866,7 +1866,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1895,7 +1895,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1916,7 +1916,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -1941,7 +1941,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1_075_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L305",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L305",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 0.75$.",
       "extended": "Builds a `MobileNetV1ForImageClassification` with the\npaper-cited 0.75-width topology — approximately 2.6M parameters\nand 68.4% ImageNet-1k top-1 in Howard et al., 2017 (Table 7).",
@@ -2001,7 +2001,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -2028,7 +2028,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2049,7 +2049,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2078,7 +2078,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2099,7 +2099,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2128,7 +2128,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2149,7 +2149,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2178,7 +2178,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2199,7 +2199,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2228,7 +2228,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2249,7 +2249,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2278,7 +2278,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2299,7 +2299,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2328,7 +2328,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2349,7 +2349,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2379,7 +2379,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2400,7 +2400,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2429,7 +2429,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2450,7 +2450,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2489,7 +2489,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1_050(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L134",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L134",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 0.5$.",
       "extended": "Builds a `MobileNetV1` with every channel count multiplied\nby 0.5 — approximately 1.3M parameters.  Howard et al., 2017\nreport 63.7% ImageNet-1k top-1 accuracy with this configuration\n(Table 7), at roughly 27% of the FLOPs of the full-width model.",
@@ -2549,7 +2549,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -2576,7 +2576,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2597,7 +2597,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2626,7 +2626,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2647,7 +2647,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2676,7 +2676,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2697,7 +2697,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2726,7 +2726,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2747,7 +2747,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2776,7 +2776,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2797,7 +2797,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2826,7 +2826,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2847,7 +2847,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2876,7 +2876,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2897,7 +2897,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2927,7 +2927,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2948,7 +2948,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2977,7 +2977,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -2998,7 +2998,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3023,7 +3023,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1_050_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L355",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L355",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 0.5$.",
       "extended": "Builds a `MobileNetV1ForImageClassification` with the\npaper-cited 0.5-width topology — approximately 1.3M parameters\nand 63.7% ImageNet-1k top-1 in Howard et al., 2017 (Table 7).",
@@ -3083,7 +3083,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -3110,7 +3110,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3131,7 +3131,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3160,7 +3160,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3181,7 +3181,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3210,7 +3210,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3231,7 +3231,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3260,7 +3260,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3281,7 +3281,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3310,7 +3310,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3331,7 +3331,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3360,7 +3360,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3381,7 +3381,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3410,7 +3410,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3431,7 +3431,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3461,7 +3461,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3482,7 +3482,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3511,7 +3511,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3532,7 +3532,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3571,7 +3571,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1_025(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L183",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L183",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 0.25$.",
       "extended": "Builds a `MobileNetV1` with every channel count multiplied\nby 0.25 — approximately 0.5M parameters.  Howard et al., 2017\nreport 50.6% ImageNet-1k top-1 accuracy with this configuration\n(Table 7) — the smallest MobileNet-v1 variant, targeted at\nextreme edge deployments where parameter count is the binding\nconstraint.",
@@ -3631,7 +3631,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -3658,7 +3658,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3679,7 +3679,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3708,7 +3708,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3729,7 +3729,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3758,7 +3758,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3779,7 +3779,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3808,7 +3808,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3829,7 +3829,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3858,7 +3858,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3879,7 +3879,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3908,7 +3908,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3929,7 +3929,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3958,7 +3958,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -3979,7 +3979,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4009,7 +4009,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4030,7 +4030,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4059,7 +4059,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4080,7 +4080,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4105,7 +4105,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mobilenet_v1_025_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_pretrained.py#L405",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_pretrained.py#L405",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 0.25$.",
       "extended": "Builds a `MobileNetV1ForImageClassification` with the\npaper-cited 0.25-width topology — approximately 0.5M parameters\nand 50.6% ImageNet-1k top-1 in Howard et al., 2017 (Table 7).\nThe smallest variant in the family, targeted at extreme edge\ndeployments.",
@@ -4165,7 +4165,7 @@
               },
               {
                 "name": "2",
-                "type": "ReLU",
+                "type": "ReLU6",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -4192,7 +4192,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4213,7 +4213,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4242,7 +4242,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4263,7 +4263,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4292,7 +4292,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4313,7 +4313,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4342,7 +4342,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4363,7 +4363,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4392,7 +4392,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4413,7 +4413,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4442,7 +4442,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4463,7 +4463,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4492,7 +4492,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4513,7 +4513,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4543,7 +4543,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4564,7 +4564,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4593,7 +4593,7 @@
                   },
                   {
                     "name": "2",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4614,7 +4614,7 @@
                   },
                   {
                     "name": "5",
-                    "type": "ReLU",
+                    "type": "ReLU6",
                     "params": 0,
                     "own_params": 0,
                     "children": []
@@ -4657,7 +4657,7 @@
       ],
       "labels": [],
       "signature": "MobileNetV1Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/mobilenet/_weights.py#L28",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/mobilenet/_weights.py#L28",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mobilenet_v1_cls`.",

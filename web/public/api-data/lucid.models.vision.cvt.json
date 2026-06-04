@@ -3,7 +3,7 @@
   "name": "cvt",
   "path": "lucid.models.vision.cvt",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/__init__.py#L1",
   "members": [
     {
       "name": "CvTConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "CvTConfig(num_classes: int = 1000, in_channels: int = 3, variant: str = 'cvt_13', dims: tuple[int, ...] = (64, 192, 384), depths: tuple[int, ...] = (1, 2, 10), num_heads: tuple[int, ...] = (1, 3, 6), embed_strides: tuple[int, ...] = (4, 2, 2), mlp_ratio: float = 4.0, dropout: float = 0.0, cls_token: tuple[bool, ...] = (False, False, True))",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, variant: str = 'cvt_13', dims: tuple[int, ...] = (64, 192, 384), depths: tuple[int, ...] = (1, 2, 10), num_heads: tuple[int, ...] = (1, 3, 6), embed_strides: tuple[int, ...] = (4, 2, 2), mlp_ratio: float = 4.0, dropout: float = 0.0, cls_token: tuple[bool, ...] = (False, False, True))",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -128,7 +128,7 @@
       ],
       "labels": [],
       "signature": "CvT(config: CvTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L371",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L371",
       "subcategory": "model",
       "methods": [
         {
@@ -137,7 +137,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CvTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L435",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L435",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -161,7 +161,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L442",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L442",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -182,7 +182,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L445",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L445",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -204,7 +204,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L456",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L456",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -265,7 +265,7 @@
       ],
       "labels": [],
       "signature": "CvTForImageClassification(config: CvTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L466",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L466",
       "subcategory": "model",
       "methods": [
         {
@@ -274,7 +274,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CvTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L521",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L521",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -296,7 +296,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_model.py#L530",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_model.py#L530",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -357,7 +357,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cvt_13(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_pretrained.py#L46",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_pretrained.py#L46",
       "subcategory": "pretrained",
       "summary": "CvT-13 backbone (Wu et al., 2021).",
       "extended": "Builds the canonical *CvT-13* configuration: `dims=(64, 192, 384)`,\n`depths=(1, 2, 10)`, `num_heads=(1, 3, 6)`,\n`embed_strides=(4, 2, 2)`.  Total spatial downsampling is\n$4 \\times 2 \\times 2 = 16\\times$, so a 224x224 input yields\na 14x14 final token grid.  Approximately **20M parameters**.",
@@ -392,19 +392,19 @@
       "model_summary": {
         "name": "CvT",
         "type": "CvT",
-        "params": 19612608,
+        "params": 19611712,
         "own_params": 0,
         "children": [
           {
             "name": "stages",
             "type": "ModuleList",
-            "params": 19612608,
+            "params": 19611712,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_CvTStage",
-                "params": 61824,
+                "params": 61696,
                 "own_params": 0,
                 "children": [
                   {
@@ -463,8 +463,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 640,
-                                    "own_params": 640,
+                                    "params": 576,
+                                    "own_params": 576,
                                     "children": []
                                   },
                                   {
@@ -477,8 +477,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 4096,
-                                    "own_params": 4096,
+                                    "params": 4160,
+                                    "own_params": 4160,
                                     "children": []
                                   }
                                 ],
@@ -532,20 +532,13 @@
                         ]
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "1",
                 "type": "_CvTStage",
-                "params": 1013952,
+                "params": 1013568,
                 "own_params": 0,
                 "children": [
                   {
@@ -604,8 +597,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 1920,
-                                    "own_params": 1920,
+                                    "params": 1728,
+                                    "own_params": 1728,
                                     "children": []
                                   },
                                   {
@@ -618,8 +611,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 36864,
-                                    "own_params": 36864,
+                                    "params": 37056,
+                                    "own_params": 37056,
                                     "children": []
                                   }
                                 ],
@@ -674,21 +667,14 @@
                         "repeat": 2
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "2",
                 "type": "_CvTStage",
-                "params": 18536832,
-                "own_params": 0,
+                "params": 18536448,
+                "own_params": 384,
                 "children": [
                   {
                     "name": "embed",
@@ -746,8 +732,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 3840,
-                                    "own_params": 3840,
+                                    "params": 3456,
+                                    "own_params": 3456,
                                     "children": []
                                   },
                                   {
@@ -760,8 +746,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 147456,
-                                    "own_params": 147456,
+                                    "params": 147840,
+                                    "own_params": 147840,
                                     "children": []
                                   }
                                 ],
@@ -816,13 +802,6 @@
                         "repeat": 10
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
                   }
                 ]
               }
@@ -837,7 +816,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cvt_13_cls(pretrained: bool | str = False, weights: CvT13Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_pretrained.py#L198",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_pretrained.py#L198",
       "subcategory": "pretrained",
       "summary": "CvT-13 image classifier (Wu et al., 2021).",
       "extended": "Combines the `cvt_13` backbone with a mean pool + LayerNorm\n+ single `nn.Linear` classification head.  Default output is\n`num_classes=1000` (ImageNet-1k).  Approximately **20M parameters**.",
@@ -878,19 +857,19 @@
       "model_summary": {
         "name": "CvTForImageClassification",
         "type": "CvTForImageClassification",
-        "params": 19998376,
+        "params": 19997480,
         "own_params": 0,
         "children": [
           {
             "name": "stages",
             "type": "ModuleList",
-            "params": 19612608,
+            "params": 19611712,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_CvTStage",
-                "params": 61824,
+                "params": 61696,
                 "own_params": 0,
                 "children": [
                   {
@@ -949,8 +928,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 640,
-                                    "own_params": 640,
+                                    "params": 576,
+                                    "own_params": 576,
                                     "children": []
                                   },
                                   {
@@ -963,8 +942,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 4096,
-                                    "own_params": 4096,
+                                    "params": 4160,
+                                    "own_params": 4160,
                                     "children": []
                                   }
                                 ],
@@ -1018,20 +997,13 @@
                         ]
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "1",
                 "type": "_CvTStage",
-                "params": 1013952,
+                "params": 1013568,
                 "own_params": 0,
                 "children": [
                   {
@@ -1090,8 +1062,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 1920,
-                                    "own_params": 1920,
+                                    "params": 1728,
+                                    "own_params": 1728,
                                     "children": []
                                   },
                                   {
@@ -1104,8 +1076,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 36864,
-                                    "own_params": 36864,
+                                    "params": 37056,
+                                    "own_params": 37056,
                                     "children": []
                                   }
                                 ],
@@ -1160,21 +1132,14 @@
                         "repeat": 2
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "2",
                 "type": "_CvTStage",
-                "params": 18536832,
-                "own_params": 0,
+                "params": 18536448,
+                "own_params": 384,
                 "children": [
                   {
                     "name": "embed",
@@ -1232,8 +1197,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 3840,
-                                    "own_params": 3840,
+                                    "params": 3456,
+                                    "own_params": 3456,
                                     "children": []
                                   },
                                   {
@@ -1246,8 +1211,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 147456,
-                                    "own_params": 147456,
+                                    "params": 147840,
+                                    "own_params": 147840,
                                     "children": []
                                   }
                                 ],
@@ -1302,13 +1267,6 @@
                         "repeat": 10
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
                   }
                 ]
               }
@@ -1337,7 +1295,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cvt_21(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_pretrained.py#L97",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_pretrained.py#L97",
       "subcategory": "pretrained",
       "summary": "CvT-21 backbone (Wu et al., 2021).",
       "extended": "Builds the canonical *CvT-21* configuration: same widths and head\ncounts as CvT-13 (`dims=(64, 192, 384)`, `num_heads=(1, 3, 6)`)\nbut deeper — `depths=(1, 4, 16)`.  Approximately **31.6M\nparameters**.",
@@ -1372,19 +1330,19 @@
       "model_summary": {
         "name": "CvT",
         "type": "CvT",
-        "params": 31237824,
+        "params": 31236928,
         "own_params": 0,
         "children": [
           {
             "name": "stages",
             "type": "ModuleList",
-            "params": 31237824,
+            "params": 31236928,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_CvTStage",
-                "params": 61824,
+                "params": 61696,
                 "own_params": 0,
                 "children": [
                   {
@@ -1443,8 +1401,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 640,
-                                    "own_params": 640,
+                                    "params": 576,
+                                    "own_params": 576,
                                     "children": []
                                   },
                                   {
@@ -1457,8 +1415,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 4096,
-                                    "own_params": 4096,
+                                    "params": 4160,
+                                    "own_params": 4160,
                                     "children": []
                                   }
                                 ],
@@ -1512,20 +1470,13 @@
                         ]
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "1",
                 "type": "_CvTStage",
-                "params": 1916352,
+                "params": 1915968,
                 "own_params": 0,
                 "children": [
                   {
@@ -1584,8 +1535,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 1920,
-                                    "own_params": 1920,
+                                    "params": 1728,
+                                    "own_params": 1728,
                                     "children": []
                                   },
                                   {
@@ -1598,8 +1549,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 36864,
-                                    "own_params": 36864,
+                                    "params": 37056,
+                                    "own_params": 37056,
                                     "children": []
                                   }
                                 ],
@@ -1654,21 +1605,14 @@
                         "repeat": 4
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "2",
                 "type": "_CvTStage",
-                "params": 29259648,
-                "own_params": 0,
+                "params": 29259264,
+                "own_params": 384,
                 "children": [
                   {
                     "name": "embed",
@@ -1726,8 +1670,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 3840,
-                                    "own_params": 3840,
+                                    "params": 3456,
+                                    "own_params": 3456,
                                     "children": []
                                   },
                                   {
@@ -1740,8 +1684,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 147456,
-                                    "own_params": 147456,
+                                    "params": 147840,
+                                    "own_params": 147840,
                                     "children": []
                                   }
                                 ],
@@ -1796,13 +1740,6 @@
                         "repeat": 16
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
                   }
                 ]
               }
@@ -1817,7 +1754,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cvt_21_cls(pretrained: bool | str = False, weights: CvT21Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_pretrained.py#L255",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_pretrained.py#L255",
       "subcategory": "pretrained",
       "summary": "CvT-21 image classifier (Wu et al., 2021).",
       "extended": "Combines the `cvt_21` backbone (`dims=(64, 192, 384)`,\n`depths=(1, 4, 16)`) with a mean pool + LayerNorm + linear\nclassification head.  Approximately **31.6M parameters**.",
@@ -1858,19 +1795,19 @@
       "model_summary": {
         "name": "CvTForImageClassification",
         "type": "CvTForImageClassification",
-        "params": 31623592,
+        "params": 31622696,
         "own_params": 0,
         "children": [
           {
             "name": "stages",
             "type": "ModuleList",
-            "params": 31237824,
+            "params": 31236928,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_CvTStage",
-                "params": 61824,
+                "params": 61696,
                 "own_params": 0,
                 "children": [
                   {
@@ -1929,8 +1866,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 640,
-                                    "own_params": 640,
+                                    "params": 576,
+                                    "own_params": 576,
                                     "children": []
                                   },
                                   {
@@ -1943,8 +1880,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 4096,
-                                    "own_params": 4096,
+                                    "params": 4160,
+                                    "own_params": 4160,
                                     "children": []
                                   }
                                 ],
@@ -1998,20 +1935,13 @@
                         ]
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 128,
-                    "own_params": 128,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "1",
                 "type": "_CvTStage",
-                "params": 1916352,
+                "params": 1915968,
                 "own_params": 0,
                 "children": [
                   {
@@ -2070,8 +2000,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 1920,
-                                    "own_params": 1920,
+                                    "params": 1728,
+                                    "own_params": 1728,
                                     "children": []
                                   },
                                   {
@@ -2084,8 +2014,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 36864,
-                                    "own_params": 36864,
+                                    "params": 37056,
+                                    "own_params": 37056,
                                     "children": []
                                   }
                                 ],
@@ -2140,21 +2070,14 @@
                         "repeat": 4
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "2",
                 "type": "_CvTStage",
-                "params": 29259648,
-                "own_params": 0,
+                "params": 29259264,
+                "own_params": 384,
                 "children": [
                   {
                     "name": "embed",
@@ -2212,8 +2135,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 3840,
-                                    "own_params": 3840,
+                                    "params": 3456,
+                                    "own_params": 3456,
                                     "children": []
                                   },
                                   {
@@ -2226,8 +2149,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 147456,
-                                    "own_params": 147456,
+                                    "params": 147840,
+                                    "own_params": 147840,
                                     "children": []
                                   }
                                 ],
@@ -2282,13 +2205,6 @@
                         "repeat": 16
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 768,
-                    "own_params": 768,
-                    "children": []
                   }
                 ]
               }
@@ -2317,7 +2233,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cvt_w24(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_pretrained.py#L144",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_pretrained.py#L144",
       "subcategory": "pretrained",
       "summary": "CvT-W24 wide backbone (Wu et al., 2021).",
       "extended": "Builds the largest reference configuration *CvT-W24*:\n`dims=(192, 768, 1024)`, `depths=(2, 2, 20)`,\n`num_heads=(3, 12, 16)`.  Roughly an order of magnitude wider\nthan CvT-13.  Approximately **277.2M parameters** — typically used\nonly with large-scale (ImageNet-22k) pretraining.",
@@ -2352,19 +2268,19 @@
       "model_summary": {
         "name": "CvT",
         "type": "CvT",
-        "params": 276172288,
+        "params": 276169344,
         "own_params": 0,
         "children": [
           {
             "name": "stages",
             "type": "ModuleList",
-            "params": 276172288,
+            "params": 276169344,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_CvTStage",
-                "params": 931584,
+                "params": 931200,
                 "own_params": 0,
                 "children": [
                   {
@@ -2423,8 +2339,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 1920,
-                                    "own_params": 1920,
+                                    "params": 1728,
+                                    "own_params": 1728,
                                     "children": []
                                   },
                                   {
@@ -2437,8 +2353,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 36864,
-                                    "own_params": 36864,
+                                    "params": 37056,
+                                    "own_params": 37056,
                                     "children": []
                                   }
                                 ],
@@ -2493,20 +2409,13 @@
                         "repeat": 2
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "1",
                 "type": "_CvTStage",
-                "params": 15557376,
+                "params": 15555840,
                 "own_params": 0,
                 "children": [
                   {
@@ -2565,8 +2474,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 7680,
-                                    "own_params": 7680,
+                                    "params": 6912,
+                                    "own_params": 6912,
                                     "children": []
                                   },
                                   {
@@ -2579,8 +2488,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 589824,
-                                    "own_params": 589824,
+                                    "params": 590592,
+                                    "own_params": 590592,
                                     "children": []
                                   }
                                 ],
@@ -2635,21 +2544,14 @@
                         "repeat": 2
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "2",
                 "type": "_CvTStage",
-                "params": 259683328,
-                "own_params": 0,
+                "params": 259682304,
+                "own_params": 1024,
                 "children": [
                   {
                     "name": "embed",
@@ -2707,8 +2609,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 10240,
-                                    "own_params": 10240,
+                                    "params": 9216,
+                                    "own_params": 9216,
                                     "children": []
                                   },
                                   {
@@ -2721,8 +2623,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 1048576,
-                                    "own_params": 1048576,
+                                    "params": 1049600,
+                                    "own_params": 1049600,
                                     "children": []
                                   }
                                 ],
@@ -2777,13 +2679,6 @@
                         "repeat": 20
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
                   }
                 ]
               }
@@ -2798,7 +2693,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cvt_w24_cls(pretrained: bool | str = False, weights: CvTW24Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_pretrained.py#L311",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_pretrained.py#L311",
       "subcategory": "pretrained",
       "summary": "CvT-W24 wide image classifier (Wu et al., 2021).",
       "extended": "Combines the `cvt_w24` backbone (`dims=(192, 768, 1024)`,\n`depths=(2, 2, 20)`) with a mean pool + LayerNorm + linear\nclassification head.  Approximately **277.2M parameters** — the\nlargest CvT variant in the paper, typically used only with\nImageNet-22k pretraining.",
@@ -2839,19 +2734,19 @@
       "model_summary": {
         "name": "CvTForImageClassification",
         "type": "CvTForImageClassification",
-        "params": 277199336,
+        "params": 277196392,
         "own_params": 0,
         "children": [
           {
             "name": "stages",
             "type": "ModuleList",
-            "params": 276172288,
+            "params": 276169344,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_CvTStage",
-                "params": 931584,
+                "params": 931200,
                 "own_params": 0,
                 "children": [
                   {
@@ -2910,8 +2805,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 1920,
-                                    "own_params": 1920,
+                                    "params": 1728,
+                                    "own_params": 1728,
                                     "children": []
                                   },
                                   {
@@ -2924,8 +2819,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 36864,
-                                    "own_params": 36864,
+                                    "params": 37056,
+                                    "own_params": 37056,
                                     "children": []
                                   }
                                 ],
@@ -2980,20 +2875,13 @@
                         "repeat": 2
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 384,
-                    "own_params": 384,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "1",
                 "type": "_CvTStage",
-                "params": 15557376,
+                "params": 15555840,
                 "own_params": 0,
                 "children": [
                   {
@@ -3052,8 +2940,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 7680,
-                                    "own_params": 7680,
+                                    "params": 6912,
+                                    "own_params": 6912,
                                     "children": []
                                   },
                                   {
@@ -3066,8 +2954,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 589824,
-                                    "own_params": 589824,
+                                    "params": 590592,
+                                    "own_params": 590592,
                                     "children": []
                                   }
                                 ],
@@ -3122,21 +3010,14 @@
                         "repeat": 2
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 1536,
-                    "own_params": 1536,
-                    "children": []
                   }
                 ]
               },
               {
                 "name": "2",
                 "type": "_CvTStage",
-                "params": 259683328,
-                "own_params": 0,
+                "params": 259682304,
+                "own_params": 1024,
                 "children": [
                   {
                     "name": "embed",
@@ -3194,8 +3075,8 @@
                                   {
                                     "name": "dw",
                                     "type": "Conv2d",
-                                    "params": 10240,
-                                    "own_params": 10240,
+                                    "params": 9216,
+                                    "own_params": 9216,
                                     "children": []
                                   },
                                   {
@@ -3208,8 +3089,8 @@
                                   {
                                     "name": "proj",
                                     "type": "Linear",
-                                    "params": 1048576,
-                                    "own_params": 1048576,
+                                    "params": 1049600,
+                                    "own_params": 1049600,
                                     "children": []
                                   }
                                 ],
@@ -3264,13 +3145,6 @@
                         "repeat": 20
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
                   }
                 ]
               }
@@ -3303,7 +3177,7 @@
       ],
       "labels": [],
       "signature": "CvT13Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_weights.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_weights.py#L21",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.cvt_13_cls`.",
@@ -3342,7 +3216,7 @@
       ],
       "labels": [],
       "signature": "CvT21Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_weights.py#L63",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_weights.py#L63",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.cvt_21_cls`.",
@@ -3381,7 +3255,7 @@
       ],
       "labels": [],
       "signature": "CvTW24Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/cvt/_weights.py#L105",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/cvt/_weights.py#L105",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.cvt_w24_cls`.",

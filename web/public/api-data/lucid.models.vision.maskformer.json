@@ -3,7 +3,7 @@
   "name": "maskformer",
   "path": "lucid.models.vision.maskformer",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/__init__.py#L1",
   "members": [
     {
       "name": "MaskFormerConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerConfig(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -132,7 +132,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerForSemanticSegmentation(config: MaskFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_model.py#L678",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_model.py#L678",
       "subcategory": "model",
       "methods": [
         {
@@ -141,7 +141,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MaskFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_model.py#L753",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_model.py#L753",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -163,7 +163,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: dict[str, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_model.py#L782",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_model.py#L782",
           "subcategory": "model",
           "summary": "Run MaskFormer.",
           "extended": null,
@@ -247,7 +247,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maskformer_resnet50(pretrained: bool | str = False, weights: MaskFormerResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_pretrained.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_pretrained.py#L49",
       "subcategory": "pretrained",
       "summary": "MaskFormer with ResNet-50 backbone (Cheng et al., NeurIPS 2021).",
       "extended": "Builds a `MaskFormerForSemanticSegmentation` with the paper-cited\nResNet-50 configuration: 100 segmentation queries, a 6-layer transformer\ndecoder with `d_model = 256`, 8 attention heads, `dim_feedforward =\n2048`, and a 256-channel FPN pixel decoder.  Default targets ADE20K\n(150 semantic classes); reaches ADE20K validation mIoU of 44.5%\n(paper Table 3, MaskFormer-R50 row) — competitive with much heavier\nper-pixel baselines.",
@@ -288,702 +288,1322 @@
       "model_summary": {
         "name": "MaskFormerForSemanticSegmentation",
         "type": "MaskFormerForSemanticSegmentation",
-        "params": 36586711,
+        "params": 41307863,
         "own_params": 0,
         "children": [
           {
-            "name": "backbone",
-            "type": "_ResNetBackbone",
-            "params": 23508032,
+            "name": "pixel_level_module",
+            "type": "_PixelLevelModule",
+            "params": 31048512,
             "own_params": 0,
             "children": [
               {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 9408,
-                "own_params": 9408,
-                "children": []
-              },
-              {
-                "name": "bn1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "pool",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "layer1",
-                "type": "Sequential",
-                "params": 215808,
+                "name": "encoder",
+                "type": "_ResNetBackbone",
+                "params": 23508032,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 75008,
+                    "name": "embedder",
+                    "type": "_ResNetEmbedder",
+                    "params": 9536,
                     "own_params": 0,
                     "children": [
                       {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
+                        "name": "embedder",
+                        "type": "_ConvNorm",
+                        "params": 9536,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "convolution",
+                            "type": "Conv2d",
+                            "params": 9408,
+                            "own_params": 9408,
+                            "children": []
+                          },
+                          {
+                            "name": "normalization",
+                            "type": "BatchNorm2d",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          }
+                        ]
                       },
                       {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "name": "pool",
+                        "type": "MaxPool2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
-                      },
+                      }
+                    ]
+                  },
+                  {
+                    "name": "encoder",
+                    "type": "_ResNetEncoderStages",
+                    "params": 23498496,
+                    "own_params": 0,
+                    "children": [
                       {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
+                        "name": "stages",
+                        "type": "ModuleList",
+                        "params": 23498496,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResNetStage",
+                            "params": 215808,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 215808,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 75008,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 16896,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 16384,
+                                            "own_params": 16384,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 512,
+                                            "own_params": 512,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 58112,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 4224,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 4096,
+                                                "own_params": 4096,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 36992,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 36864,
+                                                "own_params": 36864,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 16896,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 16384,
+                                                "own_params": 16384,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 70400,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 70400,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 16512,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 16384,
+                                                "own_params": 16384,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 36992,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 36864,
+                                                "own_params": 36864,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 16896,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 16384,
+                                                "own_params": 16384,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 2
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "1",
+                            "type": "_ResNetStage",
+                            "params": 1219584,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 1219584,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 379392,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 132096,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 131072,
+                                            "own_params": 131072,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 1024,
+                                            "own_params": 1024,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 247296,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 33024,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 32768,
+                                                "own_params": 32768,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 147712,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 147456,
+                                                "own_params": 147456,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 66560,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 65536,
+                                                "own_params": 65536,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 280064,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 280064,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 65792,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 65536,
+                                                "own_params": 65536,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 147712,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 147456,
+                                                "own_params": 147456,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 66560,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 65536,
+                                                "own_params": 65536,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 3
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "2",
+                            "type": "_ResNetStage",
+                            "params": 7098368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 7098368,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 1512448,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 526336,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 524288,
+                                            "own_params": 524288,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 2048,
+                                            "own_params": 2048,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 986112,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 131584,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 131072,
+                                                "own_params": 131072,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 590336,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 589824,
+                                                "own_params": 589824,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 264192,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 262144,
+                                                "own_params": 262144,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 2048,
+                                                "own_params": 2048,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 1117184,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 1117184,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 262656,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 262144,
+                                                "own_params": 262144,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 590336,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 589824,
+                                                "own_params": 589824,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 264192,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 262144,
+                                                "own_params": 262144,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 2048,
+                                                "own_params": 2048,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 5
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "3",
+                            "type": "_ResNetStage",
+                            "params": 14964736,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 14964736,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 6039552,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 2101248,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 2097152,
+                                            "own_params": 2097152,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 4096,
+                                            "own_params": 4096,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 3938304,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 525312,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 524288,
+                                                "own_params": 524288,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 2360320,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 2359296,
+                                                "own_params": 2359296,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 1052672,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 1048576,
+                                                "own_params": 1048576,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 4096,
+                                                "own_params": 4096,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 4462592,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 4462592,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 1049600,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 1048576,
+                                                "own_params": 1048576,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 2360320,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 2359296,
+                                                "own_params": 2359296,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 1052672,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 1048576,
+                                                "own_params": 1048576,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 4096,
+                                                "own_params": 4096,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 2
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "_FPNPixelDecoder",
+                "params": 7540480,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fpn",
+                    "type": "_FPNModel",
+                    "params": 6950400,
+                    "own_params": 0,
+                    "children": [
                       {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 16896,
+                        "name": "stem",
+                        "type": "_FPNConvLayer",
+                        "params": 4719104,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "Conv2d",
-                            "params": 16384,
-                            "own_params": 16384,
+                            "params": 4718592,
+                            "own_params": 4718592,
                             "children": []
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
+                            "type": "GroupNorm",
                             "params": 512,
                             "own_params": 512,
                             "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
                           }
                         ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 70400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
                       },
                       {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "layer2",
-                "type": "Sequential",
-                "params": 1219584,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 379392,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
+                        "name": "layers",
                         "type": "Sequential",
-                        "params": 132096,
+                        "params": 2231296,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
-                            "type": "Conv2d",
-                            "params": 131072,
-                            "own_params": 131072,
-                            "children": []
+                            "type": "_FPNLayer",
+                            "params": 852992,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Sequential",
+                                "params": 262656,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 262144,
+                                    "own_params": 262144,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "block",
+                                "type": "_FPNConvLayer",
+                                "params": 590336,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "ReLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
+                            "type": "_FPNLayer",
+                            "params": 721920,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Sequential",
+                                "params": 131584,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 131072,
+                                    "own_params": 131072,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "block",
+                                "type": "_FPNConvLayer",
+                                "params": 590336,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "ReLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "2",
+                            "type": "_FPNLayer",
+                            "params": 656384,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Sequential",
+                                "params": 66048,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 65536,
+                                    "own_params": 65536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "block",
+                                "type": "_FPNConvLayer",
+                                "params": 590336,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "ReLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
                           }
                         ]
                       }
                     ]
                   },
                   {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 280064,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 3
-                  }
-                ]
-              },
-              {
-                "name": "layer3",
-                "type": "Sequential",
-                "params": 7098368,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 1512448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 131072,
-                        "own_params": 131072,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 526336,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 524288,
-                            "own_params": 524288,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 1117184,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 5
-                  }
-                ]
-              },
-              {
-                "name": "layer4",
-                "type": "Sequential",
-                "params": 14964736,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 6039552,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 524288,
-                        "own_params": 524288,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 2101248,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 2097152,
-                            "own_params": 2097152,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 4096,
-                            "own_params": 4096,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 4462592,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
+                    "name": "mask_projection",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
                   }
                 ]
               }
             ]
           },
           {
-            "name": "pixel_decoder",
-            "type": "_FPNPixelDecoder",
-            "params": 3410176,
+            "name": "transformer_module",
+            "type": "_TransformerModule",
+            "params": 10023168,
             "own_params": 0,
             "children": [
               {
-                "name": "lat5",
+                "name": "_pos_embed",
+                "type": "_SinePositionEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "queries_embedder",
+                "type": "Embedding",
+                "params": 25600,
+                "own_params": 25600,
+                "children": []
+              },
+              {
+                "name": "input_projection",
                 "type": "Conv2d",
                 "params": 524544,
                 "own_params": 524544,
                 "children": []
               },
               {
-                "name": "lat4",
-                "type": "Conv2d",
-                "params": 262400,
-                "own_params": 262400,
-                "children": []
-              },
-              {
-                "name": "lat3",
-                "type": "Conv2d",
-                "params": 131328,
-                "own_params": 131328,
-                "children": []
-              },
-              {
-                "name": "lat2",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "out5",
-                "type": "Conv2d",
-                "params": 590080,
-                "own_params": 590080,
-                "children": [],
-                "repeat": 4
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "up",
-                "type": "Upsample",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "query_embed",
-            "type": "Embedding",
-            "params": 25600,
-            "own_params": 25600,
-            "children": []
-          },
-          {
-            "name": "transformer_decoder",
-            "type": "TransformerDecoder",
-            "params": 9472512,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "TransformerDecoderLayer",
-                "params": 1578752,
+                "name": "decoder",
+                "type": "_TransformerDecoder",
+                "params": 9473024,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "self_attn",
-                    "type": "MultiheadAttention",
-                    "params": 263168,
-                    "own_params": 263168,
-                    "children": [],
-                    "repeat": 2
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 9472512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_DecoderLayer",
+                        "params": 1578752,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "_Attention",
+                            "params": 263168,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "k_proj",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "self_attn_layer_norm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "encoder_attn",
+                            "type": "_Attention",
+                            "params": 263168,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "k_proj",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "encoder_attn_layer_norm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_DecoderMLP",
+                            "params": 1050880,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 526336,
+                                "own_params": 526336,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 524544,
+                                "own_params": 524544,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "final_layer_norm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 6
+                      }
+                    ]
                   },
                   {
-                    "name": "linear1",
-                    "type": "Linear",
-                    "params": 526336,
-                    "own_params": 526336,
-                    "children": []
-                  },
-                  {
-                    "name": "linear2",
-                    "type": "Linear",
-                    "params": 524544,
-                    "own_params": 524544,
-                    "children": []
-                  },
-                  {
-                    "name": "norm1",
+                    "name": "layernorm",
                     "type": "LayerNorm",
                     "params": 512,
                     "own_params": 512,
-                    "children": [],
-                    "repeat": 3
-                  },
-                  {
-                    "name": "dropout1",
-                    "type": "Dropout",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": [],
-                    "repeat": 4
+                    "children": []
                   }
-                ],
-                "repeat": 6
+                ]
               }
             ]
           },
           {
-            "name": "class_head",
+            "name": "class_predictor",
             "type": "Linear",
             "params": 38807,
             "own_params": 38807,
             "children": []
           },
           {
-            "name": "mask_embed",
-            "type": "Linear",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
-          },
-          {
-            "name": "pixel_proj",
-            "type": "Conv2d",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
+            "name": "mask_embedder",
+            "type": "_MaskEmbedder",
+            "params": 197376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 65792,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 65792,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -994,7 +1614,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maskformer_resnet101(pretrained: bool | str = False, weights: MaskFormerResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_pretrained.py#L119",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_pretrained.py#L119",
       "subcategory": "pretrained",
       "summary": "MaskFormer with ResNet-101 backbone (Cheng et al., NeurIPS 2021).",
       "extended": "Builds a `MaskFormerForSemanticSegmentation` with the same\ntransformer head as `maskformer_resnet50` but a deeper ResNet-101\nbackbone (`[3, 4, 23, 3]` bottleneck blocks).  Reaches ADE20K\nvalidation mIoU of 45.5% (paper Table 3, MaskFormer-R101 row).",
@@ -1035,702 +1655,1322 @@
       "model_summary": {
         "name": "MaskFormerForSemanticSegmentation",
         "type": "MaskFormerForSemanticSegmentation",
-        "params": 55578839,
+        "params": 60299991,
         "own_params": 0,
         "children": [
           {
-            "name": "backbone",
-            "type": "_ResNetBackbone",
-            "params": 42500160,
+            "name": "pixel_level_module",
+            "type": "_PixelLevelModule",
+            "params": 50040640,
             "own_params": 0,
             "children": [
               {
-                "name": "conv1",
-                "type": "Conv2d",
-                "params": 9408,
-                "own_params": 9408,
-                "children": []
-              },
-              {
-                "name": "bn1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
-                "children": []
-              },
-              {
-                "name": "pool",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "layer1",
-                "type": "Sequential",
-                "params": 215808,
+                "name": "encoder",
+                "type": "_ResNetBackbone",
+                "params": 42500160,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 75008,
+                    "name": "embedder",
+                    "type": "_ResNetEmbedder",
+                    "params": 9536,
                     "own_params": 0,
                     "children": [
                       {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
+                        "name": "embedder",
+                        "type": "_ConvNorm",
+                        "params": 9536,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "convolution",
+                            "type": "Conv2d",
+                            "params": 9408,
+                            "own_params": 9408,
+                            "children": []
+                          },
+                          {
+                            "name": "normalization",
+                            "type": "BatchNorm2d",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          }
+                        ]
                       },
                       {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "name": "pool",
+                        "type": "MaxPool2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
-                      },
+                      }
+                    ]
+                  },
+                  {
+                    "name": "encoder",
+                    "type": "_ResNetEncoderStages",
+                    "params": 42490624,
+                    "own_params": 0,
+                    "children": [
                       {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
+                        "name": "stages",
+                        "type": "ModuleList",
+                        "params": 42490624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResNetStage",
+                            "params": 215808,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 215808,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 75008,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 16896,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 16384,
+                                            "own_params": 16384,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 512,
+                                            "own_params": 512,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 58112,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 4224,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 4096,
+                                                "own_params": 4096,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 36992,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 36864,
+                                                "own_params": 36864,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 16896,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 16384,
+                                                "own_params": 16384,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 70400,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 70400,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 16512,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 16384,
+                                                "own_params": 16384,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 36992,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 36864,
+                                                "own_params": 36864,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 128,
+                                                "own_params": 128,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 16896,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 16384,
+                                                "own_params": 16384,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 2
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "1",
+                            "type": "_ResNetStage",
+                            "params": 1219584,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 1219584,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 379392,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 132096,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 131072,
+                                            "own_params": 131072,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 1024,
+                                            "own_params": 1024,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 247296,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 33024,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 32768,
+                                                "own_params": 32768,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 147712,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 147456,
+                                                "own_params": 147456,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 66560,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 65536,
+                                                "own_params": 65536,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 280064,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 280064,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 65792,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 65536,
+                                                "own_params": 65536,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 147712,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 147456,
+                                                "own_params": 147456,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 256,
+                                                "own_params": 256,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 66560,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 65536,
+                                                "own_params": 65536,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 3
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "2",
+                            "type": "_ResNetStage",
+                            "params": 26090496,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 26090496,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 1512448,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 526336,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 524288,
+                                            "own_params": 524288,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 2048,
+                                            "own_params": 2048,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 986112,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 131584,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 131072,
+                                                "own_params": 131072,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 590336,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 589824,
+                                                "own_params": 589824,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 264192,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 262144,
+                                                "own_params": 262144,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 2048,
+                                                "own_params": 2048,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 1117184,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 1117184,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 262656,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 262144,
+                                                "own_params": 262144,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 590336,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 589824,
+                                                "own_params": 589824,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 512,
+                                                "own_params": 512,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 264192,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 262144,
+                                                "own_params": 262144,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 2048,
+                                                "own_params": 2048,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 22
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "3",
+                            "type": "_ResNetStage",
+                            "params": 14964736,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "layers",
+                                "type": "Sequential",
+                                "params": 14964736,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 6039552,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "shortcut",
+                                        "type": "_ConvNorm",
+                                        "params": 2101248,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "convolution",
+                                            "type": "Conv2d",
+                                            "params": 2097152,
+                                            "own_params": 2097152,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "normalization",
+                                            "type": "BatchNorm2d",
+                                            "params": 4096,
+                                            "own_params": 4096,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 3938304,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 525312,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 524288,
+                                                "own_params": 524288,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 2360320,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 2359296,
+                                                "own_params": 2359296,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 1052672,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 1048576,
+                                                "own_params": 1048576,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 4096,
+                                                "own_params": 4096,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "_ResNetBottleneck",
+                                    "params": 4462592,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "layer",
+                                        "type": "Sequential",
+                                        "params": 4462592,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "0",
+                                            "type": "_ConvNorm",
+                                            "params": 1049600,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 1048576,
+                                                "own_params": 1048576,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "1",
+                                            "type": "_ConvNorm",
+                                            "params": 2360320,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 2359296,
+                                                "own_params": 2359296,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 1024,
+                                                "own_params": 1024,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "2",
+                                            "type": "_ConvNorm",
+                                            "params": 1052672,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "convolution",
+                                                "type": "Conv2d",
+                                                "params": 1048576,
+                                                "own_params": 1048576,
+                                                "children": []
+                                              },
+                                              {
+                                                "name": "normalization",
+                                                "type": "BatchNorm2d",
+                                                "params": 4096,
+                                                "own_params": 4096,
+                                                "children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "repeat": 2
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "_FPNPixelDecoder",
+                "params": 7540480,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fpn",
+                    "type": "_FPNModel",
+                    "params": 6950400,
+                    "own_params": 0,
+                    "children": [
                       {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 16896,
+                        "name": "stem",
+                        "type": "_FPNConvLayer",
+                        "params": 4719104,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "Conv2d",
-                            "params": 16384,
-                            "own_params": 16384,
+                            "params": 4718592,
+                            "own_params": 4718592,
                             "children": []
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
+                            "type": "GroupNorm",
                             "params": 512,
                             "own_params": 512,
                             "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
                           }
                         ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 70400,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
                       },
                       {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 36864,
-                        "own_params": 36864,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
-                  }
-                ]
-              },
-              {
-                "name": "layer2",
-                "type": "Sequential",
-                "params": 1219584,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 379392,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 32768,
-                        "own_params": 32768,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
+                        "name": "layers",
                         "type": "Sequential",
-                        "params": 132096,
+                        "params": 2231296,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
-                            "type": "Conv2d",
-                            "params": 131072,
-                            "own_params": 131072,
-                            "children": []
+                            "type": "_FPNLayer",
+                            "params": 852992,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Sequential",
+                                "params": 262656,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 262144,
+                                    "own_params": 262144,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "block",
+                                "type": "_FPNConvLayer",
+                                "params": 590336,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "ReLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
+                            "type": "_FPNLayer",
+                            "params": 721920,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Sequential",
+                                "params": 131584,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 131072,
+                                    "own_params": 131072,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "block",
+                                "type": "_FPNConvLayer",
+                                "params": 590336,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "ReLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "2",
+                            "type": "_FPNLayer",
+                            "params": 656384,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Sequential",
+                                "params": 66048,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 65536,
+                                    "own_params": 65536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "block",
+                                "type": "_FPNConvLayer",
+                                "params": 590336,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Conv2d",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GroupNorm",
+                                    "params": 512,
+                                    "own_params": 512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "ReLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
                           }
                         ]
                       }
                     ]
                   },
                   {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 280064,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 147456,
-                        "own_params": 147456,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 3
-                  }
-                ]
-              },
-              {
-                "name": "layer3",
-                "type": "Sequential",
-                "params": 26090496,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 1512448,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 131072,
-                        "own_params": 131072,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 526336,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 524288,
-                            "own_params": 524288,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 1117184,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 589824,
-                        "own_params": 589824,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 22
-                  }
-                ]
-              },
-              {
-                "name": "layer4",
-                "type": "Sequential",
-                "params": 14964736,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "0",
-                    "type": "_Bottleneck",
-                    "params": 6039552,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 524288,
-                        "own_params": 524288,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      },
-                      {
-                        "name": "downsample",
-                        "type": "Sequential",
-                        "params": 2101248,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "Conv2d",
-                            "params": 2097152,
-                            "own_params": 2097152,
-                            "children": []
-                          },
-                          {
-                            "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 4096,
-                            "own_params": 4096,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "1",
-                    "type": "_Bottleneck",
-                    "params": 4462592,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv1",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv2",
-                        "type": "Conv2d",
-                        "params": 2359296,
-                        "own_params": 2359296,
-                        "children": []
-                      },
-                      {
-                        "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      },
-                      {
-                        "name": "conv3",
-                        "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
-                        "children": []
-                      },
-                      {
-                        "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
-                        "children": []
-                      }
-                    ],
-                    "repeat": 2
+                    "name": "mask_projection",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
                   }
                 ]
               }
             ]
           },
           {
-            "name": "pixel_decoder",
-            "type": "_FPNPixelDecoder",
-            "params": 3410176,
+            "name": "transformer_module",
+            "type": "_TransformerModule",
+            "params": 10023168,
             "own_params": 0,
             "children": [
               {
-                "name": "lat5",
+                "name": "_pos_embed",
+                "type": "_SinePositionEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "queries_embedder",
+                "type": "Embedding",
+                "params": 25600,
+                "own_params": 25600,
+                "children": []
+              },
+              {
+                "name": "input_projection",
                 "type": "Conv2d",
                 "params": 524544,
                 "own_params": 524544,
                 "children": []
               },
               {
-                "name": "lat4",
-                "type": "Conv2d",
-                "params": 262400,
-                "own_params": 262400,
-                "children": []
-              },
-              {
-                "name": "lat3",
-                "type": "Conv2d",
-                "params": 131328,
-                "own_params": 131328,
-                "children": []
-              },
-              {
-                "name": "lat2",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "out5",
-                "type": "Conv2d",
-                "params": 590080,
-                "own_params": 590080,
-                "children": [],
-                "repeat": 4
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 65792,
-                "own_params": 65792,
-                "children": []
-              },
-              {
-                "name": "up",
-                "type": "Upsample",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "query_embed",
-            "type": "Embedding",
-            "params": 25600,
-            "own_params": 25600,
-            "children": []
-          },
-          {
-            "name": "transformer_decoder",
-            "type": "TransformerDecoder",
-            "params": 9472512,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "TransformerDecoderLayer",
-                "params": 1578752,
+                "name": "decoder",
+                "type": "_TransformerDecoder",
+                "params": 9473024,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "self_attn",
-                    "type": "MultiheadAttention",
-                    "params": 263168,
-                    "own_params": 263168,
-                    "children": [],
-                    "repeat": 2
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 9472512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_DecoderLayer",
+                        "params": 1578752,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "_Attention",
+                            "params": 263168,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "k_proj",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "self_attn_layer_norm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "encoder_attn",
+                            "type": "_Attention",
+                            "params": 263168,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "k_proj",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "encoder_attn_layer_norm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_DecoderMLP",
+                            "params": 1050880,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 526336,
+                                "own_params": 526336,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 524544,
+                                "own_params": 524544,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "final_layer_norm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 6
+                      }
+                    ]
                   },
                   {
-                    "name": "linear1",
-                    "type": "Linear",
-                    "params": 526336,
-                    "own_params": 526336,
-                    "children": []
-                  },
-                  {
-                    "name": "linear2",
-                    "type": "Linear",
-                    "params": 524544,
-                    "own_params": 524544,
-                    "children": []
-                  },
-                  {
-                    "name": "norm1",
+                    "name": "layernorm",
                     "type": "LayerNorm",
                     "params": 512,
                     "own_params": 512,
-                    "children": [],
-                    "repeat": 3
-                  },
-                  {
-                    "name": "dropout1",
-                    "type": "Dropout",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": [],
-                    "repeat": 4
+                    "children": []
                   }
-                ],
-                "repeat": 6
+                ]
               }
             ]
           },
           {
-            "name": "class_head",
+            "name": "class_predictor",
             "type": "Linear",
             "params": 38807,
             "own_params": 38807,
             "children": []
           },
           {
-            "name": "mask_embed",
-            "type": "Linear",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
-          },
-          {
-            "name": "pixel_proj",
-            "type": "Conv2d",
-            "params": 65792,
-            "own_params": 65792,
-            "children": []
+            "name": "mask_embedder",
+            "type": "_MaskEmbedder",
+            "params": 197376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 65792,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 65792,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -1745,7 +2985,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_weights.py#L24",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_weights.py#L24",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maskformer_resnet50`.",
@@ -1769,7 +3009,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/maskformer/_weights.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/maskformer/_weights.py#L49",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maskformer_resnet101`.",

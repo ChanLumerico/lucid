@@ -118,6 +118,14 @@ const isFamilyLeaf = (slug) => {
     ["vision", "text", "generative"].includes(p[2]);
 };
 
+// A model FACTORY returns a model instance and (when summarizable) carries a
+// ``model_summary``.  A config-BUILDER such as ``efficientdet_config`` is also
+// a module-level function but returns a ``*Config`` and never has a summary by
+// design — the summary-coverage / summary-gaps contracts must count only true
+// factories, else every family's config helper reads as a missing card.
+const isModelFactory = (m) =>
+  m.kind === "function" && !/Config$/.test((m.returns?.annotation || "").trim());
+
 const global = { files, routeSet, apiBySlug, labelKeys };
 
 // ─────────────────────────── contracts ──────────────────────────────────────
@@ -328,6 +336,27 @@ const PAGE_CONTRACTS = [
       return out;
     },
   },
+  {
+    id: "model.size-card-rendered", component: "ModelSizeCard", kind: "page",
+    applies: (ctx) =>
+      ctx.kind === "api-member" && isFamilyLeaf(ctx.scope.split("/")[0]),
+    check(ctx) {
+      // A model factory whose api-data carries a ``model_summary`` MUST render
+      // the expandable "Model Size" card (param count + collapsible layer tree)
+      // on its page.  Catches a broken data→render path; the missing-summary
+      // case is tracked by ``model.summary-gaps`` instead.
+      const member = (ctx.data?.members || []).find((m) => m.name === ctx.memberName);
+      if (!member?.model_summary) return [];
+      // Skip when this local file is a case-collision clobber (see
+      // ``pageMatchesMember``) — the rendered page is the sibling class, not
+      // this factory.  The model_summary data invariant above is still
+      // verified, and case-sensitive CI checks the real render.
+      if (!ctx.pageMatchesMember) return [];
+      return /Model Size/.test(ctx.visible)
+        ? []
+        : [{ scope: ctx.scope, detail: "has model_summary but no 'Model Size' card rendered" }];
+    },
+  },
 ];
 
 const GLOBAL_CONTRACTS = [
@@ -339,6 +368,40 @@ const GLOBAL_CONTRACTS = [
       return g.apiBySlug.has("lucid.models.weights")
         ? [{ scope: "lucid.models.weights", detail: "weights aggregator is documented as a package — must be excluded (each family owns its Weights)" }]
         : [];
+    },
+  },
+  {
+    id: "model.summary-coverage", component: "ModelSizeCard", kind: "global",
+    check(g) {
+      // Guard against a wiped _summaries.json cache (the regression that made
+      // every variant's param/structure card vanish): the share of model-family
+      // factories carrying a model_summary must stay above a floor.
+      let total = 0, withSummary = 0;
+      for (const [slug, d] of g.apiBySlug) {
+        if (!isFamilyLeaf(slug)) continue;
+        for (const m of d.members || [])
+          if (isModelFactory(m)) { total++; if (m.model_summary) withSummary++; }
+      }
+      if (total === 0) return [];
+      const pct = Math.round((withSummary / total) * 100);
+      return withSummary / total < 0.5
+        ? [{ scope: "lucid.models", detail: `model_summary coverage ${pct}% (${withSummary}/${total}) < 50% — likely a wiped _summaries.json cache` }]
+        : [];
+    },
+  },
+  {
+    id: "model.summary-gaps", component: "ModelSizeCard", kind: "global", severity: "warn",
+    check(g) {
+      // Advisory: model factories with no computed model_summary (run
+      // `python -m tools.build_model_summaries` to fill — needs the engine).
+      const out = [];
+      for (const [slug, d] of g.apiBySlug) {
+        if (!isFamilyLeaf(slug)) continue;
+        for (const m of d.members || [])
+          if (isModelFactory(m) && !m.model_summary)
+            out.push({ scope: `${slug}/${m.name}`, detail: "factory has no model_summary (no param/structure card)" });
+      }
+      return out;
     },
   },
   {
@@ -488,6 +551,17 @@ for (const file of files) {
   // content area is the robust way to ignore it.
   const main = dom.querySelector("#main-content") || dom.querySelector("main") || dom;
   const ctx = { route, scope, kind, data, memberName, dom, visible: main.text, mainHtml: main.toString() };
+  // macOS/APFS is case-insensitive: a factory page (``zfnet``) and its
+  // case-only sibling class page (``ZFNet``) collide into ONE output file, so
+  // whichever Next writes last clobbers the other — locally the file under a
+  // member route may actually hold the sibling's render.  A page genuinely for
+  // ``memberName`` anchors a heading element with ``id===memberName`` (see
+  // FunctionSignature / ClassDoc).  When that anchor is absent the file is the
+  // colliding sibling's page; on case-sensitive CI the two files are distinct
+  // so this never triggers there.  Member-content contracts gate on this so a
+  // local FS artifact can't masquerade as a render regression.
+  ctx.pageMatchesMember =
+    kind !== "api-member" || dom.getElementById(memberName) != null;
   for (const c of PAGE_CONTRACTS) {
     if (c.applies && !c.applies(ctx)) continue;
     record(c, c.check(ctx));

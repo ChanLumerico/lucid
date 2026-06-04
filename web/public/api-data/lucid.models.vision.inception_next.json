@@ -3,7 +3,7 @@
   "name": "inception_next",
   "path": "lucid.models.vision.inception_next",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/__init__.py#L1",
   "members": [
     {
       "name": "InceptionNeXtConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "InceptionNeXtConfig(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (3, 3, 9, 3), dims: tuple[int, ...] = (96, 192, 384, 768), band_kernel: int = 11, mlp_ratios: tuple[int, ...] = (4, 4, 4, 3))",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (3, 3, 9, 3), dims: tuple[int, ...] = (96, 192, 384, 768), band_kernel: int = 11, mlp_ratios: tuple[int, ...] = (4, 4, 4, 3))",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -110,7 +110,7 @@
       ],
       "labels": [],
       "signature": "InceptionNeXt(config: InceptionNeXtConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L244",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L244",
       "subcategory": "model",
       "methods": [
         {
@@ -119,7 +119,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: InceptionNeXtConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L312",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L312",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -143,7 +143,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L321",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L321",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -164,7 +164,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L324",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L324",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -186,7 +186,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L330",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L330",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -251,7 +251,7 @@
       ],
       "labels": [],
       "signature": "InceptionNeXtForImageClassification(config: InceptionNeXtConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L340",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L340",
       "subcategory": "model",
       "methods": [
         {
@@ -260,7 +260,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: InceptionNeXtConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L397",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L397",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -282,7 +282,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_model.py#L404",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_model.py#L404",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -343,7 +343,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_next_base(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_pretrained.py#L278",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_pretrained.py#L278",
       "subcategory": "pretrained",
       "summary": "InceptionNeXt-Base backbone (Yu et al., 2024).",
       "extended": "Builds the canonical *InceptionNeXt-B* configuration:\n`depths=(3, 3, 27, 3)`, `dims=(128, 256, 512, 1024)`,\n`band_kernel=11`.  Approximately **87M parameters** — the widest\nof the paper's three main variants.",
@@ -374,7 +374,426 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "InceptionNeXt",
+        "type": "InceptionNeXt",
+        "params": 80444192,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 6528,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 6272,
+                "own_params": 6272,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 80437664,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Stage",
+                "params": 397920,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 397920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 132640,
+                        "own_params": 128,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 544,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 160,
+                                "own_params": 160,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 131712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 66048,
+                                "own_params": 66048,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 65664,
+                                "own_params": 65664,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Stage",
+                "params": 1713856,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 131584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 1582272,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 527424,
+                        "own_params": 256,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 1088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 320,
+                                "own_params": 320,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 525568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 263168,
+                                "own_params": 263168,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 262400,
+                                "own_params": 262400,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Stage",
+                "params": 57317760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 525312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 524800,
+                        "own_params": 524800,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 56792448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 2103424,
+                        "own_params": 512,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 2176,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 640,
+                                "own_params": 640,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 27
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "_Stage",
+                "params": 21008128,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 2099200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 2098176,
+                        "own_params": 2098176,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 18908928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 6302976,
+                        "own_params": 1024,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 4352,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 1280,
+                                "own_params": 1280,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 6295552,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 3148800,
+                                "own_params": 3148800,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 3146752,
+                                "own_params": 3146752,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "inception_next_base_cls",
@@ -382,7 +801,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_next_base_cls(pretrained: bool | str = False, weights: InceptionNeXtBaseWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_pretrained.py#L327",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_pretrained.py#L327",
       "subcategory": "pretrained",
       "summary": "InceptionNeXt-Base image classifier (Yu et al., 2024).",
       "extended": "Combines the `inception_next_base` backbone with the\nreference MLP classifier head (`Linear → GELU → LayerNorm →\nLinear`).  Default output is `num_classes=1000` (ImageNet-1k).\nApproximately **87M parameters**.",
@@ -419,7 +838,455 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "InceptionNeXtForImageClassification",
+        "type": "InceptionNeXtForImageClassification",
+        "params": 86672136,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 6528,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 6272,
+                "own_params": 6272,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 80437664,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Stage",
+                "params": 397920,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 397920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 132640,
+                        "own_params": 128,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 544,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 160,
+                                "own_params": 160,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 131712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 66048,
+                                "own_params": 66048,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 65664,
+                                "own_params": 65664,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Stage",
+                "params": 1713856,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 131584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 1582272,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 527424,
+                        "own_params": 256,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 1088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 320,
+                                "own_params": 320,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 525568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 263168,
+                                "own_params": 263168,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 262400,
+                                "own_params": 262400,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Stage",
+                "params": 57317760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 525312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 524800,
+                        "own_params": 524800,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 56792448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 2103424,
+                        "own_params": 512,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 2176,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 640,
+                                "own_params": 640,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 27
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "_Stage",
+                "params": 21008128,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 2099200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 2098176,
+                        "own_params": 2098176,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 18908928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 6302976,
+                        "own_params": 1024,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 4352,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 1280,
+                                "own_params": 1280,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 6295552,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 3148800,
+                                "own_params": 3148800,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 3146752,
+                                "own_params": 3146752,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "_MlpClassifierHead",
+            "params": 6227944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 3148800,
+                "own_params": 3148800,
+                "children": []
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 6144,
+                "own_params": 6144,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 3073000,
+                "own_params": 3073000,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "inception_next_small",
@@ -427,7 +1294,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_next_small(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_pretrained.py#L165",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_pretrained.py#L165",
       "subcategory": "pretrained",
       "summary": "InceptionNeXt-Small backbone (Yu et al., 2024).",
       "extended": "Builds the canonical *InceptionNeXt-S* configuration:\n`depths=(3, 3, 27, 3)`, `dims=(96, 192, 384, 768)`,\n`band_kernel=11`.  Approximately **49M parameters** —\nInceptionNeXt-T widened in the third stage (9 → 27 blocks).",
@@ -458,7 +1325,426 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "InceptionNeXt",
+        "type": "InceptionNeXt",
+        "params": 45292632,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 4896,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 4704,
+                "own_params": 4704,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 45287736,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Stage",
+                "params": 224712,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 224712,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 74904,
+                        "own_params": 96,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 408,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 120,
+                                "own_params": 120,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 144,
+                                "own_params": 144,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 192,
+                            "own_params": 192,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 74208,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 37248,
+                                "own_params": 37248,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 36960,
+                                "own_params": 36960,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Stage",
+                "params": 965904,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 74112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 891792,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 297264,
+                        "own_params": 192,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 816,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 240,
+                                "own_params": 240,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 288,
+                                "own_params": 288,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Stage",
+                "params": 32273184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 295680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 295296,
+                        "own_params": 295296,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 31977504,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 1184352,
+                        "own_params": 384,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 1632,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 480,
+                                "own_params": 480,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 576,
+                                "own_params": 576,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 27
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "_Stage",
+                "params": 11823936,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 1181184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 1180416,
+                        "own_params": 1180416,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 10642752,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 3547584,
+                        "own_params": 768,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 3264,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 960,
+                                "own_params": 960,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 1152,
+                                "own_params": 1152,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 3542016,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 1771776,
+                                "own_params": 1771776,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 1770240,
+                                "own_params": 1770240,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "inception_next_small_cls",
@@ -466,7 +1752,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_next_small_cls(pretrained: bool | str = False, weights: InceptionNeXtSmallWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_pretrained.py#L216",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_pretrained.py#L216",
       "subcategory": "pretrained",
       "summary": "InceptionNeXt-Small image classifier (Yu et al., 2024).",
       "extended": "Combines the `inception_next_small` backbone with the\nreference MLP classifier head (`Linear → GELU → LayerNorm →\nLinear`).  Default output is `num_classes=1000` (ImageNet-1k).\nApproximately **49M parameters**.",
@@ -503,7 +1789,455 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "InceptionNeXtForImageClassification",
+        "type": "InceptionNeXtForImageClassification",
+        "params": 49374016,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 4896,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 4704,
+                "own_params": 4704,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 45287736,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Stage",
+                "params": 224712,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 224712,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 74904,
+                        "own_params": 96,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 408,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 120,
+                                "own_params": 120,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 144,
+                                "own_params": 144,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 192,
+                            "own_params": 192,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 74208,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 37248,
+                                "own_params": 37248,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 36960,
+                                "own_params": 36960,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Stage",
+                "params": 965904,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 74112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 891792,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 297264,
+                        "own_params": 192,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 816,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 240,
+                                "own_params": 240,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 288,
+                                "own_params": 288,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Stage",
+                "params": 32273184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 295680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 295296,
+                        "own_params": 295296,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 31977504,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 1184352,
+                        "own_params": 384,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 1632,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 480,
+                                "own_params": 480,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 576,
+                                "own_params": 576,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 27
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "_Stage",
+                "params": 11823936,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "downsample",
+                    "type": "Sequential",
+                    "params": 1181184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 1180416,
+                        "own_params": 1180416,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "Sequential",
+                    "params": 10642752,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_MetaNeXtBlock",
+                        "params": 3547584,
+                        "own_params": 768,
+                        "children": [
+                          {
+                            "name": "token_mixer",
+                            "type": "_InceptionDWConv2d",
+                            "params": 3264,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dwconv_hw",
+                                "type": "Conv2d",
+                                "params": 960,
+                                "own_params": 960,
+                                "children": []
+                              },
+                              {
+                                "name": "dwconv_w",
+                                "type": "Conv2d",
+                                "params": 1152,
+                                "own_params": 1152,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm",
+                            "type": "BatchNorm2d",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_ConvMlp",
+                            "params": 3542016,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Conv2d",
+                                "params": 1771776,
+                                "own_params": 1771776,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Conv2d",
+                                "params": 1770240,
+                                "own_params": 1770240,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "_MlpClassifierHead",
+            "params": 4081384,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 1771776,
+                "own_params": 1771776,
+                "children": []
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 4608,
+                "own_params": 4608,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 2305000,
+                "own_params": 2305000,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "inception_next_tiny",
@@ -511,7 +2245,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_next_tiny(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_pretrained.py#L48",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_pretrained.py#L48",
       "subcategory": "pretrained",
       "summary": "InceptionNeXt-Tiny backbone (Yu et al., 2024).",
       "extended": "Builds the canonical *InceptionNeXt-T* configuration:\n`depths=(3, 3, 9, 3)`, `dims=(96, 192, 384, 768)`,\n`band_kernel=11`.  Approximately **28M parameters** —\nConvNeXt-T compatible, but with each $7 \\times 7$ depthwise\nconv replaced by the four-branch InceptionDWConv mixer.",
@@ -969,7 +2703,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_next_tiny_cls(pretrained: bool | str = False, weights: InceptionNeXtTinyWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_pretrained.py#L103",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_pretrained.py#L103",
       "subcategory": "pretrained",
       "summary": "InceptionNeXt-Tiny image classifier (Yu et al., 2024).",
       "extended": "Combines the `inception_next_tiny` backbone with the\nreference MLP classifier head (`Linear → GELU → LayerNorm →\nLinear`).  Default output is `num_classes=1000` (ImageNet-1k).\nApproximately **28M parameters**.",
@@ -1466,7 +3200,7 @@
       ],
       "labels": [],
       "signature": "InceptionNeXtBaseWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_weights.py#L85",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_weights.py#L85",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.inception_next_base_cls`.",
@@ -1490,7 +3224,7 @@
       ],
       "labels": [],
       "signature": "InceptionNeXtSmallWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_weights.py#L60",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_weights.py#L60",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.inception_next_small_cls`.",
@@ -1514,7 +3248,7 @@
       ],
       "labels": [],
       "signature": "InceptionNeXtTinyWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/inception_next/_weights.py#L35",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/inception_next/_weights.py#L35",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.inception_next_tiny_cls`.",

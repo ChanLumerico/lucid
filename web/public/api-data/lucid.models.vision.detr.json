@@ -3,7 +3,7 @@
   "name": "detr",
   "path": "lucid.models.vision.detr",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/__init__.py#L1",
   "members": [
     {
       "name": "DETRConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DETRConfig(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, num_bbox_layers: int = 3, bbox_hidden_dim: int = 256, score_thresh: float = 0.7)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, num_bbox_layers: int = 3, bbox_hidden_dim: int = 256, score_thresh: float = 0.7)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -143,7 +143,7 @@
       ],
       "labels": [],
       "signature": "DETRForObjectDetection(config: DETRConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_model.py#L522",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_model.py#L522",
       "subcategory": "model",
       "methods": [
         {
@@ -152,7 +152,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DETRConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_model.py#L627",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_model.py#L627",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -174,7 +174,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: list[dict[str, Tensor]] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_model.py#L661",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_model.py#L661",
           "subcategory": "model",
           "summary": "Run DETR.",
           "extended": null,
@@ -209,7 +209,7 @@
           "kind": "function",
           "labels": [],
           "signature": "postprocess(output: ObjectDetectionOutput, image_sizes: list[tuple[int, int]])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_model.py#L832",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_model.py#L832",
           "subcategory": "model",
           "summary": "Filter queries by score threshold and convert to pixel coordinates.",
           "extended": null,
@@ -303,7 +303,7 @@
       "kind": "function",
       "labels": [],
       "signature": "detr_resnet50(pretrained: bool | str = False, weights: DETRResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_pretrained.py#L51",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_pretrained.py#L51",
       "subcategory": "pretrained",
       "summary": "DETR with ResNet-50 backbone (Carion et al., ECCV 2020).",
       "extended": "Builds a `DETRForObjectDetection` with the paper-cited\nResNet-50 + transformer configuration: 100 object queries, a 6-layer\nencoder + 6-layer decoder with `d_model = 256`, 8 attention heads,\nand `dim_feedforward = 2048`.  The COCO config uses\n`num_classes = 91`.  Reaches COCO box mAP of 42.0 (paper Table 1).\nApproximately 41.5M parameters with a notable *no-anchor / no-NMS*\ndesign.",
@@ -344,13 +344,13 @@
       "model_summary": {
         "name": "DETRForObjectDetection",
         "type": "DETRForObjectDetection",
-        "params": 41575573,
+        "params": 41524768,
         "own_params": 0,
         "children": [
           {
             "name": "backbone",
-            "type": "_ResNet50C5",
-            "params": 23508032,
+            "type": "_ResNetC5",
+            "params": 23454912,
             "own_params": 0,
             "children": [
               {
@@ -362,9 +362,9 @@
               },
               {
                 "name": "bn1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
+                "type": "_FrozenBatchNorm2d",
+                "params": 0,
+                "own_params": 0,
                 "children": []
               },
               {
@@ -377,13 +377,13 @@
               {
                 "name": "layer1",
                 "type": "Sequential",
-                "params": 215808,
+                "params": 212992,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 75008,
+                    "params": 73728,
                     "own_params": 0,
                     "children": [
                       {
@@ -395,9 +395,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -409,9 +409,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -423,15 +423,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 16896,
+                        "params": 16384,
                         "own_params": 0,
                         "children": [
                           {
@@ -443,9 +443,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -455,7 +455,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 70400,
+                    "params": 69632,
                     "own_params": 0,
                     "children": [
                       {
@@ -467,9 +467,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -481,9 +481,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -495,9 +495,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -508,13 +508,13 @@
               {
                 "name": "layer2",
                 "type": "Sequential",
-                "params": 1219584,
+                "params": 1212416,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 379392,
+                    "params": 376832,
                     "own_params": 0,
                     "children": [
                       {
@@ -526,9 +526,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -540,9 +540,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -554,15 +554,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 132096,
+                        "params": 131072,
                         "own_params": 0,
                         "children": [
                           {
@@ -574,9 +574,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -586,7 +586,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 280064,
+                    "params": 278528,
                     "own_params": 0,
                     "children": [
                       {
@@ -598,9 +598,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -612,9 +612,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -626,9 +626,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -639,13 +639,13 @@
               {
                 "name": "layer3",
                 "type": "Sequential",
-                "params": 7098368,
+                "params": 7077888,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 1512448,
+                    "params": 1507328,
                     "own_params": 0,
                     "children": [
                       {
@@ -657,9 +657,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -671,9 +671,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -685,15 +685,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 526336,
+                        "params": 524288,
                         "own_params": 0,
                         "children": [
                           {
@@ -705,9 +705,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -717,7 +717,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 1117184,
+                    "params": 1114112,
                     "own_params": 0,
                     "children": [
                       {
@@ -729,9 +729,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -743,9 +743,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -757,9 +757,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -770,13 +770,13 @@
               {
                 "name": "layer4",
                 "type": "Sequential",
-                "params": 14964736,
+                "params": 14942208,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 6039552,
+                    "params": 6029312,
                     "own_params": 0,
                     "children": [
                       {
@@ -788,9 +788,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -802,9 +802,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -816,15 +816,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 2101248,
+                        "params": 2097152,
                         "own_params": 0,
                         "children": [
                           {
@@ -836,9 +836,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -848,7 +848,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 4462592,
+                    "params": 4456448,
                     "own_params": 0,
                     "children": [
                       {
@@ -860,9 +860,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -874,9 +874,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -888,9 +888,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -916,123 +916,132 @@
           },
           {
             "name": "transformer",
-            "type": "Transformer",
-            "params": 17363968,
+            "type": "_DETRTransformer",
+            "params": 17363456,
             "own_params": 0,
             "children": [
               {
                 "name": "encoder",
-                "type": "TransformerEncoder",
-                "params": 7890944,
+                "type": "_DETREncoder",
+                "params": 7890432,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "0",
-                    "type": "TransformerEncoderLayer",
-                    "params": 1315072,
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 7890432,
                     "own_params": 0,
                     "children": [
                       {
-                        "name": "self_attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": []
-                      },
-                      {
-                        "name": "linear1",
-                        "type": "Linear",
-                        "params": 526336,
-                        "own_params": 526336,
-                        "children": []
-                      },
-                      {
-                        "name": "linear2",
-                        "type": "Linear",
-                        "params": 524544,
-                        "own_params": 524544,
-                        "children": []
-                      },
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "dropout1",
-                        "type": "Dropout",
-                        "params": 0,
+                        "name": "0",
+                        "type": "_DETREncoderLayer",
+                        "params": 1315072,
                         "own_params": 0,
-                        "children": [],
-                        "repeat": 3
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 263168,
+                            "own_params": 263168,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 526336,
+                            "own_params": 526336,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 524544,
+                            "own_params": 524544,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
                       }
-                    ],
-                    "repeat": 6
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
+                    ]
                   }
                 ]
               },
               {
                 "name": "decoder",
-                "type": "TransformerDecoder",
+                "type": "_DETRDecoder",
                 "params": 9473024,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "0",
-                    "type": "TransformerDecoderLayer",
-                    "params": 1578752,
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 9472512,
                     "own_params": 0,
                     "children": [
                       {
-                        "name": "self_attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "linear1",
-                        "type": "Linear",
-                        "params": 526336,
-                        "own_params": 526336,
-                        "children": []
-                      },
-                      {
-                        "name": "linear2",
-                        "type": "Linear",
-                        "params": 524544,
-                        "own_params": 524544,
-                        "children": []
-                      },
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": [],
-                        "repeat": 3
-                      },
-                      {
-                        "name": "dropout1",
-                        "type": "Dropout",
-                        "params": 0,
+                        "name": "0",
+                        "type": "_DETRDecoderLayer",
+                        "params": 1578752,
                         "own_params": 0,
-                        "children": [],
-                        "repeat": 4
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 263168,
+                            "own_params": 263168,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 526336,
+                            "own_params": 526336,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 524544,
+                            "own_params": 524544,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
                       }
-                    ],
-                    "repeat": 6
+                    ]
                   },
                   {
                     "name": "norm",
@@ -1046,10 +1055,17 @@
             ]
           },
           {
+            "name": "_pos_embed",
+            "type": "_PositionEmbeddingSine",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
             "name": "class_embed",
             "type": "Linear",
-            "params": 20817,
-            "own_params": 20817,
+            "params": 23644,
+            "own_params": 23644,
             "children": []
           },
           {
@@ -1112,7 +1128,7 @@
       "kind": "function",
       "labels": [],
       "signature": "detr_resnet101(pretrained: bool | str = False, weights: DETRResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_pretrained.py#L119",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_pretrained.py#L119",
       "subcategory": "pretrained",
       "summary": "DETR with ResNet-101 backbone (Carion et al., ECCV 2020).",
       "extended": "Builds a `DETRForObjectDetection` with the same transformer\nhead as `detr_resnet50` but a deeper ResNet-101 backbone\n(`[3, 4, 23, 3]` bottleneck blocks).  The COCO config uses\n`num_classes = 91`.  Approximately 60.5M parameters and COCO box\nmAP of 43.5 (paper Table 1, DETR-R101 row).",
@@ -1153,13 +1169,13 @@
       "model_summary": {
         "name": "DETRForObjectDetection",
         "type": "DETRForObjectDetection",
-        "params": 60567701,
+        "params": 60464672,
         "own_params": 0,
         "children": [
           {
             "name": "backbone",
-            "type": "_ResNet50C5",
-            "params": 42500160,
+            "type": "_ResNetC5",
+            "params": 42394816,
             "own_params": 0,
             "children": [
               {
@@ -1171,9 +1187,9 @@
               },
               {
                 "name": "bn1",
-                "type": "BatchNorm2d",
-                "params": 128,
-                "own_params": 128,
+                "type": "_FrozenBatchNorm2d",
+                "params": 0,
+                "own_params": 0,
                 "children": []
               },
               {
@@ -1186,13 +1202,13 @@
               {
                 "name": "layer1",
                 "type": "Sequential",
-                "params": 215808,
+                "params": 212992,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 75008,
+                    "params": 73728,
                     "own_params": 0,
                     "children": [
                       {
@@ -1204,9 +1220,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1218,9 +1234,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1232,15 +1248,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 16896,
+                        "params": 16384,
                         "own_params": 0,
                         "children": [
                           {
@@ -1252,9 +1268,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -1264,7 +1280,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 70400,
+                    "params": 69632,
                     "own_params": 0,
                     "children": [
                       {
@@ -1276,9 +1292,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1290,9 +1306,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1304,9 +1320,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -1317,13 +1333,13 @@
               {
                 "name": "layer2",
                 "type": "Sequential",
-                "params": 1219584,
+                "params": 1212416,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 379392,
+                    "params": 376832,
                     "own_params": 0,
                     "children": [
                       {
@@ -1335,9 +1351,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1349,9 +1365,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1363,15 +1379,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 132096,
+                        "params": 131072,
                         "own_params": 0,
                         "children": [
                           {
@@ -1383,9 +1399,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -1395,7 +1411,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 280064,
+                    "params": 278528,
                     "own_params": 0,
                     "children": [
                       {
@@ -1407,9 +1423,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1421,9 +1437,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1435,9 +1451,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -1448,13 +1464,13 @@
               {
                 "name": "layer3",
                 "type": "Sequential",
-                "params": 26090496,
+                "params": 26017792,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 1512448,
+                    "params": 1507328,
                     "own_params": 0,
                     "children": [
                       {
@@ -1466,9 +1482,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1480,9 +1496,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1494,15 +1510,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 526336,
+                        "params": 524288,
                         "own_params": 0,
                         "children": [
                           {
@@ -1514,9 +1530,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -1526,7 +1542,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 1117184,
+                    "params": 1114112,
                     "own_params": 0,
                     "children": [
                       {
@@ -1538,9 +1554,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1552,9 +1568,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1566,9 +1582,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -1579,13 +1595,13 @@
               {
                 "name": "layer4",
                 "type": "Sequential",
-                "params": 14964736,
+                "params": 14942208,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_Bottleneck",
-                    "params": 6039552,
+                    "params": 6029312,
                     "own_params": 0,
                     "children": [
                       {
@@ -1597,9 +1613,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1611,9 +1627,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1625,15 +1641,15 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
                         "name": "downsample",
                         "type": "Sequential",
-                        "params": 2101248,
+                        "params": 2097152,
                         "own_params": 0,
                         "children": [
                           {
@@ -1645,9 +1661,9 @@
                           },
                           {
                             "name": "1",
-                            "type": "BatchNorm2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
                             "children": []
                           }
                         ]
@@ -1657,7 +1673,7 @@
                   {
                     "name": "1",
                     "type": "_Bottleneck",
-                    "params": 4462592,
+                    "params": 4456448,
                     "own_params": 0,
                     "children": [
                       {
@@ -1669,9 +1685,9 @@
                       },
                       {
                         "name": "bn1",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1683,9 +1699,9 @@
                       },
                       {
                         "name": "bn2",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       },
                       {
@@ -1697,9 +1713,9 @@
                       },
                       {
                         "name": "bn3",
-                        "type": "BatchNorm2d",
-                        "params": 4096,
-                        "own_params": 4096,
+                        "type": "_FrozenBatchNorm2d",
+                        "params": 0,
+                        "own_params": 0,
                         "children": []
                       }
                     ],
@@ -1725,123 +1741,132 @@
           },
           {
             "name": "transformer",
-            "type": "Transformer",
-            "params": 17363968,
+            "type": "_DETRTransformer",
+            "params": 17363456,
             "own_params": 0,
             "children": [
               {
                 "name": "encoder",
-                "type": "TransformerEncoder",
-                "params": 7890944,
+                "type": "_DETREncoder",
+                "params": 7890432,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "0",
-                    "type": "TransformerEncoderLayer",
-                    "params": 1315072,
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 7890432,
                     "own_params": 0,
                     "children": [
                       {
-                        "name": "self_attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": []
-                      },
-                      {
-                        "name": "linear1",
-                        "type": "Linear",
-                        "params": 526336,
-                        "own_params": 526336,
-                        "children": []
-                      },
-                      {
-                        "name": "linear2",
-                        "type": "Linear",
-                        "params": 524544,
-                        "own_params": 524544,
-                        "children": []
-                      },
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "dropout1",
-                        "type": "Dropout",
-                        "params": 0,
+                        "name": "0",
+                        "type": "_DETREncoderLayer",
+                        "params": 1315072,
                         "own_params": 0,
-                        "children": [],
-                        "repeat": 3
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 263168,
+                            "own_params": 263168,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 526336,
+                            "own_params": 526336,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 524544,
+                            "own_params": 524544,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
                       }
-                    ],
-                    "repeat": 6
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 512,
-                    "own_params": 512,
-                    "children": []
+                    ]
                   }
                 ]
               },
               {
                 "name": "decoder",
-                "type": "TransformerDecoder",
+                "type": "_DETRDecoder",
                 "params": 9473024,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "0",
-                    "type": "TransformerDecoderLayer",
-                    "params": 1578752,
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 9472512,
                     "own_params": 0,
                     "children": [
                       {
-                        "name": "self_attn",
-                        "type": "MultiheadAttention",
-                        "params": 263168,
-                        "own_params": 263168,
-                        "children": [],
-                        "repeat": 2
-                      },
-                      {
-                        "name": "linear1",
-                        "type": "Linear",
-                        "params": 526336,
-                        "own_params": 526336,
-                        "children": []
-                      },
-                      {
-                        "name": "linear2",
-                        "type": "Linear",
-                        "params": 524544,
-                        "own_params": 524544,
-                        "children": []
-                      },
-                      {
-                        "name": "norm1",
-                        "type": "LayerNorm",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": [],
-                        "repeat": 3
-                      },
-                      {
-                        "name": "dropout1",
-                        "type": "Dropout",
-                        "params": 0,
+                        "name": "0",
+                        "type": "_DETRDecoderLayer",
+                        "params": 1578752,
                         "own_params": 0,
-                        "children": [],
-                        "repeat": 4
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 263168,
+                            "own_params": 263168,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 526336,
+                            "own_params": 526336,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 524544,
+                            "own_params": 524544,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
                       }
-                    ],
-                    "repeat": 6
+                    ]
                   },
                   {
                     "name": "norm",
@@ -1855,10 +1880,17 @@
             ]
           },
           {
+            "name": "_pos_embed",
+            "type": "_PositionEmbeddingSine",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
             "name": "class_embed",
             "type": "Linear",
-            "params": 20817,
-            "own_params": 20817,
+            "params": 23644,
+            "own_params": 23644,
             "children": []
           },
           {
@@ -1925,7 +1957,7 @@
       ],
       "labels": [],
       "signature": "DETRResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_weights.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_weights.py#L21",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.detr_resnet50`.",
@@ -1949,7 +1981,7 @@
       ],
       "labels": [],
       "signature": "DETRResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/detr/_weights.py#L46",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/detr/_weights.py#L46",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.detr_resnet101`.",

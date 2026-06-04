@@ -21,7 +21,7 @@ Usage
     python -m tools.build_model_summaries                # full sweep
     python -m tools.build_model_summaries --family resnet     # filter by family
     python -m tools.build_model_summaries --factory resnet_50 # one factory
-    python -m tools.build_model_summaries --skip-large 1e9    # raise/lower threshold
+    python -m tools.build_model_summaries --skip-large 5e9    # raise runtime-fallback limit
 """
 
 from __future__ import annotations  # tooling — H1 OK
@@ -109,8 +109,11 @@ def main() -> int:
         "--skip-large",
         type=float,
         default=2e9,
-        help="skip factories whose declared 'params' exceeds this value "
-             "(default 2e9 ≈ avoid >2B-param LLMs on hosted runners)",
+        help="when shadow construction fails and the runtime fallback would "
+             "allocate real Storage, skip factories whose declared 'params' "
+             "exceeds this value (default 2e9 ≈ avoid materializing >2B-param "
+             "models on hosted runners).  Does NOT affect the shadow path, "
+             "which never materializes regardless of param count.",
     )
     p.add_argument("--out", default=str(CACHE_PATH),
                    help=f"output JSON path (default: {CACHE_PATH})")
@@ -178,11 +181,6 @@ def main() -> int:
             skipped += 1
             continue
 
-        if entry.params and entry.params > args.skip_large:
-            print(f"  - {name}: params={entry.params:,} > limit; skip")
-            skipped += 1
-            continue
-
         # Cache check: skip re-instantiation when (factory module, family
         # source dir, _summary.py, _registry.py) all unchanged.
         fam_dir = _factory_family_dir(entry)
@@ -208,6 +206,19 @@ def main() -> int:
                     model = entry.factory(pretrained=False)
                 tree = compute_model_summary(model)
             except Exception:
+                # Shadow couldn't intercept this architecture; the only way
+                # to summarize is a full runtime instantiation that allocates
+                # real Storage.  ``--skip-large`` guards *this* path only —
+                # shadow never materializes regardless of declared param
+                # count (a 2.4B-param model summarizes in ~20 ms / a few MB),
+                # so the limit must not pre-empt the shadow attempt.
+                if entry.params and entry.params > args.skip_large:
+                    print(
+                        f"  - {name}: shadow failed, params={entry.params:,} "
+                        f"> runtime-fallback limit; skip"
+                    )
+                    skipped += 1
+                    continue
                 tag = "runtime"
                 model = entry.factory(pretrained=False)
                 tree = compute_model_summary(model)

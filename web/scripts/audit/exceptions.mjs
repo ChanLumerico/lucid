@@ -34,6 +34,20 @@ export const WAIVERS = [
       "--color-lucid-bg token mirrored by hand.",
   },
   {
+    id: "ddpm-imagenet64-gen-learn-sigma",
+    contracts: ["model.summary-gaps"],
+    scope: ["lucid.models.generative.ddpm/ddpm_imagenet64_gen"],
+    reason:
+      "ddpm_imagenet64_gen is the Improved-DDPM ImageNet-64 *generation* " +
+      "wrapper, whose config sets learn_sigma=True — the hybrid " +
+      "L_simple + L_vlb objective (Nichol & Dhariwal 2021) is not yet " +
+      "implemented, so the sampler raises NotImplementedError at " +
+      "construction and the model cannot be instantiated under shadow OR " +
+      "runtime.  No model_summary is computable until that loss lands; the " +
+      "plain ddpm_imagenet64 (UNet only) summarizes fine.  Dead-waiver " +
+      "detection will flag this once learn_sigma support arrives.",
+  },
+  {
     id: "cpp-engine-libclang-pipeline",
     contracts: [
       "prose.no-visible-rest",

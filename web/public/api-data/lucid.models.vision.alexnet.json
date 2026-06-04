@@ -3,7 +3,7 @@
   "name": "alexnet",
   "path": "lucid.models.vision.alexnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/__init__.py#L1",
   "members": [
     {
       "name": "AlexNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "AlexNetConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "AlexNet(config: AlexNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L72",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L72",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AlexNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L149",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L149",
           "subcategory": "model",
           "summary": "Initialise the LayerNorm module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L162",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L162",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L165",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L165",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L169",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L169",
           "subcategory": "model",
           "summary": "Run R-CNN on a batch of images.",
           "extended": null,
@@ -223,7 +223,7 @@
       ],
       "labels": [],
       "signature": "AlexNetForImageClassification(config: AlexNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L178",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L178",
       "subcategory": "model",
       "methods": [
         {
@@ -232,7 +232,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AlexNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L253",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L253",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -254,7 +254,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_model.py#L263",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_model.py#L263",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -325,7 +325,7 @@
       "kind": "function",
       "labels": [],
       "signature": "alexnet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_pretrained.py#L12",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_pretrained.py#L12",
       "subcategory": "pretrained",
       "summary": "AlexNet feature-extracting backbone (no fully-connected head).",
       "extended": "Builds an `AlexNet` with the Krizhevsky 2014 single-stream\nOWT topology: five convolutional blocks (Conv1: 3→64 with\n$11\\times11$ stride-4; Conv2: 64→192 with $5\\times5$;\nConv3: 192→384, Conv4: 384→256, Conv5: 256→256, all\n$3\\times3$), and overlapping $3\\times3$ max-pools\nafter blocks 1, 2, 5.  Approximately 2.5 M parameters in the\nconvolutional trunk alone (≈61.1 M for the full classifier\nvariant).",
@@ -361,20 +361,20 @@
       "model_summary": {
         "name": "AlexNet",
         "type": "AlexNet",
-        "params": 3747200,
+        "params": 2469696,
         "own_params": 0,
         "children": [
           {
             "name": "features",
             "type": "Sequential",
-            "params": 3747200,
+            "params": 2469696,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "Conv2d",
-                "params": 34944,
-                "own_params": 34944,
+                "params": 23296,
+                "own_params": 23296,
                 "children": []
               },
               {
@@ -386,42 +386,42 @@
               },
               {
                 "name": "2",
-                "type": "LocalResponseNorm",
+                "type": "MaxPool2d",
                 "params": 0,
                 "own_params": 0,
                 "children": []
               },
               {
                 "name": "3",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
+                "type": "Conv2d",
+                "params": 307392,
+                "own_params": 307392,
                 "children": []
               },
               {
                 "name": "4",
-                "type": "Conv2d",
-                "params": 614656,
-                "own_params": 614656,
-                "children": []
-              },
-              {
-                "name": "5",
                 "type": "ReLU",
                 "params": 0,
                 "own_params": 0,
                 "children": []
               },
               {
-                "name": "6",
-                "type": "LocalResponseNorm",
+                "name": "5",
+                "type": "MaxPool2d",
                 "params": 0,
                 "own_params": 0,
                 "children": []
               },
               {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 663936,
+                "own_params": 663936,
+                "children": []
+              },
+              {
                 "name": "7",
-                "type": "MaxPool2d",
+                "type": "ReLU",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -429,8 +429,8 @@
               {
                 "name": "8",
                 "type": "Conv2d",
-                "params": 885120,
-                "own_params": 885120,
+                "params": 884992,
+                "own_params": 884992,
                 "children": []
               },
               {
@@ -443,8 +443,8 @@
               {
                 "name": "10",
                 "type": "Conv2d",
-                "params": 1327488,
-                "own_params": 1327488,
+                "params": 590080,
+                "own_params": 590080,
                 "children": []
               },
               {
@@ -456,20 +456,6 @@
               },
               {
                 "name": "12",
-                "type": "Conv2d",
-                "params": 884992,
-                "own_params": 884992,
-                "children": []
-              },
-              {
-                "name": "13",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "14",
                 "type": "MaxPool2d",
                 "params": 0,
                 "own_params": 0,
@@ -493,7 +479,7 @@
       "kind": "function",
       "labels": [],
       "signature": "alexnet_cls(pretrained: bool | str = False, weights: AlexNetWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_pretrained.py#L75",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_pretrained.py#L75",
       "subcategory": "pretrained",
       "summary": "AlexNet image classifier (backbone + FC6 + FC7 + linear head).",
       "extended": "Builds an `AlexNetForImageClassification` with the\nKrizhevsky 2014 single-stream OWT topology: the five-block conv\ntrunk followed by FC6 (9216 → 4096), FC7 (4096 → 4096), and a\nfinal linear projection to `config.num_classes` (default 1000\nfor ImageNet-1k).  Approximately 61.1 M parameters total,\ndominated by the two 4096-dim FC layers (≈54.5 M).\n`lucid.nn.Dropout` with `p=config.dropout` (default 0.5)\nis applied after both hidden activations.",
@@ -535,20 +521,20 @@
       "model_summary": {
         "name": "AlexNetForImageClassification",
         "type": "AlexNetForImageClassification",
-        "params": 62378344,
+        "params": 61100840,
         "own_params": 0,
         "children": [
           {
             "name": "features",
             "type": "Sequential",
-            "params": 3747200,
+            "params": 2469696,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "Conv2d",
-                "params": 34944,
-                "own_params": 34944,
+                "params": 23296,
+                "own_params": 23296,
                 "children": []
               },
               {
@@ -560,42 +546,42 @@
               },
               {
                 "name": "2",
-                "type": "LocalResponseNorm",
+                "type": "MaxPool2d",
                 "params": 0,
                 "own_params": 0,
                 "children": []
               },
               {
                 "name": "3",
-                "type": "MaxPool2d",
-                "params": 0,
-                "own_params": 0,
+                "type": "Conv2d",
+                "params": 307392,
+                "own_params": 307392,
                 "children": []
               },
               {
                 "name": "4",
-                "type": "Conv2d",
-                "params": 614656,
-                "own_params": 614656,
-                "children": []
-              },
-              {
-                "name": "5",
                 "type": "ReLU",
                 "params": 0,
                 "own_params": 0,
                 "children": []
               },
               {
-                "name": "6",
-                "type": "LocalResponseNorm",
+                "name": "5",
+                "type": "MaxPool2d",
                 "params": 0,
                 "own_params": 0,
                 "children": []
               },
               {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 663936,
+                "own_params": 663936,
+                "children": []
+              },
+              {
                 "name": "7",
-                "type": "MaxPool2d",
+                "type": "ReLU",
                 "params": 0,
                 "own_params": 0,
                 "children": []
@@ -603,8 +589,8 @@
               {
                 "name": "8",
                 "type": "Conv2d",
-                "params": 885120,
-                "own_params": 885120,
+                "params": 884992,
+                "own_params": 884992,
                 "children": []
               },
               {
@@ -617,8 +603,8 @@
               {
                 "name": "10",
                 "type": "Conv2d",
-                "params": 1327488,
-                "own_params": 1327488,
+                "params": 590080,
+                "own_params": 590080,
                 "children": []
               },
               {
@@ -630,20 +616,6 @@
               },
               {
                 "name": "12",
-                "type": "Conv2d",
-                "params": 884992,
-                "own_params": 884992,
-                "children": []
-              },
-              {
-                "name": "13",
-                "type": "ReLU",
-                "params": 0,
-                "own_params": 0,
-                "children": []
-              },
-              {
-                "name": "14",
                 "type": "MaxPool2d",
                 "params": 0,
                 "own_params": 0,
@@ -700,7 +672,7 @@
       ],
       "labels": [],
       "signature": "AlexNetWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/alexnet/_weights.py#L22",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/alexnet/_weights.py#L22",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.alexnet_cls`.",

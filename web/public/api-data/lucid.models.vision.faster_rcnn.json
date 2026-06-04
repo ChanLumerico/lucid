@@ -3,7 +3,7 @@
   "name": "faster_rcnn",
   "path": "lucid.models.vision.faster_rcnn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/__init__.py#L1",
   "members": [
     {
       "name": "FasterRCNNConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "FasterRCNNConfig(num_classes: int = 91, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_bn_eps: float = 0.0, fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 1000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 0.001, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, roi_size: int = 7, roi_sampling_ratio: int = 2, roi_representation_size: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), canonical_scale: int = 224, canonical_level: int = 4, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 91, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_bn_eps: float = 0.0, fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 1000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 0.001, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, roi_size: int = 7, roi_sampling_ratio: int = 2, roi_representation_size: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), canonical_scale: int = 224, canonical_level: int = 4, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -213,7 +213,7 @@
       ],
       "labels": [],
       "signature": "FasterRCNNForObjectDetection(config: FasterRCNNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_model.py#L196",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_model.py#L196",
       "subcategory": "model",
       "methods": [
         {
@@ -222,7 +222,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: FasterRCNNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_model.py#L254",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_model.py#L254",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -244,7 +244,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, proposals: list[Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_model.py#L386",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_model.py#L386",
           "subcategory": "model",
           "summary": "Run Faster R-CNN on a (pre-processed) image batch.",
           "extended": null,
@@ -279,7 +279,7 @@
           "kind": "function",
           "labels": [],
           "signature": "postprocess(output: ObjectDetectionOutput, image_sizes: list[tuple[int, int]] | None = None, proposals: list[Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_model.py#L474",
+          "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_model.py#L474",
           "subcategory": "model",
           "summary": "Softmax → per-class score filter → per-class NMS → top-k.",
           "extended": "Mirrors the reference `postprocess_detections`: drops the\nbackground class (slot 0), score-thresholds, removes empty boxes,\nruns per-class NMS, and keeps the top `max_detections` scores.",
@@ -364,7 +364,7 @@
       "kind": "function",
       "labels": [],
       "signature": "faster_rcnn(pretrained: bool | str = False, weights: FasterRCNNResNet50FPNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_pretrained.py#L20",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_pretrained.py#L20",
       "subcategory": "pretrained",
       "summary": "Faster R-CNN with a ResNet-50-FPN backbone (Ren et al., NeurIPS 2015).",
       "extended": "Alias of `faster_rcnn_resnet50_fpn` — the canonical reference\nconfiguration: a ResNet-50 trunk (frozen BN) feeding a Feature Pyramid\nNetwork, a Region Proposal Network over five pyramid levels, and a Fast\nR-CNN RoI head.  The COCO config uses `num_classes = 91`.  Reaches\nCOCO box AP of 37.0 (reference `fasterrcnn_resnet50_fpn`).",
@@ -403,229 +403,724 @@
       "model_summary": {
         "name": "FasterRCNNForObjectDetection",
         "type": "FasterRCNNForObjectDetection",
-        "params": 138286334,
+        "params": 41755286,
         "own_params": 0,
         "children": [
           {
             "name": "backbone",
-            "type": "_VGG16Features",
-            "params": 14714688,
+            "type": "_BackboneWithFPN",
+            "params": 26799296,
             "own_params": 0,
             "children": [
               {
-                "name": "features",
-                "type": "Sequential",
-                "params": 14714688,
+                "name": "body",
+                "type": "_ResNetBody",
+                "params": 23454912,
                 "own_params": 0,
                 "children": [
                   {
-                    "name": "0",
+                    "name": "conv1",
                     "type": "Conv2d",
-                    "params": 1792,
-                    "own_params": 1792,
+                    "params": 9408,
+                    "own_params": 9408,
                     "children": []
                   },
                   {
-                    "name": "1",
+                    "name": "bn1",
+                    "type": "_FrozenBatchNorm2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "relu",
                     "type": "ReLU",
                     "params": 0,
                     "own_params": 0,
                     "children": []
                   },
                   {
-                    "name": "2",
-                    "type": "Conv2d",
-                    "params": 36928,
-                    "own_params": 36928,
-                    "children": []
-                  },
-                  {
-                    "name": "3",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "4",
+                    "name": "maxpool",
                     "type": "MaxPool2d",
                     "params": 0,
                     "own_params": 0,
                     "children": []
                   },
                   {
-                    "name": "5",
-                    "type": "Conv2d",
-                    "params": 73856,
-                    "own_params": 73856,
-                    "children": []
-                  },
-                  {
-                    "name": "6",
-                    "type": "ReLU",
-                    "params": 0,
+                    "name": "layer1",
+                    "type": "Sequential",
+                    "params": 212992,
                     "own_params": 0,
-                    "children": []
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 73728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 4096,
+                            "own_params": 4096,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 36864,
+                            "own_params": 36864,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 16384,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 16384,
+                                "own_params": 16384,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 69632,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 36864,
+                            "own_params": 36864,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
                   },
                   {
-                    "name": "7",
-                    "type": "Conv2d",
-                    "params": 147584,
-                    "own_params": 147584,
-                    "children": []
-                  },
-                  {
-                    "name": "8",
-                    "type": "ReLU",
-                    "params": 0,
+                    "name": "layer2",
+                    "type": "Sequential",
+                    "params": 1212416,
                     "own_params": 0,
-                    "children": []
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 376832,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 32768,
+                            "own_params": 32768,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 147456,
+                            "own_params": 147456,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 131072,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 131072,
+                                "own_params": 131072,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 278528,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 147456,
+                            "own_params": 147456,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
                   },
                   {
-                    "name": "9",
-                    "type": "MaxPool2d",
-                    "params": 0,
+                    "name": "layer3",
+                    "type": "Sequential",
+                    "params": 7077888,
                     "own_params": 0,
-                    "children": []
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 1507328,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 589824,
+                            "own_params": 589824,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 262144,
+                            "own_params": 262144,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 524288,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 524288,
+                                "own_params": 524288,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 1114112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 262144,
+                            "own_params": 262144,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 589824,
+                            "own_params": 589824,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 262144,
+                            "own_params": 262144,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 5
+                      }
+                    ]
                   },
                   {
-                    "name": "10",
-                    "type": "Conv2d",
-                    "params": 295168,
-                    "own_params": 295168,
-                    "children": []
-                  },
-                  {
-                    "name": "11",
-                    "type": "ReLU",
-                    "params": 0,
+                    "name": "layer4",
+                    "type": "Sequential",
+                    "params": 14942208,
                     "own_params": 0,
-                    "children": []
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 6029312,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 524288,
+                            "own_params": 524288,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 2359296,
+                            "own_params": 2359296,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 1048576,
+                            "own_params": 1048576,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 2097152,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 2097152,
+                                "own_params": 2097152,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 4456448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 1048576,
+                            "own_params": 1048576,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 2359296,
+                            "own_params": 2359296,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 1048576,
+                            "own_params": 1048576,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "fpn",
+                "type": "_FeaturePyramidNetwork",
+                "params": 3344384,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "inner_blocks",
+                    "type": "ModuleList",
+                    "params": 984064,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Sequential",
+                        "params": 65792,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 65792,
+                            "own_params": 65792,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "Sequential",
+                        "params": 131328,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 131328,
+                            "own_params": 131328,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "Sequential",
+                        "params": 262400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 262400,
+                            "own_params": 262400,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "3",
+                        "type": "Sequential",
+                        "params": 524544,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 524544,
+                            "own_params": 524544,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
                   },
                   {
-                    "name": "12",
-                    "type": "Conv2d",
+                    "name": "layer_blocks",
+                    "type": "ModuleList",
+                    "params": 2360320,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Sequential",
+                        "params": 590080,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 590080,
+                            "own_params": 590080,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 4
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rpn",
+            "type": "_RegionProposalNetwork",
+            "params": 593935,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "head",
+                "type": "_RPNHead",
+                "params": 593935,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Sequential",
                     "params": 590080,
-                    "own_params": 590080,
-                    "children": []
-                  },
-                  {
-                    "name": "13",
-                    "type": "ReLU",
-                    "params": 0,
                     "own_params": 0,
-                    "children": []
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Sequential",
+                        "params": 590080,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 590080,
+                            "own_params": 590080,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
                   },
                   {
-                    "name": "14",
+                    "name": "cls_logits",
                     "type": "Conv2d",
-                    "params": 590080,
-                    "own_params": 590080,
+                    "params": 771,
+                    "own_params": 771,
                     "children": []
                   },
                   {
-                    "name": "15",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "16",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "17",
+                    "name": "bbox_pred",
                     "type": "Conv2d",
-                    "params": 1180160,
-                    "own_params": 1180160,
-                    "children": []
-                  },
-                  {
-                    "name": "18",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "19",
-                    "type": "Conv2d",
-                    "params": 2359808,
-                    "own_params": 2359808,
-                    "children": []
-                  },
-                  {
-                    "name": "20",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "21",
-                    "type": "Conv2d",
-                    "params": 2359808,
-                    "own_params": 2359808,
-                    "children": []
-                  },
-                  {
-                    "name": "22",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "23",
-                    "type": "MaxPool2d",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "24",
-                    "type": "Conv2d",
-                    "params": 2359808,
-                    "own_params": 2359808,
-                    "children": []
-                  },
-                  {
-                    "name": "25",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "26",
-                    "type": "Conv2d",
-                    "params": 2359808,
-                    "own_params": 2359808,
-                    "children": []
-                  },
-                  {
-                    "name": "27",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  },
-                  {
-                    "name": "28",
-                    "type": "Conv2d",
-                    "params": 2359808,
-                    "own_params": 2359808,
-                    "children": []
-                  },
-                  {
-                    "name": "29",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
+                    "params": 3084,
+                    "own_params": 3084,
                     "children": []
                   }
                 ]
@@ -634,80 +1129,60 @@
           },
           {
             "name": "_anchor_gen",
-            "type": "AnchorGenerator",
+            "type": "_ReferenceAnchorGenerator",
             "params": 0,
             "own_params": 0,
             "children": []
           },
           {
-            "name": "rpn_head",
-            "type": "_RPNHead",
-            "params": 2382893,
+            "name": "roi_heads",
+            "type": "_RoIHeads",
+            "params": 14362055,
             "own_params": 0,
             "children": [
               {
-                "name": "conv",
-                "type": "Conv2d",
-                "params": 2359808,
-                "own_params": 2359808,
-                "children": []
-              },
-              {
-                "name": "cls_logits",
-                "type": "Conv2d",
-                "params": 4617,
-                "own_params": 4617,
-                "children": []
-              },
-              {
-                "name": "bbox_pred",
-                "type": "Conv2d",
-                "params": 18468,
-                "own_params": 18468,
-                "children": []
-              }
-            ]
-          },
-          {
-            "name": "roi_head",
-            "type": "_RoIHead",
-            "params": 121188753,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "fc6",
-                "type": "Linear",
-                "params": 102764544,
-                "own_params": 102764544,
-                "children": []
-              },
-              {
-                "name": "fc7",
-                "type": "Linear",
-                "params": 16781312,
-                "own_params": 16781312,
-                "children": []
-              },
-              {
-                "name": "drop",
-                "type": "Dropout",
-                "params": 0,
+                "name": "box_head",
+                "type": "_TwoMLPHead",
+                "params": 13895680,
                 "own_params": 0,
-                "children": []
+                "children": [
+                  {
+                    "name": "fc6",
+                    "type": "Linear",
+                    "params": 12846080,
+                    "own_params": 12846080,
+                    "children": []
+                  },
+                  {
+                    "name": "fc7",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ]
               },
               {
-                "name": "cls_score",
-                "type": "Linear",
-                "params": 331857,
-                "own_params": 331857,
-                "children": []
-              },
-              {
-                "name": "bbox_pred",
-                "type": "Linear",
-                "params": 1311040,
-                "own_params": 1311040,
-                "children": []
+                "name": "box_predictor",
+                "type": "_FastRCNNPredictor",
+                "params": 466375,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "cls_score",
+                    "type": "Linear",
+                    "params": 93275,
+                    "own_params": 93275,
+                    "children": []
+                  },
+                  {
+                    "name": "bbox_pred",
+                    "type": "Linear",
+                    "params": 373100,
+                    "own_params": 373100,
+                    "children": []
+                  }
+                ]
               }
             ]
           }
@@ -720,7 +1195,7 @@
       "kind": "function",
       "labels": [],
       "signature": "faster_rcnn_resnet50_fpn(pretrained: bool | str = False, weights: FasterRCNNResNet50FPNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_pretrained.py#L80",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_pretrained.py#L80",
       "subcategory": "pretrained",
       "summary": "Faster R-CNN with a ResNet-50-FPN backbone (COCO-pretrained).",
       "extended": "Builds the reference `fasterrcnn_resnet50_fpn` detector: ResNet-50\nbackbone with frozen batch-norm, a 5-level Feature Pyramid Network\n(P2-P5 + a parameter-free pool level for RPN), anchors at sizes\n`((32,),(64,),(128,),(256,),(512,))` and ratios `(0.5, 1.0, 2.0)`,\nand a Fast R-CNN RoI head (TwoMLPHead + FastRCNNPredictor) over\nMultiScale RoI Align.  COCO box AP 37.0, ~41.8M parameters.",
@@ -757,7 +1232,795 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "FasterRCNNForObjectDetection",
+        "type": "FasterRCNNForObjectDetection",
+        "params": 41755286,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_BackboneWithFPN",
+            "params": 26799296,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "body",
+                "type": "_ResNetBody",
+                "params": 23454912,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 9408,
+                    "own_params": 9408,
+                    "children": []
+                  },
+                  {
+                    "name": "bn1",
+                    "type": "_FrozenBatchNorm2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "relu",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "maxpool",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "layer1",
+                    "type": "Sequential",
+                    "params": 212992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 73728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 4096,
+                            "own_params": 4096,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 36864,
+                            "own_params": 36864,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 16384,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 16384,
+                                "own_params": 16384,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 69632,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 36864,
+                            "own_params": 36864,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "layer2",
+                    "type": "Sequential",
+                    "params": 1212416,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 376832,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 32768,
+                            "own_params": 32768,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 147456,
+                            "own_params": 147456,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 131072,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 131072,
+                                "own_params": 131072,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 278528,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 147456,
+                            "own_params": 147456,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "layer3",
+                    "type": "Sequential",
+                    "params": 7077888,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 1507328,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 589824,
+                            "own_params": 589824,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 262144,
+                            "own_params": 262144,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 524288,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 524288,
+                                "own_params": 524288,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 1114112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 262144,
+                            "own_params": 262144,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 589824,
+                            "own_params": 589824,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 262144,
+                            "own_params": 262144,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 5
+                      }
+                    ]
+                  },
+                  {
+                    "name": "layer4",
+                    "type": "Sequential",
+                    "params": 14942208,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResNetBottleneck",
+                        "params": 6029312,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 524288,
+                            "own_params": 524288,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 2359296,
+                            "own_params": 2359296,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 1048576,
+                            "own_params": 1048576,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "downsample",
+                            "type": "Sequential",
+                            "params": 2097152,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Conv2d",
+                                "params": 2097152,
+                                "own_params": 2097152,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_FrozenBatchNorm2d",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResNetBottleneck",
+                        "params": 4456448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 1048576,
+                            "own_params": 1048576,
+                            "children": []
+                          },
+                          {
+                            "name": "bn1",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 2359296,
+                            "own_params": 2359296,
+                            "children": []
+                          },
+                          {
+                            "name": "bn2",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv3",
+                            "type": "Conv2d",
+                            "params": 1048576,
+                            "own_params": 1048576,
+                            "children": []
+                          },
+                          {
+                            "name": "bn3",
+                            "type": "_FrozenBatchNorm2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "fpn",
+                "type": "_FeaturePyramidNetwork",
+                "params": 3344384,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "inner_blocks",
+                    "type": "ModuleList",
+                    "params": 984064,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Sequential",
+                        "params": 65792,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 65792,
+                            "own_params": 65792,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "Sequential",
+                        "params": 131328,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 131328,
+                            "own_params": 131328,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "Sequential",
+                        "params": 262400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 262400,
+                            "own_params": 262400,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "3",
+                        "type": "Sequential",
+                        "params": 524544,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 524544,
+                            "own_params": 524544,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "layer_blocks",
+                    "type": "ModuleList",
+                    "params": 2360320,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Sequential",
+                        "params": 590080,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 590080,
+                            "own_params": 590080,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 4
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rpn",
+            "type": "_RegionProposalNetwork",
+            "params": 593935,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "head",
+                "type": "_RPNHead",
+                "params": 593935,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Sequential",
+                    "params": 590080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Sequential",
+                        "params": 590080,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Conv2d",
+                            "params": 590080,
+                            "own_params": 590080,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cls_logits",
+                    "type": "Conv2d",
+                    "params": 771,
+                    "own_params": 771,
+                    "children": []
+                  },
+                  {
+                    "name": "bbox_pred",
+                    "type": "Conv2d",
+                    "params": 3084,
+                    "own_params": 3084,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "_anchor_gen",
+            "type": "_ReferenceAnchorGenerator",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "roi_heads",
+            "type": "_RoIHeads",
+            "params": 14362055,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "box_head",
+                "type": "_TwoMLPHead",
+                "params": 13895680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc6",
+                    "type": "Linear",
+                    "params": 12846080,
+                    "own_params": 12846080,
+                    "children": []
+                  },
+                  {
+                    "name": "fc7",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "box_predictor",
+                "type": "_FastRCNNPredictor",
+                "params": 466375,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "cls_score",
+                    "type": "Linear",
+                    "params": 93275,
+                    "own_params": 93275,
+                    "children": []
+                  },
+                  {
+                    "name": "bbox_pred",
+                    "type": "Linear",
+                    "params": 373100,
+                    "own_params": 373100,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "FasterRCNNResNet50FPNWeights",
@@ -769,7 +2032,7 @@
       ],
       "labels": [],
       "signature": "FasterRCNNResNet50FPNWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e6e946c5b/lucid/models/vision/faster_rcnn/_weights.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/85d549419/lucid/models/vision/faster_rcnn/_weights.py#L21",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.faster_rcnn_resnet50_fpn`.",
