@@ -256,6 +256,31 @@ const PAGE_CONTRACTS = [
       return out;
     },
   },
+  {
+    id: "ui.main-column.full-width", component: "DetailLayout", kind: "page",
+    applies: (ctx) => ctx.kind === "api-member" || ctx.kind === "api-module",
+    check(ctx) {
+      // Two-column detail/overview layout (main content column + ToC aside):
+      // the content column is a flex item, so without a grow rule it shrinks to
+      // its content and short pages render a NARROW card.  Enforce that the main
+      // column always fills the available width up to its ``max-w`` cap
+      // (``flex-1`` / ``w-full``) — every main card is a fixed full width
+      // regardless of content length.  Single-column pages (no ToC, e.g. the
+      // C++ engine landing) have no ``xl:flex-row`` row and are skipped: a block
+      // element already fills its parent there.
+      const row = ctx.dom.querySelectorAll("div").find((d) => d.classList.contains("xl:flex-row"));
+      if (!row) return [];
+      const col = row.querySelector(".max-w-4xl");
+      if (!col) return [{ scope: ctx.scope, detail: "two-column layout has no max-w-4xl main column" }];
+      const fills =
+        col.classList.contains("xl:flex-1") ||
+        col.classList.contains("flex-1") ||
+        col.classList.contains("w-full");
+      return fills
+        ? []
+        : [{ scope: ctx.scope, detail: "main content column lacks flex-1/w-full — card shrinks to content instead of a fixed full width" }];
+    },
+  },
   // ── UI design language (rendered-class conformance) ────────────────────────
   // Made executable as a DECLARATIVE SCHEMA (UI_CLASS_SCHEMA above) plus the
   // custom checks below: every component must carry its canonical token recipe

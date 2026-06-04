@@ -106,7 +106,7 @@ export default async function ApiSlugPage({
       if (!method) notFound();
       return (
         <FadeIn className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 max-w-4xl">
+          <div className="min-w-0 max-w-4xl xl:flex-1">
             <Breadcrumb parts={breadcrumbParts} />
             <FunctionSignature
               fn={method}
@@ -127,7 +127,7 @@ export default async function ApiSlugPage({
 
       return (
         <FadeIn className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 max-w-4xl">
+          <div className="min-w-0 max-w-4xl xl:flex-1">
             <Breadcrumb parts={breadcrumbParts} />
             <div className="mt-6">
               {isApiClass(member) ? (
@@ -159,7 +159,7 @@ export default async function ApiSlugPage({
   }
   return (
     <FadeIn className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-between">
-      <div className="min-w-0 max-w-4xl">
+      <div className="min-w-0 max-w-4xl xl:flex-1">
         <ModuleOverview data={data} />
       </div>
       <PageTableOfContents minEntries={2} />
