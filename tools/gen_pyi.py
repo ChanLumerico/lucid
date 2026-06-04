@@ -648,6 +648,16 @@ def _engine_strip(t: str) -> str:
     t = t.replace("collections.abc.", "")
     t = t.replace("typing.", "")
     t = t.replace("NoneType", "None")
+    # Collapse the redundant ``| SupportsIndex`` unions that some pybind11 /
+    # CPython typing-introspection versions append to numeric params (arange /
+    # argmax / bernoulli / …).  ``SupportsFloat`` / ``SupportsInt`` already
+    # accept int-like values, so ``SupportsIndex`` adds nothing — and *whether*
+    # pybind emits it is environment-dependent, which silently drifted the
+    # committed stub between the dev box (no SupportsIndex) and the CI runner
+    # (SupportsIndex), failing check_stubs.  Stripping it here makes gen_pyi
+    # deterministic across environments.  A bare ``SupportsIndex`` (no union) is
+    # left untouched.
+    t = t.replace(" | SupportsIndex", "").replace("SupportsIndex | ", "")
     return t
 
 
