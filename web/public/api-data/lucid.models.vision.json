@@ -3,7 +3,7 @@
   "name": "vision",
   "path": "lucid.models.vision",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/cd45b42d4/lucid/models/vision/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/88f70a6ee/lucid/models/vision/__init__.py#L1",
   "members": [],
   "summary": "Vision model families — chronological order of publication.",
   "extended": null,

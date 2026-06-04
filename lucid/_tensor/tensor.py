@@ -1580,7 +1580,6 @@ class Tensor:
         DLPack device types of interest:
 
         * ``1`` — ``kDLCPU`` (this implementation)
-        * ``2`` — ``kDLCUDA``
         * ``8`` — ``kDLMetal``
 
         A future native Metal-side export will return ``(8, 0)`` when the
@@ -2659,32 +2658,6 @@ class Tensor:
         """
         return False
 
-    @property
-    def is_cuda(self) -> bool:
-        r"""Return ``False`` — Lucid does not target NVIDIA GPUs.
-
-        Lucid is Apple-Silicon-exclusive: the GPU stream is MLX-on-Metal,
-        not NVIDIA's discrete GPU stack. Use :attr:`is_metal` to detect
-        GPU-resident tensors. This property exists purely for API
-        compatibility with code paths that probe for the legacy attribute.
-
-        Returns
-        -------
-        bool
-            Always ``False``.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> lucid.zeros(3).is_cuda
-        False
-
-        Notes
-        -----
-        Identically false: :math:`\text{is\_cuda}(t) \equiv \text{False}`.
-        Use :attr:`is_metal` to query GPU residency on Apple Silicon.
-        """
-        return False
 
     def reshape_as(self, other: Tensor) -> Tensor:
         r"""Return a tensor with the same data reshaped to ``other.shape``.
