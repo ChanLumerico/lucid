@@ -41,6 +41,11 @@ BUILD_SCRIPT = HERE / "build-api-data.py"
 CACHE_DIR = OUT_DIR / ".cache"
 CACHE_FILE = OUT_DIR / ".cache-key"
 MODULE_CACHE = CACHE_DIR / "modules.json"
+# Portable per-slug CONTENT hashes for the drift gate (``--check``).  Distinct
+# from ``modules.json`` which fingerprints mtimes — mtimes aren't preserved by
+# git, so that cache only works within one machine's build.  This one hashes
+# file bytes, so it's identical on macOS dev and the Linux CI runner.
+DRIFT_CACHE = CACHE_DIR / "drift-hashes.json"
 
 
 def _compute_key() -> str:
@@ -158,33 +163,84 @@ def _save_module_cache(fingerprints: dict[str, str]) -> None:
     MODULE_CACHE.write_text(json.dumps(fingerprints, indent=2, sort_keys=True))
 
 
-def _check_drift() -> int:
-    """Report (without rebuilding) any slug whose source CONTENT changed since
-    the committed per-module cache (``.cache/modules.json``) was written — i.e.
-    the committed api-data is stale w.r.t. its Lucid source.
+def _content_fingerprints() -> dict[str, str]:
+    """Per-slug fingerprint over source-file CONTENT (bytes), keyed by slug.
 
-    Pure stdlib (content hashes via :func:`_hash_paths`), so it runs on the
-    docs CI runner where Griffe / Lucid / pip are intentionally absent.  This is
-    the "source → api-data" half of the drift gate; the "post-processor" half
-    (cross-links / used-by / link-citations / meta) is caught by a plain
-    ``git diff`` after the prebuild, since those run on CI and don't touch the
-    per-commit source-permalink SHA.
-
-    Limitation: synth slugs (``lucid.ops`` / ``lucid.creation`` /
+    Portable across machines/checkouts — unlike :func:`_per_module_fingerprints`
+    (mtimes) — so the committed baseline computed on a dev box matches what the
+    CI runner recomputes.  Drives the drift gate only; the build-speed cache is
+    unaffected.  Synth slugs (``lucid.ops`` / ``lucid.creation`` /
     ``lucid.ops.composite`` / ``lucid._C.engine``) have no isolated source dir
-    (:func:`_slug_to_source_dir` returns ``None``) and are not verified here —
-    they depend on the whole tree and rely on the developer regenerating.
+    and are skipped.
     """
-    cached = _load_module_cache()
-    current = _per_module_fingerprints()
+    result: dict[str, str] = {}
+    if not OUT_DIR.is_dir():
+        return result
+    for jp in OUT_DIR.glob("*.json"):
+        if jp.name.startswith("_") or jp.name.startswith("."):
+            continue
+        slug = jp.stem
+        d = _slug_to_source_dir(slug)
+        if d is None:
+            continue
+        files = list(d.rglob("*.py")) if d.is_dir() else [d]
+
+        def _rel(p: Path) -> str:
+            return (
+                str(p.relative_to(LUCID_SRC)).replace("\\", "/")
+                if p.is_relative_to(LUCID_SRC)
+                else p.name
+            )
+
+        # Sort by the lucid-relative path string so iteration order — and thus
+        # the combined hash — is identical on macOS dev and the Linux runner
+        # (absolute prefixes differ, relative paths don't).
+        h = hashlib.sha256()
+        for p in sorted(files, key=_rel):
+            try:
+                data = p.read_bytes()
+            except OSError:
+                continue
+            h.update(_rel(p).encode())  # catches renames too
+            h.update(b"\0")
+            h.update(data)
+            h.update(b"\0")
+        result[slug] = h.hexdigest()
+    return result
+
+
+def _check_drift() -> int:
+    """Report (without rebuilding) any slug whose source CONTENT differs from the
+    committed drift baseline (``.cache/drift-hashes.json``) — i.e. the committed
+    api-data is stale w.r.t. its Lucid source.
+
+    Pure stdlib (content hashes), so it runs on the docs CI runner where Griffe
+    / Lucid / pip are intentionally absent.  This is the "source → api-data" half
+    of the drift gate; the "post-processor" half (cross-links / used-by /
+    link-citations / meta) is caught by a plain ``git diff`` after the prebuild.
+    """
+    cached: dict[str, str] = {}
+    if DRIFT_CACHE.is_file():
+        try:
+            cached = json.loads(DRIFT_CACHE.read_text())
+        except (OSError, json.JSONDecodeError):
+            cached = {}
+    current = _content_fingerprints()
     if not current:
         print("[api-data] --check: no emitted *.json found; nothing to verify")
         return 0
+    if not cached:
+        print(
+            "[api-data] ✗ no drift baseline — run "
+            "`python3 scripts/build-api-data-cached.py --write-cache` and commit "
+            f"{DRIFT_CACHE.relative_to(REPO_ROOT)}"
+        )
+        return 1
     stale = sorted(s for s, h in current.items() if cached.get(s) != h)
     if not stale:
         print(
             f"[api-data] ✓ no source drift — {len(current)} module slugs "
-            "match the committed cache"
+            "match the committed baseline"
         )
         return 0
     print("[api-data] ✗ STALE — committed api-data is out of date with source:")
@@ -193,19 +249,20 @@ def _check_drift() -> int:
         print(f"    - {s}  ({why})")
     print("\n  Regenerate + commit:")
     print("    cd web && FORCE_API_BUILD=1 python3 scripts/build-api-data-cached.py")
+    print("    npm run rebaseline:api-cache   # refresh the drift baseline")
     print("    git add web/public/api-data")
     return 1
 
 
 def _write_cache() -> int:
-    """Rewrite ``.cache/modules.json`` to match the CURRENT source content,
+    """(Re)write ``.cache/drift-hashes.json`` to the CURRENT source content,
     asserting the committed api-data already reflects it (e.g. after a direct
-    ``build-api-data.py`` regen that doesn't touch the cache).  Use this to
-    re-baseline the drift cache once, so ``--check`` is meaningful afterwards.
+    ``build-api-data.py`` regen).  Re-baselines the drift gate.
     """
-    fp = _per_module_fingerprints()
-    _save_module_cache(fp)
-    print(f"[api-data] re-baselined {len(fp)} module fingerprints -> {MODULE_CACHE}")
+    fp = _content_fingerprints()
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    DRIFT_CACHE.write_text(json.dumps(fp, indent=2, sort_keys=True))
+    print(f"[api-data] re-baselined {len(fp)} content fingerprints -> {DRIFT_CACHE}")
     return 0
 
 
