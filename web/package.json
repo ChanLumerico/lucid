@@ -19,7 +19,8 @@
     "check:api-drift": "python3 scripts/build-api-data-cached.py --check",
     "rebaseline:api-cache": "python3 scripts/build-api-data-cached.py --write-cache",
     "validate:math": "node scripts/validate-math.mjs",
-    "audit:docs": "node scripts/audit-docs.mjs"
+    "audit:docs": "node scripts/audit-docs.mjs",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.2.8",
@@ -52,6 +53,7 @@
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/hast": "^3.0.4",
     "@types/katex": "^0.16.8",
     "@types/mdx": "^2.0.13",

@@ -1,0 +1,48 @@
+name: E2E smoke
+
+# Runtime smoke (Playwright) — hydration / console errors / interactive ToC,
+# which the static docs audit can't see.  Browser install is heavy, so this is
+# opt-in: manual dispatch + a nightly run, not every push.  The static
+# contract audit in docs.yml remains the per-push web gate.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 9 * * *"
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Playwright smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # dev:fast runs build-bibtex / build-meta (stdlib only, SKIP_API_BUILD=1)
+      # then `next dev` — no Griffe / Lucid needed.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright chromium
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run smoke
+        working-directory: web
+        run: pnpm e2e
