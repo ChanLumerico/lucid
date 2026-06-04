@@ -2,7 +2,11 @@
 requires = [
     "setuptools>=68",
     "wheel",
-    "pybind11>=2.10",
+    # Pinned to 3.0.x: pybind11's stub-introspection rendering (numeric
+    # param unions, parameterized tuple returns) varies across minors, which
+    # silently drifted the committed engine.pyi between dev and CI.  gen_pyi
+    # normalizes those, but pinning keeps the generated stub reproducible.
+    "pybind11>=3.0,<3.1",
     "cmake>=3.24",
     "ninja>=1.11",
     # setup.py imports mlx at build time to detect Metal sources, so it
