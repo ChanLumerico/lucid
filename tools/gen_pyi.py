@@ -658,6 +658,15 @@ def _engine_strip(t: str) -> str:
     # deterministic across environments.  A bare ``SupportsIndex`` (no union) is
     # left untouched.
     t = t.replace(" | SupportsIndex", "").replace("SupportsIndex | ", "")
+    # Same environment-dependence for ``std::tuple`` returns: newer pybind11
+    # renders them parameterized (``tuple[TensorImpl, TensorImpl]``) while older
+    # emits a bare ``tuple``.  Only *introspected* main-namespace functions
+    # (histogram* / topk) flow through here — the parameterized nn/linalg
+    # returns (qr / svd / lstm_forward …) are hardcoded literals that bypass
+    # ``_engine_strip`` — so collapsing to the bare ``tuple`` the committed stub
+    # uses for these is safe and keeps gen_pyi deterministic across envs.
+    t = t.replace("tuple[TensorImpl, TensorImpl, TensorImpl]", "tuple")
+    t = t.replace("tuple[TensorImpl, TensorImpl]", "tuple")
     return t
 
 
