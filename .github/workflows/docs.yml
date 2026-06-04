@@ -52,6 +52,12 @@ jobs:
         working-directory: web
         run: python3 scripts/build-api-data-cached.py --check
 
+      # Regression tests for the reST->markdown converter (build-api-data.py).
+      # Standalone stdlib script (no pytest) so it runs on this minimal runner.
+      - name: Test reST->markdown converter
+        working-directory: web
+        run: python3 scripts/test_rst_converter.py
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
