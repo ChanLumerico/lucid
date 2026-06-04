@@ -81,6 +81,13 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile
 
+      # ESLint (Next.js flat preset) — JS/TS correctness the contract audit
+      # can't see (react-hooks rules, Next pitfalls, imports).  Gates on
+      # errors; the advisory react-19 effect rule stays a warning.
+      - name: Lint (eslint)
+        working-directory: web
+        run: pnpm lint
+
       # ── Next.js build cache — incremental compile / image opt artifacts ───
       - uses: actions/cache@v4
         with:
