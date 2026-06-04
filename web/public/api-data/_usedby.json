@@ -2951,26 +2951,6 @@
       "module": "lucid.models.generative.ddpm"
     }
   ],
-  "lucid.models.generative.ddpm._weights.DDPMChurchWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.ddpm._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.generative.ddpm._weights.DDPMCifarWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.ddpm._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
   "lucid.models.generative.ncsn": [
     {
       "kind": "module",
@@ -3289,116 +3269,6 @@
       "module": "lucid.models.text.bert"
     }
   ],
-  "lucid.models.text.bert._weights.BERTBaseMLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTBaseNERWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTBaseQAWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTBaseWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTLargeMLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTLargeQAWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTLargeWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTMediumWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTMiniWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTSmallWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.bert._weights.BERTTinyWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
   "lucid.models.text.gpt": [
     {
       "kind": "module",
@@ -3489,26 +3359,6 @@
     {
       "kind": "module",
       "module": "lucid.models.text.gpt"
-    }
-  ],
-  "lucid.models.text.gpt._weights.GPTLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt._weights.GPTWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.text.gpt2": [
@@ -3639,86 +3489,6 @@
       "module": "lucid.models.text.gpt2"
     }
   ],
-  "lucid.models.text.gpt2._weights.GPT2LargeLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt2._weights.GPT2LargeWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt2._weights.GPT2MediumLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt2._weights.GPT2MediumWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt2._weights.GPT2SmallLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt2._weights.GPT2SmallWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt2._weights.GPT2XLargeLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.gpt2._weights.GPT2XLargeWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
   "lucid.models.text.roformer": [
     {
       "kind": "module",
@@ -3825,26 +3595,6 @@
     {
       "kind": "module",
       "module": "lucid.models.text.roformer"
-    }
-  ],
-  "lucid.models.text.roformer._weights.RoFormerMLMWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.roformer._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
-    }
-  ],
-  "lucid.models.text.roformer._weights.RoFormerWeights": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.roformer._pretrained"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.weights"
     }
   ],
   "lucid.models.text.transformer": [

@@ -50,23 +50,20 @@ function sectionSubpackages(
   if (children.length === 0) return [];
 
   if (parentSlug === "lucid.models") {
-    const FAMILY_ORDER = [
+    // Curated order for the top-level Model Zoo categories.  (The weights
+    // aggregator is not a documented package — each family owns its weight
+    // classes under its own "Weights" slot — so there is no infra section.)
+    const ORDER = [
       "lucid.models.vision",
       "lucid.models.text",
       "lucid.models.generative",
     ];
     const rank = (slug: string) => {
-      const i = FAMILY_ORDER.indexOf(slug);
-      return i === -1 ? FAMILY_ORDER.length : i;
+      const i = ORDER.indexOf(slug);
+      return i === -1 ? ORDER.length : i;
     };
-    const families = children
-      .filter((c) => FAMILY_ORDER.includes(c.slug))
-      .sort((a, b) => rank(a.slug) - rank(b.slug));
-    const infra = children.filter((c) => !FAMILY_ORDER.includes(c.slug));
-    const sections: SubpackageSection[] = [];
-    if (families.length) sections.push({ title: "Model Families", groups: families });
-    if (infra.length) sections.push({ title: "Infrastructure", groups: infra });
-    return sections;
+    const ordered = [...children].sort((a, b) => rank(a.slug) - rank(b.slug));
+    return [{ title: "Model Families", groups: ordered }];
   }
 
   const title = parentSlug.startsWith("lucid.models") ? "Model Families" : "Sub-packages";
@@ -102,8 +99,14 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
     return <ClassDoc cls={cls} />;
   }
 
-  const classes   = data.members.filter(isApiClass);
-  const functions = data.members.filter(isApiFunction);
+  const allClasses = data.members.filter(isApiClass);
+  const functions  = data.members.filter(isApiFunction);
+  // Pretrained-weight enums (``<Family>Weights``) get their own "Weights"
+  // section — the model-zoo-wide home for weight classes (the
+  // ``lucid.models.weights`` aggregator is not a documented package).  Empty
+  // for every non-model module, so this is a no-op there.
+  const weightClasses = allClasses.filter((m) => m.name.endsWith("Weights"));
+  const classes = allClasses.filter((m) => !m.name.endsWith("Weights"));
 
   // Sub-package cards (Model Zoo families, Utils sub-packages, …).  Computed
   // generically from the slug hierarchy — no per-package config — then split
@@ -181,6 +184,13 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
         <MemberSection title="Functions" slug={data.slug} accent="blue">
           {functions.map((fn) => (
             <FunctionCard key={fn.name} fn={fn} moduleSlug={data.slug} />
+          ))}
+        </MemberSection>
+      )}
+      {weightClasses.length > 0 && (
+        <MemberSection title="Weights" slug={data.slug} accent="primary">
+          {weightClasses.map((cls) => (
+            <ClassCard key={cls.name} cls={cls} moduleSlug={data.slug} />
           ))}
         </MemberSection>
       )}

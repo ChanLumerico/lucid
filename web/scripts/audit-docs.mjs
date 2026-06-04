@@ -238,7 +238,7 @@ const PAGE_CONTRACTS = [
     check(ctx) {
       const out = [];
       const secs = ctx.dom.querySelectorAll("section").filter((s) =>
-        /^(Model Families|Infrastructure|Sub-packages)$/.test(s.querySelector("h2")?.text?.trim() || ""));
+        /^(Model Families|Sub-packages)$/.test(s.querySelector("h2")?.text?.trim() || ""));
       for (const sec of secs) {
         for (const card of sec.querySelectorAll("a")) {
           const title = card.querySelector("h3")?.text?.trim();
@@ -309,27 +309,38 @@ const PAGE_CONTRACTS = [
     },
   },
   {
-    id: "models.weights-separated", component: "ModulePage", kind: "page",
-    applies: (ctx) => ctx.route === "/api/lucid.models",
+    id: "ui.weights-section", component: "ModulePage", kind: "page",
+    applies: (ctx) => ctx.kind === "api-module",
     check(ctx) {
-      const sectionCards = (heading) => {
-        const sec = ctx.dom.querySelectorAll("section").find((s) => s.querySelector("h2")?.text?.trim() === heading);
-        return sec ? sec.querySelectorAll("a").map((a) => a.getAttribute("href") || "") : null;
-      };
-      const fams = sectionCards("Model Families");
-      const infra = sectionCards("Infrastructure");
+      // Pretrained-weight enums (``<Family>Weights``) render under a dedicated
+      // "Weights" section, never mixed into "Classes".  Model-zoo-wide rule:
+      // the lucid.models.weights aggregator is not a package — each family owns
+      // its weight classes and surfaces them in its own Weights slot/section.
+      const classesSec = ctx.dom.querySelectorAll("section")
+        .find((s) => s.querySelector("h2")?.text?.trim() === "Classes");
+      if (!classesSec) return [];
       const out = [];
-      if (!fams) out.push({ scope: ctx.scope, detail: "no 'Model Families' section" });
-      else if (fams.some((h) => h.includes("lucid.models.weights")))
-        out.push({ scope: ctx.scope, detail: "weights card is inside 'Model Families' (must be 'Infrastructure')" });
-      if (!infra || !infra.some((h) => h.includes("lucid.models.weights")))
-        out.push({ scope: ctx.scope, detail: "weights card missing from a separate 'Infrastructure' section" });
+      for (const a of classesSec.querySelectorAll("a")) {
+        const href = (a.getAttribute("href") || "").split("#")[0];
+        if (href.endsWith("Weights"))
+          out.push({ scope: ctx.scope, detail: `weight class in "Classes" (must be a "Weights" section): ${href}` });
+      }
       return out;
     },
   },
 ];
 
 const GLOBAL_CONTRACTS = [
+  {
+    id: "models.weights-not-a-package", component: "ModulePage", kind: "global",
+    check(g) {
+      // The per-family weight-enum aggregator must NOT be a documented package
+      // (excluded in build-api-data); each family owns its <Family>Weights.
+      return g.apiBySlug.has("lucid.models.weights")
+        ? [{ scope: "lucid.models.weights", detail: "weights aggregator is documented as a package — must be excluded (each family owns its Weights)" }]
+        : [];
+    },
+  },
   {
     id: "design.no-raw-hex", component: "DesignToken", kind: "global",
     check() {

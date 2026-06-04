@@ -68,6 +68,12 @@ _EXCLUDED_SUBTREE: set[str] = {
     "lucid.backends",    # CPU/GPU dispatch internals
     "lucid.test",        # test infrastructure (parity fixtures, etc.)
     "lucid.benchmarks",  # internal perf scripts
+    # Per-family weight-enum aggregator: NOT documented as its own package.
+    # Each ``<Family>Weights`` class is already a member of its model family
+    # (e.g. lucid.models.vision.alexnet.AlexNetWeights) and is surfaced there
+    # under the family's "Weights" sidebar slot.  The aggregator would just be
+    # a flat 128-entry duplicate.
+    "lucid.models.weights",
 }
 
 # Self excluded — this slug is dropped but descendants still get discovered.

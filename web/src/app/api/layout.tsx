@@ -245,7 +245,7 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
     (m) => isApiClass(m) || m.kind === "function",
   );
 
-  // Partition into the 4 strict slots.
+  // Partition into the strict family slots.
   const configClass = allMembers.find(
     (m) => isApiClass(m) && m.name.endsWith("Config"),
   );
@@ -261,12 +261,20 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
   const outputClasses = allMembers.filter(
     (m) => isApiClass(m) && m.name.endsWith("Output"),
   );
+  // Pretrained-weight enums (``<Family>Weights``).  The model-zoo-wide
+  // ``Weights`` slot — every family owns its weight classes directly (the
+  // ``lucid.models.weights`` aggregator is not documented as a package), so
+  // they surface here next to the model rather than in a separate tree.
+  const weightClasses = allMembers.filter(
+    (m) => isApiClass(m) && m.name.endsWith("Weights"),
+  );
   const directModel = allMembers.find(
     (m) =>
       isApiClass(m) &&
       m !== configClass &&
       !taskWrappers.includes(m) &&
-      !outputClasses.includes(m),
+      !outputClasses.includes(m) &&
+      !weightClasses.includes(m),
   );
   const pretrained = allMembers.filter((m) => m.kind === "function");
 
@@ -287,12 +295,20 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
       items: pretrained.map((m) => memberLeaf(slug, m)),
     });
   }
+  if (weightClasses.length > 0) {
+    items.push({
+      title: "Weights",
+      badge: `${weightClasses.length}`,
+      items: weightClasses.map((m) => memberLeaf(slug, m)),
+    });
+  }
 
   const badgeCount =
     (configClass ? 1 : 0) +
     (directModel ? 1 : 0) +
     taskWrappers.length +
-    pretrained.length;
+    pretrained.length +
+    weightClasses.length;
 
   return {
     title,
