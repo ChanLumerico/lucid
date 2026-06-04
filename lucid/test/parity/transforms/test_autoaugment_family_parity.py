@@ -628,7 +628,6 @@ class TestMagnitudeLookupParity:
     def test_invert_matches(self) -> None:
         """Invert is in the reference framework's RandAugment space (as
         a scalar 0.0 with ``signed=False``); Lucid stores ``([], False)``."""
-        ref_space = self._ref_space()
         lucid_mags, lucid_signed = _magnitudes_for("Invert", self.NUM_BINS)
         # Reference framework's RandAugment _augmentation_space lacks
         # Invert (AutoAugment's space has it).  Test against the

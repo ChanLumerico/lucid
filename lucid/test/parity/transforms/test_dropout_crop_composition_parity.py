@@ -657,14 +657,13 @@ class TestComposition:
             ]
         )
         lucid.manual_seed(7)
-        out1 = rc(T.Image(chw1)).data
+        rc(T.Image(chw1))  # populates rc.replay_data (output itself unused)
         saved = list(rc.replay_data)
         # Replay on a *different* input — the same indices / holes /
         # crop window must be applied (i.e. the output should be
         # produced by re-running with identical saved params).
         replayed_on_2 = rc.replay(saved, T.Image(chw2)).data
         # Re-build the same pipeline manually from saved params.
-        expected_2 = chw2
         # Use the saved tuples directly: each Transform.dispatch with
         # the saved params is what ``replay`` invokes.
         from lucid.utils.transforms import Image as _Image

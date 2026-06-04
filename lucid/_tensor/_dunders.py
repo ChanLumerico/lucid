@@ -5,7 +5,7 @@ All arithmetic/comparison operators are implemented here and attached to
 the Tensor class by _inject_dunders() at module import time.
 """
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._tensor._indexing import _getitem, _setitem
@@ -70,7 +70,7 @@ def _unwrap_or_scalar(
     # Avoid circular import: check duck-type attribute instead of isinstance
     impl = getattr(x, "_impl", None)
     if impl is not None and isinstance(impl, _C_engine.TensorImpl):
-        return cast(_C_engine.TensorImpl, impl)
+        return impl
     if isinstance(x, _C_engine.TensorImpl):
         return x
 
