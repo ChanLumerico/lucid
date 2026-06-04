@@ -133,7 +133,20 @@ if [[ "${LUCID_SKIP_API_DATA:-0}" != "1" ]]; then
         if (
             cd "$REPO_ROOT" && \
             PYTHONPATH="${REPO_ROOT}" python3 web/scripts/build-api-data.py \
-                >/tmp/lucid-api-data.log 2>&1
+                >/tmp/lucid-api-data.log 2>&1 && \
+            # Mirror ``pnpm prebuild``: post-process so the committed JSON is the
+            # FULL deployable artifact (cross-links / used-by / citations /
+            # meta), not griffe-only.  Without this a lucid commit strips the
+            # post-processing and the docs ``post-processor drift`` gate fails.
+            python3 web/scripts/build-cross-links.py >>/tmp/lucid-api-data.log 2>&1 && \
+            python3 web/scripts/build-usedby.py      >>/tmp/lucid-api-data.log 2>&1 && \
+            python3 web/scripts/link-citations.py    >>/tmp/lucid-api-data.log 2>&1 && \
+            python3 web/scripts/build-bibtex.py      >>/tmp/lucid-api-data.log 2>&1 && \
+            python3 web/scripts/build-meta.py        >>/tmp/lucid-api-data.log 2>&1 && \
+            # Re-baseline the content-hash drift cache so ``--check`` (the
+            # ``source drift`` gate) stays in sync with the regenerated tree.
+            python3 web/scripts/build-api-data-cached.py --write-cache \
+                >>/tmp/lucid-api-data.log 2>&1
         ); then
             git add "${REPO_ROOT}/web/public/api-data"
             echo "  [api-data] ✓ re-staged $(git diff --cached --name-only \
