@@ -41,6 +41,17 @@ jobs:
         with:
           python-version: "3.14"
 
+      # Drift gate (source → api-data): the committed JSON tree is what we
+      # deploy (SKIP_API_BUILD), so it must stay in sync with the Lucid source.
+      # This compares per-module source-content hashes against the committed
+      # .cache/modules.json — pure stdlib, so it needs neither Griffe nor a
+      # built Lucid (consistent with this minimal runner).  Catches "edited a
+      # docstring / signature but forgot to regenerate api-data".  Fix locally:
+      # cd web && FORCE_API_BUILD=1 python3 scripts/build-api-data-cached.py
+      - name: Check api-data source drift
+        working-directory: web
+        run: python3 scripts/build-api-data-cached.py --check
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -78,6 +89,23 @@ jobs:
           NODE_ENV: production
           SKIP_API_BUILD: "1"   # JSON tree is committed; never rebuild on CI
         run: pnpm build
+
+      # Drift gate (post-processors → api-data): the prebuild above just re-ran
+      # cross-links / used-by / link-citations / build-meta against the
+      # committed JSON.  If that produced ANY change, the committed api-data was
+      # stale (e.g. a citation link the deployed site shows but the repo lacks).
+      # These post-processors don't touch the per-commit source-permalink SHA,
+      # so a plain diff is exact.  Fix locally: cd web && pnpm build, then
+      # commit public/api-data.
+      - name: Check api-data post-processor drift
+        working-directory: web
+        run: |
+          if ! git diff --quiet -- public/api-data ':!public/api-data/.cache'; then
+            echo "::error::Committed api-data is stale w.r.t. post-processors — run 'pnpm build' in web/ and commit public/api-data."
+            git diff --stat -- public/api-data ':!public/api-data/.cache'
+            exit 1
+          fi
+          echo "✓ api-data post-processors in sync"
 
       # Component-contract audit (scripts/audit-docs.mjs): crawls every built
       # page, enforces the structural + UI design-language contracts, and fails

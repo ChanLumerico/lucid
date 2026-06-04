@@ -158,7 +158,63 @@ def _save_module_cache(fingerprints: dict[str, str]) -> None:
     MODULE_CACHE.write_text(json.dumps(fingerprints, indent=2, sort_keys=True))
 
 
+def _check_drift() -> int:
+    """Report (without rebuilding) any slug whose source CONTENT changed since
+    the committed per-module cache (``.cache/modules.json``) was written — i.e.
+    the committed api-data is stale w.r.t. its Lucid source.
+
+    Pure stdlib (content hashes via :func:`_hash_paths`), so it runs on the
+    docs CI runner where Griffe / Lucid / pip are intentionally absent.  This is
+    the "source → api-data" half of the drift gate; the "post-processor" half
+    (cross-links / used-by / link-citations / meta) is caught by a plain
+    ``git diff`` after the prebuild, since those run on CI and don't touch the
+    per-commit source-permalink SHA.
+
+    Limitation: synth slugs (``lucid.ops`` / ``lucid.creation`` /
+    ``lucid.ops.composite`` / ``lucid._C.engine``) have no isolated source dir
+    (:func:`_slug_to_source_dir` returns ``None``) and are not verified here —
+    they depend on the whole tree and rely on the developer regenerating.
+    """
+    cached = _load_module_cache()
+    current = _per_module_fingerprints()
+    if not current:
+        print("[api-data] --check: no emitted *.json found; nothing to verify")
+        return 0
+    stale = sorted(s for s, h in current.items() if cached.get(s) != h)
+    if not stale:
+        print(
+            f"[api-data] ✓ no source drift — {len(current)} module slugs "
+            "match the committed cache"
+        )
+        return 0
+    print("[api-data] ✗ STALE — committed api-data is out of date with source:")
+    for s in stale:
+        why = "source changed since last regen" if s in cached else "new slug, never built"
+        print(f"    - {s}  ({why})")
+    print("\n  Regenerate + commit:")
+    print("    cd web && FORCE_API_BUILD=1 python3 scripts/build-api-data-cached.py")
+    print("    git add web/public/api-data")
+    return 1
+
+
+def _write_cache() -> int:
+    """Rewrite ``.cache/modules.json`` to match the CURRENT source content,
+    asserting the committed api-data already reflects it (e.g. after a direct
+    ``build-api-data.py`` regen that doesn't touch the cache).  Use this to
+    re-baseline the drift cache once, so ``--check`` is meaningful afterwards.
+    """
+    fp = _per_module_fingerprints()
+    _save_module_cache(fp)
+    print(f"[api-data] re-baselined {len(fp)} module fingerprints -> {MODULE_CACHE}")
+    return 0
+
+
 def main() -> int:
+    if "--check" in sys.argv:
+        return _check_drift()
+    if "--write-cache" in sys.argv:
+        return _write_cache()
+
     if os.environ.get("SKIP_API_BUILD") == "1":
         print("[api-data] SKIP_API_BUILD=1 — skipping build")
         return 0
