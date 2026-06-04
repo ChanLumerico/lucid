@@ -1241,7 +1241,202 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 109482240,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 23837184,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 23440896,
+                "own_params": 23440896,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 393216,
+                "own_params": 393216,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 2363904,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 1771776,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 592128,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 2361600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "bert_base_cls",
@@ -1286,7 +1481,224 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForSequenceClassification",
+        "type": "BertForSequenceClassification",
+        "params": 109483778,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1538,
+            "own_params": 1538,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "bert_base_mlm",
@@ -1331,7 +1743,255 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForMaskedLM",
+        "type": "BertForMaskedLM",
+        "params": 110104890,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "cls",
+            "type": "_BertOnlyMLMHead",
+            "params": 24063546,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictions",
+                "type": "_BertLMPredictionHead",
+                "params": 24063546,
+                "own_params": 30522,
+                "children": [
+                  {
+                    "name": "transform",
+                    "type": "_BertPredictionHeadTransform",
+                    "params": 592128,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dense",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "LayerNorm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "Linear",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "bert_base_qa",
@@ -1376,7 +2036,217 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForQuestionAnswering",
+        "type": "BertForQuestionAnswering",
+        "params": 109483778,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "qa_outputs",
+            "type": "Linear",
+            "params": 1538,
+            "own_params": 1538,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "bert_base_token_cls",
@@ -1421,7 +2291,224 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForTokenClassification",
+        "type": "BertForTokenClassification",
+        "params": 109483778,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 109482240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 23837184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 23440896,
+                    "own_params": 23440896,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 393216,
+                    "own_params": 393216,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 2363904,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 1771776,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 592128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 2361600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1538,
+            "own_params": 1538,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "bert_large",
@@ -1466,7 +2553,202 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 335141888,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 31782912,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 31254528,
+                "own_params": 31254528,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 524288,
+                "own_params": 524288,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 4200448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 3148800,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 1051648,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 4197376,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 1049600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "bert_large_cls",
@@ -1511,7 +2793,224 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForSequenceClassification",
+        "type": "BertForSequenceClassification",
+        "params": 335143938,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 335141888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 31782912,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 31254528,
+                    "own_params": 31254528,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 524288,
+                    "own_params": 524288,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 4200448,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 3148800,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 1051648,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 2048,
+                                    "own_params": 2048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 4197376,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 1049600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 2050,
+            "own_params": 2050,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "bert_large_mlm",
@@ -1556,7 +3055,255 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertForMaskedLM",
+        "type": "BertForMaskedLM",
+        "params": 336224058,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "bert",
+            "type": "BertModel",
+            "params": 335141888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "embeddings",
+                "type": "_BertEmbeddings",
+                "params": 31782912,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "word_embeddings",
+                    "type": "Embedding",
+                    "params": 31254528,
+                    "own_params": 31254528,
+                    "children": []
+                  },
+                  {
+                    "name": "position_embeddings",
+                    "type": "Embedding",
+                    "params": 524288,
+                    "own_params": 524288,
+                    "children": []
+                  },
+                  {
+                    "name": "token_type_embeddings",
+                    "type": "Embedding",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "LayerNorm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "encoder",
+                "type": "_BertEncoder",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layer",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_BertLayer",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "attention",
+                            "type": "_BertAttention",
+                            "params": 4200448,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "self",
+                                "type": "_BertSelfAttention",
+                                "params": 3148800,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "query",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": [],
+                                    "repeat": 3
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "output",
+                                "type": "_BertSelfOutput",
+                                "params": 1051648,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dense",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "LayerNorm",
+                                    "type": "LayerNorm",
+                                    "params": 2048,
+                                    "own_params": 2048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "dropout",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "name": "intermediate",
+                            "type": "_BertIntermediate",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertOutput",
+                            "params": 4197376,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pooler",
+                "type": "_BertPooler",
+                "params": 1049600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "dense",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "cls",
+            "type": "_BertOnlyMLMHead",
+            "params": 32336698,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictions",
+                "type": "_BertLMPredictionHead",
+                "params": 32336698,
+                "own_params": 30522,
+                "children": [
+                  {
+                    "name": "transform",
+                    "type": "_BertPredictionHeadTransform",
+                    "params": 1051648,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dense",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "LayerNorm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "Linear",
+                    "params": 31254528,
+                    "own_params": 31254528,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "bert_large_qa",
@@ -1646,7 +3393,202 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 41373184,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 15891456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 15627264,
+                "own_params": 15627264,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 262144,
+                "own_params": 262144,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 25219072,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 25219072,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 1051648,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 787968,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 263680,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 1050112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 262656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 262656,
+                "own_params": 262656,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "bert_mini",
@@ -1691,7 +3633,202 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 11170560,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 7945728,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 7813632,
+                "own_params": 7813632,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 131072,
+                "own_params": 131072,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 3159040,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 3159040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 789760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 263680,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 197376,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 66304,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 65792,
+                                "own_params": 65792,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 263168,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 263168,
+                            "own_params": 263168,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 262912,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 262400,
+                            "own_params": 262400,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 65792,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "bert_small",
@@ -1736,7 +3873,202 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 28763648,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 15891456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 15627264,
+                "own_params": 15627264,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 262144,
+                "own_params": 262144,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 12609536,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 12609536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 1051648,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 787968,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 263680,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 1050112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 262656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 262656,
+                "own_params": 262656,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "bert_tiny",
@@ -1781,7 +4113,202 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "BertModel",
+        "type": "BertModel",
+        "params": 4385920,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "embeddings",
+            "type": "_BertEmbeddings",
+            "params": 3972864,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "word_embeddings",
+                "type": "Embedding",
+                "params": 3906816,
+                "own_params": 3906816,
+                "children": []
+              },
+              {
+                "name": "position_embeddings",
+                "type": "Embedding",
+                "params": 65536,
+                "own_params": 65536,
+                "children": []
+              },
+              {
+                "name": "token_type_embeddings",
+                "type": "Embedding",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "LayerNorm",
+                "type": "LayerNorm",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder",
+            "type": "_BertEncoder",
+            "params": 396544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layer",
+                "type": "ModuleList",
+                "params": 396544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_BertLayer",
+                    "params": 198272,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "attention",
+                        "type": "_BertAttention",
+                        "params": 66304,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self",
+                            "type": "_BertSelfAttention",
+                            "params": 49536,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 16512,
+                                "own_params": 16512,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "output",
+                            "type": "_BertSelfOutput",
+                            "params": 16768,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "dense",
+                                "type": "Linear",
+                                "params": 16512,
+                                "own_params": 16512,
+                                "children": []
+                              },
+                              {
+                                "name": "LayerNorm",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": []
+                              },
+                              {
+                                "name": "dropout",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "intermediate",
+                        "type": "_BertIntermediate",
+                        "params": 66048,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 66048,
+                            "own_params": 66048,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "output",
+                        "type": "_BertOutput",
+                        "params": 65920,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "dense",
+                            "type": "Linear",
+                            "params": 65664,
+                            "own_params": 65664,
+                            "children": []
+                          },
+                          {
+                            "name": "LayerNorm",
+                            "type": "LayerNorm",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_BertPooler",
+            "params": 16512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dense",
+                "type": "Linear",
+                "params": 16512,
+                "own_params": 16512,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "summary": "BERT family — Devlin et al., 2018 (encoder-only transformer).",

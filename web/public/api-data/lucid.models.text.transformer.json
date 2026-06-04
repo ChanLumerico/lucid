@@ -771,7 +771,168 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerModel",
+        "type": "TransformerModel",
+        "params": 82028544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "src_tok_emb",
+            "type": "Embedding",
+            "params": 18944000,
+            "own_params": 18944000,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "positional_encoding",
+            "type": "SinusoidalEmbedding",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "Transformer",
+            "params": 44140544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "TransformerEncoder",
+                "params": 18915328,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerEncoderLayer",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "TransformerDecoder",
+                "params": 25225216,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerDecoderLayer",
+                    "params": 4204032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": [],
+                        "repeat": 3
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 4
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "transformer_base_cls",
@@ -810,7 +971,190 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForSequenceClassification",
+        "type": "TransformerForSequenceClassification",
+        "params": 82029570,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 82028544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 18944000,
+                "own_params": 18944000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 44140544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 18915328,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 25225216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1026,
+            "own_params": 1026,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "transformer_base_seq2seq",
@@ -849,7 +1193,183 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForSeq2SeqLM",
+        "type": "TransformerForSeq2SeqLM",
+        "params": 82028544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 82028544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 18944000,
+                "own_params": 18944000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 44140544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 18915328,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 25225216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 18944000,
+            "own_params": 18944000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "transformer_base_token_cls",
@@ -888,7 +1408,190 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForTokenClassification",
+        "type": "TransformerForTokenClassification",
+        "params": 82029570,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 82028544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 18944000,
+                "own_params": 18944000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 44140544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 18915328,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 25225216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1026,
+            "own_params": 1026,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "transformer_large",
@@ -927,7 +1630,168 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerModel",
+        "type": "TransformerModel",
+        "params": 252137472,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "src_tok_emb",
+            "type": "Embedding",
+            "params": 37888000,
+            "own_params": 37888000,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "positional_encoding",
+            "type": "SinusoidalEmbedding",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "Transformer",
+            "params": 176361472,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "TransformerEncoder",
+                "params": 75579392,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerEncoderLayer",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "TransformerDecoder",
+                "params": 100782080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "TransformerDecoderLayer",
+                    "params": 16796672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "self_attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "linear1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "linear2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": [],
+                        "repeat": 3
+                      },
+                      {
+                        "name": "dropout1",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 4
+                      }
+                    ],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "transformer_large_seq2seq",
@@ -966,7 +1830,183 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "TransformerForSeq2SeqLM",
+        "type": "TransformerForSeq2SeqLM",
+        "params": 252137472,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "TransformerModel",
+            "params": 252137472,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "src_tok_emb",
+                "type": "Embedding",
+                "params": 37888000,
+                "own_params": 37888000,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "positional_encoding",
+                "type": "SinusoidalEmbedding",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "Transformer",
+                "params": 176361472,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "TransformerEncoder",
+                    "params": 75579392,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerEncoderLayer",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "decoder",
+                    "type": "TransformerDecoder",
+                    "params": 100782080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "TransformerDecoderLayer",
+                        "params": 16796672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "self_attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": [],
+                            "repeat": 2
+                          },
+                          {
+                            "name": "linear1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "linear2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "dropout1",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ],
+                        "repeat": 6
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 37888000,
+            "own_params": 37888000,
+            "children": []
+          }
+        ]
+      }
     }
   ],
   "summary": "Original Transformer family — Vaswani et al., 2017 (encoder-decoder seq2seq).",

@@ -241,7 +241,808 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "AttentionUNetForSemanticSegmentation",
+        "type": "AttentionUNetForSemanticSegmentation",
+        "params": 31560230,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_0",
+            "type": "_EncoderBlock",
+            "params": 37696,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 37696,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 37696,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_1",
+            "type": "_EncoderBlock",
+            "params": 221696,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 221696,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 221696,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 73728,
+                        "own_params": 73728,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_2",
+            "type": "_EncoderBlock",
+            "params": 885760,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 885760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 885760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 294912,
+                        "own_params": 294912,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "encoder_3",
+            "type": "_EncoderBlock",
+            "params": 3540992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 3540992,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 3540992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1179648,
+                        "own_params": 1179648,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "pool",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bottleneck",
+            "type": "_DoubleConv",
+            "params": 14159872,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "net",
+                "type": "Sequential",
+                "params": 14159872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 4718592,
+                    "own_params": 4718592,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 9437184,
+                    "own_params": 9437184,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_3",
+            "type": "_DecoderBlock",
+            "params": 9571585,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "gate",
+                "type": "_AttentionGate",
+                "params": 393985,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "Wx",
+                    "type": "Conv2d",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "Wg",
+                    "type": "Conv2d",
+                    "params": 262400,
+                    "own_params": 262400,
+                    "children": []
+                  },
+                  {
+                    "name": "psi",
+                    "type": "Conv2d",
+                    "params": 257,
+                    "own_params": 257,
+                    "children": []
+                  },
+                  {
+                    "name": "up",
+                    "type": "Upsample",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 2097664,
+                "own_params": 2097664,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 7079936,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 7079936,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 4718592,
+                        "own_params": 4718592,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 2359296,
+                        "own_params": 2359296,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_2",
+            "type": "_DecoderBlock",
+            "params": 2393729,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "gate",
+                "type": "_AttentionGate",
+                "params": 98689,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "Wx",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  },
+                  {
+                    "name": "Wg",
+                    "type": "Conv2d",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "psi",
+                    "type": "Conv2d",
+                    "params": 129,
+                    "own_params": 129,
+                    "children": []
+                  },
+                  {
+                    "name": "up",
+                    "type": "Upsample",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 1770496,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 1770496,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1179648,
+                        "own_params": 1179648,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_1",
+            "type": "_DecoderBlock",
+            "params": 598849,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "gate",
+                "type": "_AttentionGate",
+                "params": 24769,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "Wx",
+                    "type": "Conv2d",
+                    "params": 8256,
+                    "own_params": 8256,
+                    "children": []
+                  },
+                  {
+                    "name": "Wg",
+                    "type": "Conv2d",
+                    "params": 16448,
+                    "own_params": 16448,
+                    "children": []
+                  },
+                  {
+                    "name": "psi",
+                    "type": "Conv2d",
+                    "params": 65,
+                    "own_params": 65,
+                    "children": []
+                  },
+                  {
+                    "name": "up",
+                    "type": "Upsample",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 131200,
+                "own_params": 131200,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 442880,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 442880,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 294912,
+                        "own_params": 294912,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 147456,
+                        "own_params": 147456,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_0",
+            "type": "_DecoderBlock",
+            "params": 149921,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "gate",
+                "type": "_AttentionGate",
+                "params": 6241,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "Wx",
+                    "type": "Conv2d",
+                    "params": 2080,
+                    "own_params": 2080,
+                    "children": []
+                  },
+                  {
+                    "name": "Wg",
+                    "type": "Conv2d",
+                    "params": 4128,
+                    "own_params": 4128,
+                    "children": []
+                  },
+                  {
+                    "name": "psi",
+                    "type": "Conv2d",
+                    "params": 33,
+                    "own_params": 33,
+                    "children": []
+                  },
+                  {
+                    "name": "up",
+                    "type": "Upsample",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "up",
+                "type": "ConvTranspose2d",
+                "params": 32832,
+                "own_params": 32832,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 110848,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "net",
+                    "type": "Sequential",
+                    "params": 110848,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 73728,
+                        "own_params": 73728,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 36864,
+                        "own_params": 36864,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Conv2d",
+            "params": 130,
+            "own_params": 130,
+            "children": []
+          }
+        ]
+      }
     }
   ],
   "summary": "Attention U-Net (Oktay et al., MIDL 2018).",

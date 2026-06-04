@@ -472,7 +472,155 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VAEModel",
+        "type": "VAEModel",
+        "params": 2007043,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_VAEEncoder",
+            "params": 745344,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "down_blocks",
+                "type": "ModuleList",
+                "params": 658880,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 3136,
+                    "own_params": 3136,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 131200,
+                    "own_params": 131200,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 524544,
+                    "own_params": 524544,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "fc_mus",
+                "type": "ModuleList",
+                "params": 43232,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 2080,
+                    "own_params": 2080,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 8256,
+                    "own_params": 8256,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "_VAEDecoder",
+            "params": 1261699,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc",
+                "type": "Linear",
+                "params": 528384,
+                "own_params": 528384,
+                "children": []
+              },
+              {
+                "name": "up_blocks",
+                "type": "ModuleList",
+                "params": 721152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 524416,
+                    "own_params": 524416,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 131136,
+                    "own_params": 131136,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 65600,
+                    "own_params": 65600,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "head",
+                "type": "Conv2d",
+                "params": 1731,
+                "own_params": 1731,
+                "children": []
+              },
+              {
+                "name": "injectors",
+                "type": "ModuleList",
+                "params": 10432,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 8320,
+                    "own_params": 8320,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2112,
+                    "own_params": 2112,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "hvae_gen",
@@ -511,7 +659,163 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VAEForImageGeneration",
+        "type": "VAEForImageGeneration",
+        "params": 2007043,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vae",
+            "type": "VAEModel",
+            "params": 2007043,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_VAEEncoder",
+                "params": 745344,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "down_blocks",
+                    "type": "ModuleList",
+                    "params": 658880,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 3136,
+                        "own_params": 3136,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 131200,
+                        "own_params": 131200,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Conv2d",
+                        "params": 524544,
+                        "own_params": 524544,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "fc_mus",
+                    "type": "ModuleList",
+                    "params": 43232,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 2080,
+                        "own_params": 2080,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 8256,
+                        "own_params": 8256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "_VAEDecoder",
+                "params": 1261699,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc",
+                    "type": "Linear",
+                    "params": 528384,
+                    "own_params": 528384,
+                    "children": []
+                  },
+                  {
+                    "name": "up_blocks",
+                    "type": "ModuleList",
+                    "params": 721152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ConvTranspose2d",
+                        "params": 524416,
+                        "own_params": 524416,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "ConvTranspose2d",
+                        "params": 131136,
+                        "own_params": 131136,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ConvTranspose2d",
+                        "params": 65600,
+                        "own_params": 65600,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "head",
+                    "type": "Conv2d",
+                    "params": 1731,
+                    "own_params": 1731,
+                    "children": []
+                  },
+                  {
+                    "name": "injectors",
+                    "type": "ModuleList",
+                    "params": 10432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 8320,
+                        "own_params": 8320,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 2112,
+                        "own_params": 2112,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "vae",
@@ -550,7 +854,111 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VAEModel",
+        "type": "VAEModel",
+        "params": 2958979,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_VAEEncoder",
+            "params": 1707712,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "down_blocks",
+                "type": "ModuleList",
+                "params": 658880,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 3136,
+                    "own_params": 3136,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 131200,
+                    "own_params": 131200,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 524544,
+                    "own_params": 524544,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "fc_mu",
+                "type": "Linear",
+                "params": 524416,
+                "own_params": 524416,
+                "children": [],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "_VAEDecoder",
+            "params": 1251267,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc",
+                "type": "Linear",
+                "params": 528384,
+                "own_params": 528384,
+                "children": []
+              },
+              {
+                "name": "up_blocks",
+                "type": "ModuleList",
+                "params": 721152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 524416,
+                    "own_params": 524416,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 131136,
+                    "own_params": 131136,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 65600,
+                    "own_params": 65600,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "head",
+                "type": "Conv2d",
+                "params": 1731,
+                "own_params": 1731,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "vae_gen",
@@ -589,7 +997,119 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VAEForImageGeneration",
+        "type": "VAEForImageGeneration",
+        "params": 2958979,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vae",
+            "type": "VAEModel",
+            "params": 2958979,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_VAEEncoder",
+                "params": 1707712,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "down_blocks",
+                    "type": "ModuleList",
+                    "params": 658880,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 3136,
+                        "own_params": 3136,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 131200,
+                        "own_params": 131200,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Conv2d",
+                        "params": 524544,
+                        "own_params": 524544,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "fc_mu",
+                    "type": "Linear",
+                    "params": 524416,
+                    "own_params": 524416,
+                    "children": [],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "_VAEDecoder",
+                "params": 1251267,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc",
+                    "type": "Linear",
+                    "params": 528384,
+                    "own_params": 528384,
+                    "children": []
+                  },
+                  {
+                    "name": "up_blocks",
+                    "type": "ModuleList",
+                    "params": 721152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ConvTranspose2d",
+                        "params": 524416,
+                        "own_params": 524416,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "ConvTranspose2d",
+                        "params": 131136,
+                        "own_params": 131136,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ConvTranspose2d",
+                        "params": 65600,
+                        "own_params": 65600,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "head",
+                    "type": "Conv2d",
+                    "params": 1731,
+                    "own_params": 1731,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "summary": "VAE family — Kingma & Welling, 2013 + Sønderby et al., 2016 hierarchical.",

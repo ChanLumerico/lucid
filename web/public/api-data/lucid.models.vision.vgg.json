@@ -362,7 +362,177 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9220480,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9220480,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_11_bn",
@@ -399,7 +569,233 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9225984,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9225984,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_11_bn_cls",
@@ -444,7 +840,262 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 132868840,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9225984,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_11_cls",
@@ -489,7 +1140,206 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 132863336,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9220480,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_13",
@@ -528,7 +1378,205 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9404992,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9404992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_13_bn",
@@ -565,7 +1613,275 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 9410880,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9410880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_13_bn_cls",
@@ -610,7 +1926,304 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 133053736,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9410880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_13_cls",
@@ -655,7 +2268,234 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 133047848,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 9404992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_16",
@@ -694,7 +2534,247 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 14714688,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14714688,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_16_bn",
@@ -731,7 +2811,338 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 14723136,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14723136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_16_bn_cls",
@@ -776,7 +3187,367 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 138365992,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14723136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_16_cls",
@@ -821,7 +3592,276 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 138357544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 14714688,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_19",
@@ -860,7 +3900,289 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 20024384,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20024384,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_19_bn",
@@ -897,7 +4219,401 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGG",
+        "type": "VGG",
+        "params": 20035392,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20035392,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "44",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "45",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "46",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "47",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "48",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "49",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "50",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "51",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "52",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_19_bn_cls",
@@ -942,7 +4658,430 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 143678248,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20035392,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "37",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "38",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "39",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "40",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "41",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "42",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "43",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "44",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "45",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "46",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "47",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "48",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "49",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "50",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              },
+              {
+                "name": "51",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "52",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vgg_19_cls",
@@ -987,7 +5126,318 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "VGGForImageClassification",
+        "type": "VGGForImageClassification",
+        "params": 143667240,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 20024384,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1792,
+                "own_params": 1792,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 36928,
+                "own_params": 36928,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "Conv2d",
+                "params": 73856,
+                "own_params": 73856,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Conv2d",
+                "params": 147584,
+                "own_params": 147584,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 295168,
+                "own_params": 295168,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "15",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "16",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "17",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "18",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "19",
+                "type": "Conv2d",
+                "params": 1180160,
+                "own_params": 1180160,
+                "children": []
+              },
+              {
+                "name": "20",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "21",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "22",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "23",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "24",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "25",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "26",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "27",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "28",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "29",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "30",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "31",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "32",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "33",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "34",
+                "type": "Conv2d",
+                "params": 2359808,
+                "own_params": 2359808,
+                "children": []
+              },
+              {
+                "name": "35",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "36",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 102764544,
+            "own_params": 102764544,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "VGG11BNWeights",

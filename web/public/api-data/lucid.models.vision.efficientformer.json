@@ -454,7 +454,499 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "EfficientFormer",
+        "type": "EfficientFormer",
+        "params": 13459760,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 11232,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 672,
+                "own_params": 672,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 48,
+                "own_params": 48,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 10416,
+                "own_params": 10416,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 96,
+                "own_params": 96,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 12307152,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 58320,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 19440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 480,
+                        "own_params": 480,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 18672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 9408,
+                            "own_params": 9408,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 9264,
+                            "own_params": 9264,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 48,
+                        "own_params": 48,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 151488,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 75744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 960,
+                        "own_params": 960,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 74208,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 37248,
+                            "own_params": 37248,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 36960,
+                            "own_params": 36960,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 2436672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 406112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 2240,
+                        "own_params": 2240,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 402528,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 201600,
+                            "own_params": 201600,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 200928,
+                            "own_params": 200928,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 224,
+                        "own_params": 224,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 9660672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerAttnBlock",
+                    "params": 2415168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 804608,
+                        "own_params": 804608,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1607872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 804608,
+                            "own_params": 804608,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 803264,
+                            "own_params": 803264,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1140480,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 41760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 41568,
+                    "own_params": 41568,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 194208,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 193760,
+                    "own_params": 193760,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 448,
+                    "own_params": 448,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 904512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 903616,
+                    "own_params": 903616,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 896,
+                    "own_params": 896,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 896,
+            "own_params": 896,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "efficientformer_l1_cls",
@@ -499,7 +991,506 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "EfficientFormerForImageClassification",
+        "type": "EfficientFormerForImageClassification",
+        "params": 13908760,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 11232,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 672,
+                "own_params": 672,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 48,
+                "own_params": 48,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 10416,
+                "own_params": 10416,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 96,
+                "own_params": 96,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 12307152,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 58320,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 19440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 480,
+                        "own_params": 480,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 18672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 9408,
+                            "own_params": 9408,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 9264,
+                            "own_params": 9264,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 48,
+                        "own_params": 48,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 151488,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 75744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 960,
+                        "own_params": 960,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 74208,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 37248,
+                            "own_params": 37248,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 36960,
+                            "own_params": 36960,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 2436672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 406112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 2240,
+                        "own_params": 2240,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 402528,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 201600,
+                            "own_params": 201600,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 200928,
+                            "own_params": 200928,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 224,
+                        "own_params": 224,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 9660672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerAttnBlock",
+                    "params": 2415168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 804608,
+                        "own_params": 804608,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1607872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 804608,
+                            "own_params": 804608,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 803264,
+                            "own_params": 803264,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1140480,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 41760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 41568,
+                    "own_params": 41568,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 194208,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 193760,
+                    "own_params": 193760,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 448,
+                    "own_params": 448,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 904512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 903616,
+                    "own_params": 903616,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 896,
+                    "own_params": 896,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 896,
+            "own_params": 896,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 449000,
+            "own_params": 449000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "efficientformer_l3",
@@ -538,7 +1529,499 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "EfficientFormer",
+        "type": "EfficientFormer",
+        "params": 31443392,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 19584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 896,
+                "own_params": 896,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 64,
+                "own_params": 64,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 18496,
+                "own_params": 18496,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 29502976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 136448,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 34112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 33088,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 16640,
+                            "own_params": 16640,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 16448,
+                            "own_params": 16448,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 535040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 133760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 1280,
+                        "own_params": 1280,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 131712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 66048,
+                            "own_params": 66048,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 65664,
+                            "own_params": 65664,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 9911040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 825920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 3200,
+                        "own_params": 3200,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 820800,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 410880,
+                            "own_params": 410880,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 409920,
+                            "own_params": 409920,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 320,
+                        "own_params": 320,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 18920448,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerAttnBlock",
+                    "params": 3153408,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1919808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 74112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 73856,
+                    "own_params": 73856,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 369600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 368960,
+                    "own_params": 368960,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 640,
+                    "own_params": 640,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 1476096,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1475072,
+                    "own_params": 1475072,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1024,
+            "own_params": 1024,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "efficientformer_l3_cls",
@@ -583,7 +2066,506 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "EfficientFormerForImageClassification",
+        "type": "EfficientFormerForImageClassification",
+        "params": 31956392,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 19584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 896,
+                "own_params": 896,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 64,
+                "own_params": 64,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 18496,
+                "own_params": 18496,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 29502976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 136448,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 34112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 33088,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 16640,
+                            "own_params": 16640,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 16448,
+                            "own_params": 16448,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 535040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 133760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 1280,
+                        "own_params": 1280,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 131712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 66048,
+                            "own_params": 66048,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 65664,
+                            "own_params": 65664,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 9911040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 825920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 3200,
+                        "own_params": 3200,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 820800,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 410880,
+                            "own_params": 410880,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 409920,
+                            "own_params": 409920,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 320,
+                        "own_params": 320,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 18920448,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerAttnBlock",
+                    "params": 3153408,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1919808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 74112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 73856,
+                    "own_params": 73856,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 369600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 368960,
+                    "own_params": 368960,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 640,
+                    "own_params": 640,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 1476096,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1475072,
+                    "own_params": 1475072,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1024,
+            "own_params": 1024,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 513000,
+            "own_params": 513000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "efficientformer_l7",
@@ -622,7 +2604,499 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "EfficientFormer",
+        "type": "EfficientFormer",
+        "params": 83874624,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 43200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1344,
+                "own_params": 1344,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 96,
+                "own_params": 96,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 41568,
+                "own_params": 41568,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 80342208,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 454464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 75744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 960,
+                        "own_params": 960,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 74208,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 37248,
+                            "own_params": 37248,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 36960,
+                            "own_params": 36960,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 1793664,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 298944,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 1920,
+                        "own_params": 1920,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 21378816,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 1187712,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 3840,
+                        "own_params": 3840,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 18
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 56715264,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerAttnBlock",
+                    "params": 7089408,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 3487680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 166464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 166080,
+                    "own_params": 166080,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 664704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 663936,
+                    "own_params": 663936,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 2654976,
+                    "own_params": 2654976,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "efficientformer_l7_cls",
@@ -667,7 +3141,506 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "EfficientFormerForImageClassification",
+        "type": "EfficientFormerForImageClassification",
+        "params": 84643624,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 43200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1344,
+                "own_params": 1344,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 96,
+                "own_params": 96,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 41568,
+                "own_params": 41568,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 80342208,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 454464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 75744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 960,
+                        "own_params": 960,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 74208,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 37248,
+                            "own_params": 37248,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 36960,
+                            "own_params": 36960,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 1793664,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 298944,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 1920,
+                        "own_params": 1920,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 21378816,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerPoolBlock",
+                    "params": 1187712,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 3840,
+                        "own_params": 3840,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "pool_mixer",
+                        "type": "_PoolingBlock",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "pool",
+                            "type": "AvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 18
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 56715264,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_EfficientFormerAttnBlock",
+                    "params": 7089408,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ls1",
+                        "type": "LayerScale",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 3487680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 166464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 166080,
+                    "own_params": 166080,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 664704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 663936,
+                    "own_params": 663936,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 2654976,
+                    "own_params": 2654976,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "EfficientFormerL1Weights",

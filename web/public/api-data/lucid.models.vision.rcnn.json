@@ -276,7 +276,165 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "RCNNForObjectDetection",
+        "type": "RCNNForObjectDetection",
+        "params": 59924241,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv_features",
+            "type": "_ConvFeatures",
+            "params": 3747200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "features",
+                "type": "Sequential",
+                "params": 3747200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 34944,
+                    "own_params": 34944,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 614656,
+                    "own_params": 614656,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "Conv2d",
+                    "params": 885120,
+                    "own_params": 885120,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "8",
+                    "type": "Conv2d",
+                    "params": 1327488,
+                    "own_params": 1327488,
+                    "children": []
+                  },
+                  {
+                    "name": "9",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "10",
+                    "type": "Conv2d",
+                    "params": 884992,
+                    "own_params": 884992,
+                    "children": []
+                  },
+                  {
+                    "name": "11",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "12",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "fc_head",
+            "type": "_FCHead",
+            "params": 56177041,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc6",
+                "type": "Linear",
+                "params": 37752832,
+                "own_params": 37752832,
+                "children": []
+              },
+              {
+                "name": "fc7",
+                "type": "Linear",
+                "params": 16781312,
+                "own_params": 16781312,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "cls_head",
+                "type": "Linear",
+                "params": 331857,
+                "own_params": 331857,
+                "children": []
+              },
+              {
+                "name": "bbox_head",
+                "type": "Linear",
+                "params": 1311040,
+                "own_params": 1311040,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "summary": "R-CNN — object detection (Girshick et al., CVPR 2014).",

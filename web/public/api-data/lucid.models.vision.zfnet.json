@@ -343,7 +343,135 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ZFNet",
+        "type": "ZFNet",
+        "params": 3726464,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 3726464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 14208,
+                "own_params": 14208,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 614656,
+                "own_params": 614656,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 885120,
+                "own_params": 885120,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 1327488,
+                "own_params": 1327488,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 884992,
+                "own_params": 884992,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "zfnet_cls",
@@ -382,7 +510,164 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ZFNetForImageClassification",
+        "type": "ZFNetForImageClassification",
+        "params": 62357608,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 3726464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 14208,
+                "own_params": 14208,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Conv2d",
+                "params": 614656,
+                "own_params": 614656,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "LocalResponseNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "8",
+                "type": "Conv2d",
+                "params": 885120,
+                "own_params": 885120,
+                "children": []
+              },
+              {
+                "name": "9",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "10",
+                "type": "Conv2d",
+                "params": 1327488,
+                "own_params": 1327488,
+                "children": []
+              },
+              {
+                "name": "11",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "12",
+                "type": "Conv2d",
+                "params": 884992,
+                "own_params": 884992,
+                "children": []
+              },
+              {
+                "name": "13",
+                "type": "ReLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "14",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc6",
+            "type": "Linear",
+            "params": 37752832,
+            "own_params": 37752832,
+            "children": []
+          },
+          {
+            "name": "fc7",
+            "type": "Linear",
+            "params": 16781312,
+            "own_params": 16781312,
+            "children": []
+          },
+          {
+            "name": "drop6",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": [],
+            "repeat": 2
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 4097000,
+            "own_params": 4097000,
+            "children": []
+          }
+        ]
+      }
     }
   ],
   "summary": "ZFNet family — backbone + image classification.",

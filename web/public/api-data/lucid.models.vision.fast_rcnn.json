@@ -294,7 +294,284 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "FastRCNNForObjectDetection",
+        "type": "FastRCNNForObjectDetection",
+        "params": 135903441,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_VGG16Features",
+            "params": 14714688,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "features",
+                "type": "Sequential",
+                "params": 14714688,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 1792,
+                    "own_params": 1792,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 36928,
+                    "own_params": 36928,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "Conv2d",
+                    "params": 73856,
+                    "own_params": 73856,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "8",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "9",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "10",
+                    "type": "Conv2d",
+                    "params": 295168,
+                    "own_params": 295168,
+                    "children": []
+                  },
+                  {
+                    "name": "11",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "12",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "13",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "14",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "15",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "16",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "17",
+                    "type": "Conv2d",
+                    "params": 1180160,
+                    "own_params": 1180160,
+                    "children": []
+                  },
+                  {
+                    "name": "18",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "19",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "20",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "21",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "22",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "23",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "24",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "25",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "26",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "27",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "28",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  },
+                  {
+                    "name": "29",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "roi_head",
+            "type": "_FastRCNNHead",
+            "params": 121188753,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc6",
+                "type": "Linear",
+                "params": 102764544,
+                "own_params": 102764544,
+                "children": []
+              },
+              {
+                "name": "fc7",
+                "type": "Linear",
+                "params": 16781312,
+                "own_params": 16781312,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "cls_score",
+                "type": "Linear",
+                "params": 331857,
+                "own_params": 331857,
+                "children": []
+              },
+              {
+                "name": "bbox_pred",
+                "type": "Linear",
+                "params": 1311040,
+                "own_params": 1311040,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "summary": "Fast R-CNN — object detection (Girshick, ICCV 2015).",

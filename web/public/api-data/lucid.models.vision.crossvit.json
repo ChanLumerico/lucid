@@ -346,7 +346,299 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 8600000
+      "param_count": 8600000,
+      "model_summary": {
+        "name": "CrossViT",
+        "type": "CrossViT",
+        "params": 4206976,
+        "own_params": 92416,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 55424,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 55424,
+                "own_params": 55424,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 196864,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 3861504,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 1287168,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 165376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 66048,
+                        "own_params": 66048,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 98816,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 49536,
+                            "own_params": 49536,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 49280,
+                            "own_params": 49280,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 658432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 394240,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 197376,
+                            "own_params": 197376,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 196864,
+                            "own_params": 196864,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 330112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 33024,
+                        "own_params": 33024,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 133248,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 66048,
+                        "own_params": 66048,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 33024,
+                        "own_params": 33024,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 256,
+            "own_params": 256,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_9_cls",
@@ -390,7 +682,313 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 8600000
+      "param_count": 8600000,
+      "model_summary": {
+        "name": "CrossViTForImageClassification",
+        "type": "CrossViTForImageClassification",
+        "params": 4592976,
+        "own_params": 92416,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 55424,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 55424,
+                "own_params": 55424,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 196864,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 3861504,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 1287168,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 165376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 66048,
+                        "own_params": 66048,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 98816,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 49536,
+                            "own_params": 49536,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 49280,
+                            "own_params": 49280,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 658432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 394240,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 197376,
+                            "own_params": 197376,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 196864,
+                            "own_params": 196864,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 330112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 33024,
+                        "own_params": 33024,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 133248,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 66048,
+                        "own_params": 66048,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 33024,
+                        "own_params": 33024,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 256,
+            "own_params": 256,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 129000,
+            "own_params": 129000,
+            "children": []
+          },
+          {
+            "name": "head_l",
+            "type": "Linear",
+            "params": 257000,
+            "own_params": 257000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_tiny",
@@ -413,7 +1011,298 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 7000000
+      "param_count": 7000000,
+      "model_summary": {
+        "name": "CrossViT",
+        "type": "CrossViT",
+        "params": 1077312,
+        "own_params": 69312,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 41568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 41568,
+                "own_params": 41568,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 147648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 147648,
+                "own_params": 147648,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 818208,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 818208,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 111840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 74208,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 37248,
+                            "own_params": 37248,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 36960,
+                            "own_params": 36960,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 444864,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 186144,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 18624,
+                        "own_params": 18624,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 18528,
+                        "own_params": 18528,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 75360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 18528,
+                        "own_params": 18528,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 18624,
+                        "own_params": 18624,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 192,
+            "own_params": 192,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_tiny_cls",
@@ -457,7 +1346,312 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 7000000
+      "param_count": 7000000,
+      "model_summary": {
+        "name": "CrossViTForImageClassification",
+        "type": "CrossViTForImageClassification",
+        "params": 1367312,
+        "own_params": 69312,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 41568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 41568,
+                "own_params": 41568,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 147648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 147648,
+                "own_params": 147648,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 818208,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 818208,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 111840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 74208,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 37248,
+                            "own_params": 37248,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 36960,
+                            "own_params": 36960,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 444864,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 186144,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 18624,
+                        "own_params": 18624,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 18528,
+                        "own_params": 18528,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 75360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 18528,
+                        "own_params": 18528,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 18624,
+                        "own_params": 18624,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 192,
+            "own_params": 192,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 97000,
+            "own_params": 97000,
+            "children": []
+          },
+          {
+            "name": "head_l",
+            "type": "Linear",
+            "params": 193000,
+            "own_params": 193000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_small",
@@ -480,7 +1674,299 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 26700000
+      "param_count": 26700000,
+      "model_summary": {
+        "name": "CrossViT",
+        "type": "CrossViT",
+        "params": 13551936,
+        "own_params": 138624,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 83136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 83136,
+                "own_params": 83136,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 295296,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 295296,
+                "own_params": 295296,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 13033728,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 3258432,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 444864,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 740928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 298176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_small_cls",
@@ -524,7 +2010,313 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 26700000
+      "param_count": 26700000,
+      "model_summary": {
+        "name": "CrossViTForImageClassification",
+        "type": "CrossViTForImageClassification",
+        "params": 14129936,
+        "own_params": 138624,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 83136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 83136,
+                "own_params": 83136,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 295296,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 295296,
+                "own_params": 295296,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 13033728,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 3258432,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 444864,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 740928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 298176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 193000,
+            "own_params": 193000,
+            "children": []
+          },
+          {
+            "name": "head_l",
+            "type": "Linear",
+            "params": 385000,
+            "own_params": 385000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_base",
@@ -547,7 +2339,299 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 105000000
+      "param_count": 105000000,
+      "model_summary": {
+        "name": "CrossViT",
+        "type": "CrossViT",
+        "params": 33102528,
+        "own_params": 138624,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 83136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 83136,
+                "own_params": 83136,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 295296,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 295296,
+                "own_params": 295296,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 32584320,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 3258432,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 444864,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 740928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 298176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 10
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_base_cls",
@@ -591,7 +2675,313 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 105000000
+      "param_count": 105000000,
+      "model_summary": {
+        "name": "CrossViTForImageClassification",
+        "type": "CrossViTForImageClassification",
+        "params": 33680528,
+        "own_params": 138624,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 83136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 83136,
+                "own_params": 83136,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 295296,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 295296,
+                "own_params": 295296,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 32584320,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 3258432,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 444864,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 295872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 148224,
+                            "own_params": 148224,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 147648,
+                            "own_params": 147648,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 740928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 298176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 10
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 193000,
+            "own_params": 193000,
+            "children": []
+          },
+          {
+            "name": "head_l",
+            "type": "Linear",
+            "params": 385000,
+            "own_params": 385000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_15",
@@ -614,7 +3004,299 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 27400000
+      "param_count": 27400000,
+      "model_summary": {
+        "name": "CrossViT",
+        "type": "CrossViT",
+        "params": 9185856,
+        "own_params": 138624,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 83136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 83136,
+                "own_params": 83136,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 295296,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 295296,
+                "own_params": 295296,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 8667648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 2889216,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 370944,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 221952,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 111168,
+                            "own_params": 111168,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 110784,
+                            "own_params": 110784,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 1479168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 886272,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 442752,
+                            "own_params": 442752,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 740928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 298176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_15_cls",
@@ -658,7 +3340,313 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 27400000
+      "param_count": 27400000,
+      "model_summary": {
+        "name": "CrossViTForImageClassification",
+        "type": "CrossViTForImageClassification",
+        "params": 9763856,
+        "own_params": 138624,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 83136,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 83136,
+                "own_params": 83136,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 295296,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 295296,
+                "own_params": 295296,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 8667648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 2889216,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 370944,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 221952,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 111168,
+                            "own_params": 111168,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 110784,
+                            "own_params": 110784,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 1479168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 886272,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 442752,
+                            "own_params": 442752,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 740928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 298176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 73920,
+                        "own_params": 73920,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 74112,
+                        "own_params": 74112,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 384,
+            "own_params": 384,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 193000,
+            "own_params": 193000,
+            "children": []
+          },
+          {
+            "name": "head_l",
+            "type": "Linear",
+            "params": 385000,
+            "own_params": 385000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_18",
@@ -681,7 +3669,299 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 43300000
+      "param_count": 43300000,
+      "model_summary": {
+        "name": "CrossViT",
+        "type": "CrossViT",
+        "params": 12394144,
+        "own_params": 161728,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 96992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 96992,
+                "own_params": 96992,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 344512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 344512,
+                "own_params": 344512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 11789568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 3929856,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 504448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 201600,
+                        "own_params": 201600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 301952,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 151200,
+                            "own_params": 151200,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 150752,
+                            "own_params": 150752,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 2012416,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 804608,
+                        "own_params": 804608,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1206016,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 603456,
+                            "own_params": 603456,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 602560,
+                            "own_params": 602560,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 1007776,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 100800,
+                        "own_params": 100800,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 804608,
+                        "own_params": 804608,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 100576,
+                        "own_params": 100576,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 405216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 100576,
+                        "own_params": 100576,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 201600,
+                        "own_params": 201600,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 100800,
+                        "own_params": 100800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 448,
+            "own_params": 448,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 896,
+            "own_params": 896,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "crossvit_18_cls",
@@ -725,7 +4005,313 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
-      "param_count": 43300000
+      "param_count": 43300000,
+      "model_summary": {
+        "name": "CrossViTForImageClassification",
+        "type": "CrossViTForImageClassification",
+        "params": 13068144,
+        "own_params": 161728,
+        "children": [
+          {
+            "name": "embed_s",
+            "type": "_PatchEmbed",
+            "params": 96992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 96992,
+                "own_params": 96992,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "embed_l",
+            "type": "_PatchEmbed",
+            "params": 344512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 344512,
+                "own_params": 344512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 11789568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CrossViTStage",
+                "params": 3929856,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "small_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 504448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 201600,
+                        "own_params": 201600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 301952,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 151200,
+                            "own_params": 151200,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 150752,
+                            "own_params": 150752,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "large_block",
+                    "type": "_SelfAttnBlock",
+                    "params": 2012416,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 804608,
+                        "own_params": 804608,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1206016,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 603456,
+                            "own_params": 603456,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 602560,
+                            "own_params": 602560,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_s2l",
+                    "type": "_CrossAttention",
+                    "params": 1007776,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 100800,
+                        "own_params": 100800,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 804608,
+                        "own_params": 804608,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 100576,
+                        "own_params": 100576,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cross_l2s",
+                    "type": "_CrossAttention",
+                    "params": 405216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm_src",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_tgt",
+                        "type": "LayerNorm",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      },
+                      {
+                        "name": "q_proj",
+                        "type": "Linear",
+                        "params": 100576,
+                        "own_params": 100576,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 201600,
+                        "own_params": 201600,
+                        "children": []
+                      },
+                      {
+                        "name": "out_proj",
+                        "type": "Linear",
+                        "params": 100800,
+                        "own_params": 100800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm_out",
+                        "type": "LayerNorm",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "norm_s",
+            "type": "LayerNorm",
+            "params": 448,
+            "own_params": 448,
+            "children": []
+          },
+          {
+            "name": "norm_l",
+            "type": "LayerNorm",
+            "params": 896,
+            "own_params": 896,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 225000,
+            "own_params": 225000,
+            "children": []
+          },
+          {
+            "name": "head_l",
+            "type": "Linear",
+            "params": 449000,
+            "own_params": 449000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "CrossViT9Weights",

@@ -322,7 +322,738 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 40377361,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 27517818,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 4896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 27512922,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 299190,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 224694,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 112347,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 37755,
+                                "own_params": 507,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 27936,
+                                    "own_params": 27936,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 9312,
+                                    "own_params": 9312,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 74208,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 37248,
+                                    "own_params": 37248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 36960,
+                                    "own_params": 36960,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 74496,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 73728,
+                            "own_params": 73728,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 1188204,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 891756,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 445878,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 149238,
+                                "own_params": 1014,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 111168,
+                                    "own_params": 111168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 37056,
+                                    "own_params": 37056,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 295872,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 148224,
+                                    "own_params": 148224,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 147648,
+                                    "own_params": 147648,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 296448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 294912,
+                            "own_params": 294912,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 11841672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 10658952,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 1776492,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 593388,
+                                "own_params": 2028,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 443520,
+                                    "own_params": 443520,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147840,
+                                    "own_params": 147840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 1181568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 591360,
+                                    "own_params": 591360,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 590208,
+                                    "own_params": 590208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 6
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 1182720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 3072,
+                            "own_params": 3072,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1179648,
+                            "own_params": 1179648,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 14183856,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 14183856,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 7091928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 2366424,
+                                "own_params": 4056,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 1771776,
+                                    "own_params": 1771776,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 2795776,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 98560,
+                "own_params": 98560,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 49408,
+                "own_params": 49408,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 24832,
+                "own_params": 24832,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "mask2former_swin_small",
@@ -365,7 +1096,738 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 61695265,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 48835722,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 4896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 48830826,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 299190,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 224694,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 112347,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 37755,
+                                "own_params": 507,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 27936,
+                                    "own_params": 27936,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 9312,
+                                    "own_params": 9312,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 192,
+                                "own_params": 192,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 74208,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 37248,
+                                    "own_params": 37248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 36960,
+                                    "own_params": 36960,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 74496,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 73728,
+                            "own_params": 73728,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 1188204,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 891756,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 445878,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 149238,
+                                "own_params": 1014,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 111168,
+                                    "own_params": 111168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 37056,
+                                    "own_params": 37056,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 295872,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 148224,
+                                    "own_params": 148224,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 147648,
+                                    "own_params": 147648,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 296448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 294912,
+                            "own_params": 294912,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 33159576,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 31976856,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 1776492,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 593388,
+                                "own_params": 2028,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 443520,
+                                    "own_params": 443520,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147840,
+                                    "own_params": 147840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 1181568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 591360,
+                                    "own_params": 591360,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 590208,
+                                    "own_params": 590208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 18
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 1182720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 3072,
+                            "own_params": 3072,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1179648,
+                            "own_params": 1179648,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 14183856,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 14183856,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 7091928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 2366424,
+                                "own_params": 4056,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 1771776,
+                                    "own_params": 1771776,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 2795776,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 98560,
+                "own_params": 98560,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 49408,
+                "own_params": 49408,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 24832,
+                "own_params": 24832,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "mask2former_swin_base",
@@ -408,7 +1870,738 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 99723599,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 86741176,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 6528,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 6272,
+                    "own_params": 6272,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 86734648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 529992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 397896,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 198948,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 66724,
+                                "own_params": 676,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 49536,
+                                    "own_params": 49536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 16512,
+                                    "own_params": 16512,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 131712,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 66048,
+                                    "own_params": 66048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 65664,
+                                    "own_params": 65664,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 132096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 2108560,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 1582224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 791112,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 264520,
+                                "own_params": 1352,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 197376,
+                                    "own_params": 197376,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 65792,
+                                    "own_params": 65792,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 525568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 263168,
+                                    "own_params": 263168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 262400,
+                                    "own_params": 262400,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 526336,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 524288,
+                            "own_params": 524288,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 58892832,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 56791584,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 3155088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 1053328,
+                                "own_params": 2704,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 787968,
+                                    "own_params": 787968,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 262656,
+                                    "own_params": 262656,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 2099712,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 1050624,
+                                    "own_params": 1050624,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 1049088,
+                                    "own_params": 1049088,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 18
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 2101248,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 4096,
+                            "own_params": 4096,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 2097152,
+                            "own_params": 2097152,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 25203264,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 25203264,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 12601632,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 4203808,
+                                "own_params": 5408,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 3148800,
+                                    "own_params": 3148800,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 8393728,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 4198400,
+                                    "own_params": 4198400,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 4195328,
+                                    "own_params": 4195328,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 2918656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 262400,
+                "own_params": 262400,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 33024,
+                "own_params": 33024,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "mask2former_swin_large",
@@ -451,7 +2644,738 @@
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "Mask2FormerForSemanticSegmentation",
+        "type": "Mask2FormerForSemanticSegmentation",
+        "params": 208220587,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "backbone",
+            "type": "_SwinBackbone",
+            "params": 194992404,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 9792,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 9408,
+                    "own_params": 9408,
+                    "children": []
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "stages",
+                "type": "ModuleList",
+                "params": 194982612,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SwinStage",
+                    "params": 1188204,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 891756,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 445878,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 149238,
+                                "own_params": 1014,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 111168,
+                                    "own_params": 111168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 37056,
+                                    "own_params": 37056,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 384,
+                                "own_params": 384,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 295872,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 148224,
+                                    "own_params": 148224,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 147648,
+                                    "own_params": 147648,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 296448,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 294912,
+                            "own_params": 294912,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SwinStage",
+                    "params": 4735704,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 3552984,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 1776492,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 593388,
+                                "own_params": 2028,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 443520,
+                                    "own_params": 443520,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147840,
+                                    "own_params": 147840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 768,
+                                "own_params": 768,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 1181568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 591360,
+                                    "own_params": 591360,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 590208,
+                                    "own_params": 590208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 1182720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 3072,
+                            "own_params": 3072,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1179648,
+                            "own_params": 1179648,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_SwinStage",
+                    "params": 132379440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 127654704,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 7091928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 2366424,
+                                "own_params": 4056,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 1771776,
+                                    "own_params": 1771776,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 590592,
+                                    "own_params": 590592,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 18
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsample",
+                        "type": "_PatchMerge",
+                        "params": 4724736,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm",
+                            "type": "LayerNorm",
+                            "params": 6144,
+                            "own_params": 6144,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 4718592,
+                            "own_params": 4718592,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SwinStage",
+                    "params": 56679264,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 56679264,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_SwinBlock",
+                            "params": 28339632,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "LayerNorm",
+                                "params": 3072,
+                                "own_params": 3072,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_WindowAttention",
+                                "params": 9451440,
+                                "own_params": 8112,
+                                "children": [
+                                  {
+                                    "name": "qkv",
+                                    "type": "Linear",
+                                    "params": 7082496,
+                                    "own_params": 7082496,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 2360832,
+                                    "own_params": 2360832,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn_drop",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "LayerNorm",
+                                "params": 3072,
+                                "own_params": 3072,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 18882048,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 9443328,
+                                    "own_params": 9443328,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "GELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "3",
+                                    "type": "Linear",
+                                    "params": 9438720,
+                                    "own_params": 9438720,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "4",
+                                    "type": "Dropout",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "drop_path",
+                                "type": "DropPath",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pixel_decoder",
+            "type": "_MultiScaleFPNDecoder",
+            "params": 3164416,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lat5",
+                "type": "Conv2d",
+                "params": 393472,
+                "own_params": 393472,
+                "children": []
+              },
+              {
+                "name": "lat4",
+                "type": "Conv2d",
+                "params": 196864,
+                "own_params": 196864,
+                "children": []
+              },
+              {
+                "name": "lat3",
+                "type": "Conv2d",
+                "params": 98560,
+                "own_params": 98560,
+                "children": []
+              },
+              {
+                "name": "lat2",
+                "type": "Conv2d",
+                "params": 49408,
+                "own_params": 49408,
+                "children": []
+              },
+              {
+                "name": "out5",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              },
+              {
+                "name": "up",
+                "type": "Upsample",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "query_embed",
+            "type": "Embedding",
+            "params": 25600,
+            "own_params": 25600,
+            "children": []
+          },
+          {
+            "name": "dec_layer_0",
+            "type": "_MaskedAttentionDecoderLayer",
+            "params": 1644544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "cross_attn",
+                "type": "MultiheadAttention",
+                "params": 263168,
+                "own_params": 263168,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "linear1",
+                "type": "Linear",
+                "params": 526336,
+                "own_params": 526336,
+                "children": []
+              },
+              {
+                "name": "linear2",
+                "type": "Linear",
+                "params": 524544,
+                "own_params": 524544,
+                "children": []
+              },
+              {
+                "name": "dropout1",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "kv_proj",
+                "type": "Linear",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ],
+            "repeat": 6
+          },
+          {
+            "name": "class_head",
+            "type": "Linear",
+            "params": 38807,
+            "own_params": 38807,
+            "children": []
+          },
+          {
+            "name": "mask_embed",
+            "type": "Linear",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "pixel_proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          },
+          {
+            "name": "aux_mask_norm",
+            "type": "LayerNorm",
+            "params": 512,
+            "own_params": 512,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "Mask2FormerSwinTinyWeights",

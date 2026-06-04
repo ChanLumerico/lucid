@@ -388,7 +388,448 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CvT",
+        "type": "CvT",
+        "params": 19612608,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 19612608,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CvTStage",
+                "params": 61824,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 9600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 9472,
+                        "own_params": 9472,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 52096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 52096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 18752,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 4864,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 640,
+                                    "own_params": 640,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 128,
+                                    "own_params": 128,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 4096,
+                                    "own_params": 4096,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 4160,
+                                "own_params": 4160,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 33088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 16640,
+                                "own_params": 16640,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 16448,
+                                "own_params": 16448,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_CvTStage",
+                "params": 1013952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 111168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 110784,
+                        "own_params": 110784,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 902400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 451200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 154560,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 39168,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 1920,
+                                    "own_params": 1920,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 384,
+                                    "own_params": 384,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 36864,
+                                    "own_params": 36864,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 37056,
+                                "own_params": 37056,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_CvTStage",
+                "params": 18536832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 664704,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 663936,
+                        "own_params": 663936,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 17871360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 1787136,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 604032,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 152064,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 3840,
+                                    "own_params": 3840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 768,
+                                    "own_params": 768,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147456,
+                                    "own_params": 147456,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 10
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "cvt_13_cls",
@@ -433,7 +874,462 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CvTForImageClassification",
+        "type": "CvTForImageClassification",
+        "params": 19998376,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 19612608,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CvTStage",
+                "params": 61824,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 9600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 9472,
+                        "own_params": 9472,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 52096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 52096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 18752,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 4864,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 640,
+                                    "own_params": 640,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 128,
+                                    "own_params": 128,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 4096,
+                                    "own_params": 4096,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 4160,
+                                "own_params": 4160,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 33088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 16640,
+                                "own_params": 16640,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 16448,
+                                "own_params": 16448,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_CvTStage",
+                "params": 1013952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 111168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 110784,
+                        "own_params": 110784,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 902400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 451200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 154560,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 39168,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 1920,
+                                    "own_params": 1920,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 384,
+                                    "own_params": 384,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 36864,
+                                    "own_params": 36864,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 37056,
+                                "own_params": 37056,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_CvTStage",
+                "params": 18536832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 664704,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 663936,
+                        "own_params": 663936,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 17871360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 1787136,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 604032,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 152064,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 3840,
+                                    "own_params": 3840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 768,
+                                    "own_params": 768,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147456,
+                                    "own_params": 147456,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 10
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 385000,
+            "own_params": 385000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "cvt_21",
@@ -472,7 +1368,448 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CvT",
+        "type": "CvT",
+        "params": 31237824,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 31237824,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CvTStage",
+                "params": 61824,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 9600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 9472,
+                        "own_params": 9472,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 52096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 52096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 18752,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 4864,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 640,
+                                    "own_params": 640,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 128,
+                                    "own_params": 128,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 4096,
+                                    "own_params": 4096,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 4160,
+                                "own_params": 4160,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 33088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 16640,
+                                "own_params": 16640,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 16448,
+                                "own_params": 16448,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_CvTStage",
+                "params": 1916352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 111168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 110784,
+                        "own_params": 110784,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 1804800,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 451200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 154560,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 39168,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 1920,
+                                    "own_params": 1920,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 384,
+                                    "own_params": 384,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 36864,
+                                    "own_params": 36864,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 37056,
+                                "own_params": 37056,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 4
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_CvTStage",
+                "params": 29259648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 664704,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 663936,
+                        "own_params": 663936,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 28594176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 1787136,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 604032,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 152064,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 3840,
+                                    "own_params": 3840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 768,
+                                    "own_params": 768,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147456,
+                                    "own_params": 147456,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 16
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "cvt_21_cls",
@@ -517,7 +1854,462 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CvTForImageClassification",
+        "type": "CvTForImageClassification",
+        "params": 31623592,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 31237824,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CvTStage",
+                "params": 61824,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 9600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 9472,
+                        "own_params": 9472,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 52096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 52096,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 18752,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 4864,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 640,
+                                    "own_params": 640,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 128,
+                                    "own_params": 128,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 4096,
+                                    "own_params": 4096,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 4160,
+                                "own_params": 4160,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 33088,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 16640,
+                                "own_params": 16640,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 16448,
+                                "own_params": 16448,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_CvTStage",
+                "params": 1916352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 111168,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 110784,
+                        "own_params": 110784,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 1804800,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 451200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 154560,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 39168,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 1920,
+                                    "own_params": 1920,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 384,
+                                    "own_params": 384,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 36864,
+                                    "own_params": 36864,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 37056,
+                                "own_params": 37056,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 4
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_CvTStage",
+                "params": 29259648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 664704,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 663936,
+                        "own_params": 663936,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 28594176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 1787136,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 604032,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 152064,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 3840,
+                                    "own_params": 3840,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 768,
+                                    "own_params": 768,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 147456,
+                                    "own_params": 147456,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 16
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 385000,
+            "own_params": 385000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "cvt_w24",
@@ -556,7 +2348,449 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CvT",
+        "type": "CvT",
+        "params": 276172288,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 276172288,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CvTStage",
+                "params": 931584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 28800,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 28416,
+                        "own_params": 28416,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 902400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 451200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 154560,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 39168,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 1920,
+                                    "own_params": 1920,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 384,
+                                    "own_params": 384,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 36864,
+                                    "own_params": 36864,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 37056,
+                                "own_params": 37056,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_CvTStage",
+                "params": 15557376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 1329408,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 1327872,
+                        "own_params": 1327872,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 14226432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 7113216,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 2387712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 599040,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 7680,
+                                    "own_params": 7680,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_CvTStage",
+                "params": 259683328,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 7080960,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 7078912,
+                        "own_params": 7078912,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 252600320,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 12630016,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 4232192,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 1060864,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 10240,
+                                    "own_params": 10240,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 2048,
+                                    "own_params": 2048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 1048576,
+                                    "own_params": 1048576,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 20
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "cvt_w24_cls",
@@ -601,7 +2835,463 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CvTForImageClassification",
+        "type": "CvTForImageClassification",
+        "params": 277199336,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 276172288,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_CvTStage",
+                "params": 931584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 28800,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 28416,
+                        "own_params": 28416,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 902400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 451200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 154560,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 39168,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 1920,
+                                    "own_params": 1920,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 384,
+                                    "own_params": 384,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 36864,
+                                    "own_params": 36864,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 37056,
+                                "own_params": 37056,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 295872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 148224,
+                                "own_params": 148224,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 147648,
+                                "own_params": 147648,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_CvTStage",
+                "params": 15557376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 1329408,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 1327872,
+                        "own_params": 1327872,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 14226432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 7113216,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 2387712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 599040,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 7680,
+                                    "own_params": 7680,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 1536,
+                                    "own_params": 1536,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 589824,
+                                    "own_params": 589824,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_CvTStage",
+                "params": 259683328,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "embed",
+                    "type": "_ConvEmbed",
+                    "params": 7080960,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 7078912,
+                        "own_params": 7078912,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 252600320,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_CvTBlock",
+                        "params": 12630016,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_CvTAttention",
+                            "params": 4232192,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj_q",
+                                "type": "_ConvProj",
+                                "params": 1060864,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "dw",
+                                    "type": "Conv2d",
+                                    "params": 10240,
+                                    "own_params": 10240,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "bn",
+                                    "type": "BatchNorm2d",
+                                    "params": 2048,
+                                    "own_params": 2048,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 1048576,
+                                    "own_params": 1048576,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out_proj",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 20
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "CvT13Weights",

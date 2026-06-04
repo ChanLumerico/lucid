@@ -345,7 +345,79 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "LeNet",
+        "type": "LeNet",
+        "params": 50692,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 50692,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 156,
+                "own_params": 156,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 2416,
+                "own_params": 2416,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 48120,
+                "own_params": 48120,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "lenet_5_cls",
@@ -384,7 +456,100 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "LeNetForImageClassification",
+        "type": "LeNetForImageClassification",
+        "params": 61706,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "features",
+            "type": "Sequential",
+            "params": 50692,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 156,
+                "own_params": 156,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 2416,
+                "own_params": 2416,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "6",
+                "type": "Conv2d",
+                "params": 48120,
+                "own_params": 48120,
+                "children": []
+              },
+              {
+                "name": "7",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "f6",
+            "type": "Linear",
+            "params": 10164,
+            "own_params": 10164,
+            "children": []
+          },
+          {
+            "name": "act_f6",
+            "type": "Tanh",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 850,
+            "own_params": 850,
+            "children": []
+          }
+        ]
+      }
     }
   ],
   "summary": "LeNet family — LeCun et al., 1998.",

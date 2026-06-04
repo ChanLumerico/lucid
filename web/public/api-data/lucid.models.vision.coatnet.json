@@ -440,7 +440,604 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CoAtNet",
+        "type": "CoAtNet",
+        "params": 24785196,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 38848,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1728,
+                "own_params": 1728,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "GELU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36864,
+                "own_params": 36864,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "GELU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "s1",
+            "type": "Sequential",
+            "params": 189584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_MBConv",
+                "params": 91736,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 24576,
+                    "own_params": 24576,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 3456,
+                    "own_params": 3456,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 18840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 9240,
+                        "own_params": 9240,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 36960,
+                    "own_params": 36960,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 6240,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "AvgPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 6240,
+                        "own_params": 6240,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_MBConv",
+                "params": 97848,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 36864,
+                    "own_params": 36864,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 3456,
+                    "own_params": 3456,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 18840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 9240,
+                        "own_params": 9240,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 36960,
+                    "own_params": 36960,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "s2",
+            "type": "Sequential",
+            "params": 1084752,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_MBConv",
+                "params": 324720,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 73728,
+                    "own_params": 73728,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 6912,
+                    "own_params": 6912,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 74544,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 36912,
+                        "own_params": 36912,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 37632,
+                        "own_params": 37632,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 147648,
+                    "own_params": 147648,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 18624,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "AvgPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 18624,
+                        "own_params": 18624,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_MBConv",
+                "params": 380016,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 147456,
+                    "own_params": 147456,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 6912,
+                    "own_params": 6912,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 74544,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 36912,
+                        "own_params": 36912,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 37632,
+                        "own_params": 37632,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 147648,
+                    "own_params": 147648,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "s3",
+            "type": "_TransformerStage",
+            "params": 8990940,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pool",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 74112,
+                "own_params": 74112,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 8916060,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_RelAttnBlock",
+                    "params": 1783212,
+                    "own_params": 8748,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 443520,
+                        "own_params": 443520,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 147840,
+                        "own_params": 147840,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 5
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "s4",
+            "type": "_TransformerStage",
+            "params": 14481072,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pool",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 295680,
+                "own_params": 295680,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 14183856,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_RelAttnBlock",
+                    "params": 7091928,
+                    "own_params": 4056,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "coatnet_0_cls",
@@ -479,7 +1076,647 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "CoAtNetForImageClassification",
+        "type": "CoAtNetForImageClassification",
+        "params": 26146324,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "Sequential",
+            "params": 38848,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 1728,
+                "own_params": 1728,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "GELU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 36864,
+                "own_params": 36864,
+                "children": []
+              },
+              {
+                "name": "4",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "5",
+                "type": "GELU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "s1",
+            "type": "Sequential",
+            "params": 189584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_MBConv",
+                "params": 91736,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 24576,
+                    "own_params": 24576,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 3456,
+                    "own_params": 3456,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 18840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 9240,
+                        "own_params": 9240,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 36960,
+                    "own_params": 36960,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 6240,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "AvgPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 6240,
+                        "own_params": 6240,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_MBConv",
+                "params": 97848,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 36864,
+                    "own_params": 36864,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 3456,
+                    "own_params": 3456,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 18840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 9240,
+                        "own_params": 9240,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 36960,
+                    "own_params": 36960,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "s2",
+            "type": "Sequential",
+            "params": 1084752,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_MBConv",
+                "params": 324720,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 73728,
+                    "own_params": 73728,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 6912,
+                    "own_params": 6912,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 74544,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 36912,
+                        "own_params": 36912,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 37632,
+                        "own_params": 37632,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 147648,
+                    "own_params": 147648,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 18624,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "AvgPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 18624,
+                        "own_params": 18624,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_MBConv",
+                "params": 380016,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "bn_pre",
+                    "type": "BatchNorm2d",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "expand",
+                    "type": "Conv2d",
+                    "params": 147456,
+                    "own_params": 147456,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_exp",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "dw",
+                    "type": "Conv2d",
+                    "params": 6912,
+                    "own_params": 6912,
+                    "children": []
+                  },
+                  {
+                    "name": "bn_dw",
+                    "type": "BatchNorm2d",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "se",
+                    "type": "_SE",
+                    "params": 74544,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 36912,
+                        "own_params": 36912,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 37632,
+                        "own_params": 37632,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "project",
+                    "type": "Conv2d",
+                    "params": 147648,
+                    "own_params": 147648,
+                    "children": []
+                  },
+                  {
+                    "name": "shortcut",
+                    "type": "Sequential",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "s3",
+            "type": "_TransformerStage",
+            "params": 8990940,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pool",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 74112,
+                "own_params": 74112,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 8916060,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_RelAttnBlock",
+                    "params": 1783212,
+                    "own_params": 8748,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 443520,
+                        "own_params": 443520,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 147840,
+                        "own_params": 147840,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 5
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "s4",
+            "type": "_TransformerStage",
+            "params": 14481072,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pool",
+                "type": "AvgPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 295680,
+                "own_params": 295680,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 14183856,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_RelAttnBlock",
+                    "params": 7091928,
+                    "own_params": 4056,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "pre_logits",
+            "type": "Sequential",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Tanh",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "coatnet_1",

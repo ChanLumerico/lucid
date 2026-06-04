@@ -158,9 +158,25 @@ export function PageTableOfContents({ minEntries = 1 }: PageTableOfContentsProps
 
   if (entries.length < minEntries) return null;
 
+  // Smooth in-page navigation.  ``scrollIntoView`` honours the heading's
+  // ``scroll-mt-24`` so the target clears the fixed header; ``replaceState``
+  // syncs the URL hash without piling history entries on every TOC click.
+  const onEntryClick = (e: React.MouseEvent, id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    history.replaceState(null, "", `#${id}`);
+  };
+
   return (
-    <aside className="hidden xl:block w-48 shrink-0">
-      <div className="sticky top-24">
+    // The ASIDE itself is sticky: its containing block is the tall flex row, so
+    // it follows the scroll.  (A sticky *child* fails here because the parent
+    // ``items-start`` shrinks this aside to its own height — no room to stick.)
+    // ``max-h`` + ``overflow-y-auto`` lets long ToCs (Tensor has ~88 entries)
+    // scroll internally instead of overflowing the viewport.
+    <aside className="hidden xl:block w-48 shrink-0 self-start sticky top-24 max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain pb-6">
+      <div>
         <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-lucid-text-disabled">
           On this page
         </p>
@@ -184,6 +200,7 @@ export function PageTableOfContents({ minEntries = 1 }: PageTableOfContentsProps
                   />
                   <a
                     href={`#${id}`}
+                    onClick={(e) => onEntryClick(e, id)}
                     className={cn(
                       "block rounded py-0.5 pl-2 text-[13px] leading-snug transition-colors duration-100",
                       level === 3 && "pl-5",

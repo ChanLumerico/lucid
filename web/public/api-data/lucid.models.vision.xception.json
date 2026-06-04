@@ -423,7 +423,662 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "Xception",
+        "type": "Xception",
+        "params": 20806952,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 864,
+            "own_params": 864,
+            "children": []
+          },
+          {
+            "name": "bn1",
+            "type": "BatchNorm2d",
+            "params": 64,
+            "own_params": 64,
+            "children": []
+          },
+          {
+            "name": "conv2",
+            "type": "Conv2d",
+            "params": 18432,
+            "own_params": 18432,
+            "children": []
+          },
+          {
+            "name": "bn2",
+            "type": "BatchNorm2d",
+            "params": 128,
+            "own_params": 128,
+            "children": []
+          },
+          {
+            "name": "block1",
+            "type": "_EntryBlock",
+            "params": 35264,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 26816,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SepConvOp",
+                    "params": 8768,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SepConvOp",
+                    "params": 17536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 8192,
+                "own_params": 8192,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block2",
+            "type": "_EntryBlock",
+            "params": 136064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 102784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 33920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 67840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 32768,
+                "own_params": 32768,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block3",
+            "type": "_EntryBlock",
+            "params": 915944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 728120,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 188672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 186368,
+                        "own_params": 186368,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 186368,
+                "own_params": 186368,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 1456,
+                "own_params": 1456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block4",
+            "type": "_MiddleBlock",
+            "params": 1613976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1613976,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "8",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 8
+          },
+          {
+            "name": "block12",
+            "type": "_ExitBlock",
+            "params": 2039584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1292064,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 752024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 745472,
+                        "own_params": 745472,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 745472,
+                "own_params": 745472,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv3",
+            "type": "_ExitSepConv",
+            "params": 1582080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 9216,
+                "own_params": 9216,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 1572864,
+                "own_params": 1572864,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn3",
+            "type": "BatchNorm2d",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          },
+          {
+            "name": "conv4",
+            "type": "_ExitSepConv",
+            "params": 3159552,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 13824,
+                "own_params": 13824,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 3145728,
+                "own_params": 3145728,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn4",
+            "type": "BatchNorm2d",
+            "params": 4096,
+            "own_params": 4096,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "xception_cls",
@@ -468,7 +1123,684 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "XceptionForImageClassification",
+        "type": "XceptionForImageClassification",
+        "params": 22855952,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 864,
+            "own_params": 864,
+            "children": []
+          },
+          {
+            "name": "bn1",
+            "type": "BatchNorm2d",
+            "params": 64,
+            "own_params": 64,
+            "children": []
+          },
+          {
+            "name": "conv2",
+            "type": "Conv2d",
+            "params": 18432,
+            "own_params": 18432,
+            "children": []
+          },
+          {
+            "name": "bn2",
+            "type": "BatchNorm2d",
+            "params": 128,
+            "own_params": 128,
+            "children": []
+          },
+          {
+            "name": "block1",
+            "type": "_EntryBlock",
+            "params": 35264,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 26816,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SepConvOp",
+                    "params": 8768,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SepConvOp",
+                    "params": 17536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 16384,
+                        "own_params": 16384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "4",
+                    "type": "BatchNorm2d",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 8192,
+                "own_params": 8192,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block2",
+            "type": "_EntryBlock",
+            "params": 136064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 102784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 33920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1152,
+                        "own_params": 1152,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 67840,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 32768,
+                "own_params": 32768,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block3",
+            "type": "_EntryBlock",
+            "params": 915944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 728120,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 188672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 2304,
+                        "own_params": 2304,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 186368,
+                        "own_params": 186368,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 186368,
+                "own_params": 186368,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 1456,
+                "own_params": 1456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "block4",
+            "type": "_MiddleBlock",
+            "params": 1613976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1613976,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "8",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 8
+          },
+          {
+            "name": "block12",
+            "type": "_ExitBlock",
+            "params": 2039584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "rep",
+                "type": "Sequential",
+                "params": 1292064,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SepConvOp",
+                    "params": 536536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 529984,
+                        "own_params": 529984,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "BatchNorm2d",
+                    "params": 1456,
+                    "own_params": 1456,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "4",
+                    "type": "_SepConvOp",
+                    "params": 752024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 6552,
+                        "own_params": 6552,
+                        "children": []
+                      },
+                      {
+                        "name": "pointwise",
+                        "type": "Conv2d",
+                        "params": 745472,
+                        "own_params": 745472,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "5",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "skip",
+                "type": "Conv2d",
+                "params": 745472,
+                "own_params": 745472,
+                "children": []
+              },
+              {
+                "name": "skipbn",
+                "type": "BatchNorm2d",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv3",
+            "type": "_ExitSepConv",
+            "params": 1582080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 9216,
+                "own_params": 9216,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 1572864,
+                "own_params": 1572864,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn3",
+            "type": "BatchNorm2d",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          },
+          {
+            "name": "conv4",
+            "type": "_ExitSepConv",
+            "params": 3159552,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 13824,
+                "own_params": 13824,
+                "children": []
+              },
+              {
+                "name": "pointwise",
+                "type": "Conv2d",
+                "params": 3145728,
+                "own_params": 3145728,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "bn4",
+            "type": "BatchNorm2d",
+            "params": 4096,
+            "own_params": 4096,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Sequential",
+            "params": 2049000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2049000,
+                "own_params": 2049000,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "XceptionWeights",

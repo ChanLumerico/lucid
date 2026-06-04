@@ -445,7 +445,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 85798656,
+        "own_params": 152064,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_base_16_cls",
@@ -490,7 +616,140 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 86567656,
+        "own_params": 152064,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 590592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_base_32",
@@ -529,7 +788,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 87455232,
+        "own_params": 39168,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 2360064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 2360064,
+                "own_params": 2360064,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_base_32_cls",
@@ -574,7 +959,140 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 88224232,
+        "own_params": 39168,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 2360064,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 2360064,
+                "own_params": 2360064,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_large_16",
@@ -613,7 +1131,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 303301632,
+        "own_params": 202752,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 787456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 787456,
+                "own_params": 787456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_large_16_cls",
@@ -658,7 +1302,140 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 304326632,
+        "own_params": 202752,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 787456,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 787456,
+                "own_params": 787456,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_large_32",
@@ -697,7 +1474,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 305510400,
+        "own_params": 52224,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 3146752,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 3146752,
+                "own_params": 3146752,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_large_32_cls",
@@ -742,7 +1645,140 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 306535400,
+        "own_params": 52224,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 3146752,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 3146752,
+                "own_params": 3146752,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_huge_14",
@@ -781,7 +1817,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViT",
+        "type": "ViT",
+        "params": 630764800,
+        "own_params": 330240,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 753920,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 753920,
+                "own_params": 753920,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 629678080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 19677440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 6558720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 13113600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 6558720,
+                        "own_params": 6558720,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 6554880,
+                        "own_params": 6554880,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 32
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "vit_huge_14_cls",
@@ -820,7 +1982,140 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ViTForImageClassification",
+        "type": "ViTForImageClassification",
+        "params": 632045800,
+        "own_params": 330240,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_PatchEmbed",
+            "params": 753920,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 753920,
+                "own_params": 753920,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pos_drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 629678080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ViTBlock",
+                "params": 19677440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 6558720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_MLP",
+                    "params": 13113600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 6558720,
+                        "own_params": 6558720,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 6554880,
+                        "own_params": 6554880,
+                        "children": []
+                      },
+                      {
+                        "name": "drop",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 32
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1281000,
+            "own_params": 1281000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "ViTBase16Weights",

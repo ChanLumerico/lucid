@@ -405,7 +405,349 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXt",
+        "type": "ConvNeXt",
+        "params": 27820128,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 4896,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 4704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 26262720,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 237888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 79296,
+                    "own_params": 96,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 4800,
+                        "own_params": 4800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 36960,
+                        "own_params": 36960,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 918144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 306048,
+                    "own_params": 192,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 147648,
+                        "own_params": 147648,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 10817280,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 1201920,
+                    "own_params": 384,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 19200,
+                        "own_params": 19200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 9
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 14289408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 4763136,
+                    "own_params": 768,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 38400,
+                        "own_params": 38400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1550976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 74112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 73920,
+                    "own_params": 73920,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 295680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 295296,
+                    "own_params": 295296,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1180416,
+                    "own_params": 1180416,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_tiny_cls",
@@ -450,7 +792,356 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXtForImageClassification",
+        "type": "ConvNeXtForImageClassification",
+        "params": 28589128,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 4896,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 4704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 26262720,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 237888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 79296,
+                    "own_params": 96,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 4800,
+                        "own_params": 4800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 36960,
+                        "own_params": 36960,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 918144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 306048,
+                    "own_params": 192,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 147648,
+                        "own_params": 147648,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 10817280,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 1201920,
+                    "own_params": 384,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 19200,
+                        "own_params": 19200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 9
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 14289408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 4763136,
+                    "own_params": 768,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 38400,
+                        "own_params": 38400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1550976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 74112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 73920,
+                    "own_params": 73920,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 295680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 295296,
+                    "own_params": 295296,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1180416,
+                    "own_params": 1180416,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_small",
@@ -489,7 +1180,349 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXt",
+        "type": "ConvNeXt",
+        "params": 49454688,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 4896,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 4704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 47897280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 237888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 79296,
+                    "own_params": 96,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 4800,
+                        "own_params": 4800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 36960,
+                        "own_params": 36960,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 918144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 306048,
+                    "own_params": 192,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 147648,
+                        "own_params": 147648,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 32451840,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 1201920,
+                    "own_params": 384,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 19200,
+                        "own_params": 19200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 14289408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 4763136,
+                    "own_params": 768,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 38400,
+                        "own_params": 38400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1550976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 74112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 73920,
+                    "own_params": 73920,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 295680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 295296,
+                    "own_params": 295296,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1180416,
+                    "own_params": 1180416,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_small_cls",
@@ -534,7 +1567,356 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXtForImageClassification",
+        "type": "ConvNeXtForImageClassification",
+        "params": 50223688,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 4896,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 4704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 4704,
+                    "own_params": 4704,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 47897280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 237888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 79296,
+                    "own_params": 96,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 4800,
+                        "own_params": 4800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 37248,
+                        "own_params": 37248,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 36960,
+                        "own_params": 36960,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 918144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 306048,
+                    "own_params": 192,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 147648,
+                        "own_params": 147648,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 32451840,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 1201920,
+                    "own_params": 384,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 19200,
+                        "own_params": 19200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 14289408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 4763136,
+                    "own_params": 768,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 38400,
+                        "own_params": 38400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 1550976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 74112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 73920,
+                    "own_params": 73920,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 295680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 295296,
+                    "own_params": 295296,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1180416,
+                    "own_params": 1180416,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_base",
@@ -573,7 +1955,349 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXt",
+        "type": "ConvNeXt",
+        "params": 87566464,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 6528,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 6272,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 6272,
+                    "own_params": 6272,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 84801792,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 415488,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 138496,
+                    "own_params": 128,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 6400,
+                        "own_params": 6400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 66048,
+                        "own_params": 66048,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 1617408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 539136,
+                    "own_params": 256,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 12800,
+                        "own_params": 12800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 262400,
+                        "own_params": 262400,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 57424896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 2126848,
+                    "own_params": 512,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 25600,
+                        "own_params": 25600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 25344000,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 8448000,
+                    "own_params": 1024,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 51200,
+                        "own_params": 51200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 2756096,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 131584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 525312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 524800,
+                    "own_params": 524800,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 2098176,
+                    "own_params": 2098176,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_base_cls",
@@ -618,7 +2342,356 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXtForImageClassification",
+        "type": "ConvNeXtForImageClassification",
+        "params": 88591464,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 6528,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 6272,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 6272,
+                    "own_params": 6272,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 84801792,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 415488,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 138496,
+                    "own_params": 128,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 6400,
+                        "own_params": 6400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 66048,
+                        "own_params": 66048,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 1617408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 539136,
+                    "own_params": 256,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 12800,
+                        "own_params": 12800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 262400,
+                        "own_params": 262400,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 57424896,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 2126848,
+                    "own_params": 512,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 25600,
+                        "own_params": 25600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 25344000,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 8448000,
+                    "own_params": 1024,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 51200,
+                        "own_params": 51200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 2756096,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 131584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 525312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 524800,
+                    "own_params": 524800,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 2098176,
+                    "own_params": 2098176,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_large",
@@ -657,7 +2730,349 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXt",
+        "type": "ConvNeXt",
+        "params": 196230336,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 9792,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 9408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 9408,
+                    "own_params": 9408,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 384,
+                "own_params": 384,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 190018944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 918144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 306048,
+                    "own_params": 192,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 147648,
+                        "own_params": 147648,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 3605760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 1201920,
+                    "own_params": 384,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 19200,
+                        "own_params": 19200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 128604672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 4763136,
+                    "own_params": 768,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 38400,
+                        "own_params": 38400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 56890368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 18963456,
+                    "own_params": 1536,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 76800,
+                        "own_params": 76800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 3072,
+                        "own_params": 3072,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 9443328,
+                        "own_params": 9443328,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 9438720,
+                        "own_params": 9438720,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 6198528,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 295680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 295296,
+                    "own_params": 295296,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1180416,
+                    "own_params": 1180416,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 4721664,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 4720128,
+                    "own_params": 4720128,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_large_cls",
@@ -702,7 +3117,356 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXtForImageClassification",
+        "type": "ConvNeXtForImageClassification",
+        "params": 197767336,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 9792,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 9408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 9408,
+                    "own_params": 9408,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 384,
+                "own_params": 384,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 190018944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 918144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 306048,
+                    "own_params": 192,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 9600,
+                        "own_params": 9600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 148224,
+                        "own_params": 148224,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 147648,
+                        "own_params": 147648,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 3605760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 1201920,
+                    "own_params": 384,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 19200,
+                        "own_params": 19200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 128604672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 4763136,
+                    "own_params": 768,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 38400,
+                        "own_params": 38400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 56890368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 18963456,
+                    "own_params": 1536,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 76800,
+                        "own_params": 76800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 3072,
+                        "own_params": 3072,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 9443328,
+                        "own_params": 9443328,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 9438720,
+                        "own_params": 9438720,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 6198528,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 295680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 295296,
+                    "own_params": 295296,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1180416,
+                    "own_params": 1180416,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 4721664,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 4720128,
+                    "own_params": 4720128,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1537000,
+            "own_params": 1537000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_xlarge",
@@ -741,7 +3505,349 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXt",
+        "type": "ConvNeXt",
+        "params": 348147968,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 13056,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 12544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12544,
+                    "own_params": 12544,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 337113600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 1617408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 539136,
+                    "own_params": 256,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 12800,
+                        "own_params": 12800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 262400,
+                        "own_params": 262400,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 6380544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 2126848,
+                    "own_params": 512,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 25600,
+                        "own_params": 25600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 228096000,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 8448000,
+                    "own_params": 1024,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 51200,
+                        "own_params": 51200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 101019648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 33673216,
+                    "own_params": 2048,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 102400,
+                        "own_params": 102400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 16785408,
+                        "own_params": 16785408,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 16779264,
+                        "own_params": 16779264,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 11017216,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 525312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 524800,
+                    "own_params": 524800,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 2098176,
+                    "own_params": 2098176,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 8392704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 8390656,
+                    "own_params": 8390656,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 4096,
+            "own_params": 4096,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "convnext_xlarge_cls",
@@ -786,7 +3892,356 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "ConvNeXtForImageClassification",
+        "type": "ConvNeXtForImageClassification",
+        "params": 350196968,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "stem",
+            "type": "_StemWithNorm",
+            "params": 13056,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Sequential",
+                "params": 12544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12544,
+                    "own_params": 12544,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "ModuleList",
+            "params": 337113600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Sequential",
+                "params": 1617408,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 539136,
+                    "own_params": 256,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 12800,
+                        "own_params": 12800,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 263168,
+                        "own_params": 263168,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 262400,
+                        "own_params": 262400,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "Sequential",
+                "params": 6380544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 2126848,
+                    "own_params": 512,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 25600,
+                        "own_params": 25600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 1049088,
+                        "own_params": 1049088,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "Sequential",
+                "params": 228096000,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 8448000,
+                    "own_params": 1024,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 51200,
+                        "own_params": 51200,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 27
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "Sequential",
+                "params": 101019648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvNeXtBlock",
+                    "params": 33673216,
+                    "own_params": 2048,
+                    "children": [
+                      {
+                        "name": "dwconv",
+                        "type": "Conv2d",
+                        "params": 102400,
+                        "own_params": 102400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm",
+                        "type": "LayerNorm",
+                        "params": 4096,
+                        "own_params": 4096,
+                        "children": []
+                      },
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 16785408,
+                        "own_params": 16785408,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 16779264,
+                        "own_params": 16779264,
+                        "children": []
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "downsamplers",
+            "type": "ModuleList",
+            "params": 11017216,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 525312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 524800,
+                    "own_params": 524800,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 2098176,
+                    "own_params": 2098176,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "2",
+                "type": "_Downsample",
+                "params": 8392704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 8390656,
+                    "own_params": 8390656,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head_norm",
+            "type": "LayerNorm",
+            "params": 4096,
+            "own_params": 4096,
+            "children": []
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 2049000,
+            "own_params": 2049000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "ConvNeXtTinyWeights",

@@ -759,7 +759,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2Model",
+        "type": "GPT2Model",
+        "params": 774030080,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "wte",
+            "type": "Embedding",
+            "params": 64328960,
+            "own_params": 64328960,
+            "children": []
+          },
+          {
+            "name": "wpe",
+            "type": "Embedding",
+            "params": 1310720,
+            "own_params": 1310720,
+            "children": []
+          },
+          {
+            "name": "drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "h",
+            "type": "ModuleList",
+            "params": 708387840,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_GPT2Block",
+                "params": 19677440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "ln_1",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_GPT2SelfAttention",
+                    "params": 6558720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_attn",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_2",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_GPT2MLP",
+                    "params": 13113600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_fc",
+                        "type": "Linear",
+                        "params": 6558720,
+                        "own_params": 6558720,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 6554880,
+                        "own_params": 6554880,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 36
+              }
+            ]
+          },
+          {
+            "name": "ln_f",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_large_lm",
@@ -804,7 +930,148 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2LMHeadModel",
+        "type": "GPT2LMHeadModel",
+        "params": 774030080,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "GPT2Model",
+            "params": 774030080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "wte",
+                "type": "Embedding",
+                "params": 64328960,
+                "own_params": 64328960,
+                "children": []
+              },
+              {
+                "name": "wpe",
+                "type": "Embedding",
+                "params": 1310720,
+                "own_params": 1310720,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "h",
+                "type": "ModuleList",
+                "params": 708387840,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_GPT2Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_GPT2SelfAttention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_attn",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          },
+                          {
+                            "name": "attn_dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_GPT2MLP",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_fc",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 36
+                  }
+                ]
+              },
+              {
+                "name": "ln_f",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 64328960,
+            "own_params": 64328960,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_medium",
@@ -849,7 +1116,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2Model",
+        "type": "GPT2Model",
+        "params": 354823168,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "wte",
+            "type": "Embedding",
+            "params": 51463168,
+            "own_params": 51463168,
+            "children": []
+          },
+          {
+            "name": "wpe",
+            "type": "Embedding",
+            "params": 1048576,
+            "own_params": 1048576,
+            "children": []
+          },
+          {
+            "name": "drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "h",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_GPT2Block",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "ln_1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_GPT2SelfAttention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_attn",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_GPT2MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_fc",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "ln_f",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_medium_lm",
@@ -894,7 +1287,148 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2LMHeadModel",
+        "type": "GPT2LMHeadModel",
+        "params": 354823168,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "GPT2Model",
+            "params": 354823168,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "wte",
+                "type": "Embedding",
+                "params": 51463168,
+                "own_params": 51463168,
+                "children": []
+              },
+              {
+                "name": "wpe",
+                "type": "Embedding",
+                "params": 1048576,
+                "own_params": 1048576,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "h",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_GPT2Block",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_GPT2SelfAttention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_attn",
+                            "type": "Linear",
+                            "params": 3148800,
+                            "own_params": 3148800,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": []
+                          },
+                          {
+                            "name": "attn_dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_GPT2MLP",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_fc",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              },
+              {
+                "name": "ln_f",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 51463168,
+            "own_params": 51463168,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_small",
@@ -939,7 +1473,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2Model",
+        "type": "GPT2Model",
+        "params": 124439808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "wte",
+            "type": "Embedding",
+            "params": 38597376,
+            "own_params": 38597376,
+            "children": []
+          },
+          {
+            "name": "wpe",
+            "type": "Embedding",
+            "params": 786432,
+            "own_params": 786432,
+            "children": []
+          },
+          {
+            "name": "drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "h",
+            "type": "ModuleList",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_GPT2Block",
+                "params": 7087872,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "ln_1",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_GPT2SelfAttention",
+                    "params": 2362368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_attn",
+                        "type": "Linear",
+                        "params": 1771776,
+                        "own_params": 1771776,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_2",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_GPT2MLP",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_fc",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "ln_f",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_small_cls",
@@ -984,7 +1644,155 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2ForSequenceClassification",
+        "type": "GPT2ForSequenceClassification",
+        "params": 124441344,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "GPT2Model",
+            "params": 124439808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "wte",
+                "type": "Embedding",
+                "params": 38597376,
+                "own_params": 38597376,
+                "children": []
+              },
+              {
+                "name": "wpe",
+                "type": "Embedding",
+                "params": 786432,
+                "own_params": 786432,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "h",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_GPT2Block",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_GPT2SelfAttention",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_attn",
+                            "type": "Linear",
+                            "params": 1771776,
+                            "own_params": 1771776,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 590592,
+                            "own_params": 590592,
+                            "children": []
+                          },
+                          {
+                            "name": "attn_dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_GPT2MLP",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_fc",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "ln_f",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classifier",
+            "type": "Linear",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_small_lm",
@@ -1029,7 +1837,148 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2LMHeadModel",
+        "type": "GPT2LMHeadModel",
+        "params": 124439808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "GPT2Model",
+            "params": 124439808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "wte",
+                "type": "Embedding",
+                "params": 38597376,
+                "own_params": 38597376,
+                "children": []
+              },
+              {
+                "name": "wpe",
+                "type": "Embedding",
+                "params": 786432,
+                "own_params": 786432,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "h",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_GPT2Block",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_GPT2SelfAttention",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_attn",
+                            "type": "Linear",
+                            "params": 1771776,
+                            "own_params": 1771776,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 590592,
+                            "own_params": 590592,
+                            "children": []
+                          },
+                          {
+                            "name": "attn_dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_GPT2MLP",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_fc",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "ln_f",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 38597376,
+            "own_params": 38597376,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_xlarge",
@@ -1074,7 +2023,133 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2Model",
+        "type": "GPT2Model",
+        "params": 1557611200,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "wte",
+            "type": "Embedding",
+            "params": 80411200,
+            "own_params": 80411200,
+            "children": []
+          },
+          {
+            "name": "wpe",
+            "type": "Embedding",
+            "params": 1638400,
+            "own_params": 1638400,
+            "children": []
+          },
+          {
+            "name": "drop",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "h",
+            "type": "ModuleList",
+            "params": 1475558400,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_GPT2Block",
+                "params": 30740800,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "ln_1",
+                    "type": "LayerNorm",
+                    "params": 3200,
+                    "own_params": 3200,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_GPT2SelfAttention",
+                    "params": 10246400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_attn",
+                        "type": "Linear",
+                        "params": 7684800,
+                        "own_params": 7684800,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 2561600,
+                        "own_params": 2561600,
+                        "children": []
+                      },
+                      {
+                        "name": "attn_dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": [],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_2",
+                    "type": "LayerNorm",
+                    "params": 3200,
+                    "own_params": 3200,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_GPT2MLP",
+                    "params": 20488000,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "c_fc",
+                        "type": "Linear",
+                        "params": 10246400,
+                        "own_params": 10246400,
+                        "children": []
+                      },
+                      {
+                        "name": "c_proj",
+                        "type": "Linear",
+                        "params": 10241600,
+                        "own_params": 10241600,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 48
+              }
+            ]
+          },
+          {
+            "name": "ln_f",
+            "type": "LayerNorm",
+            "params": 3200,
+            "own_params": 3200,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "gpt2_xlarge_lm",
@@ -1119,7 +2194,148 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "GPT2LMHeadModel",
+        "type": "GPT2LMHeadModel",
+        "params": 1557611200,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "transformer",
+            "type": "GPT2Model",
+            "params": 1557611200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "wte",
+                "type": "Embedding",
+                "params": 80411200,
+                "own_params": 80411200,
+                "children": []
+              },
+              {
+                "name": "wpe",
+                "type": "Embedding",
+                "params": 1638400,
+                "own_params": 1638400,
+                "children": []
+              },
+              {
+                "name": "drop",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "h",
+                "type": "ModuleList",
+                "params": 1475558400,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_GPT2Block",
+                    "params": 30740800,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 3200,
+                        "own_params": 3200,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_GPT2SelfAttention",
+                        "params": 10246400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_attn",
+                            "type": "Linear",
+                            "params": 7684800,
+                            "own_params": 7684800,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 2561600,
+                            "own_params": 2561600,
+                            "children": []
+                          },
+                          {
+                            "name": "attn_dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 3200,
+                        "own_params": 3200,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_GPT2MLP",
+                        "params": 20488000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "c_fc",
+                            "type": "Linear",
+                            "params": 10246400,
+                            "own_params": 10246400,
+                            "children": []
+                          },
+                          {
+                            "name": "c_proj",
+                            "type": "Linear",
+                            "params": 10241600,
+                            "own_params": 10241600,
+                            "children": []
+                          },
+                          {
+                            "name": "dropout",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 48
+                  }
+                ]
+              },
+              {
+                "name": "ln_f",
+                "type": "LayerNorm",
+                "params": 3200,
+                "own_params": 3200,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "lm_head",
+            "type": "Linear",
+            "params": 80411200,
+            "own_params": 80411200,
+            "children": []
+          }
+        ]
+      }
     }
   ],
   "summary": "GPT-2 family — Radford et al., 2019 (pre-LN decoder-only transformer).",

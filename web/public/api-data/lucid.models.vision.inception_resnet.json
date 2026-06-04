@@ -442,7 +442,1188 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "InceptionResNetV2",
+        "type": "InceptionResNetV2",
+        "params": 54306464,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv2d_1a",
+            "type": "_ConvBnReLU",
+            "params": 928,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 864,
+                "own_params": 864,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 64,
+                "own_params": 64,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_2a",
+            "type": "_ConvBnReLU",
+            "params": 9280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 9216,
+                "own_params": 9216,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 64,
+                "own_params": 64,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_2b",
+            "type": "_ConvBnReLU",
+            "params": 18560,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 18432,
+                "own_params": 18432,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "_pool1",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "conv2d_3b",
+            "type": "_ConvBnReLU",
+            "params": 5280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 5120,
+                "own_params": 5120,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 160,
+                "own_params": 160,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_4a",
+            "type": "_ConvBnReLU",
+            "params": 138624,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 138240,
+                "own_params": 138240,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 384,
+                "own_params": 384,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "_pool2",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "mixed_5b",
+            "type": "_Mixed5b",
+            "params": 268320,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "_ConvBnReLU",
+                "params": 18624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 18432,
+                    "own_params": 18432,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 86240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 9312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 9216,
+                        "own_params": 9216,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 76928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 76800,
+                        "own_params": 76800,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 151040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 12416,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 12288,
+                        "own_params": 12288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 55488,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 55296,
+                        "own_params": 55296,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 83136,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 82944,
+                        "own_params": 82944,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 12416,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "AvgPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 12416,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 12288,
+                        "own_params": 12288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "repeat",
+            "type": "Sequential",
+            "params": 1231680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Block35",
+                "params": 123168,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "branch0",
+                    "type": "_ConvBnReLU",
+                    "params": 10304,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 10240,
+                        "own_params": 10240,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch1",
+                    "type": "Sequential",
+                    "params": 19584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 10304,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 10240,
+                            "own_params": 10240,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 9280,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 9216,
+                            "own_params": 9216,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch2",
+                    "type": "Sequential",
+                    "params": 52000,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 10304,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 10240,
+                            "own_params": 10240,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 13920,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 13824,
+                            "own_params": 13824,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 96,
+                            "own_params": 96,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ConvBnReLU",
+                        "params": 27776,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 27648,
+                            "own_params": 27648,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2d",
+                    "type": "Conv2d",
+                    "params": 41280,
+                    "own_params": 41280,
+                    "children": []
+                  }
+                ],
+                "repeat": 10
+              }
+            ]
+          },
+          {
+            "name": "mixed_6a",
+            "type": "_Mixed6a",
+            "params": 2664960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "_ConvBnReLU",
+                "params": 1106688,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1105920,
+                    "own_params": 1105920,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 1558272,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 82432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 81920,
+                        "own_params": 81920,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 590336,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 885504,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 884736,
+                        "own_params": 884736,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "repeat_1",
+            "type": "Sequential",
+            "params": 22535680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Block17",
+                "params": 1126784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "branch0",
+                    "type": "_ConvBnReLU",
+                    "params": 209280,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 208896,
+                        "own_params": 208896,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch1",
+                    "type": "Sequential",
+                    "params": 498624,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 139520,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 139264,
+                            "own_params": 139264,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 143680,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 143360,
+                            "own_params": 143360,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 320,
+                            "own_params": 320,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ConvBnReLU",
+                        "params": 215424,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 215040,
+                            "own_params": 215040,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2d",
+                    "type": "Conv2d",
+                    "params": 418880,
+                    "own_params": 418880,
+                    "children": []
+                  }
+                ],
+                "repeat": 20
+              }
+            ]
+          },
+          {
+            "name": "mixed_7a",
+            "type": "_Mixed7a",
+            "params": 3880960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "Sequential",
+                "params": 1164544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 279040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 278528,
+                        "own_params": 278528,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 885504,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 884736,
+                        "own_params": 884736,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 943168,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 279040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 278528,
+                        "own_params": 278528,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 664128,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 663552,
+                        "own_params": 663552,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 1773248,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 279040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 278528,
+                        "own_params": 278528,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 664128,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 663552,
+                        "own_params": 663552,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 830080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 829440,
+                        "own_params": 829440,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "repeat_2",
+            "type": "Sequential",
+            "params": 18318816,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Block8",
+                "params": 2035424,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "branch0",
+                    "type": "_ConvBnReLU",
+                    "params": 399744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 399360,
+                        "own_params": 399360,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch1",
+                    "type": "Sequential",
+                    "params": 701760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 399744,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 399360,
+                            "own_params": 399360,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 129472,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 129024,
+                            "own_params": 129024,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 448,
+                            "own_params": 448,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ConvBnReLU",
+                        "params": 172544,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 172032,
+                            "own_params": 172032,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2d",
+                    "type": "Conv2d",
+                    "params": 933920,
+                    "own_params": 933920,
+                    "children": []
+                  }
+                ],
+                "repeat": 9
+              }
+            ]
+          },
+          {
+            "name": "block8",
+            "type": "_Block8",
+            "params": 2035424,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "_ConvBnReLU",
+                "params": 399744,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 399360,
+                    "own_params": 399360,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 701760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 399744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 399360,
+                        "own_params": 399360,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 129472,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 129024,
+                        "own_params": 129024,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 172544,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 172032,
+                        "own_params": 172032,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "conv2d",
+                "type": "Conv2d",
+                "params": 933920,
+                "own_params": 933920,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_7b",
+            "type": "_ConvBnReLU",
+            "params": 3197952,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 3194880,
+                "own_params": 3194880,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 3072,
+                "own_params": 3072,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "inception_resnet_v2_cls",
@@ -487,7 +1668,1202 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "InceptionResNetV2ForImageClassification",
+        "type": "InceptionResNetV2ForImageClassification",
+        "params": 55843464,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "conv2d_1a",
+            "type": "_ConvBnReLU",
+            "params": 928,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 864,
+                "own_params": 864,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 64,
+                "own_params": 64,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_2a",
+            "type": "_ConvBnReLU",
+            "params": 9280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 9216,
+                "own_params": 9216,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 64,
+                "own_params": 64,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_2b",
+            "type": "_ConvBnReLU",
+            "params": 18560,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 18432,
+                "own_params": 18432,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "_pool1",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "conv2d_3b",
+            "type": "_ConvBnReLU",
+            "params": 5280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 5120,
+                "own_params": 5120,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 160,
+                "own_params": 160,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_4a",
+            "type": "_ConvBnReLU",
+            "params": 138624,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 138240,
+                "own_params": 138240,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 384,
+                "own_params": 384,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "_pool2",
+            "type": "MaxPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "mixed_5b",
+            "type": "_Mixed5b",
+            "params": 268320,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "_ConvBnReLU",
+                "params": 18624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 18432,
+                    "own_params": 18432,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 86240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 9312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 9216,
+                        "own_params": 9216,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 96,
+                        "own_params": 96,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 76928,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 76800,
+                        "own_params": 76800,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 151040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 12416,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 12288,
+                        "own_params": 12288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 55488,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 55296,
+                        "own_params": 55296,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 83136,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 82944,
+                        "own_params": 82944,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 192,
+                        "own_params": 192,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "Sequential",
+                "params": 12416,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "AvgPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 12416,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 12288,
+                        "own_params": 12288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "repeat",
+            "type": "Sequential",
+            "params": 1231680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Block35",
+                "params": 123168,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "branch0",
+                    "type": "_ConvBnReLU",
+                    "params": 10304,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 10240,
+                        "own_params": 10240,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch1",
+                    "type": "Sequential",
+                    "params": 19584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 10304,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 10240,
+                            "own_params": 10240,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 9280,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 9216,
+                            "own_params": 9216,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch2",
+                    "type": "Sequential",
+                    "params": 52000,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 10304,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 10240,
+                            "own_params": 10240,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 13920,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 13824,
+                            "own_params": 13824,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 96,
+                            "own_params": 96,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ConvBnReLU",
+                        "params": 27776,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 27648,
+                            "own_params": 27648,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2d",
+                    "type": "Conv2d",
+                    "params": 41280,
+                    "own_params": 41280,
+                    "children": []
+                  }
+                ],
+                "repeat": 10
+              }
+            ]
+          },
+          {
+            "name": "mixed_6a",
+            "type": "_Mixed6a",
+            "params": 2664960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "_ConvBnReLU",
+                "params": 1106688,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 1105920,
+                    "own_params": 1105920,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 1558272,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 82432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 81920,
+                        "own_params": 81920,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 590336,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 885504,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 884736,
+                        "own_params": 884736,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "repeat_1",
+            "type": "Sequential",
+            "params": 22535680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Block17",
+                "params": 1126784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "branch0",
+                    "type": "_ConvBnReLU",
+                    "params": 209280,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 208896,
+                        "own_params": 208896,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch1",
+                    "type": "Sequential",
+                    "params": 498624,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 139520,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 139264,
+                            "own_params": 139264,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 143680,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 143360,
+                            "own_params": 143360,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 320,
+                            "own_params": 320,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ConvBnReLU",
+                        "params": 215424,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 215040,
+                            "own_params": 215040,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2d",
+                    "type": "Conv2d",
+                    "params": 418880,
+                    "own_params": 418880,
+                    "children": []
+                  }
+                ],
+                "repeat": 20
+              }
+            ]
+          },
+          {
+            "name": "mixed_7a",
+            "type": "_Mixed7a",
+            "params": 3880960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "Sequential",
+                "params": 1164544,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 279040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 278528,
+                        "own_params": 278528,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 885504,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 884736,
+                        "own_params": 884736,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 943168,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 279040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 278528,
+                        "own_params": 278528,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 664128,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 663552,
+                        "own_params": 663552,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch2",
+                "type": "Sequential",
+                "params": 1773248,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 279040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 278528,
+                        "own_params": 278528,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 664128,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 663552,
+                        "own_params": 663552,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 576,
+                        "own_params": 576,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 830080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 829440,
+                        "own_params": 829440,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 640,
+                        "own_params": 640,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "branch3",
+                "type": "MaxPool2d",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "repeat_2",
+            "type": "Sequential",
+            "params": 18318816,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Block8",
+                "params": 2035424,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "branch0",
+                    "type": "_ConvBnReLU",
+                    "params": 399744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 399360,
+                        "own_params": 399360,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "branch1",
+                    "type": "Sequential",
+                    "params": 701760,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ConvBnReLU",
+                        "params": 399744,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 399360,
+                            "own_params": 399360,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 384,
+                            "own_params": 384,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ConvBnReLU",
+                        "params": 129472,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 129024,
+                            "own_params": 129024,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 448,
+                            "own_params": 448,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ConvBnReLU",
+                        "params": 172544,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 172032,
+                            "own_params": 172032,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 512,
+                            "own_params": 512,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2d",
+                    "type": "Conv2d",
+                    "params": 933920,
+                    "own_params": 933920,
+                    "children": []
+                  }
+                ],
+                "repeat": 9
+              }
+            ]
+          },
+          {
+            "name": "block8",
+            "type": "_Block8",
+            "params": 2035424,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "branch0",
+                "type": "_ConvBnReLU",
+                "params": 399744,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 399360,
+                    "own_params": 399360,
+                    "children": []
+                  },
+                  {
+                    "name": "bn",
+                    "type": "BatchNorm2d",
+                    "params": 384,
+                    "own_params": 384,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "branch1",
+                "type": "Sequential",
+                "params": 701760,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ConvBnReLU",
+                    "params": 399744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 399360,
+                        "own_params": 399360,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 384,
+                        "own_params": 384,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_ConvBnReLU",
+                    "params": 129472,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 129024,
+                        "own_params": 129024,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 448,
+                        "own_params": 448,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ConvBnReLU",
+                    "params": 172544,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 172032,
+                        "own_params": 172032,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "conv2d",
+                "type": "Conv2d",
+                "params": 933920,
+                "own_params": 933920,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv2d_7b",
+            "type": "_ConvBnReLU",
+            "params": 3197952,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 3194880,
+                "own_params": 3194880,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 3072,
+                "own_params": 3072,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "avgpool",
+            "type": "AdaptiveAvgPool2d",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "dropout",
+            "type": "Dropout",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "classif",
+            "type": "Linear",
+            "params": 1537000,
+            "own_params": 1537000,
+            "children": []
+          }
+        ]
+      }
     },
     {
       "name": "InceptionResNetV2Weights",

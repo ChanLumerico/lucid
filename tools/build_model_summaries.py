@@ -135,8 +135,15 @@ def main() -> int:
         except (OSError, json.JSONDecodeError):
             pass
 
-    out: dict[str, Any] = {}
-    meta: dict[str, str] = {}
+    # When filtering to a subset (--family / --factory), SEED from the existing
+    # cache so untouched families survive.  Without this, a per-family run wrote
+    # a cache containing ONLY that family, silently dropping every other model's
+    # summary on the next ``build-api-data`` regen (the resnet/vit/… "model
+    # structure" cards vanished).  A full run (no filter) still starts empty so
+    # removed factories drop out.
+    filtered = bool(args.family or args.factory)
+    out: dict[str, Any] = dict(prev_tree) if (filtered and not args.force) else {}
+    meta: dict[str, str] = dict(prev_meta) if (filtered and not args.force) else {}
     ok = 0
     cache_hits = 0
     skipped = 0
