@@ -75,9 +75,17 @@ def clip_grad_norm_(
     >>> # after loss.backward() ...
     >>> total_norm = clip_grad_norm_(model.parameters(), max_norm=1.0)
     """
-    params_with_grad = [p for p in parameters if p.grad is not None]
+    params = list(parameters)
+    params_with_grad = [p for p in params if p.grad is not None]
     if not params_with_grad:
-        return zeros(1)
+        # Preserve the parameters' device/dtype for the zero-norm result —
+        # defaulting to CPU/float32 here breaks multi-device / mixed-precision
+        # callers.  Fall back to the global default only when there are no
+        # parameters at all (nothing to infer from).
+        if not params:
+            return zeros(1)
+        impl0 = params[0]._impl
+        return _wrap(_C_engine.full([1], 0.0, impl0.dtype, impl0.device))
 
     dev = params_with_grad[0]._impl.device
     dt = params_with_grad[0]._impl.dtype
@@ -222,9 +230,17 @@ def get_total_norm(
     >>> from lucid.nn.utils.clip_grad import get_total_norm
     >>> g_norm = get_total_norm(model.parameters())
     """
-    params_with_grad = [p for p in parameters if p.grad is not None]
+    params = list(parameters)
+    params_with_grad = [p for p in params if p.grad is not None]
     if not params_with_grad:
-        return zeros(1)
+        # Preserve the parameters' device/dtype for the zero-norm result —
+        # defaulting to CPU/float32 here breaks multi-device / mixed-precision
+        # callers.  Fall back to the global default only when there are no
+        # parameters at all (nothing to infer from).
+        if not params:
+            return zeros(1)
+        impl0 = params[0]._impl
+        return _wrap(_C_engine.full([1], 0.0, impl0.dtype, impl0.device))
 
     dev = params_with_grad[0]._impl.device
     dt = params_with_grad[0]._impl.dtype

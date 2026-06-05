@@ -189,7 +189,7 @@ def nanquantile(
         )
         n = int(non_nan_vals.sum().item())
         if n == 0:
-            nan_val = lucid.tensor(math.nan, dtype=input.dtype)
+            nan_val = lucid.tensor(math.nan, dtype=input.dtype, device=input.device)
             if scalar_q:
                 return nan_val
             return lucid.stack([nan_val] * len(q_list))
@@ -206,7 +206,7 @@ def nanquantile(
         if n == 0:
             out_shape = list(input.shape)
             out_shape[dim] = len(q_list)
-            nan_val = lucid.full(out_shape, math.nan, dtype=input.dtype)
+            nan_val = lucid.full(out_shape, math.nan, dtype=input.dtype, device=input.device)
             if scalar_q:
                 return nan_val.squeeze(dim)
             return nan_val

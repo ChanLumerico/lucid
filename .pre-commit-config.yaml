@@ -16,8 +16,11 @@ repos:
         pass_filenames: false
         always_run: true
 
+  # Pin to v22.x to match CI (`clang-format>=22,<23`) and local Homebrew LLVM
+  # 22 — older clang-format formats differently, causing flaky format-gate
+  # mismatches between local pre-commit and CI.
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v18.1.8
+    rev: v22.1.4
     hooks:
       - id: clang-format
         files: ^lucid/_C/.*\.(h|hpp|cpp|cc)$
