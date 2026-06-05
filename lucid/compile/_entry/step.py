@@ -33,7 +33,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Protocol, cast
 
 from lucid._C import engine as _C_engine
-from lucid._C.engine import TensorImpl
 from lucid.autograd.function import Function, FunctionCtx
 
 
@@ -287,7 +286,7 @@ def make_step(
 
     def _run(
         entry: _StepEntry, x_args: tuple[Tensor, ...]
-    ) -> tuple[TensorImpl, list[TensorImpl]]:
+    ) -> tuple[_C_engine.TensorImpl, list[_C_engine.TensorImpl]]:
         """Execute one cached step entry; return ``(loss_impl, [grad_impls])``.
 
         The executable returns ``len(params) + 1`` storages — the loss
@@ -318,10 +317,12 @@ def make_step(
                 f"(1 loss + {len(params)} grads + {entry.bn_stat_out_count} BN stats)"
             )
         for _i, _buf in enumerate(entry.bn_stat_buffers):
-            _buf.copy_(_wrap(cast(TensorImpl, outs[n_loss_grad + _i])))
+            _buf.copy_(_wrap(cast(_C_engine.TensorImpl, outs[n_loss_grad + _i])))
         # outs = [loss_impl, grad_param_0_impl, …]
-        loss_impl = cast(TensorImpl, outs[0])
-        grad_impls = [cast(TensorImpl, g) for g in outs[1 : 1 + len(params)]]
+        loss_impl = cast(_C_engine.TensorImpl, outs[0])
+        grad_impls = [
+            cast(_C_engine.TensorImpl, g) for g in outs[1 : 1 + len(params)]
+        ]
         return loss_impl, grad_impls
 
     class _CompiledStepFunction(Function):
@@ -382,7 +383,9 @@ def make_step(
             # optimizer ignores).  The ``entry_holder`` non-Tensor
             # input does not appear in ``next_edges`` so no slot is
             # produced for it here.
-            saved_grad_impls = cast(list[TensorImpl], ctx.saved_grad_impls)
+            saved_grad_impls = cast(
+                list[_C_engine.TensorImpl], ctx.saved_grad_impls
+            )
             n_user = cast(int, ctx.n_user)
             scaled = [grad_loss * _wrap(g) for g in saved_grad_impls]
             return tuple([None] * n_user + scaled)
