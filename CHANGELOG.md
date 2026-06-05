@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed — device/dtype preserved on empty-input gradient norm + NaN quantile
+
+`clip_grad_norm_` / `get_total_norm` returned their zero norm via `zeros(1)`
+(global-default device/dtype) when no parameter carried a gradient, and
+`nanquantile`'s all-NaN early returns (both the `dim=None` and per-`dim`
+paths) built the NaN result without `device=input.device`. Both silently
+produced a CPU / float32 tensor for GPU or mixed-precision inputs, causing
+downstream device-mismatch errors. Each path now preserves the input's
+device and dtype (falling back to the global default only when there are no
+parameters at all). Surfaced by a stability audit.
+
+---
+
 ## [3.5.0] — 2026-06-05
 
 ### Fixed — Inference no longer leaks the autograd graph (saved-output self-cycle)
