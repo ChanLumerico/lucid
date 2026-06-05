@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubsectionHeading } from "@/components/ui/SubsectionHeading";
 import { getUsedBy } from "@/lib/usedby";
 import { getAllModuleSlugs } from "@/lib/api-loader";
 import { cn } from "@/lib/utils";
@@ -35,12 +36,12 @@ export function UsedByBlock({ path, maxRows = 12 }: UsedByBlockProps) {
 
   return (
     <section className="space-y-2">
-      <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+      <SubsectionHeading>
         Used by{" "}
         <span className="ml-1 font-mono text-[10px] text-lucid-text-low">
           {rows.length}
         </span>
-      </h4>
+      </SubsectionHeading>
       <ul
         className={cn(
           "rounded-xl border border-lucid-border bg-lucid-surface/40 px-4 py-3",

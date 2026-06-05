@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubsectionHeading } from "@/components/ui/SubsectionHeading";
 import type { SeeAlsoItem } from "@/lib/types";
 import { getAllModuleSlugs, loadApiData } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule } from "@/lib/types";
@@ -54,9 +55,9 @@ export function SeeAlsoBlock({ items }: SeeAlsoBlockProps) {
   const slugs = new Set(getAllModuleSlugs());
   return (
     <section className="space-y-2">
-      <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+      <SubsectionHeading>
         See Also
-      </h4>
+      </SubsectionHeading>
       <ul className="rounded-xl border-l-2 border-lucid-primary/40 bg-lucid-primary/5 px-4 py-3 space-y-1.5">
         {items.map((item, i) => {
           const href = resolveLink(item.name, slugs);

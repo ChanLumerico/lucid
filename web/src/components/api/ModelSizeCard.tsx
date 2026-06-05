@@ -19,6 +19,7 @@
  */
 
 import { useState } from "react";
+import { SubsectionHeading } from "@/components/ui/SubsectionHeading";
 import { ChevronDown } from "lucide-react";
 import { cn, formatCompactCount } from "@/lib/utils";
 import type { LayerSummaryNode } from "@/lib/types";
@@ -39,9 +40,9 @@ export function ModelSizeCard({ paramCount, summary }: ModelSizeCardProps) {
 
   return (
     <section className="space-y-2">
-      <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+      <SubsectionHeading>
         Model Size
-      </h4>
+      </SubsectionHeading>
       <div className="rounded-xl border border-lucid-border bg-lucid-surface overflow-hidden">
         {/* Header — always visible.  Clickable when a tree is attached. */}
         <button
@@ -54,6 +55,11 @@ export function ModelSizeCard({ paramCount, summary }: ModelSizeCardProps) {
             !hasTree && "cursor-default",
           )}
           aria-expanded={hasTree ? open : undefined}
+          aria-label={
+            hasTree
+              ? "Toggle the per-layer parameter breakdown"
+              : "Parameter count (no layer breakdown available)"
+          }
         >
           <span className="font-mono text-2xl font-semibold text-lucid-text-high">
             {formatCompactCount(headlineCount)}

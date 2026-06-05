@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubsectionHeading } from "@/components/ui/SubsectionHeading";
 import { ExternalLink, Pencil } from "lucide-react";
 import { sourceToEditUrl } from "@/lib/github-edit";
 import { highlight } from "@/lib/shiki";
@@ -132,9 +133,9 @@ export async function ClassDoc({ cls, moduleSlug, methodName }: ClassDocProps) {
           {cls.raises.length > 0 && <RaisesTable raises={cls.raises} />}
           {cls.notes.length > 0 && (
             <section className="space-y-2">
-              <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+              <SubsectionHeading>
                 Notes
-              </h4>
+              </SubsectionHeading>
               <div className="rounded-xl border-l-2 border-lucid-blue bg-lucid-blue/5 px-4 py-3 space-y-2">
                 {cls.notes.map((note, i) => (
                   <MathText key={i} text={note} block className="text-sm text-lucid-text-mid leading-relaxed" />

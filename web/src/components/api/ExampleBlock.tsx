@@ -1,4 +1,5 @@
 import { highlight } from "@/lib/shiki";
+import { SubsectionHeading } from "@/components/ui/SubsectionHeading";
 import { cn } from "@/lib/utils";
 import { CopyButton } from "./CopyButton";
 
@@ -16,9 +17,9 @@ export async function ExampleBlock({ examples, className }: ExampleBlockProps) {
 
   return (
     <div className={cn("space-y-3", className)}>
-      <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+      <SubsectionHeading>
         Examples
-      </h4>
+      </SubsectionHeading>
       {rendered.map((html, i) => (
         // ``group relative`` is what lets the copy button reveal on
         // hover and absolutely-position to the top-right of the

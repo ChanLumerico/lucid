@@ -26,6 +26,10 @@ downstream device-mismatch errors. Each path now preserves the input's
 device and dtype (falling back to the global default only when there are no
 parameters at all). Surfaced by a stability audit.
 
+### Changed
+
+- SubsectionHeading SSOT + a11y + changelog error boundary
+
 ---
 
 ## [3.5.0] — 2026-06-05

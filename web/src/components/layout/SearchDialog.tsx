@@ -209,7 +209,10 @@ export function SearchDialog({
       setKindFilter("all");
       setActiveIndex(0);
       setRecents(getRecentPages());
-      setTimeout(() => inputRef.current?.focus(), 50);
+      // Clear on close so a rapidly-dismissed dialog doesn't focus a
+      // stale input after unmount.
+      const id = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(id);
     }
   }, [open]);
 

@@ -1,4 +1,5 @@
 import type { DocstringParameter, DocstringAttribute, DocstringRaise } from "@/lib/types";
+import { SubsectionHeading } from "@/components/ui/SubsectionHeading";
 import { TypeAnnotation } from "./TypeAnnotation";
 import { MathText } from "./MathText";
 import { cn } from "@/lib/utils";
@@ -13,9 +14,9 @@ export function ParameterTable({ parameters, className }: ParameterTableProps) {
 
   return (
     <section className={cn("space-y-2", className)}>
-      <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+      <SubsectionHeading>
         Parameters
-      </h4>
+      </SubsectionHeading>
       <div className="divide-y divide-lucid-border rounded-xl border border-lucid-border overflow-hidden">
         {parameters.map((p) => (
           <div key={p.name} className="flex flex-col sm:flex-row gap-1 sm:gap-4 px-4 py-3 bg-lucid-surface hover:bg-lucid-elevated transition-colors">
@@ -54,9 +55,9 @@ export function AttributeTable({ attributes, className }: AttributeTableProps) {
 
   return (
     <section className={cn("space-y-2", className)}>
-      <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+      <SubsectionHeading>
         Attributes
-      </h4>
+      </SubsectionHeading>
       <div className="divide-y divide-lucid-border rounded-xl border border-lucid-border overflow-hidden">
         {attributes.map((a) => (
           <div key={a.name} className="flex flex-col sm:flex-row gap-1 sm:gap-4 px-4 py-3 bg-lucid-surface hover:bg-lucid-elevated transition-colors">
@@ -86,9 +87,9 @@ export function RaisesTable({ raises, className }: RaisesTableProps) {
 
   return (
     <section className={cn("space-y-2", className)}>
-      <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
+      <SubsectionHeading>
         Raises
-      </h4>
+      </SubsectionHeading>
       <div className="divide-y divide-lucid-border rounded-xl border border-lucid-border overflow-hidden">
         {raises.map((r, i) => (
           <div key={i} className="flex flex-col sm:flex-row gap-1 sm:gap-4 px-4 py-3 bg-lucid-surface">
