@@ -74,7 +74,8 @@ class CrossViTConfig(ModelConfig):
         240×240 input).
     crop_scale : bool, optional, default=False
         Method used to rescale the large-branch input.  ``False`` ⇒
-        bilinear resize (paper default); ``True`` ⇒ center-crop.
+        bicubic resize to the absolute branch target (paper default);
+        ``True`` ⇒ center-crop.
     patch_sizes : tuple of int, optional, default=(12, 16)
         Patch sizes for the (small, large) branches.
     embed_dims : tuple of int, optional, default=(96, 192)

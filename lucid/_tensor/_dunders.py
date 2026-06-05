@@ -67,8 +67,10 @@ def _unwrap_or_scalar(
     Return TensorImpl for Tensor; convert scalars to scalar TensorImpl.
     ref_impl is used to match dtype/device for scalar→TensorImpl conversion.
     """
-    # Avoid circular import: check duck-type attribute instead of isinstance
-    impl = getattr(x, "_impl", None)
+    # Avoid circular import: check duck-type attribute instead of isinstance.
+    # Annotate ``object`` (not the implicit ``Any`` from ``getattr(..., default)``)
+    # so the isinstance guard narrows reliably across mypy versions.
+    impl: object = getattr(x, "_impl", None)
     if impl is not None and isinstance(impl, _C_engine.TensorImpl):
         return impl
     if isinstance(x, _C_engine.TensorImpl):

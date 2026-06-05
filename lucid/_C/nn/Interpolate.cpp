@@ -2,13 +2,13 @@
 //
 // Bilinear, trilinear, and nearest-neighbor interpolation implementations.
 //
-// Differentiable ops (bilinear, trilinear): forward delegates to
-//   IBackend::interpolate_*_forward; the backward node saves only the original
-//   shape and the output dimensions — the backend recomputes interpolation
-//   weights during backward.
+// Bilinear / trilinear: forward delegates to IBackend::interpolate_*_forward;
+//   the backward node saves only the original shape and the output dimensions —
+//   the backend recomputes interpolation weights during backward.
 //
-// Non-differentiable ops (nearest 2-D and 3-D): forward delegates to
-//   IBackend::interpolate_nearest_*_forward; no backward node is created.
+// Nearest 2-D / 3-D: forward delegates to IBackend::interpolate_nearest_*_forward
+//   and attaches a backward node that scatter-adds each output gradient onto its
+//   unique source pixel/voxel (same floor coordinate map as the forward).
 
 #include "Interpolate.h"
 
@@ -21,7 +21,6 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
-#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -138,43 +137,92 @@ TensorImplPtr interpolate_trilinear_op(
 }
 LUCID_REGISTER_OP(InterpolateTrilinearBackward)
 
-TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out) {
+const OpSchema InterpolateNearestBackward2D::schema_v1{"interpolate_nearest_2d", 1,
+                                                       AmpPolicy::KeepInput, true};
+
+TensorImplPtr
+InterpolateNearestBackward2D::forward(const TensorImplPtr& input, int H_out, int W_out) {
     Validator::input(input, "interpolate_nearest.input").non_null();
     if (input->shape().size() != 4)
         throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest: 4-D input required");
     const int N = static_cast<int>(input->shape()[0]);
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, H_out, W_out};
-    OpScopeFull scope{"interpolate_nearest_2d", input->device(), input->dtype(), out_shape};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
     scope.set_attr("H_out", static_cast<std::int64_t>(H_out));
     scope.set_attr("W_out", static_cast<std::int64_t>(W_out));
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage = be.interpolate_nearest_2d_forward(input->storage(), input->shape(), H_out,
                                                             W_out, input->dtype());
-    auto result = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
-                                               input->device(), false);
-    if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({input}, result);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                            input->device(), false);
+    {
+        auto bwd = std::make_shared<InterpolateNearestBackward2D>();
+        bwd->H_in_ = static_cast<int>(input->shape()[2]);
+        bwd->W_in_ = static_cast<int>(input->shape()[3]);
+        bwd->H_out_ = H_out;
+        bwd->W_out_ = W_out;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<InterpolateNearestBackward2D, 1>::wire_autograd(std::move(bwd), {input},
+                                                                           out, false);
     }
-    return result;
+    return out;
 }
 
+std::vector<Storage> InterpolateNearestBackward2D::apply(Storage grad_out) {
+    auto& be = backend::Dispatcher::for_device(device_);
+    return {be.interpolate_nearest_2d_backward(grad_out, orig_shape_, H_out_, W_out_, dtype_)};
+}
+
+TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out) {
+    return InterpolateNearestBackward2D::forward(input, H_out, W_out);
+}
+LUCID_REGISTER_OP(InterpolateNearestBackward2D)
+
+const OpSchema InterpolateNearestBackward3D::schema_v1{"interpolate_nearest_3d", 1,
+                                                       AmpPolicy::KeepInput, true};
+
 TensorImplPtr
-interpolate_nearest_3d_op(const TensorImplPtr& input, int D_out, int H_out, int W_out) {
+InterpolateNearestBackward3D::forward(const TensorImplPtr& input, int D_out, int H_out, int W_out) {
     Validator::input(input, "interpolate_nearest_3d.input").non_null();
     if (input->shape().size() != 5)
         throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest_3d: 5-D input required");
     const int N = static_cast<int>(input->shape()[0]);
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, D_out, H_out, W_out};
-    OpScopeFull scope{"interpolate_nearest_3d", input->device(), input->dtype(), out_shape};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage = be.interpolate_nearest_3d_forward(input->storage(), input->shape(), D_out,
                                                             H_out, W_out, input->dtype());
-    return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
-                                        input->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                            input->device(), false);
+    {
+        auto bwd = std::make_shared<InterpolateNearestBackward3D>();
+        bwd->D_in_ = static_cast<int>(input->shape()[2]);
+        bwd->H_in_ = static_cast<int>(input->shape()[3]);
+        bwd->W_in_ = static_cast<int>(input->shape()[4]);
+        bwd->D_out_ = D_out;
+        bwd->H_out_ = H_out;
+        bwd->W_out_ = W_out;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<InterpolateNearestBackward3D, 1>::wire_autograd(std::move(bwd), {input},
+                                                                           out, false);
+    }
+    return out;
 }
+
+std::vector<Storage> InterpolateNearestBackward3D::apply(Storage grad_out) {
+    auto& be = backend::Dispatcher::for_device(device_);
+    return {
+        be.interpolate_nearest_3d_backward(grad_out, orig_shape_, D_out_, H_out_, W_out_, dtype_)};
+}
+
+TensorImplPtr
+interpolate_nearest_3d_op(const TensorImplPtr& input, int D_out, int H_out, int W_out) {
+    return InterpolateNearestBackward3D::forward(input, D_out, H_out, W_out);
+}
+LUCID_REGISTER_OP(InterpolateNearestBackward3D)
 
 }  // namespace lucid

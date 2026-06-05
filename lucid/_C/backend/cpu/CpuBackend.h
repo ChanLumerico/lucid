@@ -7783,6 +7783,97 @@ public:
         return Storage{std::move(out_cpu)};
     }
 
+    Storage interpolate_nearest_2d_backward(
+        const Storage& grad_out, const Shape& in_shape, int H_out, int W_out, Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
+        const int H_in = static_cast<int>(in_shape[2]);
+        const int W_in = static_cast<int>(in_shape[3]);
+        const auto& go = std::get<CpuStorage>(grad_out);
+        auto dx_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H_in * W_in, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* go_p = reinterpret_cast<const T*>(go.ptr.get());
+            T* dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
+            std::memset(dx_p, 0, sizeof(T) * static_cast<std::size_t>(N) * C * H_in * W_in);
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    const T* go_base = go_p + ((n * C + c) * H_out) * W_out;
+                    T* dx_base = dx_p + ((n * C + c) * H_in) * W_in;
+                    for (int h = 0; h < H_out; ++h) {
+                        int yh =
+                            static_cast<int>(std::floor(static_cast<double>(h) * H_in / H_out));
+                        yh = std::clamp(yh, 0, H_in - 1);
+                        for (int w = 0; w < W_out; ++w) {
+                            int xw =
+                                static_cast<int>(std::floor(static_cast<double>(w) * W_in / W_out));
+                            xw = std::clamp(xw, 0, W_in - 1);
+                            dx_base[yh * W_in + xw] += go_base[h * W_out + w];
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_nearest_2d_backward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(dx_cpu)};
+    }
+
+    Storage interpolate_nearest_3d_backward(const Storage& grad_out,
+                                            const Shape& in_shape,
+                                            int D_out,
+                                            int H_out,
+                                            int W_out,
+                                            Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
+        const int D_in = static_cast<int>(in_shape[2]);
+        const int H_in = static_cast<int>(in_shape[3]);
+        const int W_in = static_cast<int>(in_shape[4]);
+        const auto& go = std::get<CpuStorage>(grad_out);
+        auto dx_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * D_in * H_in * W_in, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* go_p = reinterpret_cast<const T*>(go.ptr.get());
+            T* dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
+            std::memset(dx_p, 0, sizeof(T) * static_cast<std::size_t>(N) * C * D_in * H_in * W_in);
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    const T* go_base = go_p + (n * C + c) * D_out * H_out * W_out;
+                    T* dx_base = dx_p + (n * C + c) * D_in * H_in * W_in;
+                    for (int d = 0; d < D_out; ++d) {
+                        int dz = std::clamp(
+                            static_cast<int>(std::floor(static_cast<double>(d) * D_in / D_out)), 0,
+                            D_in - 1);
+                        for (int h = 0; h < H_out; ++h) {
+                            int yh = std::clamp(
+                                static_cast<int>(std::floor(static_cast<double>(h) * H_in / H_out)),
+                                0, H_in - 1);
+                            for (int w = 0; w < W_out; ++w) {
+                                int xw = std::clamp(static_cast<int>(std::floor(
+                                                        static_cast<double>(w) * W_in / W_out)),
+                                                    0, W_in - 1);
+                                dx_base[(dz * H_in + yh) * W_in + xw] +=
+                                    go_base[(d * H_out + h) * W_out + w];
+                            }
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_nearest_3d_backward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(dx_cpu)};
+    }
+
     Storage interpolate_bilinear_forward(const Storage& input,
                                          const Shape& in_shape,
                                          int H_out,

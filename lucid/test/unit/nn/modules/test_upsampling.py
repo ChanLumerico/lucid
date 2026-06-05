@@ -27,14 +27,35 @@ class TestUpsample:
         assert out.shape == (1, 1, 4, 4)
         assert (out == 7.0).all()
 
-    def test_backward(self) -> None:
-        # NOTE: nearest-mode upsample currently doesn't propagate a gradient
-        # (a separate engine gap); bilinear does, so the grad path is tested
-        # through it.
+    def test_backward_bilinear(self) -> None:
         x = lucid.ones(1, 1, 4, 4, requires_grad=True)
         nn.Upsample(scale_factor=2, mode="bilinear")(x).sum().backward()
         assert x.grad is not None
         assert x.grad.shape == (1, 1, 4, 4)
+
+    def test_backward_nearest_2d(self) -> None:
+        # nearest-mode now propagates gradients: each input pixel feeds a 2x2
+        # output block under a 2x upsample, so every input gradient is 4.0.
+        x = lucid.ones(1, 1, 4, 4, requires_grad=True)
+        nn.Upsample(scale_factor=2, mode="nearest")(x).sum().backward()
+        assert x.grad is not None
+        assert x.grad.shape == (1, 1, 4, 4)
+        assert (x.grad == 4.0).all().item()
+
+    def test_backward_nearest_3d(self) -> None:
+        # each voxel feeds a 2x2x2 output block under a 2x upsample -> grad 8.0.
+        x = lucid.ones(1, 1, 2, 2, 2, requires_grad=True)
+        nn.Upsample(scale_factor=2, mode="nearest")(x).sum().backward()
+        assert x.grad is not None
+        assert x.grad.shape == (1, 1, 2, 2, 2)
+        assert (x.grad == 8.0).all().item()
+
+    def test_backward_nearest_asymmetric(self) -> None:
+        # non-integer scale: gradients stay strictly positive everywhere.
+        x = lucid.ones(1, 2, 3, 3, requires_grad=True)
+        nn.Upsample(scale_factor=1.5, mode="nearest")(x).sum().backward()
+        assert x.grad is not None
+        assert (x.grad > 0).all().item()
 
 
 class TestPixelShuffleUnshuffle:

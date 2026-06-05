@@ -5588,6 +5588,109 @@ private:
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
+    Storage interpolate_nearest_2d_backward(
+        const Storage& grad_out, const Shape& in_shape, int H_out, int W_out, Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
+        const int H_in = static_cast<int>(in_shape[2]);
+        const int W_in = static_cast<int>(in_shape[3]);
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+
+        // Source index per output position: clamp(floor(out * in / out_dim)),
+        // exactly mirroring the forward gather mapping.
+        auto build_idx = [&](int in_dim, int out_dim) {
+            auto idx =
+                ::mlx::core::astype(::mlx::core::arange(0, out_dim, 1), ::mlx::core::float32);
+            auto scale = gpu::mlx_scalar(static_cast<double>(in_dim) / static_cast<double>(out_dim),
+                                         ::mlx::core::float32);
+            auto v = ::mlx::core::floor(::mlx::core::multiply(idx, scale));
+            auto zero_f = gpu::mlx_scalar(0.0, ::mlx::core::float32);
+            auto cap = gpu::mlx_scalar(in_dim - 1, ::mlx::core::float32);
+            v = ::mlx::core::clip(v, std::optional<::mlx::core::array>(zero_f),
+                                  std::optional<::mlx::core::array>(cap));
+            return ::mlx::core::astype(v, ::mlx::core::int32);
+        };
+
+        ::mlx::core::Shape full_idx_shape{N, C, H_out, W_out};
+        auto y_b = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(build_idx(H_in, H_out), {1, 1, H_out, 1}), full_idx_shape);
+        auto x_b = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(build_idx(W_in, W_out), {1, 1, 1, W_out}), full_idx_shape);
+        auto n_idx = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(
+                ::mlx::core::astype(::mlx::core::arange(0, N, 1), ::mlx::core::int32),
+                {N, 1, 1, 1}),
+            full_idx_shape);
+        auto c_idx = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(
+                ::mlx::core::astype(::mlx::core::arange(0, C, 1), ::mlx::core::int32),
+                {1, C, 1, 1}),
+            full_idx_shape);
+
+        ::mlx::core::Shape upd_shape{N, C, H_out, W_out, 1, 1, 1, 1};
+        auto base = ::mlx::core::zeros(::mlx::core::Shape{N, C, H_in, W_in}, mlx_dt);
+        std::vector<int> axes_v{0, 1, 2, 3};
+        std::vector<::mlx::core::array> idxs{n_idx, c_idx, y_b, x_b};
+        auto upd = ::mlx::core::reshape(*gg.arr, upd_shape);
+        base = ::mlx::core::scatter_add(base, idxs, upd, axes_v);
+        return Storage{gpu::wrap_mlx_array(std::move(base), dt)};
+    }
+
+    Storage interpolate_nearest_3d_backward(const Storage& grad_out,
+                                            const Shape& in_shape,
+                                            int D_out,
+                                            int H_out,
+                                            int W_out,
+                                            Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
+        const int D_in = static_cast<int>(in_shape[2]);
+        const int H_in = static_cast<int>(in_shape[3]);
+        const int W_in = static_cast<int>(in_shape[4]);
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+
+        auto build_idx = [&](int in_dim, int out_dim) {
+            auto idx =
+                ::mlx::core::astype(::mlx::core::arange(0, out_dim, 1), ::mlx::core::float32);
+            auto scale = gpu::mlx_scalar(static_cast<double>(in_dim) / static_cast<double>(out_dim),
+                                         ::mlx::core::float32);
+            auto v = ::mlx::core::floor(::mlx::core::multiply(idx, scale));
+            auto zero_f = gpu::mlx_scalar(0.0, ::mlx::core::float32);
+            auto cap = gpu::mlx_scalar(in_dim - 1, ::mlx::core::float32);
+            v = ::mlx::core::clip(v, std::optional<::mlx::core::array>(zero_f),
+                                  std::optional<::mlx::core::array>(cap));
+            return ::mlx::core::astype(v, ::mlx::core::int32);
+        };
+
+        ::mlx::core::Shape full_idx_shape{N, C, D_out, H_out, W_out};
+        auto d_b = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(build_idx(D_in, D_out), {1, 1, D_out, 1, 1}), full_idx_shape);
+        auto h_b = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(build_idx(H_in, H_out), {1, 1, 1, H_out, 1}), full_idx_shape);
+        auto w_b = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(build_idx(W_in, W_out), {1, 1, 1, 1, W_out}), full_idx_shape);
+        auto n_idx = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(
+                ::mlx::core::astype(::mlx::core::arange(0, N, 1), ::mlx::core::int32),
+                {N, 1, 1, 1, 1}),
+            full_idx_shape);
+        auto c_idx = ::mlx::core::broadcast_to(
+            ::mlx::core::reshape(
+                ::mlx::core::astype(::mlx::core::arange(0, C, 1), ::mlx::core::int32),
+                {1, C, 1, 1, 1}),
+            full_idx_shape);
+
+        ::mlx::core::Shape upd_shape{N, C, D_out, H_out, W_out, 1, 1, 1, 1, 1};
+        auto base = ::mlx::core::zeros(::mlx::core::Shape{N, C, D_in, H_in, W_in}, mlx_dt);
+        std::vector<int> axes_v{0, 1, 2, 3, 4};
+        std::vector<::mlx::core::array> idxs{n_idx, c_idx, d_b, h_b, w_b};
+        auto upd = ::mlx::core::reshape(*gg.arr, upd_shape);
+        base = ::mlx::core::scatter_add(base, idxs, upd, axes_v);
+        return Storage{gpu::wrap_mlx_array(std::move(base), dt)};
+    }
+
     Storage interpolate_bilinear_forward(const Storage& input,
                                          const Shape& in_shape,
                                          int H_out,

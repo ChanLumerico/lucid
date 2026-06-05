@@ -1714,6 +1714,20 @@ public:
     virtual Storage interpolate_nearest_3d_forward(
         const Storage& input, const Shape& in_shape, int D_out, int H_out, int W_out, Dtype dt) = 0;
 
+    // Nearest-neighbor upsampling backward: scatter-adds each output gradient
+    // onto its unique source pixel/voxel using the same floor coordinate map
+    // as the forward (a many-to-one mapping, so a source accumulates the sum
+    // of every output gradient that selected it).
+    virtual Storage interpolate_nearest_2d_backward(
+        const Storage& grad_out, const Shape& in_shape, int H_out, int W_out, Dtype dt) = 0;
+
+    virtual Storage interpolate_nearest_3d_backward(const Storage& grad_out,
+                                                    const Shape& in_shape,
+                                                    int D_out,
+                                                    int H_out,
+                                                    int W_out,
+                                                    Dtype dt) = 0;
+
     // Bilinear interpolation forward/backward.
     // align_corners=true maps corner pixels to corner coordinates; false
     // scales by factor (in_size / out_size).

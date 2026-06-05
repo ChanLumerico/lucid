@@ -52,7 +52,10 @@ def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
     """Return the underlying TensorImpl from a Tensor or TensorImpl."""
     if isinstance(t, _C_engine.TensorImpl):
         return t
-    impl = getattr(t, "_impl", None)
+    # ``getattr(..., default)`` is typed ``Any``; annotate ``object`` so the
+    # isinstance guard below narrows reliably across mypy versions (1.19 left
+    # the post-isinstance ``Any`` un-narrowed → no-any-return).
+    impl: object = getattr(t, "_impl", None)
     if impl is not None and isinstance(impl, _C_engine.TensorImpl):
         return impl
     raise TypeError(f"Expected Tensor or TensorImpl, got {type(t).__name__}")

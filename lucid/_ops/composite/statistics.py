@@ -33,8 +33,8 @@ def _quantile_sorted(
             val_lo = sorted_x[lo]
             val_hi = sorted_x[hi]
         else:
-            lo_t = lucid.tensor([lo], dtype=lucid.int64)
-            hi_t = lucid.tensor([hi], dtype=lucid.int64)
+            lo_t = lucid.tensor([lo], dtype=lucid.int64, device=sorted_x.device)
+            hi_t = lucid.tensor([hi], dtype=lucid.int64, device=sorted_x.device)
             val_lo = sorted_x.index_select(dim, lo_t).squeeze(dim)
             val_hi = sorted_x.index_select(dim, hi_t).squeeze(dim)
 
@@ -51,7 +51,10 @@ def _quantile_sorted(
                 sorted_x[round(idx_f)]
                 if dim is None
                 else sorted_x.index_select(
-                    dim, lucid.tensor([round(idx_f)], dtype=lucid.int64)
+                    dim,
+                    lucid.tensor(
+                        [round(idx_f)], dtype=lucid.int64, device=sorted_x.device
+                    ),
                 ).squeeze(dim)
             )
         else:

@@ -454,9 +454,10 @@ void register_nn(py::module_& m) {
           py::arg("H_out"), py::arg("W_out"), py::arg("align_corners") = false,
           "3-D trilinear interpolation. Input: (N, C, D, H, W).");
     m.def("interpolate_nearest_2d", &interpolate_nearest_2d_op, py::arg("input"), py::arg("H_out"),
-          py::arg("W_out"), "2-D nearest-neighbor interpolation (no autograd).");
+          py::arg("W_out"), "2-D nearest-neighbor interpolation (autograd-aware).");
     m.def("interpolate_nearest_3d", &interpolate_nearest_3d_op, py::arg("input"), py::arg("D_out"),
-          py::arg("H_out"), py::arg("W_out"), "3-D nearest-neighbor interpolation (no autograd).");
+          py::arg("H_out"), py::arg("W_out"),
+          "3-D nearest-neighbor interpolation (autograd-aware).");
 
     m.def("one_hot", &one_hot_op, py::arg("input"), py::arg("num_classes"),
           py::arg("dtype") = Dtype::I8,

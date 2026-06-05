@@ -445,25 +445,25 @@ def _bicubic_2d(x: Tensor, oh: int, ow: int) -> Tensor:
     return out
 
 
-def _scale_image(x: Tensor, scale: float, crop_scale: bool) -> Tensor:
-    """Resize (default) or center-crop the input by ``scale``.
+def _scale_image(x: Tensor, target: int, crop_scale: bool) -> Tensor:
+    """Resize (default) or center-crop the input to an absolute ``target`` side.
 
-    Mirrors timm's ``scale_image`` helper.  ``scale=1.0`` is a no-op.
+    Mirrors timm's ``scale_image``: the destination is a fixed pixel target
+    (``round(image_size * img_scale[d])``, computed by the caller from the
+    *config* — never from the runtime input dims).  This keeps each branch's
+    patch count equal to its positional-embedding size for any input
+    resolution.  A no-op when the input already matches ``target``.
     """
-    if scale == 1.0:
-        return x
-    if crop_scale:
-        # Center crop to ``(B, C, H*scale, W*scale)``.
-        _, _, H, W = x.shape
-        h, w = int(round(H * scale)), int(round(W * scale))
-        top = (H - h) // 2
-        left = (W - w) // 2
-        return x[:, :, top : top + h, left : left + w]
-    # Bicubic interpolation matches timm's ``scale_image`` exactly.
     _, _, H, W = x.shape
-    new_h = int(round(H * scale))
-    new_w = int(round(W * scale))
-    return _bicubic_2d(x, new_h, new_w)
+    if H == target and W == target:
+        return x
+    if crop_scale and target <= H and target <= W:
+        # Center crop to ``(B, C, target, target)``.
+        top = (H - target) // 2
+        left = (W - target) // 2
+        return x[:, :, top : top + target, left : left + target]
+    # Bicubic interpolation matches timm's ``scale_image`` exactly.
+    return _bicubic_2d(x, target, target)
 
 
 # ---------------------------------------------------------------------------
@@ -574,9 +574,11 @@ class CrossViT(PretrainedModel, BackboneMixin):
 
     def forward_features(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         cfg = cast(CrossViTConfig, self.config)
-        # Rescale per branch.
+        # Rescale per branch to the same absolute targets used to size the
+        # positional embeddings in ``__init__`` (round(image_size·img_scale)).
+        targets = [int(round(cfg.image_size * cfg.img_scale[d])) for d in range(2)]
         xs: list[Tensor] = [
-            _scale_image(x, cfg.img_scale[d], cfg.crop_scale) for d in range(2)
+            _scale_image(x, targets[d], cfg.crop_scale) for d in range(2)
         ]
         # Patch-embed + CLS + positional.
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
@@ -683,8 +685,9 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         cfg = cast(CrossViTConfig, self.config)
+        targets = [int(round(cfg.image_size * cfg.img_scale[d])) for d in range(2)]
         xs: list[Tensor] = [
-            _scale_image(x, cfg.img_scale[d], cfg.crop_scale) for d in range(2)
+            _scale_image(x, targets[d], cfg.crop_scale) for d in range(2)
         ]
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         for stage in self.stages:

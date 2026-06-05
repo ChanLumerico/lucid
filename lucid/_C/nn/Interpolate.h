@@ -18,8 +18,10 @@
 //   placing the resampling grid on pixel *centres* and producing a half-pixel
 //   shift relative to the corner-aligned variant.
 //
-// The nearest-neighbour ops are inference-only — they produce a fixed output
-// and never attach an autograd node.
+// The nearest-neighbour ops are differentiable: their forward copies the
+// single nearest source pixel per output, and their backward scatter-adds
+// each output gradient onto that unique source pixel (a many-to-one map, so a
+// source pixel selected by several outputs accumulates their gradients).
 
 #pragma once
 
@@ -182,6 +184,117 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+// Autograd node for 2-D nearest-neighbour interpolation.
+//
+// Resizes a 4-D tensor of shape ``(N, C, H_in, W_in)`` to
+// ``(N, C, H_out, W_out)`` by copying, for each output pixel, the single
+// nearest input pixel:
+// $$
+//   y[i, j] = x\!\left[\operatorname{clamp}(\lfloor i \cdot H_{\text{in}} / H_{\text{out}} \rfloor),\;
+//                       \operatorname{clamp}(\lfloor j \cdot W_{\text{in}} / W_{\text{out}} \rfloor)\right]
+// $$
+// (the floor mapping above is the exact rule the forward backend kernel
+// uses).  Because the map is many-to-one, the backward scatter-adds each
+// output gradient onto its unique source pixel — an input pixel selected by
+// ``k`` output pixels receives the sum of those ``k`` gradients.
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     ``"interpolate_nearest_2d"``, ``AmpPolicy::KeepInput`` (pure gather,
+//     no arithmetic — input dtype is preserved).
+// H_in_, W_in_ : int
+//     Saved input spatial dimensions.
+// H_out_, W_out_ : int
+//     Requested output spatial dimensions.
+// orig_shape_ : Shape
+//     Full ``(N, C, H_in, W_in)`` shape for backward reconstruction.
+class LUCID_API InterpolateNearestBackward2D : public FuncOp<InterpolateNearestBackward2D, 1> {
+public:
+    static const OpSchema schema_v1;
+    int H_in_ = 0, W_in_ = 0, H_out_ = 0, W_out_ = 0;
+    Shape orig_shape_;  // Full (N, C, H_in, W_in) shape for backward.
+
+    // Compute the nearest-neighbour resize with autograd wiring.
+    //
+    // Parameters
+    // ----------
+    // input : TensorImplPtr
+    //     4-D input tensor of shape ``(N, C, H_in, W_in)``.
+    // H_out : int
+    //     Desired output height.
+    // W_out : int
+    //     Desired output width.
+    //
+    // Returns
+    // -------
+    // TensorImplPtr
+    //     Resampled tensor of shape ``(N, C, H_out, W_out)``.
+    //
+    // Raises
+    // ------
+    // ShapeMismatch
+    //     If ``input`` is not 4-D.
+    static TensorImplPtr forward(const TensorImplPtr& input, int H_out, int W_out);
+
+    // Backward pass: scatter-adds ``grad_out`` onto the source pixels using
+    // the same floor coordinate mapping as the forward.
+    std::vector<Storage> apply(Storage grad_out) override;
+};
+
+// Autograd node for 3-D nearest-neighbour interpolation.
+//
+// Volumetric counterpart of ``InterpolateNearestBackward2D``; resizes a 5-D
+// tensor ``(N, C, D_in, H_in, W_in)`` to ``(N, C, D_out, H_out, W_out)`` by
+// floor-rounding source voxel coordinates.  The backward scatter-adds each
+// output gradient onto its unique source voxel.
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     ``"interpolate_nearest_3d"``, ``AmpPolicy::KeepInput``.
+// D_in_, H_in_, W_in_ : int
+//     Saved input spatial dimensions.
+// D_out_, H_out_, W_out_ : int
+//     Requested output spatial dimensions.
+// orig_shape_ : Shape
+//     Full ``(N, C, D_in, H_in, W_in)`` shape for backward reconstruction.
+class LUCID_API InterpolateNearestBackward3D : public FuncOp<InterpolateNearestBackward3D, 1> {
+public:
+    static const OpSchema schema_v1;
+    int D_in_ = 0, H_in_ = 0, W_in_ = 0;
+    int D_out_ = 0, H_out_ = 0, W_out_ = 0;
+    Shape orig_shape_;
+
+    // Compute the nearest-neighbour resize with autograd wiring.
+    //
+    // Parameters
+    // ----------
+    // input : TensorImplPtr
+    //     5-D input tensor of shape ``(N, C, D_in, H_in, W_in)``.
+    // D_out : int
+    //     Desired output depth.
+    // H_out : int
+    //     Desired output height.
+    // W_out : int
+    //     Desired output width.
+    //
+    // Returns
+    // -------
+    // TensorImplPtr
+    //     Resampled tensor of shape ``(N, C, D_out, H_out, W_out)``.
+    //
+    // Raises
+    // ------
+    // ShapeMismatch
+    //     If ``input`` is not 5-D.
+    static TensorImplPtr forward(const TensorImplPtr& input, int D_out, int H_out, int W_out);
+
+    // Backward pass: scatter-adds ``grad_out`` onto the source voxels using
+    // the same floor coordinate mapping as the forward.
+    std::vector<Storage> apply(Storage grad_out) override;
+};
+
 // Public 2-D bilinear resize with autograd.
 //
 // Thin wrapper that delegates to ``InterpolateBilinearBackward::forward``.
@@ -228,14 +341,15 @@ LUCID_API TensorImplPtr interpolate_bilinear_op(const TensorImplPtr& input,
 LUCID_API TensorImplPtr interpolate_trilinear_op(
     const TensorImplPtr& input, int D_out, int H_out, int W_out, bool align_corners);
 
-// Public 2-D nearest-neighbour resize (no autograd).
+// Public 2-D nearest-neighbour resize with autograd.
 //
+// Thin wrapper that delegates to ``InterpolateNearestBackward2D::forward``.
 // Each output pixel receives the value of the nearest input pixel:
 // $$
-//   y[i, j] = x\!\left[\lfloor (i + 0.5) \cdot H_{\text{in}} / H_{\text{out}} \rfloor,\;
-//                       \lfloor (j + 0.5) \cdot W_{\text{in}} / W_{\text{out}} \rfloor\right]
+//   y[i, j] = x\!\left[\lfloor i \cdot H_{\text{in}} / H_{\text{out}} \rfloor,\;
+//                       \lfloor j \cdot W_{\text{in}} / W_{\text{out}} \rfloor\right]
 // $$
-// No backward node is attached — the operation is inference-only.
+// (clamped to valid index ranges).  A backward node is attached.
 //
 // Parameters
 // ----------
@@ -252,11 +366,11 @@ LUCID_API TensorImplPtr interpolate_trilinear_op(
 //     Resampled tensor of shape ``(N, C, H_out, W_out)``.
 LUCID_API TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out);
 
-// Public 3-D nearest-neighbour resize (no autograd).
+// Public 3-D nearest-neighbour resize with autograd.
 //
 // Volumetric counterpart of ``interpolate_nearest_2d_op``; produces a
 // ``(N, C, D_out, H_out, W_out)`` output by floor-rounding source voxel
-// coordinates.  No backward node is attached.
+// coordinates.  A backward node is attached.
 //
 // Parameters
 // ----------

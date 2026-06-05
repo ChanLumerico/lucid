@@ -17,6 +17,21 @@ class TestQuantile:
         out = lucid.quantile(t, 0.25).item()
         assert abs(out - 2.0) < 1e-6
 
+    def test_with_dim(self, device: str) -> None:
+        # quantile along a dim builds index tensors internally; those must land
+        # on the input's device (regression: the metal path previously crashed
+        # with bad_variant_access from a CPU index against a metal tensor).
+        t = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device=device)
+        out = lucid.quantile(t, 0.5, dim=1)
+        assert out.shape == (2,)
+        np.testing.assert_allclose(out.numpy(), [2.0, 5.0], atol=1e-6)
+
+    def test_with_dim_all_nan(self, device: str) -> None:
+        t = lucid.full((2, 3), float("nan"), device=device)
+        out = lucid.quantile(t, 0.5, dim=1)
+        assert out.shape == (2,)
+        assert bool(lucid.isnan(out).all().item())
+
 
 class TestCov:
     def test_basic(self, device: str) -> None:

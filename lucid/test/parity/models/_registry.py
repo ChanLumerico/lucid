@@ -102,6 +102,32 @@ def _convnext_key_transform(k: str) -> str:
     return k
 
 
+def _legacy_seresnet_key_transform(k: str) -> str:
+    """Legacy SE-ResNet: Lucid key → timm ``legacy_seresnet*`` key.
+
+    The 18/34/101/152 variants use the legacy stem-pool (``legacy_pool=True``)
+    and were converted from timm's ``legacy_seresnet*`` checkpoints, so they
+    must be compared against that family (the modern ``seresnet*`` uses a
+    different stem pool + SE reduction).  Naming deltas:
+      conv1.* / bn1.*  → layer0.conv1.* / layer0.bn1.*   (stem)
+      .se.             → .se_module.                      (SE block)
+    The classifier head (``fc`` → ``last_linear``) is handled via key_remap.
+    """
+    if k.startswith("conv1."):
+        return "layer0.conv1." + k[len("conv1.") :]
+    if k.startswith("bn1."):
+        return "layer0.bn1." + k[len("bn1.") :]
+    return k.replace(".se.", ".se_module.")
+
+
+# Legacy SE-ResNet classifier head: lucid ``fc`` → timm ``last_linear``
+# (not covered by the auto head-remap, which only knows ``fc``/``head``/...).
+_LEGACY_SERESNET_HEAD = {
+    "fc.weight": "last_linear.weight",
+    "fc.bias": "last_linear.bias",
+}
+
+
 # ── Spec type ─────────────────────────────────────────────────────────────────
 
 
@@ -293,16 +319,38 @@ SPECS: list[ParitySpec] = [
         use_positional_fallback=True,
     ),
     # ── SE-ResNet ─────────────────────────────────────────────────────────────
-    ParitySpec(M.se_resnet_18_cls, "seresnet18", use_positional_fallback=True),
-    ParitySpec(M.se_resnet_34_cls, "seresnet34", use_positional_fallback=True),
+    # 18/34/101/152 use the legacy stem-pool (converted from timm
+    # ``legacy_seresnet*``) → compare against that family, not modern
+    # ``seresnet*`` (different stem pool + SE reduction).  50 keeps the
+    # modern ``seresnet50`` reference (it is ``legacy_pool=False``).
+    ParitySpec(
+        M.se_resnet_18_cls,
+        "legacy_seresnet18",
+        key_transform=_legacy_seresnet_key_transform,
+        key_remap=_LEGACY_SERESNET_HEAD,
+    ),
+    ParitySpec(
+        M.se_resnet_34_cls,
+        "legacy_seresnet34",
+        key_transform=_legacy_seresnet_key_transform,
+        key_remap=_LEGACY_SERESNET_HEAD,
+    ),
     ParitySpec(
         M.se_resnet_50_cls, "seresnet50", tier="slow", use_positional_fallback=True
     ),
     ParitySpec(
-        M.se_resnet_101_cls, "seresnet101", tier="slow", use_positional_fallback=True
+        M.se_resnet_101_cls,
+        "legacy_seresnet101",
+        tier="slow",
+        key_transform=_legacy_seresnet_key_transform,
+        key_remap=_LEGACY_SERESNET_HEAD,
     ),
     ParitySpec(
-        M.se_resnet_152_cls, "seresnet152", tier="slow", use_positional_fallback=True
+        M.se_resnet_152_cls,
+        "legacy_seresnet152",
+        tier="slow",
+        key_transform=_legacy_seresnet_key_transform,
+        key_remap=_LEGACY_SERESNET_HEAD,
     ),
     # ── SK-ResNet / SK-ResNeXt ────────────────────────────────────────────────
     # timm 1.0 only has skresnet18/34/50/50d and skresnext50_32x4d.
