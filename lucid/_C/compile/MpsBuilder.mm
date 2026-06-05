@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstddef>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -453,7 +454,7 @@ CompiledExecutable* MpsBuilder::compile_trace(
         if (compiled == nil)
             return fail("compile_trace: MPSGraph compilation returned nil");
 
-        auto* exe = new CompiledExecutable();
+        auto exe = std::make_unique<CompiledExecutable>();
         exe->executable = compiled;
         exe->input_ids = ordered_feed_ids;
         exe->output_ids = target_ids;
@@ -476,7 +477,7 @@ CompiledExecutable* MpsBuilder::compile_trace(
                 }
             }
         }
-        return exe;
+        return exe.release();
     }
 }
 
@@ -862,7 +863,7 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
             output_dtypes.push_back(extra_dtypes[i]);
         }
 
-        auto* exe = new CompiledExecutable();
+        auto exe = std::make_unique<CompiledExecutable>();
         exe->executable = compiled;
         exe->input_ids = ordered_feed_ids;
         exe->output_ids = std::vector<TensorId>{loss_id};
@@ -872,7 +873,7 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         exe->output_shapes = std::move(output_shapes);
         exe->output_dtypes = std::move(output_dtypes);
         exe->device = device;
-        return exe;
+        return exe.release();
     }
 }
 
@@ -1355,7 +1356,7 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
             }
         }
 
-        auto* exe = new CompiledExecutable();
+        auto exe = std::make_unique<CompiledExecutable>();
         exe->executable = compiled;
         exe->input_ids = ordered_feed_ids;
         exe->output_ids = std::vector<TensorId>{loss_id};
@@ -1365,7 +1366,7 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         exe->output_shapes = std::move(output_shapes);
         exe->output_dtypes = std::move(output_dtypes);
         exe->device = device;
-        return exe;
+        return exe.release();
     }
 }
 
@@ -1694,7 +1695,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         // can carry them directly).
         std::vector<TensorId> aux_output_ids(output_target_ids);
 
-        auto* exe = new CompiledExecutable();
+        auto exe = std::make_unique<CompiledExecutable>();
         exe->executable = compiled;
         exe->input_ids = ordered_feed_ids;
         exe->output_ids = std::vector<TensorId>{loss_id};
@@ -1704,7 +1705,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         exe->output_shapes = std::move(output_shapes);
         exe->output_dtypes = std::move(output_dtypes);
         exe->device = device;
-        return exe;
+        return exe.release();
     }
 }
 
@@ -2142,7 +2143,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
             return fail(
                 "compile_generic_fused_step_with_vars: MPSGraph compile returned nil");
 
-        auto* exe = new CompiledExecutable();
+        auto exe = std::make_unique<CompiledExecutable>();
         exe->executable = compiled;
         // Retain the source MPSGraph so its variable storage outlives
         // the compile autoreleasepool.  Without this, MPSGraph releases
@@ -2160,7 +2161,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         exe->output_shapes = std::move(output_shapes);
         exe->output_dtypes = std::move(output_dtypes);
         exe->device = device;
-        return exe;
+        return exe.release();
     }
 }
 

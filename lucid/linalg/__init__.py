@@ -2398,7 +2398,7 @@ def cholesky_ex(
     try:
         L = cholesky(A, upper=upper)
         return L, _info_zero(A)
-    except Exception:
+    except _C_engine.LucidError:
         if check_errors:
             raise
         zero_L = lucid.zeros(*A.shape, dtype=A.dtype, device=A.device)
@@ -2446,7 +2446,7 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     """
     try:
         return cast(Tensor, inv(A)), _info_zero(A)
-    except Exception:
+    except _C_engine.LucidError:
         if check_errors:
             raise
         zero_inv = lucid.zeros(*A.shape, dtype=A.dtype, device=A.device)
@@ -2511,7 +2511,7 @@ def solve_ex(
         raise NotImplementedError("solve_ex: only left=True is supported")
     try:
         return cast(Tensor, solve(A, B)), _info_zero(A)
-    except Exception:
+    except _C_engine.LucidError:
         if check_errors:
             raise
         zero_X = lucid.zeros(*B.shape, dtype=B.dtype, device=B.device)

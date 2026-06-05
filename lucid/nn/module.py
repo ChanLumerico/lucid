@@ -143,7 +143,12 @@ class Module:
         try:
             output = self.forward(*args, **kwargs)
         except Exception:
-            self._call_always_forward_hooks(args, kwargs, output)
+            # Run the always-hooks for cleanup, but never let one of them
+            # mask the original forward error — re-raise that.
+            try:
+                self._call_always_forward_hooks(args, kwargs, output)
+            except Exception:
+                pass
             raise
 
         for hook, with_kwargs, _ in _GLOBAL_FORWARD_HOOKS.values():

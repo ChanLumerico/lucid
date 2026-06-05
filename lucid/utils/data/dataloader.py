@@ -7,6 +7,7 @@ expected, but ``import lucid.utils.data`` itself stays numpy-free.
 """
 
 import multiprocessing as _mp
+import queue
 import random
 from typing import Callable, Iterator, cast
 
@@ -406,12 +407,18 @@ class _MultiProcessDataLoaderIter:
         while self._rcvd_idx not in self._reorder:
             try:
                 seq, result = self._result_queue.get(**get_kwargs)  # type: ignore[attr-defined]
-            except Exception:  # queue.Empty on timeout
+            except queue.Empty:
                 self._shutdown_workers()
                 raise RuntimeError(
                     f"DataLoader worker timed out after {self._timeout}s. "
                     "Increase timeout or reduce batch size."
                 ) from None
+            except Exception:
+                # A non-timeout failure (worker crash / closed queue) — shut
+                # the pool down, then surface the *real* error instead of
+                # masking it behind a bogus "timed out" message.
+                self._shutdown_workers()
+                raise
             if isinstance(result, Exception):
                 self._shutdown_workers()
                 raise result

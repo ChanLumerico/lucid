@@ -373,9 +373,13 @@ def save_sharded(
     sd_meta = getattr(obj, "_metadata", None)
     if sd_meta is not None:
         try:
-            # _metadata is a plain dict[str, dict] — JSON-serializable.
+            # Only attach metadata that actually round-trips through the
+            # json.dump below — a bare assignment can't fail, so validate
+            # serializability here; otherwise a non-serializable value would
+            # corrupt the whole index write further down.
+            json.dumps(sd_meta)
             index["_state_dict_metadata"] = sd_meta
-        except Exception:
+        except (TypeError, ValueError):
             pass
 
     with open(os.path.join(path_str, "index.json"), "w", encoding="utf-8") as fp:
