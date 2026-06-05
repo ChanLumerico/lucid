@@ -26,9 +26,33 @@ downstream device-mismatch errors. Each path now preserves the input's
 device and dtype (falling back to the global default only when there are no
 parameters at all). Surfaced by a stability audit.
 
-### Changed
+### Fixed — error handling no longer masks the real failure
 
-- SubsectionHeading SSOT + a11y + changelog error boundary
+`DataLoader` now distinguishes a queue timeout from a worker crash / closed
+queue — the latter shuts down and re-raises the *real* error instead of a
+bogus "timed out". `linalg` `*_ex` (cholesky / inv / solve) catch only the
+engine's `LucidError`, so OOM / unrelated errors propagate rather than being
+reported as a singular matrix. `Module.__call__` runs the always-forward
+hooks under their own guard so a failing cleanup hook can't mask the original
+forward exception. Sharded serialization validates that metadata is
+JSON-serializable before attaching it to the index.
+
+### Fixed — exception-safe MPSGraph compile
+
+The five `MpsBuilder::compile_*` paths allocated `CompiledExecutable` with a
+raw `new` before running fallible work (set insertion); a throw mid-build
+leaked it. They now use `make_unique` + `release()` (ownership unchanged).
+
+### Tooling
+
+Dev-infra hardening, no runtime impact: `ci.yml` now gates main code-pushes
+(+ ccache, `pybind11` pinned for reproducible stub generation); an api-data
+drift gate (source-hash `--check` + post-processor diff) plus a
+full-pipeline pre-commit hook; a reST→markdown converter regression suite,
+ESLint, and a Playwright smoke for the docs site (contract audit now 30
+rules); compile-db deploy target aligned to 26.0; and dedicated padding /
+upsampling / transformer unit tests. The docs `SubsectionHeading` recipe is
+now a single component.
 
 ---
 
