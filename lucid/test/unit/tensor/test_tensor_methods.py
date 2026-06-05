@@ -214,7 +214,6 @@ class TestTrackBParity:
         t = lucid.tensor([1.0], device=device)
         assert t.is_pinned() is False
 
-
     def test_reshape_as(self, device: str) -> None:
         a = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], device=device)
         b = lucid.zeros(4, device=device)

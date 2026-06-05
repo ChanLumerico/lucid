@@ -213,7 +213,7 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
             sig = inspect.signature(fn, annotation_format=_FORWARDREF)
         else:
             sig = inspect.signature(fn)
-    except (TypeError, ValueError, NameError):
+    except TypeError, ValueError, NameError:
         sig = _parse_pybind_signature(fn) or inspect.Signature(
             parameters=[
                 inspect.Parameter(

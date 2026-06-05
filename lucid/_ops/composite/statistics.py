@@ -206,7 +206,9 @@ def nanquantile(
         if n == 0:
             out_shape = list(input.shape)
             out_shape[dim] = len(q_list)
-            nan_val = lucid.full(out_shape, math.nan, dtype=input.dtype, device=input.device)
+            nan_val = lucid.full(
+                out_shape, math.nan, dtype=input.dtype, device=input.device
+            )
             if scalar_q:
                 return nan_val.squeeze(dim)
             return nan_val

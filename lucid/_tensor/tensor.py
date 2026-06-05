@@ -2658,7 +2658,6 @@ class Tensor:
         """
         return False
 
-
     def reshape_as(self, other: Tensor) -> Tensor:
         r"""Return a tensor with the same data reshaped to ``other.shape``.
 

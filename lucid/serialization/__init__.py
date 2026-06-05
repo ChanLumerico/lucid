@@ -379,7 +379,7 @@ def save_sharded(
             # corrupt the whole index write further down.
             json.dumps(sd_meta)
             index["_state_dict_metadata"] = sd_meta
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pass
 
     with open(os.path.join(path_str, "index.json"), "w", encoding="utf-8") as fp:
