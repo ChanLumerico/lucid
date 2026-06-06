@@ -1,0 +1,168 @@
+---
+title: Mixed Precision (AMP)
+description: Train in float16 on the Metal GPU with lucid.amp — autocast for op-level casting and GradScaler for dynamic loss scaling that prevents gradient underflow.
+category: Performance
+order: 2
+---
+
+`lucid.amp` runs the heavy compute of a model — matmuls, convolutions, attention — in a lower-precision dtype while keeping the master parameters and the loss in `float32`. On Apple Silicon this halves activation memory bandwidth and lights up the M-series GPU's half-precision pipelines, so compute-bound layers run roughly twice as fast and you can fit larger batches.
+
+The subsystem is two cooperating tools:
+
+- **`autocast`** — a context manager that casts eligible ops to `float16` (or `bfloat16`) at op boundaries.
+- **`GradScaler`** — a dynamic loss-scaling helper that stops small `float16` gradients from underflowing to zero.
+
+```python
+import lucid
+from lucid.amp import autocast, GradScaler
+
+scaler = GradScaler()
+with autocast(device_type="metal", dtype=lucid.float16):
+    out = model(x)
+    loss = loss_fn(out, y)
+
+scaler.scale(loss).backward()
+scaler.step(optimizer)
+scaler.update()
+```
+
+## Why mixed precision needs care
+
+`float16` has only 10 mantissa bits and a narrow exponent range — its smallest *normal* value is about $6.1 \times 10^{-5}$. Forward activations live comfortably in that range, but two failure modes appear:
+
+- **Underflow.** Late-training gradients are tiny. Stored directly in `float16`, many round to exactly zero and the network stops learning.
+- **Overflow.** A single large activation can produce an `inf`, which poisons the whole backward pass with `NaN`.
+
+The standard recipe sidesteps both: keep the *bulk* of compute in `float16` for speed, but keep reductions, accumulators, and the parameter master copy in `float32` for fidelity. That split is exactly what `autocast` and `GradScaler` divide between them.
+
+| Concern | Handled by | How |
+|---|---|---|
+| Casting eligible ops to `float16` | `autocast` | Inserts casts at op boundaries inside the scope |
+| Keeping reductions / accumulators in `float32` | `autocast` | Accumulator state stays `float32` automatically |
+| Preventing gradient underflow | `GradScaler` | Multiplies the loss by a scale $S$ before backward |
+| Skipping bad (`inf`/`NaN`) steps | `GradScaler` | Detects non-finite grads and skips `optimizer.step()` |
+
+## autocast
+
+`autocast(device_type='metal', dtype=float16, enabled=True)` opens a scope in which AMP-aware ops cast their inputs to the target dtype. Cast points are inserted **only** at op boundaries — activations are stored in the lower-precision dtype, while reduction and accumulator state stays in `float32`. That is the "mixed" in mixed precision: matmul *inputs* are `float16`, but the inner accumulation runs in `float32`, so a long dot product does not lose precision.
+
+```python
+with lucid.amp.autocast():            # device_type="metal", dtype=float16
+    out = model(x)                    # conv / matmul / attention run in fp16
+    loss = loss_fn(out, y)            # loss lands back in fp32
+```
+
+Ops that are numerically sensitive — softmax, layer norm, loss reductions — keep their `float32` math even inside the scope, so you do not have to hand-pick which layers are safe.
+
+<Callout variant="info">
+`autocast` also works as a decorator, wrapping every call to a function in a fresh scope:
+
+```python
+@lucid.amp.autocast()
+def predict(x):
+    return model(x)
+```
+</Callout>
+
+Scopes nest, and the previous dtype is restored on exit:
+
+```python
+with lucid.amp.autocast(dtype=lucid.float16):
+    ...                               # fp16 here
+    with lucid.amp.autocast(dtype=lucid.bfloat16):
+        ...                           # bf16 here
+    ...                               # back to fp16 — outer guard reinstalled
+```
+
+Pass `enabled=False` to turn the scope into a no-op without touching any call sites — handy for A/B comparing AMP on versus off. Two static helpers let you query the active state: `autocast.is_autocast_enabled()` returns a `bool`, and `autocast.get_autocast_dtype()` returns the active dtype or `None`.
+
+<Callout variant="warning">
+Run `.backward()` **outside** the `autocast` scope. `autocast` governs the forward pass; the backward pass derives its dtypes from the recorded graph. Calling `backward()` while the scope is still open casts gradient computation too, which is not what you want.
+</Callout>
+
+## GradScaler and dynamic loss scaling
+
+Even with `autocast`, the gradients themselves can underflow in `float16`. `GradScaler` fixes this by multiplying the loss by a large constant $S$ before backpropagation. Because differentiation is linear, every gradient is scaled by the same factor:
+
+$$
+\tilde{L} = S \cdot L, \qquad
+\frac{\partial \tilde{L}}{\partial \theta} = S \cdot \frac{\partial L}{\partial \theta}.
+$$
+
+With $S$ large (the default is $2^{16} = 65536$), the scaled gradients land safely inside `float16`'s representable range instead of flushing to zero. Before the optimizer update they are **unscaled** by $1/S$ — and crucially that division is done in `float32`, so the update is mathematically identical to ordinary `float32` training.
+
+The scale is not fixed; it adapts to the gradient distribution. After each step the unscaled gradients are checked for `inf` / `NaN`:
+
+- **Overflow detected** — the step is skipped and $S \leftarrow S \cdot \text{backoff\_factor}$ (default `0.5`).
+- **No overflow for `growth_interval` steps** — $S \leftarrow S \cdot \text{growth\_factor}$ (default `2.0`).
+
+This produces a sawtooth schedule that hovers just below the largest scale the current gradients can tolerate.
+
+```python
+scaler = GradScaler(
+    init_scale=2.0 ** 16,
+    growth_factor=2.0,
+    backoff_factor=0.5,
+    growth_interval=2000,
+)
+```
+
+The three steps form the canonical pattern — **scale the loss, then step, then update**:
+
+| Call | Responsibility |
+|---|---|
+| `scaler.scale(loss)` | Multiply the loss by $S$ so backward grads land in range |
+| `scaler.step(optimizer)` | Unscale grads, check for `inf`/`NaN`, run or skip `optimizer.step()` |
+| `scaler.update()` | Grow or back off $S$ for the next iteration |
+
+`scaler.step` calls `unscale_` internally, so you normally never call it yourself. The one exception is **gradient clipping**: clip on real-scale gradients, so call `scaler.unscale_(optimizer)` first, then clip, then `scaler.step`. Other helpers: `scaler.get_scale()` reports the live scale, and `scaler.state_dict()` / `scaler.load_state_dict()` checkpoint it alongside your model.
+
+## Complete training loop
+
+```python
+import lucid
+import lucid.optim as optim
+import lucid.nn.functional as F
+from lucid.amp import autocast, GradScaler
+
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+scaler = GradScaler()
+
+for x, y in loader:
+    optimizer.zero_grad()
+
+    with autocast(device_type="metal", dtype=lucid.float16):
+        out = model(x)
+        loss = F.cross_entropy(out, y)
+
+    scaler.scale(loss).backward()   # scaled grads, safe in fp16
+    scaler.step(optimizer)          # unscale + skip if inf/nan, else step
+    scaler.update()                 # adapt the scale for next iter
+```
+
+With gradient clipping, unscale explicitly before you clip:
+
+```python
+    scaler.scale(loss).backward()
+    scaler.unscale_(optimizer)                       # grads now at true scale
+    lucid.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+    scaler.step(optimizer)
+    scaler.update()
+```
+
+## Common pitfalls
+
+<Callout variant="danger">
+- **Do not call `backward()` inside the `autocast` block.** Forward in the scope, backward outside it.
+- **`scaler.step` may skip the update.** When `inf`/`NaN` is detected, `step` returns `None` and does **not** advance the optimizer — that iteration is intentionally dropped while the scale backs off. Do not treat a skipped step as an error.
+- **Always pair `step` with `update`.** Without `update`, the scale never adapts: it cannot grow into a productive range or back off after an overflow.
+- **`zero_grad` still belongs to you.** `GradScaler` does not clear gradients; call `optimizer.zero_grad()` each iteration as usual.
+</Callout>
+
+<Callout variant="success">
+The first few hundred steps may skip while the scaler finds a stable scale — this is expected. Once `get_scale()` settles into its sawtooth, training proceeds at full `float16` throughput with `float32`-equivalent accuracy.
+</Callout>
+
+<Callout variant="note">
+See the [API reference](/api/lucid.amp) for the full surface, [Training Loop](/docs/training-loop) for where AMP slots into a real loop, and [Optimizers](/docs/optimizers) for the optimizers `GradScaler` drives.
+</Callout>

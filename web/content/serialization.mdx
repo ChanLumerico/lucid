@@ -1,0 +1,169 @@
+---
+title: Serialization
+description: Save and load Lucid checkpoints — state-dict files, device remapping with map_location, SafeTensors interchange, and sharded checkpoints for large models.
+category: Utilities
+order: 2
+---
+
+`lucid.serialization` is how a trained model leaves memory and comes back. The whole subsystem is built around one principle: **save the `state_dict`, not the module object.** A `state_dict` is a flat dictionary mapping parameter names to tensors — pure data with no code attached. Persisting that, rather than the live `Module` instance, is what keeps a checkpoint portable across code revisions and safe to share.
+
+The six functions are exposed at the top level (`lucid.save`, `lucid.load`, …) and also under the full `lucid.serialization.*` path. Prefer the top-level names; they are the canonical surface.
+
+## Why the state_dict, not the module
+
+Pickling a whole `Module` freezes your class definition, attribute layout, and import paths into the file. Rename a layer, move a file, or refactor `__init__`, and the old checkpoint stops loading. A `state_dict` sidesteps all of that — it is just `{name: Tensor}`, so it round-trips through any version of your code as long as the parameter names line up.
+
+```python
+import lucid
+import lucid.nn as nn
+
+model = nn.Sequential(
+    nn.Linear(784, 256), nn.ReLU(),
+    nn.Linear(256, 10),
+)
+
+# Save the parameters, not the object.
+lucid.save(model.state_dict(), "model.lucid")
+
+# Rebuild the architecture in code, then pour the weights back in.
+fresh = nn.Sequential(
+    nn.Linear(784, 256), nn.ReLU(),
+    nn.Linear(256, 10),
+)
+fresh.load_state_dict(lucid.load("model.lucid"))
+```
+
+<Callout variant="warning">
+Always checkpoint `model.state_dict()`, never the `model` itself. Saving the live module bakes your source layout into the file and ties the checkpoint to one exact version of your code.
+</Callout>
+
+## save and load
+
+`save(obj, f, *, pickle_protocol=4)` writes any picklable object graph — but in practice `obj` is a `state_dict`. Embedded tensors are captured as typed byte blobs through the engine's own wire format, so a `.lucid` file reloads cleanly without depending on the host's array libraries.
+
+```python
+lucid.save(model.state_dict(), "ckpt.lucid")
+
+# f may also be an open binary file handle.
+with open("ckpt.lucid", "wb") as fh:
+    lucid.save(model.state_dict(), fh)
+```
+
+`load(f, *, map_location=None, weights_only=True)` reverses it. By default `weights_only=True` runs a **restricted unpickler** that only permits a small whitelist of primitive types — enough for a `state_dict`, but it will refuse to instantiate arbitrary objects.
+
+```python
+state = lucid.load("ckpt.lucid")
+model.load_state_dict(state)
+```
+
+<Callout variant="danger">
+Only pass `weights_only=False` for files you fully trust. It re-enables unrestricted deserialisation, which can execute arbitrary code embedded in a malicious checkpoint. For shared or downloaded weights, keep the default or use SafeTensors.
+</Callout>
+
+A complete training-loop checkpoint usually bundles more than weights — the optimizer state and an epoch counter let you resume exactly where you stopped:
+
+```python
+checkpoint = {
+    "model": model.state_dict(),
+    "optimizer": optimizer.state_dict(),
+    "epoch": epoch,
+}
+lucid.save(checkpoint, "resume.lucid")
+```
+
+See [Training Loop](/docs/training-loop) and [Optimizers](/docs/optimizers) for where these slot into a real loop.
+
+## Moving between devices with map_location
+
+A checkpoint records which device each tensor lived on when it was saved. If you train on the GPU and later load on a machine with only CPU, `map_location` rewrites that placement as tensors come off disk — no manual `.to()` afterwards.
+
+```python
+# Pull a GPU-trained checkpoint onto the CPU.
+state = lucid.load("gpu_ckpt.lucid", map_location="cpu")
+
+# Or send everything to the metal device on load.
+state = lucid.load("cpu_ckpt.lucid", map_location="metal")
+```
+
+`map_location` accepts three forms:
+
+- a **string** (`"cpu"` / `"metal"`) — relocate every tensor to that one device,
+- a **dict** mapping source device names to targets — remap selectively,
+- a **callable** `(tensor, source_device) -> tensor` — full control per tensor.
+
+```python
+# Only redirect tensors that were saved on metal; leave the rest.
+state = lucid.load("ckpt.lucid", map_location={"metal": "cpu"})
+```
+
+<Callout variant="note">
+`map_location` is the right tool for portability: save once on whatever device you trained on, then load anywhere by remapping at load time. See [Metal Device](/docs/metal-device) for how the `cpu` and `metal` streams differ.
+</Callout>
+
+## SafeTensors: safe, zero-copy interchange
+
+`save_safetensors` / `load_safetensors` use the **SafeTensors** format — a tiny JSON header followed by raw tensor bytes. There is no pickle stream anywhere in the file, so loading carries **zero code-execution surface**, is fast, and is zero-copy where possible. This is the format to reach for whenever a checkpoint may be shared with, or downloaded from, an untrusted party.
+
+```python
+# Save a flat {name: Tensor} dict.
+lucid.save_safetensors(model.state_dict(), "weights.safetensors")
+
+# Load straight onto a target device.
+state = lucid.load_safetensors("weights.safetensors", device="metal")
+model.load_state_dict(state)
+```
+
+`save_safetensors(state_dict, path, *, metadata=None)` also accepts free-form string metadata stored in the header — handy for tagging a model version:
+
+```python
+lucid.save_safetensors(
+    model.state_dict(),
+    "weights.safetensors",
+    metadata={"version": "1.2", "task": "classification"},
+)
+```
+
+<Callout variant="warning">
+SafeTensors stores **only tensors**. The `state_dict` must be a flat mapping of names to `Tensor` — nested dicts, optimizer state, or arbitrary Python objects raise `TypeError`. Bundle those with `lucid.save` instead. SafeTensors support also needs the optional `safetensors` package (`pip install safetensors`).
+</Callout>
+
+## Sharded checkpoints for large models
+
+A model too big for one practical file can be split with `save_sharded(obj, path, *, shard_size_mb=1024.0, pickle_protocol=4)`. It writes a **directory** of shard files, each capped near `shard_size_mb` MiB, plus an `index.json` recording which keys live in which shard. No single tensor is ever split across two shards, so every key resolves to exactly one file — which makes partial loads and resumable downloads tractable.
+
+```python
+big = MyLargeModel()
+
+# 2 GiB shards instead of one monolithic file.
+lucid.save_sharded(big.state_dict(), "big_ckpt", shard_size_mb=2048)
+```
+
+`load_sharded(path, *, map_location=None, weights_only=True)` reads `index.json`, deserialises each shard, and merges them back into a single ordered `state_dict`. Shard order comes from the index — not the filesystem listing — so the merge is reproducible across hosts. It honours `map_location` exactly like `load`:
+
+```python
+state = lucid.load_sharded("big_ckpt", map_location="metal")
+big.load_state_dict(state)
+```
+
+## Choosing a format
+
+| Function pair | Stores | Code-exec safe | Best for |
+|---|---|---|---|
+| `save` / `load` | Any picklable object (state dicts, optimizer state, scalars) | Restricted by default (`weights_only=True`) | Resumable training checkpoints with mixed contents |
+| `save_safetensors` / `load_safetensors` | Tensors only, flat dict | Yes — no pickle stream | Sharing weights, untrusted sources, fast zero-copy loads |
+| `save_sharded` / `load_sharded` | State dicts split across files + index | Restricted by default | Very large models, partial / resumable loads |
+
+## Best practices
+
+- **Save the `state_dict`, never the module.** This is the single most important rule — it decouples a checkpoint from your source layout.
+- **Bundle optimizer state and an epoch counter** in a dict with `save` when you need to resume training mid-run, not just deploy weights.
+- **Use `map_location` for portability** rather than saving device-specific files: one checkpoint, remapped to `cpu` or `metal` at load time.
+- **Default to SafeTensors for anything you publish.** It is tensor-only and free of pickle's execution risk, which is exactly what shared weights need.
+- **Keep `weights_only=True`** for `load` / `load_sharded` unless you personally produced and trust the file.
+- **Reach for sharding only when one file is genuinely impractical** — for ordinary models a single `.lucid` or `.safetensors` file is simpler.
+
+<Callout variant="success">
+The common path is two lines: `lucid.save(model.state_dict(), path)` to checkpoint, and `model.load_state_dict(lucid.load(path))` to restore. Everything else — `map_location`, SafeTensors, sharding — layers onto that core round-trip.
+</Callout>
+
+See the [API reference](/api/lucid.serialization) for full signatures, [Modules](/docs/modules) for how `state_dict` / `load_state_dict` are produced, and [Model Zoo](/docs/model-zoo) for loading pretrained weights.

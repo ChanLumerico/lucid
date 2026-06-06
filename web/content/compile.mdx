@@ -1,0 +1,131 @@
+---
+title: Compile (JIT)
+description: Capture a model or training step into a cached MPSGraph executable with lucid.compile — tracing, fused steps, AOT export, and coverage diagnosis.
+category: Performance
+order: 1
+---
+
+`lucid.compile` traces a model — or a whole forward + backward + optimizer step — into a single cached Metal executable. Eager mode dispatches one kernel per op; the compiled path captures the entire graph once and replays it as one `MPSGraph` invocation, eliminating per-op Python and dispatch overhead on the hot loop.
+
+## When to compile
+
+Compile pays off when the **same shapes** flow through the **same graph** thousands of times — i.e. a training loop. The first call traces and builds the executable (a one-time cost); every subsequent call with matching shapes hits the cache.
+
+<Callout variant="note">
+Eager mode stays the right default for research, debugging, and dynamic control flow. Reach for `compile` once the architecture is fixed and you are iterating on data, not code.
+</Callout>
+
+## Compiling a model
+
+`lucid.compile(target)` wraps a `Module` (or any callable) so calls route through cached executables:
+
+```python
+import lucid
+import lucid.nn as nn
+
+model = nn.Sequential(
+    nn.Linear(784, 256), nn.ReLU(),
+    nn.Linear(256, 10),
+)
+
+fast_model = lucid.compile(model)
+
+x = lucid.random.randn(64, 784)
+y = fast_model(x)        # 1st call: trace + build, then run
+y = fast_model(x)        # 2nd call onward: cached executable
+```
+
+The wrapper exposes the same interface as the underlying module — parameters, `state_dict`, and `eval()` all forward through.
+
+## Fused training step
+
+The largest win comes from fusing forward, backward, and the optimizer update into one executable. `fused_step` returns a callable that runs the entire step:
+
+```python
+import lucid.optim as optim
+
+model = MyModel()
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+step = lucid.compile.fused_step(
+    model,
+    loss_fn=lambda out, target: nn.functional.cross_entropy(out, target),
+    optimizer=optimizer,
+)
+
+for x_batch, y_batch in loader:
+    loss = step(x_batch, y_batch)   # fwd + bwd + opt.step(), one executable
+```
+
+`make_step` and `compiled_step` are the lower-level building blocks `fused_step` composes; reach for them when you need to drive forward and backward separately.
+
+## Compiling the optimizer alone
+
+If you only want the parameter update fused — leaving forward/backward eager — wrap the optimizer:
+
+```python
+optimizer = lucid.compile.compile_optimizer(optim.SGD(model.parameters(), lr=0.1))
+```
+
+`opt.step()` then runs as a single `MPSGraph` executable instead of one kernel per parameter tensor.
+
+## Dynamic shapes
+
+By default the cache keys on input shapes, so a new batch shape triggers a re-trace. If your batch size genuinely varies, pass `dynamic=True` to trace shape-polymorphic graphs and avoid re-compiling per shape:
+
+```python
+fast_model = lucid.compile(model, dynamic=True)
+```
+
+<Callout variant="warning">
+`dynamic=True` trades a small amount of per-call overhead for far fewer re-traces. Use it only when shapes really do change — a fixed-shape loop is faster without it.
+</Callout>
+
+## BatchNorm and Dropout under compile
+
+Stateful layers are handled transparently:
+
+- **BatchNorm** running mean/variance are surfaced as extra executable outputs and written back into the live module buffers after each step, so `model.eval()` reads fresh statistics.
+- **Dropout** masks are driven by the GPU RNG inside the captured graph, so training stays stochastic across steps without falling back to a CPU round-trip.
+
+## Coverage diagnosis
+
+Not every op has a manual vector-Jacobian product yet. `diagnose` traces your function and reports which ops are compile-backed and which would fall back:
+
+```python
+report = lucid.compile.diagnose(model, example_inputs=(x,))
+
+print(report.total_ops)
+for op in report.registered:
+    print(op.name, op.count, op.sample_shape)
+```
+
+Run `diagnose` first when a model compiles slower than expected — an unregistered op in the hot path forces a fallback and explains the gap.
+
+## Ahead-of-time export
+
+A compiled forward graph can be serialised to disk and reloaded without re-tracing — useful for deployment or warm starts:
+
+```python
+fast_model = lucid.compile(model)
+fast_model(x)                                  # build the executable
+
+lucid.compile.save_compiled(fast_model, "model.lucidc")
+
+restored = lucid.compile.load_compiled("model.lucidc")
+y = restored(x)                                # no trace cost
+```
+
+## What to expect
+
+| Workload | Eager | Compiled |
+|---|---|---|
+| First call | runs immediately | trace + build (one-time) |
+| Steady-state step | per-op dispatch | single executable replay |
+| Best fit | dynamic / research code | fixed-shape training loops |
+
+The compiled path is most effective on deep models with many small ops, where per-op dispatch dominates. For a handful of large matmuls the eager and compiled paths converge.
+
+<Callout variant="note">
+See the [API reference](/api/lucid.compile) for the full surface, and [Training Loop](/docs/training-loop) for where a fused step slots into a real loop.
+</Callout>

@@ -1,0 +1,190 @@
+---
+title: Linear Algebra
+description: Solve linear systems, factor matrices, and compute eigenvalues, norms, and condition numbers with the differentiable lucid.linalg subsystem.
+category: Numerics
+order: 1
+---
+
+`lucid.linalg` is Lucid's linear-algebra subsystem: a single namespace for solving systems, factoring matrices, computing eigenvalues, and measuring norms and conditioning. Most routines are batched over leading dimensions — an input shaped `(*, n, n)` is treated as a stack of `n × n` matrices — and the decompositions are wired into autograd, so a factorization can sit in the middle of a model and gradients flow through it.
+
+Every operation lives **only** under the `lucid.linalg.` prefix. There are no top-level aliases (`lucid.inv` does not exist) and no Tensor methods (`x.inv()` does not exist). Import the module, or pull names off it explicitly:
+
+```python
+import lucid
+import lucid.linalg as linalg
+
+A = lucid.tensor([[4.0, 7.0], [2.0, 6.0]])
+linalg.inv(A)
+# Tensor([[ 0.6000, -0.7000],
+#         [-0.2000,  0.4000]])
+```
+
+<Callout variant="note">
+Throughout this guide, `linalg.foo(...)` is the canonical path. The [API reference](/api/lucid.linalg) lists every signature with full parameter detail; this guide is about *which* tool fits *which* problem.
+</Callout>
+
+## Solving linear systems
+
+To find $X$ in $AX = B$, reach for `solve` — never form `inv(A)` and multiply. Explicit inversion is both slower and less numerically stable than the back-substitution `solve` performs internally.
+
+```python
+A = lucid.tensor([[3.0, 1.0], [1.0, 2.0]])
+b = lucid.tensor([9.0, 8.0])
+
+x = linalg.solve(A, b)      # Tensor([2.0, 3.0])
+```
+
+`solve` accepts a single right-hand side `(*, n)` or several columns at once `(*, n, k)`. It factors $A = LU$ with partial pivoting, then runs two triangular sweeps.
+
+When the **same** coefficient matrix is reused against many right-hand sides, factor once and reuse. `lu_factor` returns a packed $LU$ plus pivots; `lu_solve` then turns each new $B$ into a solution in $O(n^2 k)$ instead of repeating the $O(n^3)$ factorization:
+
+```python
+LU, piv = linalg.lu_factor(A)
+x1 = linalg.lu_solve(LU, piv, b1)
+x2 = linalg.lu_solve(LU, piv, b2)   # reuses the same factorization
+```
+
+If $A$ is already triangular, skip the factorization entirely and call `solve_triangular`, which substitutes directly. For the explicit $(P, L, U)$ triple — useful for inspection — call `lu`.
+
+<Callout variant="warning">
+`solve`, `inv`, and `det` raise a runtime error on a singular (non-invertible) matrix. In code paths where near-singular inputs are *expected* — trust-region steps, regularization sweeps — use the `_ex` variants (`solve_ex`, `inv_ex`, `cholesky_ex`). They return an extra integer `info` flag (`0` = success, non-zero = failure) instead of raising, so a failed factorization does not break control flow:
+
+```python
+X, info = linalg.solve_ex(A, b)
+if int(info) == 0:
+    use(X)
+```
+</Callout>
+
+## Least squares and the pseudo-inverse
+
+When $A$ is rectangular — more equations than unknowns, or fewer — there is no exact solution. `lstsq` finds the $X$ that minimises the residual
+
+$$
+\min_X \,\|A X - B\|_2^2 .
+$$
+
+```python
+A = lucid.tensor([[1.0, 1.0], [1.0, 2.0], [1.0, 3.0]])   # 3 eqns, 2 unknowns
+b = lucid.tensor([[6.0], [9.0], [12.0]])
+
+sol, *_ = linalg.lstsq(A, b)   # Tensor([[3.0], [3.0]])
+```
+
+`lstsq` returns the solution first; the trailing outputs exist for shape compatibility. For an explicit operator that maps any $b$ to its least-squares solution, `pinv` computes the Moore-Penrose pseudo-inverse $A^+$ via SVD, so $x = A^+ b$ even when $A$ is singular or non-square. For a square full-rank matrix, `pinv` routes through `inv` to keep autograd active.
+
+## Matrix decompositions
+
+Decompositions are the backbone of the subsystem. Each factors a matrix into structured pieces that downstream code can exploit.
+
+```python
+# Cholesky: SPD matrix -> lower-triangular L with A = L Lᵀ
+A = lucid.tensor([[4.0, 2.0], [2.0, 3.0]])
+L = linalg.cholesky(A)        # roughly 2x faster than LU, no pivoting
+
+# QR: orthonormal Q and upper-triangular R
+Q, R = linalg.qr(A)           # mode="reduced" by default
+
+# SVD: A = U Σ Vᵀ — the universal factorization
+U, S, Vh = linalg.svd(A, full_matrices=False)
+```
+
+`cholesky` is the right choice for symmetric positive-definite systems — covariance matrices, Gram matrices, normal equations — costing about half the work of LU. For *indefinite* symmetric matrices (saddle-point / KKT systems) where Cholesky fails, use `ldl_factor` + `ldl_solve`, which produce a block-diagonal $LDL^\top$ form.
+
+`svd` is the most general decomposition: any matrix $A \in \mathbb{R}^{m \times n}$ factors as $A = U\Sigma V^\top$ with singular values $\sigma_1 \ge \cdots \ge \sigma_k \ge 0$. It underpins low-rank approximation, `pinv`, `matrix_rank`, and `cond`. When only the singular values are needed, `svdvals` skips assembling $U$ and $V^\top$ and runs roughly twice as fast.
+
+| Decomposition | Call | Input | Produces |
+|---|---|---|---|
+| Cholesky | `linalg.cholesky` | symmetric pos-def | $A = LL^\top$ |
+| LDL | `linalg.ldl_factor` | symmetric indefinite | $A = LDL^\top$ |
+| LU | `linalg.lu` / `linalg.lu_factor` | square | $PA = LU$ |
+| QR | `linalg.qr` | any | $A = QR$ |
+| SVD | `linalg.svd` / `linalg.svdvals` | any | $A = U\Sigma V^\top$ |
+
+<Callout variant="success">
+`cholesky`, `qr`, and `svd` are **differentiable**. Each carries an analytic vector-Jacobian product, so you can drop a factorization inside a model — say, whitening with a Cholesky factor or a differentiable low-rank projection — and `.backward()` propagates gradients straight through it. See [Autograd](/docs/autograd) for how these nodes join the graph.
+</Callout>
+
+## Eigenvalue problems
+
+Eigendecomposition splits along a symmetry boundary, and choosing the right routine matters for both speed and stability.
+
+For a **symmetric / Hermitian** matrix, use `eigh` (eigenvalues *and* eigenvectors) or `eigvalsh` (eigenvalues only). Eigenvalues come back real and in **ascending** order, and the eigenvectors are orthogonal:
+
+```python
+A = lucid.tensor([[2.0, 1.0], [1.0, 3.0]])   # symmetric
+
+w, V = linalg.eigh(A)          # w ascending, V orthogonal
+w_only = linalg.eigvalsh(A)    # Tensor([1.3820, 3.6180])
+```
+
+For a **general** square matrix whose spectrum may be complex, use `eig` / `eigvals`, which solve $A v_i = \lambda_i v_i$ for the right eigenvectors.
+
+<Callout variant="danger">
+`eigh` and `eigvalsh` are differentiable (backward via the Loewner-matrix formula). The general-matrix `eig` and `eigvals` have **no autograd support** — gradients through a non-symmetric eigendecomposition are unstable near defective spectra and are not implemented. Whenever your matrix is symmetric, prefer `eigh`: it is faster, more stable, *and* differentiable. Note that even `eigh`'s gradient blows up when two eigenvalues coincide, and `svd`'s does the same for repeated singular values — near-degenerate inputs are not differentiation-friendly.
+</Callout>
+
+## Norms, determinants, and conditioning
+
+`norm` is the generic dispatcher: it computes the Euclidean ($\ell_2$) norm of a vector and the Frobenius norm of a matrix by default, and routes to `vector_norm` or `matrix_norm` for explicit control.
+
+```python
+linalg.norm(lucid.tensor([3.0, 4.0]))                 # Tensor(5.0)
+linalg.vector_norm(lucid.tensor([1.0, -2.0, 3.0]), ord=1)   # Tensor(6.0)
+linalg.matrix_norm(lucid.tensor([[3.0, 4.0], [0.0, 0.0]]), ord="fro")  # Tensor(5.0)
+```
+
+Vector orders include `0` (non-zero count), `1`, `2`, and `±inf`; matrix orders include `"fro"`, `"nuc"` (nuclear), spectral `2`, and the row/column-sum orders `1` / `inf`. Spectral and nuclear norms require an SVD; entry-wise norms reduce in a single pass.
+
+For determinants, prefer `slogdet` over `det` whenever scale matters. A raw determinant overflows or underflows easily for large matrices, so `slogdet` returns the numerically stable pair $(\mathrm{sign},\, \log|\det A|)$:
+
+```python
+sign, logabs = linalg.slogdet(A)
+# det(A) == sign * exp(logabs)
+```
+
+The condition number $\kappa(A)$ measures how sensitive a solve is to perturbation. `cond` with the default spectral norm returns $\sigma_{\max} / \sigma_{\min}$; a value approaching the inverse machine epsilon signals numerical singularity. `matrix_rank` counts the singular values above a tolerance:
+
+```python
+linalg.cond(lucid.tensor([[1.0, 0.0], [0.0, 1e-6]]))   # Tensor(1000000.0)
+linalg.matrix_rank(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]))   # Tensor(1)
+```
+
+| Quantity | Call | Stable form / notes |
+|---|---|---|
+| Vector / matrix norm | `linalg.norm` | dispatches by rank |
+| Determinant | `linalg.det` | prefer `slogdet` at scale |
+| Sign + log-det | `linalg.slogdet` | overflow-safe |
+| Condition number | `linalg.cond` | `p=2` uses SVD |
+| Numerical rank | `linalg.matrix_rank` | counts $\sigma_i > \tau$ |
+
+## Products and helpers
+
+The module also covers the everyday products and a few constructors:
+
+- `dot` — inner product of two 1-D tensors; `inner` generalises it over trailing axes.
+- `vecdot` — batched dot product along a chosen `dim`, equivalent to `(x * y).sum(dim=dim)`.
+- `outer` — rank-1 matrix $x_i y_j$; `cross` — the 3-D vector cross product.
+- `multi_dot` — a chained product $A_1 A_2 \cdots A_n$ as one call.
+- `matrix_power` — $A^n$ via repeated squaring ($O(\log|n|)$ matmuls); `matrix_exp` — the matrix exponential $e^A$ via scaling-and-squaring.
+- `vander` — a Vandermonde matrix for polynomial fitting; `diagonal` — extract a (super/sub-)diagonal from a batched input.
+
+```python
+linalg.cross(lucid.tensor([1.0, 0.0, 0.0]),
+             lucid.tensor([0.0, 1.0, 0.0]))   # Tensor([0.0, 0.0, 1.0])
+
+A = lucid.tensor([[1.0, 1.0], [0.0, 1.0]])
+linalg.matrix_power(A, 5)
+# Tensor([[1.0, 5.0],
+#         [0.0, 1.0]])
+```
+
+`matrix_power`, `matrix_exp`, `cross`, `vecdot`, and the norm routines are composites over differentiable primitives, so autograd flows through them as well.
+
+<Callout variant="warning">
+`vander` becomes badly ill-conditioned as the column count grows — its condition number rises exponentially. For polynomial regression beyond degree ≈ 10, fit in an orthogonal-polynomial basis or via QR rather than inverting a Vandermonde matrix directly.
+</Callout>
+
+## Where it runs
+
+Like the rest of Lucid, `lucid.linalg` runs on the GPU stream backed by Metal and on the CPU stream, with the right backend selected automatically for your tensors. You do not pick a routine per device — the same `linalg.svd(x)` dispatches correctly wherever `x` lives. See [Metal Device](/docs/metal-device) for moving tensors between streams, and the [API reference](/api/lucid.linalg) for the complete list of operations and their exact signatures.

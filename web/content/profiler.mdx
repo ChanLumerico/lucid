@@ -1,0 +1,157 @@
+---
+title: Profiler
+description: Record per-op timing, FLOPs, and peak memory with lucid.profiler to find the hot op before you optimize anything.
+category: Performance
+order: 3
+---
+
+`lucid.profiler` records every op the C++ engine dispatches and reports where the time and memory actually went. Optimization without measurement is guessing — the profiler turns "the model feels slow" into "84% of the step is one matmul." Find that op first; then decide what to do about it.
+
+## Why profile
+
+A training step is hundreds of small kernel launches. The slow part is rarely where intuition points: it is usually a single op called thousands of times, or one large allocation that spikes peak memory. The profiler answers two questions directly:
+
+- **Which op dominates wall-clock time?** Sort by total time and read the top row.
+- **Where does memory peak?** Read `peak_bytes` after the suspect region.
+
+Once you know the answer, the fix follows — fuse the hot loop with [Compile](/docs/compile), reduce a redundant op, or trim an oversized intermediate.
+
+## Basic usage
+
+`lucid.profiler.profile()` is a context manager. Run any Lucid computation inside the `with` block, then inspect the profiler after it exits:
+
+```python
+import lucid
+import lucid.profiler as profiler
+
+with profiler.profile() as prof:
+    a = lucid.random.randn(512, 512)
+    b = lucid.random.randn(512, 512)
+    y = (a @ b).relu().sum()
+    y.backward()
+
+for summary in prof.key_averages():
+    print(summary)
+```
+
+`prof.key_averages()` buckets every recorded event by op name and returns a list of `ProfileSummary` objects **sorted slowest-first** by total time. The first row is your hot op. For a raw, unaggregated timeline, use `prof.events()` instead — one `OpEvent` per dispatched op, in execution order.
+
+## Reading the summary
+
+A `ProfileSummary` aggregates all calls to one op name. Each row exposes:
+
+| Attribute | Meaning |
+|---|---|
+| `name` | Op name, e.g. `"matmul"`, `"add"`, `"conv2d"` |
+| `count` | How many times the op was called |
+| `total_time_us` | Total microseconds across all calls |
+| `avg_time_us` | Mean time per call |
+| `total_flops` | Cumulative FLOP estimate |
+
+The average is just the total over the call count:
+
+$$
+\bar{t} = \frac{1}{N} \sum_{i=1}^{N} t_i
+$$
+
+A "top-k by self-time" report is the canonical first read — it tells you which op to look at and whether the cost is one expensive call or many cheap ones:
+
+```python
+top = prof.key_averages()[:5]
+for s in top:
+    print(f"{s.name:<16} {s.total_time_us:>10.1f} us  x{s.count}")
+```
+
+If a single op shows a huge `count`, the cost is dispatch overhead from repetition — a strong signal that [Compile](/docs/compile) will help. If one op has a small `count` but dominates `total_time_us`, it is a genuinely heavy kernel, and fusing it buys little.
+
+## Inspecting individual ops
+
+For per-call detail — output shapes, FLOPs, per-op memory delta — iterate the raw events. Each `OpEvent` carries:
+
+| Attribute | Meaning |
+|---|---|
+| `name` | Op name |
+| `time_ns` / `time_us` / `time_ms` | Duration, three units of the same value |
+| `shape` | Output tensor shape as `list[int]` |
+| `flops` | Estimated FLOPs for this call |
+| `memory_delta_bytes` | Net bytes allocated by this op |
+
+```python
+for ev in prof.events():
+    if ev.name == "matmul":
+        print(ev.shape, ev.time_us, ev.flops)
+```
+
+Shapes here are load-bearing: an unexpectedly large `shape` on a hot op often points straight at a batch dimension or broadcast you did not intend.
+
+## Labeling regions with record_function
+
+Per-op rows are precise but anonymous — `matmul` appears identically whether it ran in the encoder or the decoder. `lucid.profiler.record_function(name)` wraps a block and tags it with a semantic label, so you can attribute cost to a phase rather than an op:
+
+```python
+with profiler.profile() as prof:
+    with profiler.record_function("encoder"):
+        h = encoder(x)
+    with profiler.record_function("decoder"):
+        out = decoder(h)
+    with profiler.record_function("loss"):
+        loss = criterion(out, target)
+        loss.backward()
+```
+
+<Callout variant="note">
+Place `record_function` around coarse phases — encoder, decoder, loss, optimizer step. Wrapping every micro-op inflates the trace without adding insight. The hook is always safe: it is a no-op when no profiler is active.
+</Callout>
+
+## Memory statistics
+
+When `with_memory=True` (the default), the profiler also snapshots the allocator. `prof.memory_stats()` returns a `MemoryStats` — or `None` if stats are unavailable — exposing:
+
+| Attribute | Meaning |
+|---|---|
+| `current_bytes` | Bytes allocated right now |
+| `peak_bytes` | High-water mark since the last reset |
+| `alloc_count` | Number of allocations |
+| `free_count` | Number of deallocations |
+
+```python
+with profiler.profile() as prof:
+    out = model(batch)
+    loss = criterion(out, target)
+    loss.backward()
+
+stats = prof.memory_stats()
+if stats is not None:
+    print(f"peak: {stats.peak_bytes / 1e6:.1f} MB")
+```
+
+`peak_bytes` is the number that decides whether a batch size fits on the [metal device](/docs/metal-device). Watching it before and after a change is how you confirm an activation-checkpointing or in-place tweak actually lowered the high-water mark, rather than just shuffling allocations around.
+
+## Interpreting results
+
+A repeatable workflow once you have a summary:
+
+1. **Read the top row** of `key_averages()` — that op owns the most wall-clock time.
+2. **Check its `count`.** High count, modest `avg_time_us` → dispatch-bound, [Compile](/docs/compile) the loop. Low count, high `avg_time_us` → compute-bound, the kernel itself is the cost.
+3. **Confirm the shape** via `events()` — an outsized `shape` is often an accidental broadcast or a batch dimension left in.
+4. **Check `peak_bytes`** if memory, not time, is the constraint.
+
+For a fuller visual timeline, export a Chrome/Perfetto trace and open it in `chrome://tracing` or the Perfetto UI:
+
+```python
+prof.export_chrome_trace("trace.json")
+```
+
+<Callout variant="warning">
+Profiling adds per-op recording overhead, so absolute numbers run slightly slower than an unprofiled run. Trust the **relative ranking** — the order of ops by cost is what matters, not the wall-clock totals in isolation.
+</Callout>
+
+<Callout variant="info">
+Warm up before you measure. The first iteration pays one-time costs — lazy graph setup, allocator growth, cache misses — that distort timings. Run a few iterations outside the `with` block, then profile the steady state.
+</Callout>
+
+Only one profiler may be active at a time; entering a nested context overwrites the engine's current profiler pointer until the outer block exits. For programmatic control without a `with` block, drive a `Profiler` directly via `start()` / `stop()` and `clear()` between runs.
+
+<Callout variant="note">
+See the [API reference](/api/lucid.profiler) for the full surface. Once the profiler names your hot op, head to [Compile](/docs/compile) to fuse it, or the [Training Loop](/docs/training-loop) guide to see where measurement fits into a real loop.
+</Callout>

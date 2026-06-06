@@ -1,0 +1,175 @@
+---
+title: Distributions
+description: Parameterised probability distributions in lucid.distributions — sampling, reparameterised rsample, log_prob likelihoods, entropy, and KL divergence on Apple Silicon.
+category: Numerics
+order: 5
+---
+
+`lucid.distributions` provides a family of probability distributions with a single, consistent interface. Each distribution is constructed from its parameters as tensors, exposes closed-form statistics (`mean`, `variance`), draws samples, and scores values under its density via `log_prob`. Because the parameters can carry gradients, distributions slot directly into the [autograd](/docs/autograd) graph — the foundation for variational inference, policy-gradient methods, and probabilistic layers.
+
+## A shared interface
+
+Every distribution subclasses `lucid.distributions.Distribution` and implements the same core methods, so once you learn one you know them all:
+
+| Member | Meaning |
+|---|---|
+| `.sample(sample_shape=())` | Draw samples (no gradient through the draw) |
+| `.rsample(sample_shape=())` | Reparameterised, **differentiable** samples |
+| `.log_prob(value)` | Log-density / log-mass at `value` |
+| `.entropy()` | Differential or discrete entropy |
+| `.mean` / `.variance` / `.stddev` | Closed-form moments |
+| `.mode` | Most probable value |
+| `.cdf(value)` / `.icdf(p)` | CDF and its inverse (where defined) |
+| `.has_rsample` | `True` if a reparameterised sampler exists |
+
+A distribution carries a `batch_shape` (independent parameter sets evaluated in parallel) and an `event_shape` (the shape of a single draw). The optional `validate_args` flag turns on constraint checking on the parameters and on values passed to `log_prob`.
+
+```python
+import lucid
+import lucid.distributions as dist
+
+normal = dist.Normal(loc=0.0, scale=1.0)
+
+s = normal.sample(sample_shape=(4,))   # 4 i.i.d. draws
+print(normal.mean, normal.variance)    # 0.0  1.0
+print(normal.log_prob(s).shape)        # (4,)
+```
+
+<Callout variant="note">
+Constructing with `validate_args=True` raises if you pass an invalid parameter (a negative `scale`, probabilities outside $[0, 1]$, and so on). Leave it off in tight loops where you trust your inputs.
+</Callout>
+
+## Sampling vs. rsample
+
+There are two ways to draw from a distribution, and the difference is entirely about gradients.
+
+`sample()` returns a plain tensor. The randomness is treated as a constant, so **no gradient flows back** to the distribution's parameters — this is what you want for evaluation, replay buffers, or any draw you do not differentiate through.
+
+`rsample()` uses the **reparameterization trick**: it expresses the sample as a deterministic, differentiable function of the parameters and an independent noise source. For a Normal that is
+
+$$
+z = \mu + \sigma \cdot \epsilon, \qquad \epsilon \sim \mathcal{N}(0, 1)
+$$
+
+The noise $\epsilon$ is sampled with no gradient, but $\mu$ and $\sigma$ enter through differentiable ops, so `z.backward()` produces gradients for `loc` and `scale`. This is the mechanism that makes a variational autoencoder trainable: you sample the latent code yet still backpropagate the reconstruction loss into the encoder.
+
+```python
+import lucid
+import lucid.distributions as dist
+
+mu    = lucid.tensor([0.0], requires_grad=True)
+sigma = lucid.tensor([1.0], requires_grad=True)
+
+q = dist.Normal(loc=mu, scale=sigma)
+z = q.rsample()          # z = mu + sigma * eps, differentiable
+loss = (z ** 2).sum()    # some downstream objective
+loss.backward()
+
+print(mu.grad)           # gradient flows through the sample
+print(sigma.grad)
+```
+
+Not every distribution is reparameterisable. Continuous location-scale families (`Normal`, `Exponential`, `Laplace`, `Cauchy`) set `has_rsample = True`; discrete families (`Bernoulli`, `Categorical`, `Poisson`) cannot define a differentiable draw, and some continuous samplers (e.g. `Gamma`, whose draw is rejection-based) also report `has_rsample = False`.
+
+<Callout variant="warning">
+Calling `rsample()` on a distribution with `has_rsample = False` raises. Check `dist_obj.has_rsample` first, or use the **relaxed** continuous surrogates — `RelaxedBernoulli` and `RelaxedOneHotCategorical` (the Concrete / Gumbel-softmax distributions) — when you need differentiable discrete-like samples.
+</Callout>
+
+## log_prob for likelihoods and NLL loss
+
+`log_prob(value)` is the workhorse for learning: it returns the log-density (continuous) or log-mass (discrete) of `value` under the distribution. Maximising the log-likelihood of observed data — equivalently minimising the **negative log-likelihood** — is just summing `log_prob` over a batch and negating:
+
+```python
+import lucid
+import lucid.distributions as dist
+
+# Fit the mean of a Normal to observed data by gradient descent.
+data = lucid.tensor([1.2, 0.8, 1.5, 0.9, 1.1])
+
+mu = lucid.tensor([0.0], requires_grad=True)
+model = dist.Normal(loc=mu, scale=1.0)
+
+nll = -model.log_prob(data).mean()   # negative log-likelihood
+nll.backward()
+print(mu.grad)                       # points mu toward the data mean
+```
+
+The same call powers classification heads. A `Categorical` built from `logits` gives you cross-entropy for free, since `-log_prob(label)` **is** the cross-entropy of that label:
+
+```python
+logits = model_output                       # (batch, num_classes)
+labels = targets                            # (batch,) integer class ids
+
+cat  = dist.Categorical(logits=logits)
+loss = -cat.log_prob(labels).mean()         # cross-entropy
+```
+
+<Callout variant="info">
+Discrete distributions accept **either** `probs` or `logits` — pass exactly one. `logits` are numerically preferable when the values are unnormalised network outputs, since the normalisation happens inside `log_prob` in log-space.
+</Callout>
+
+## Entropy and KL divergence
+
+`entropy()` returns the (differential or discrete) entropy of a distribution in closed form where one exists — useful as an exploration bonus in reinforcement learning or as a regulariser.
+
+For comparing two distributions, `lucid.distributions.kl_divergence(p, q)` computes
+
+$$
+\mathrm{KL}(p \,\|\, q) = \mathbb{E}_{x \sim p}\!\left[\log \frac{p(x)}{q(x)}\right]
+$$
+
+using a registered closed form when the pair is recognised. This is the regularisation term in a VAE's evidence lower bound — the KL between the approximate posterior $q$ and the prior $p$:
+
+```python
+import lucid.distributions as dist
+
+posterior = dist.Normal(loc=mu, scale=sigma)   # encoder output
+prior     = dist.Normal(loc=0.0, scale=1.0)    # standard-Normal prior
+
+kl   = dist.kl_divergence(posterior, prior)    # closed-form, differentiable
+elbo = recon_log_prob - kl                     # maximise the ELBO
+```
+
+Because `kl_divergence` is built from differentiable ops, the result backpropagates into the posterior's parameters. When you define a new distribution pair, register its closed form with `lucid.distributions.register_kl` so `kl_divergence` can dispatch to it.
+
+<Callout variant="note">
+If no closed form is registered for a `(p, q)` pair, `kl_divergence` raises rather than silently returning a Monte-Carlo estimate. Register an exact formula with `register_kl`, or estimate it yourself via `p.log_prob(p.rsample()) - q.log_prob(...)`.
+</Callout>
+
+## What's available
+
+The subsystem ships a broad catalogue. A representative grouping:
+
+| Group | Distributions |
+|---|---|
+| **Discrete** | `Bernoulli`, `Categorical`, `OneHotCategorical`, `Binomial`, `Multinomial`, `NegativeBinomial`, `Geometric`, `Poisson` |
+| **Continuous (location-scale)** | `Normal`, `LogNormal`, `Laplace`, `Cauchy`, `HalfNormal`, `HalfCauchy`, `Gumbel`, `StudentT` |
+| **Continuous (positive support)** | `Exponential`, `Gamma`, `Chi2`, `Weibull`, `Pareto`, `InverseGamma` |
+| **On the simplex / interval** | `Beta`, `Dirichlet`, `Kumaraswamy`, `Uniform`, `ContinuousBernoulli` |
+| **Multivariate / matrix** | `MultivariateNormal`, `Wishart`, `LKJCholesky` |
+| **Relaxed (differentiable discrete)** | `RelaxedBernoulli`, `RelaxedOneHotCategorical` |
+| **Combinators** | `Independent`, `MixtureSameFamily`, `TransformedDistribution` |
+| **Base classes** | `Distribution`, `ExponentialFamily` |
+
+The combinators are how you build structured distributions without writing a new class. `Independent` re-interprets trailing batch dimensions as a single event (turning a batch of Normals into one diagonal-covariance multivariate density), `MixtureSameFamily` forms a finite mixture, and `TransformedDistribution` pushes a base distribution through a bijector (any of the `Transform` objects — `AffineTransform`, `ExpTransform`, `SigmoidTransform`, `TanhTransform`, and so on) to construct, for instance, a `LogNormal` from a `Normal` under `ExpTransform`.
+
+```python
+import lucid.distributions as dist
+
+# A diagonal-covariance Gaussian in R^3 from three independent Normals.
+base = dist.Normal(loc=lucid.zeros(3), scale=lucid.ones(3))
+mvn  = dist.Independent(base, reinterpreted_batch_ndims=1)
+
+print(mvn.event_shape)        # (3,)
+print(mvn.log_prob(lucid.zeros(3)).shape)   # ()  — one scalar per draw
+```
+
+## Where to go next
+
+- The [API reference](/api/lucid.distributions) lists every distribution with its exact parameters and methods.
+- See [Autograd](/docs/autograd) for how `rsample` and `log_prob` gradients propagate.
+- Distributions run on whichever [Metal device](/docs/metal-device) their parameter tensors live on — move the parameters and the sampler follows.
+
+<Callout variant="success">
+The mental model is small: **parameters in, a `Distribution` object out**, then `sample`/`rsample` to draw, `log_prob` to score, and `kl_divergence`/`entropy` to regularise. Everything else in the catalogue is a variation on that interface.
+</Callout>

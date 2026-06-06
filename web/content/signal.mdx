@@ -1,0 +1,159 @@
+---
+title: Signal Windows
+description: Generate tapering window functions — Hann, Hamming, Blackman, Kaiser, Gaussian and more — with the lucid.signal subsystem to suppress spectral leakage before an FFT.
+category: Numerics
+order: 3
+---
+
+`lucid.signal` provides **window functions**: short 1-D tensors that taper a signal frame smoothly to (or toward) zero at its edges. You multiply a frame of samples by a window *before* transforming it, and the multiplication reshapes how energy spreads across the spectrum.
+
+## Why window at all
+
+A finite frame is an implicit assumption that the signal is *periodic* over exactly that length. Real frames rarely satisfy this, so the abrupt cut at each end injects a discontinuity. Under the transform that discontinuity smears a single tone's energy across many neighbouring bins — **spectral leakage** — burying weak components next to strong ones.
+
+A window tapers the ends so the framed signal joins up smoothly. The cost is a trade-off you cannot escape: every taper that lowers the side lobes (the leakage skirts) also **widens the main lobe** (the central peak), blurring two close frequencies together. Choosing a window *is* choosing where you sit on that curve.
+
+The simplest non-trivial taper is the Hann window, a single raised cosine:
+
+$$
+w[n] = \tfrac{1}{2}\left(1 - \cos\!\left(\frac{2\pi n}{M - 1}\right)\right), \qquad 0 \le n < M.
+$$
+
+```python
+import lucid
+import lucid.signal
+
+w = lucid.signal.hann(8)
+print(w)   # tapers from 0 at the edges up to 1 in the middle
+```
+
+## Common signature
+
+Every window shares the same four base parameters; shape-specific knobs (like `beta` or `std`) come *before* `sym`.
+
+| Parameter | Meaning |
+|---|---|
+| `M` | Window length in samples (number of points). Must be `>= 0`. |
+| `sym` | `True` (default) → **symmetric** window for filter design. `False` → **periodic** window for spectral analysis. |
+| `dtype` | Output dtype; defaults to `float32`. |
+| `device` | Target device — `"cpu"` or the `"gpu"` (Metal) device. See [Metal Device](/docs/metal-device). |
+
+```python
+# float64 Hamming window of length 256 on the GPU
+w = lucid.signal.hamming(256, sym=False, dtype=lucid.float64, device="gpu")
+```
+
+<Callout variant="warning">
+The `sym` flag is the most-missed detail. Use `sym=False` (periodic) whenever the window feeds an FFT/STFT — the periodic form has length `M+1` internally with its last sample dropped, so consecutive frames tile seamlessly without a duplicated boundary point. Use `sym=True` (the default) for FIR filter design, where the coefficient symmetry is what gives a linear phase response. The two forms differ *only* at the boundary samples.
+</Callout>
+
+## A tour of the families
+
+### Rectangular-ish: Bartlett and Cosine
+
+Not applying a window is the *rectangular* window — narrowest main lobe, worst leakage. The first real tapers stay close to it. `bartlett(M)` is a linear triangular ramp up and back down; `cosine(M)` is a single arch of a sine, slightly smoother with lower side lobes than the triangle.
+
+```python
+tri  = lucid.signal.bartlett(64)
+half = lucid.signal.cosine(64)
+```
+
+### The workhorses: Hann and Hamming
+
+These two raised-cosine windows are the everyday defaults for STFT analysis.
+
+- **Hann** vanishes at both endpoints and has the fastest asymptotic side-lobe roll-off, so distant leakage decays quickly.
+- **Hamming** sits on a small nonzero pedestal (endpoints `0.08`), which cancels the first side lobe down to about $-43\,\text{dB}$ at the cost of slower far roll-off.
+
+Both are special cases of `general_hamming(M, alpha=...)` — `alpha = 0.5` is Hann, `alpha = 0.54` is Hamming — so you can sweep the family continuously:
+
+```python
+hann    = lucid.signal.hann(128)
+hamming = lucid.signal.hamming(128)
+custom  = lucid.signal.general_hamming(128, alpha=0.5435)  # "optimal" Hamming
+```
+
+### Deeper suppression: Blackman and Nuttall
+
+When weak tones hide beside strong ones, reach for more cosine terms. `blackman(M)` is a three-term sum reaching roughly $-58\,\text{dB}$ side lobes; `nuttall(M)` is a four-term design reaching about $-98\,\text{dB}$. Both pay with a main lobe several times wider than Hann. The parent of all of these is `general_cosine(M, a=[...])`, which takes raw coefficients:
+
+```python
+# Blackman expressed through the generic cosine-sum parent
+bw = lucid.signal.general_cosine(128, a=[0.42, 0.50, 0.08])
+nw = lucid.signal.nuttall(128)
+```
+
+### Parametric: Kaiser and Gaussian
+
+The cosine-sum windows are fixed points on the trade-off curve. The parametric windows let you *dial* the position.
+
+`kaiser(M, beta=...)` is near-optimal in the sense of packing the most energy into the main lobe for a given width. A single $\beta$ sweeps the whole range:
+
+$$
+w[n] = \frac{I_0\!\left(\beta\,\sqrt{1 - \left(\tfrac{2n}{M-1} - 1\right)^2}\right)}{I_0(\beta)},
+$$
+
+where $I_0$ is the order-0 modified Bessel function. `beta = 0` is rectangular, `beta ≈ 5` approximates Hamming, and larger $\beta$ trades main-lobe width for ever-deeper side lobes (attenuation grows roughly as $8.7\,\beta$).
+
+```python
+sharp = lucid.signal.kaiser(256, beta=5.0)    # ~Hamming-like
+deep  = lucid.signal.kaiser(256, beta=12.0)   # ~ -124 dB side lobes
+```
+
+`gaussian(M, std=...)` is the unique window whose transform is also Gaussian, achieving the time-frequency uncertainty bound — it underlies the Gabor / short-time Fourier transform. `general_gaussian(M, p=..., sig=...)` adds a shape exponent that flattens the top as `p` grows. `exponential(M, tau=..., center=...)` decays away from a chosen point, handy for emphasising the most recent sample of an online buffer.
+
+```python
+g  = lucid.signal.gaussian(256, std=32.0)
+gg = lucid.signal.general_gaussian(256, p=1.5, sig=40.0)
+ex = lucid.signal.exponential(256, tau=60.0)
+```
+
+## Worked example: windowing before an FFT
+
+The canonical use is to apply a window to a frame, then transform it. Because windows are ordinary tensors, you just multiply element-wise and pass the result to [`lucid.fft.fft`](/api/lucid.fft).
+
+```python
+import lucid
+import lucid.signal
+import lucid.fft
+
+M = 1024
+n = lucid.arange(M)
+
+# A two-tone signal: a strong tone and a weak nearby one.
+signal = (
+    lucid.sin(2 * lucid.pi * 50 * n / M)
+    + 0.005 * lucid.sin(2 * lucid.pi * 60 * n / M)
+)
+
+# Periodic window for spectral analysis — note sym=False.
+w = lucid.signal.hann(M, sym=False)
+
+spectrum_raw      = lucid.fft.fft(signal)        # leakage hides the weak tone
+spectrum_windowed = lucid.fft.fft(signal * w)    # weak tone now resolvable
+
+magnitude = lucid.abs(spectrum_windowed)
+```
+
+Without the window, the strong tone's leakage skirt swamps the weak one nearby. With the Hann taper applied, the skirts collapse and the second peak becomes visible. Swap in `lucid.signal.blackman` or a high-`beta` `kaiser` if you need even more dynamic range — at the cost of resolving power between adjacent frequencies.
+
+<Callout variant="note">
+Windows are pure composites built on `lucid.arange` and elementwise math — there is no engine call and no autograd graph. Compute one once per frame length and reuse the tensor across every frame rather than regenerating it in the hot loop. See the [API reference](/api/lucid.signal) for all twelve windows.
+</Callout>
+
+## Choosing a window
+
+Qualitative trade-offs, narrowest main lobe (best frequency resolution) at the top, deepest side lobes (least leakage) at the bottom:
+
+| Window | Main-lobe width | Peak side lobe | Best for |
+|---|---|---|---|
+| Rectangular (no window) | narrowest | $\approx -13\,\text{dB}$ | maximum resolution, tones of similar level |
+| `bartlett` / `cosine` | narrow | $\approx -25\,\text{dB}$ | a gentle improvement over none |
+| `hann` | medium | $\approx -31\,\text{dB}$ | general STFT default, fast far roll-off |
+| `hamming` | medium | $\approx -43\,\text{dB}$ | suppressing the nearest side lobe |
+| `blackman` | wide | $\approx -58\,\text{dB}$ | moderate dynamic range |
+| `nuttall` | wider | $\approx -98\,\text{dB}$ | very-high dynamic range |
+| `kaiser` (`beta`) | tunable | tunable | dialling an exact trade-off |
+| `gaussian` (`std`) | tunable | tunable | optimal time-frequency localisation |
+
+When in doubt, start with `hann(M, sym=False)` for analysis. Move toward `blackman`, `nuttall`, or a high-`beta` `kaiser` only when a strong component is masking a weak one and you can afford the wider main lobe.

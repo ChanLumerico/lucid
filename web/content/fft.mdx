@@ -1,0 +1,169 @@
+---
+title: FFT
+description: Compute discrete Fourier transforms in Lucid with lucid.fft — 1-D/2-D/N-D, real and Hermitian variants, normalisation conventions, and frequency helpers.
+category: Numerics
+order: 2
+---
+
+`lucid.fft` is Lucid's discrete Fourier transform (DFT) toolkit. It maps a tensor between the time/space domain and the frequency domain, so you can filter, deconvolve, or analyse spectra with $O(N \log N)$ fast transforms. The single-axis forward DFT is
+
+$$
+X_k = \sum_{n=0}^{N-1} x_n\, e^{-i 2\pi k n / N}, \quad k = 0, 1, \ldots, N-1.
+$$
+
+Every transform is a differentiable op — gradients flow through `lucid.fft.*` calls exactly like any other tensor operation (see [Autograd](/docs/autograd)). The backward of each transform is its dual transform with the dual normalisation, so spectral layers train end-to-end.
+
+<Callout variant="info">
+On Apple Silicon every FFT delegates to a fast Accelerate-backed kernel, so both CPU and GPU tensors land on the same path. You access ops only through the `lucid.fft.` prefix — `lucid.fft.fft(x)`, `lucid.fft.rfftn(x)`, and so on. See the [API reference](/api/lucid.fft) for the full surface.
+</Callout>
+
+## 1-D, 2-D, and N-D transforms
+
+The library mirrors the standard FFT layout. Pick the variant by how many axes you transform:
+
+| Dimensions | Forward | Inverse | Default axes |
+|---|---|---|---|
+| 1-D | `lucid.fft.fft` | `lucid.fft.ifft` | `dim=-1` |
+| 2-D | `lucid.fft.fft2` | `lucid.fft.ifft2` | `dim=(-2, -1)` |
+| N-D | `lucid.fft.fftn` | `lucid.fft.ifftn` | all axes |
+
+The 1-D and 2-D entry points are convenience wrappers around `fftn` restricted to one or two axes. All of them return a **complex64** tensor.
+
+```python
+import lucid
+
+# 1-D DFT along the last axis
+x = lucid.randn(64)
+X = lucid.fft.fft(x)          # complex64, shape (64,)
+
+# 2-D DFT over the last two axes (e.g. an image)
+img = lucid.randn(64, 64)
+S = lucid.fft.fft2(img)       # shape (64, 64)
+
+# N-D DFT over a chosen subset of axes
+vol = lucid.randn(16, 32, 32)
+V = lucid.fft.fftn(vol, dim=[-2, -1])   # transform the last two axes only
+```
+
+## Sizing with `n` / `s` and choosing `dim`
+
+The single-axis ops (`fft`, `ifft`, `rfft`, ...) take a scalar length `n`; the multi-axis ops (`fftn`, `fft2`, ...) take a sequence `s`. Both control the transformed-axis length: if the requested size is **larger** than the input, the axis is zero-padded; if **smaller**, it is truncated — before the transform runs.
+
+```python
+# Zero-pad a length-100 signal to 128 bins (spectral interpolation)
+x = lucid.randn(100)
+X = lucid.fft.fft(x, n=128)        # shape (128,)
+
+# Pad a 4x4 grid up to 8x8 over the last two axes
+g = lucid.ones(4, 4)
+G = lucid.fft.fftn(g, s=[8, 8], dim=[-2, -1])   # shape (8, 8)
+```
+
+`dim` selects which axis or axes to transform; negative indices are supported. When `s` and `dim` are both sequences they must be the same length — `s[i]` sizes `dim[i]`.
+
+## Real transforms and the half-spectrum
+
+When the input is real, its DFT is **Hermitian** (conjugate-symmetric): $X[N-k] = X^*[k]$. The upper half of the spectrum is therefore redundant. The `r`-prefixed transforms exploit this and store only the unique bins along the **last** transformed axis — length $\lfloor N/2 \rfloor + 1$ instead of $N$.
+
+```python
+x = lucid.randn(128)
+X = lucid.fft.rfft(x)          # shape (65,)  ->  128 // 2 + 1
+x_rec = lucid.fft.irfft(X, n=128)   # back to shape (128,), real
+```
+
+| Real op | Input → Output | Last-axis length |
+|---|---|---|
+| `lucid.fft.rfft` / `rfft2` / `rfftn` | real → complex half-spectrum | $\lfloor N/2 \rfloor + 1$ |
+| `lucid.fft.irfft` / `irfft2` / `irfftn` | complex half-spectrum → real | full $N$ |
+| `lucid.fft.hfft` / `hfft2` / `hfftn` | Hermitian half-spectrum → real | full $N$ |
+| `lucid.fft.ihfft` / `ihfft2` / `ihfftn` | real → Hermitian half-spectrum | $\lfloor N/2 \rfloor + 1$ |
+
+<Callout variant="warning">
+The inverse real and Hermitian transforms cannot tell an even-length signal from an odd one: a half-spectrum of $m$ bins came from either $2(m-1)$ or $2m-1$ samples. The default assumes even ($2(m-1)$). When the original length was **odd**, pass it explicitly — `lucid.fft.irfft(X, n=N)` or `lucid.fft.irfftn(X, s=[N])` — otherwise the output is one element short.
+</Callout>
+
+The `h`-prefixed pair is the frequency-domain dual of the real pair: `hfft` takes a Hermitian half-spectrum and returns a real result, while `ihfft` takes a real input and returns its Hermitian half-spectrum.
+
+## The normalisation convention
+
+The `norm` argument controls where the $1/N$ scale factor lives. It is shared by every transform in the module, where $N$ is the product of the transformed-axis lengths.
+
+| `norm` | Forward scale | Inverse scale | Property |
+|---|---|---|---|
+| `"backward"` (default, `None`) | $1$ | $1/N$ | standard DFT |
+| `"forward"` | $1/N$ | $1$ | scale on forward |
+| `"ortho"` | $1/\sqrt{N}$ | $1/\sqrt{N}$ | unitary pair |
+
+Use `"ortho"` when you need the transform to preserve energy (Parseval) — both directions divide by $\sqrt{N}$, making the pair mutually unitary.
+
+```python
+x = lucid.randn(256)
+X = lucid.fft.fft(x, norm="ortho")
+x_rec = lucid.fft.ifft(X, norm="ortho")   # recovers x exactly (unitary)
+```
+
+<Callout variant="note">
+Whatever `norm` you pass to a forward transform, pass the **same** value to its inverse — mismatched modes leave a stray factor of $N$ or $\sqrt{N}$. Autograd already follows this rule internally: the backward of a transform uses the dual normalisation (`backward` ↔ `forward`, `ortho` unchanged).
+</Callout>
+
+## Shifting and frequency axes
+
+Standard FFT ordering places DC (zero frequency) at index 0, the positive frequencies next, then the wrapped-around negative frequencies. Two pairs of helpers make this ordering usable:
+
+- `lucid.fft.fftshift(x, dim=None)` — circularly shifts so DC sits at the **centre** of each axis. `lucid.fft.ifftshift` exactly undoes it (they differ by one position for odd lengths).
+- `lucid.fft.fftfreq(n, d=1.0)` — the frequency of each `fft` bin, in FFT order. `lucid.fft.rfftfreq(n, d=1.0)` returns the non-negative half that pairs with `rfft`.
+
+The sample spacing `d` sets the units: leave it at `1.0` for cycles-per-sample, or pass `d = 1/fs` to get Hz at sample rate `fs`.
+
+```python
+fs = 1000.0                                  # 1 kHz sample rate
+freqs = lucid.fft.fftfreq(256, d=1.0 / fs)   # Hz, FFT order
+# Centre both spectrum and axis for a clean plot:
+X = lucid.fft.fftshift(lucid.fft.fft(lucid.randn(256)))
+f = lucid.fft.fftshift(freqs)                # now monotone, -500 Hz .. +496 Hz
+```
+
+`rfftfreq` is already monotone (all non-negative, DC up to Nyquist $f_s/2$), so it needs no shift — it drops straight in as the x-axis of a power spectrum.
+
+## Worked example: low-pass filtering
+
+Filtering in the frequency domain follows the convolution theorem: transform, multiply by a frequency mask, transform back. Here we keep only the low frequencies of a real 2-D field using the real transform pair.
+
+```python
+import lucid
+
+img = lucid.randn(64, 64)                 # a real field / image
+
+# Forward real 2-D transform — last axis is compressed to 33 bins
+F = lucid.fft.rfft2(img)                  # shape (64, 33)
+
+# Build a low-pass mask over the matching frequency grids
+fy = lucid.fft.fftfreq(64).reshape(64, 1)         # rows: full frequencies
+fx = lucid.fft.rfftfreq(64).reshape(1, 33)        # cols: half-spectrum
+radius = (fy ** 2 + fx ** 2) ** 0.5
+mask = (radius < 0.15).float()                    # 1.0 inside the low-frequency disc
+
+# Apply in the frequency domain, then invert back to a real image
+smooth = lucid.fft.irfft2(F * mask, s=[64, 64])   # shape (64, 64), real
+```
+
+Because the field is real we used `rfft2` / `irfft2`, halving the stored spectrum, and matched the row axis with `fftfreq` and the compressed column axis with `rfftfreq`. Passing `s=[64, 64]` to `irfft2` pins the output back to the original even size.
+
+<Callout variant="info">
+The whole pipeline is differentiable — wrap it in a module and gradients propagate through `rfft2`, the mask multiply, and `irfft2`. That makes `lucid.fft` usable as a spectral layer inside a trained model, not just an analysis tool. See [Modules](/docs/modules) and the [Training Loop](/docs/training-loop) guide for where such a layer fits.
+</Callout>
+
+## Round-trip summary
+
+Every forward/inverse pair reconstructs the input up to floating-point rounding when you keep `norm` consistent and (for real/Hermitian variants) supply the original size:
+
+| Round trip | Recovers |
+|---|---|
+| `ifft(fft(x))` | complex `x` |
+| `ifftn(fftn(x))` | complex `x` (any axes) |
+| `irfft(rfft(x), n=N)` | real `x` |
+| `irfftn(rfftn(x), s=[...])` | real `x` |
+| `hfft(ihfft(x, ...), n=N)` | real `x` |
+| `ifftshift(fftshift(x))` | exact, no rounding |
+
+Reach for the plain `fft*` family for complex signals, the `rfft*` family for real signals (half the memory), and the `hfft*` family when you already hold a Hermitian spectrum and want the implied real signal in one call.

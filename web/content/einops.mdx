@@ -1,0 +1,174 @@
+---
+title: Einops
+description: Manipulate tensor axes with readable pattern strings — transpose, reshape, split, merge, reduce, repeat, and contract through lucid.einops.
+category: Utilities
+order: 1
+---
+
+`lucid.einops` expresses axis manipulation as a single readable pattern string instead of a chain of opaque `transpose` / `view` / `sum` calls. One pattern says exactly what happens to every axis — which dimensions move, merge, split, collapse, or appear — so the intent stays visible at the call site rather than living in your head.
+
+The subsystem has four functions: `rearrange`, `reduce`, `repeat`, and `einsum`. All of them are reached **only** through the `lucid.einops.` prefix — there are no top-level shortcuts and no Tensor methods.
+
+```python
+import lucid
+
+x = lucid.random.randn(2, 3, 4)
+
+lucid.einops.rearrange(x, "b h w -> b (h w)").shape   # (2, 3, 4) -> (2, 12)
+```
+
+## Reading a pattern
+
+Every pattern has the form `"<lhs> -> <rhs>"`. The left side names the axes of the **input**, left to right; the right side names the axes of the **output**, left to right. Lucid matches names by position, then performs whatever permutation, merge, split, drop, or insert the two sides imply.
+
+- **Named axes** — `b`, `h`, `w`, `c` are just labels. Pick readable ones (`batch`, `head`, `seq`) where it helps.
+- **Composition** — parentheses on the right merge axes into one: `(h w)` flattens `h` and `w` into a single dimension of size `h * w`.
+- **Decomposition** — parentheses on the left split one axis into several: `(h w)` reads one input axis as two, with the inner sizes supplied through keyword `axes_lengths`.
+- **New axes** — a name on the right that never appeared on the left is introduced (for `repeat`), and its size is passed as a keyword.
+
+<Callout variant="warning">
+Axis names must **balance** across `->`. Every name on one side has to be accounted for on the other — either kept, merged into a parenthesised group, dropped (only in `reduce`), or introduced with an explicit length (only in `repeat`). An unbalanced pattern is an error, which is exactly what makes the notation safe to read.
+</Callout>
+
+## The four functions
+
+| Function | Pattern role | What it does |
+|---|---|---|
+| `lucid.einops.rearrange(tensor, pattern, **axes_lengths)` | shape-preserving | Transpose, merge, and split axes — same elements, new layout |
+| `lucid.einops.reduce(tensor, pattern, reduction, **axes_lengths)` | drops axes | Collapse axes present on the left but missing on the right |
+| `lucid.einops.repeat(tensor, pattern, **axes_lengths)` | adds axes | Tile along existing axes or broadcast into new ones |
+| `lucid.einops.einsum(equation, *operands)` | contracts | Multiply and sum multiple tensors over shared index labels |
+
+All four return ordinary Lucid tensors and participate in autograd like any other op — see [Autograd](/docs/autograd) for how the graph is recorded.
+
+## rearrange
+
+`rearrange` moves elements around without changing their count. It covers three jobs that would otherwise need separate calls.
+
+**Transpose** — reorder named axes:
+
+```python
+x = lucid.random.randn(8, 32, 32, 3)
+
+# channels-last image to channels-first
+lucid.einops.rearrange(x, "b h w c -> b c h w").shape   # (8, 32, 32, 3) -> (8, 3, 32, 32)
+```
+
+**Flatten via composition** — merge spatial axes into a token sequence:
+
+```python
+feat = lucid.random.randn(8, 64, 7, 7)   # (batch, channels, h, w)
+
+# fold (h, w) into one sequence axis, channels last
+tokens = lucid.einops.rearrange(feat, "b c h w -> b (h w) c")
+tokens.shape   # (8, 64, 7, 7) -> (8, 49, 64)
+```
+
+**Split via `axes_lengths`** — decompose one axis into several. Because a merged axis carries no record of its factors, you supply the inner sizes by keyword:
+
+```python
+seq = lucid.random.randn(4, 196, 768)   # (batch, tokens, dim)
+
+# split 196 tokens back into a 14x14 grid
+grid = lucid.einops.rearrange(seq, "b (h w) c -> b c h w", h=14, w=14)
+grid.shape   # (4, 196, 768) -> (4, 768, 14, 14)
+```
+
+Splitting and merging compose freely. A multi-head attention reshape — slicing the model dimension into heads and moving the head axis forward — is one pattern:
+
+```python
+x = lucid.random.randn(4, 100, 512)   # (batch, seq, dim)
+
+heads = lucid.einops.rearrange(x, "b s (head d) -> b head s d", head=8)
+heads.shape   # (4, 100, 512) -> (4, 8, 100, 64)
+```
+
+<Callout variant="info">
+The pattern is the documentation. `"b s (head d) -> b head s d"` states the head-splitting reshape in one line, where the equivalent `view` + `transpose` chain would silently encode the same intent in index arithmetic.
+</Callout>
+
+## reduce
+
+`reduce` collapses axes by aggregation. Any axis on the left that is missing from the right is reduced away using the named `reduction` — one of `"sum"`, `"mean"`, `"max"`, `"min"`, or `"prod"`.
+
+**Global pooling** — average over the spatial grid:
+
+```python
+feat = lucid.random.randn(8, 256, 7, 7)   # (batch, channels, h, w)
+
+pooled = lucid.einops.reduce(feat, "b c h w -> b c", "mean")
+pooled.shape   # (8, 256, 7, 7) -> (8, 256)
+```
+
+**Windowed pooling** — decompose a spatial axis, then reduce only the inner window. This is a 2×2 average pool expressed as one pattern:
+
+```python
+img = lucid.random.randn(8, 64, 32, 32)
+
+pooled = lucid.einops.reduce(
+    img, "b c (h h2) (w w2) -> b c h w", "max", h2=2, w2=2
+)
+pooled.shape   # (8, 64, 32, 32) -> (8, 64, 16, 16)
+```
+
+Here `(h h2)` splits the height into `16` windows of `2`, and dropping `h2` / `w2` from the right side tells `reduce` to take the max over each window.
+
+## repeat
+
+`repeat` is the inverse of `reduce`: it adds axes. A name on the right that never appeared on the left is a **new** axis, and its size comes from `axes_lengths`.
+
+**Broadcast into a new axis** — attach a channel dimension to a grayscale map:
+
+```python
+gray = lucid.random.randn(8, 28, 28)   # (batch, h, w)
+
+rgb = lucid.einops.repeat(gray, "b h w -> b h w c", c=3)
+rgb.shape   # (8, 28, 28) -> (8, 28, 28, 3)
+```
+
+**Tile a vector across a grid** — turn a positional bias into a full map:
+
+```python
+bias = lucid.random.randn(16)   # one value per channel
+
+field = lucid.einops.repeat(bias, "c -> c h w", h=8, w=8)
+field.shape   # (16,) -> (16, 8, 8)
+```
+
+No data is materialised until read — the new axis is expressed as a broadcast where possible, so `repeat` stays cheap.
+
+## einsum
+
+`einsum` contracts **multiple** tensors over shared index labels. Each operand is indexed by the labels before its comma; the output keeps only the labels on the right of `->`. Labels that appear on the left but not the right are **summed**; labels shared across operands are **matched**.
+
+**Batched matmul** — the workhorse contraction:
+
+```python
+a = lucid.random.randn(32, 8, 64)   # (batch, m, k)
+b = lucid.random.randn(32, 64, 16)  # (batch, k, n)
+
+out = lucid.einops.einsum("b m k, b k n -> b m n", a, b)
+out.shape   # -> (32, 8, 16)   sum over shared k
+```
+
+**Attention scores** — query/key contraction over the head dimension is one equation:
+
+```python
+q = lucid.random.randn(4, 8, 100, 64)   # (batch, head, seq, dim)
+k = lucid.random.randn(4, 8, 100, 64)
+
+scores = lucid.einops.einsum("b h i d, b h j d -> b h i j", q, k)
+scores.shape   # -> (4, 8, 100, 100)   sum over shared d
+```
+
+The repeated label `d` is contracted; `i` and `j` are kept distinct so every query position scores against every key position. Other common shapes follow the same rule — `"i, j -> i j"` is an outer product, `"i i ->"` is a trace, and `"b i j, b j k -> b i k"` is a plain batched product.
+
+<Callout variant="note">
+Reach for `einsum` whenever an operation involves more than one tensor and you would otherwise reshape, transpose, and broadcast by hand to line up a matmul. The single equation that names every index is far harder to get subtly wrong.
+</Callout>
+
+## Where this fits
+
+Pattern-based axis manipulation shows up throughout the [model zoo](/docs/model-zoo) — vision backbones fold spatial grids into token sequences with `rearrange`, attention blocks score with `einsum`, and pooling stages aggregate with `reduce`. Because every `lucid.einops` call is a normal differentiable op, it slots directly into a [training loop](/docs/training-loop) and runs on the [metal device](/docs/metal-device) like the rest of the graph.
+
+See the [API reference](/api/lucid.einops) for the full signatures of all four functions.

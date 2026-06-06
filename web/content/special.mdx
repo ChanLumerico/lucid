@@ -1,0 +1,146 @@
+---
+title: Special Functions
+description: Numerically-stable, autograd-aware special mathematical functions for probabilistic and scientific ML, exposed under lucid.special.
+category: Numerics
+order: 4
+---
+
+`lucid.special` collects the special mathematical functions that probabilistic and scientific ML lean on — error functions, the normal CDF and its inverse, Bessel functions, gamma-family derivatives, entropy kernels, and orthogonal polynomial bases. Every entry is an **elementwise function on a `Tensor`**: it preserves shape and dtype, broadcasts where it takes two arguments, and runs on whichever device the input lives on, CPU or the Metal GPU.
+
+These functions are **autograd-aware**. They are pure composites over engine primitives, so a tensor with `requires_grad=True` flows through them and `.backward()` propagates gradients the same way it would through `+` or `exp`. That means you can drop `ndtr`, `entr`, or `gammaln` straight into a loss term and differentiate end-to-end.
+
+<Callout variant="info">
+Per the one-canonical-path rule, functions already exposed at the top level — `lucid.erf`, `lucid.sinc`, `lucid.lgamma`, `lucid.digamma`, `lucid.i0`, `lucid.xlogy`, `lucid.logit` — stay at the top level. The entries documented here are reachable only as `lucid.special.<name>`. A few are thin aliases (`gammaln` → `lgamma`, `psi` → `digamma`, `expit` → `sigmoid`) provided for naming familiarity.
+</Callout>
+
+## Error and Gaussian functions
+
+The Gaussian group covers the standard-normal CDF $\Phi$, its inverse (the probit / quantile function), and the scaled complementary error function. The defining identity for the normal CDF is
+
+$$
+\mathrm{ndtr}(x) = \Phi(x) = \tfrac{1}{2}\!\left(1 + \operatorname{erf}\!\left(\tfrac{x}{\sqrt 2}\right)\right).
+$$
+
+```python
+import lucid
+import lucid.special as special
+
+x = lucid.tensor([-3.0, -1.0, 0.0, 1.0, 3.0])
+
+p = special.ndtr(x)          # P(Z <= x)
+z = special.ndtri(p)         # inverse: recovers x
+logp = special.log_ndtr(x)   # stable log Phi(x) in the left tail
+```
+
+`ndtri(p)` is the probit function $\Phi^{-1}(p)$ — the workhorse for inverse-CDF sampling and probit regression. For log-likelihoods of censored or probit models, reach for `log_ndtr` rather than `log(ndtr(x))`: the direct composition underflows once $x \ll 0$, while `log_ndtr` switches to an `erfc`-based branch below $x = -1$ to keep full precision.
+
+`erfcx(x) = e^{x^2}\,\mathrm{erfc}(x)` is the Mills-ratio-friendly scaling of the complementary error function. Where $\mathrm{erfc}(x)$ underflows to zero for moderately large $x$, `erfcx` decays only as $1/(x\sqrt\pi)$ and stays finite — exactly what tail-probability evaluation needs.
+
+```python
+special.erfcx(lucid.tensor([0.0, 1.0, 5.0]))   # finite where erfc would underflow
+```
+
+## Bessel functions
+
+Lucid ships the ordinary Bessel functions of the first and second kind ($J_0, J_1, Y_0, Y_1$), the modified Bessel functions ($I_0, I_1, K_0, K_1$), their exponentially-scaled variants, and the spherical $j_0$. These show up in wave and scattering problems, rotational-symmetric kernels, and the log-densities of Rician, von Mises, and Generalised-Inverse-Gaussian distributions.
+
+```python
+special.bessel_j0(lucid.tensor([0.0, 2.4048, 5.0]))            # first kind, order 0
+special.modified_bessel_i0(lucid.tensor([0.0, 1.0, 3.0]))      # I0
+special.modified_bessel_k0(lucid.tensor([0.5, 1.0, 5.0]))      # K0 (x > 0)
+special.spherical_bessel_j0(lucid.tensor([0.0, 1.0, 3.14159])) # sin(x)/x, with j0(0)=1
+```
+
+The modified Bessel functions grow ($I_\nu$) or decay ($K_\nu$) exponentially, so direct evaluation overflows or underflows for moderate arguments. The **scaled** variants fix this: `i0e(x)` returns $I_0(x)\,e^{-|x|}$ (bounded by 1 for $x \ge 0$) and `scaled_modified_bessel_k0(x)` returns $e^{x}K_0(x)$.
+
+```python
+special.i0e(lucid.tensor([0.0, 1.0, 5.0, 20.0]))                  # I0(x) * exp(-|x|)
+special.i1e(lucid.tensor([0.0, 1.0, 5.0]))                        # I1(x) * exp(-|x|)
+special.scaled_modified_bessel_k1(lucid.tensor([1.0, 5.0, 20.0])) # exp(x) * K1(x)
+```
+
+<Callout variant="warning">
+The scaled forms (`i0e`, `i1e`, `erfcx`, `scaled_modified_bessel_k0`, `scaled_modified_bessel_k1`) exist precisely to avoid overflow and underflow. In any log-density expression, prefer them over the raw `modified_bessel_i0` / `modified_bessel_k0` etc. — the unscaled versions saturate to `inf` or `0` for arguments well within the range a real model produces.
+</Callout>
+
+## Entropy and log helpers
+
+Two small but load-bearing kernels carry the right limit conventions so they stay finite at the boundary. The entropy element is
+
+$$
+\mathrm{entr}(x) = \begin{cases} -x \ln x, & x > 0 \\ 0, & x = 0 \end{cases}
+$$
+
+with $\mathrm{entr}(x) = \mathrm{NaN}$ for $x < 0$. Summing it over a distribution gives the Shannon entropy $H(p) = \sum_i \mathrm{entr}(p_i)$.
+
+```python
+p = lucid.tensor([0.1, 0.2, 0.7])
+entropy = special.entr(p).sum()       # Shannon entropy of p
+```
+
+`xlog1py(x, y)` computes $x \log(1 + y)$ but enforces $0 \cdot \log(1 + y) = 0$ whenever $x = 0$, mirroring `lucid.xlogy` with a `log1p` core. The `log1p` form also avoids precision loss for small `y`, where `1 + y` would round to `1.0`.
+
+```python
+x = lucid.tensor([0.0, 1.0, 2.0])
+y = lucid.tensor([0.0, 1.0, 3.0])
+special.xlog1py(x, y)                  # 0 * log1p(0) == 0, no NaN
+```
+
+Both are differentiable, so they slot directly into entropy regularisers and negative-binomial / beta log-likelihood terms.
+
+## Gamma-family functions
+
+This group supplies the log-gamma normalisers and digamma/polygamma derivatives that the exponential-family log-partition functions and their Fisher-information matrices need. `gammaln` and `psi` are aliases for the top-level `lgamma` and `digamma`; the genuinely new entries are `multigammaln`, `polygamma`, and the Hurwitz `zeta`.
+
+`multigammaln(a, p)` is the log of the multivariate gamma $\log\Gamma_p(a)$ that appears in Wishart and inverse-Wishart normalising constants:
+
+$$
+\log\Gamma_p(a) = \frac{p(p-1)}{4}\log\pi + \sum_{i=1}^{p}\log\Gamma\!\left(a + \tfrac{1 - i}{2}\right).
+$$
+
+```python
+special.multigammaln(lucid.tensor([3.0, 5.0]), p=2)
+
+# polygamma: n-th derivative of digamma; n=0 -> digamma, n=1 -> trigamma
+special.polygamma(1, lucid.tensor([1.0, 2.0, 5.0]))
+
+# Hurwitz zeta: sum_k (k + q)^(-x), with Riemann zeta as zeta(x, 1)
+special.zeta(lucid.tensor([2.0, 3.0]), lucid.tensor([1.0, 1.0]))
+```
+
+<Callout variant="note">
+`polygamma` supports orders $n \in \{0, 1, 2, 3\}$; $n = 0$ falls through to `digamma` and $n = 1$ is the trigamma function. Higher orders raise `NotImplementedError`. `multigammaln` raises `ValueError` for `p < 1`, and `zeta` needs the exponent `x > 1` for the series to converge.
+</Callout>
+
+The logistic sigmoid `expit(x)` = $1/(1 + e^{-x})$ rounds out this group as the inverse of `lucid.logit` and the probabilistic-output activation for binary classifiers.
+
+## Orthogonal polynomials
+
+Lucid provides the classical orthogonal polynomial families, each built by its three-term recurrence, evaluated elementwise at degree `n`. Chebyshev polynomials of the first kind satisfy $T_n(\cos\theta) = \cos(n\theta)$ and the recurrence $T_{k+1}(x) = 2x\,T_k(x) - T_{k-1}(x)$; the families underlie spectral methods, minimax approximation, and Gaussian quadrature.
+
+```python
+x = lucid.tensor([-1.0, 0.0, 0.5, 1.0])
+
+special.chebyshev_polynomial_t(x, n=3)   # T_3, orthogonal on [-1, 1]
+special.chebyshev_polynomial_u(x, n=3)   # U_3 (second kind)
+special.legendre_polynomial_p(x, n=3)    # P_3, uniform weight on [-1, 1]
+special.hermite_polynomial_he(x, n=3)    # probabilist's Hermite (Gaussian weight)
+special.laguerre_polynomial_l(x, n=2)    # L_2, weight e^{-x} on [0, inf)
+```
+
+The full set includes all four Chebyshev kinds (`t`, `u`, `v`, `w`) plus their `shifted_*` counterparts mapped onto $[0, 1]$ via $x \mapsto 2x - 1$, both Hermite conventions (`hermite_polynomial_h` physicists', `hermite_polynomial_he` probabilists'), Legendre, and Laguerre. Each raises `ValueError` for a negative degree `n`.
+
+## What's available
+
+| Family | Functions | Notes |
+|---|---|---|
+| Error / Gaussian | `erfcx`, `ndtr`, `log_ndtr`, `ndtri` | normal CDF, its log, probit inverse, scaled erfc |
+| Ordinary / spherical Bessel | `bessel_j0`, `bessel_j1`, `bessel_y0`, `bessel_y1`, `spherical_bessel_j0` | $Y_\nu$ require $x > 0$ |
+| Modified Bessel + scaled | `modified_bessel_i0/i1`, `i0e`, `i1`, `i1e`, `modified_bessel_k0/k1`, `scaled_modified_bessel_k0/k1` | scaled variants avoid over/underflow |
+| Entropy / log helpers | `entr`, `xlog1py` | carry $0\log 0 = 0$ limit conventions |
+| Gamma family | `gammaln`, `psi`, `multigammaln`, `polygamma`, `zeta`, `expit` | log-gamma, digamma/polygamma, Hurwitz zeta, sigmoid |
+| Orthogonal polynomials | `chebyshev_polynomial_{t,u,v,w}` (+ `shifted_*`), `hermite_polynomial_{h,he}`, `legendre_polynomial_p`, `laguerre_polynomial_l` | take a degree `n` |
+
+<Callout variant="success">
+Because every function here is a differentiable composite, you can use them anywhere a tensor op is valid — inside a `Module.forward`, in a custom loss, or under `lucid.func.grad`. See [Autograd](/docs/autograd) for how gradients flow, and the [API reference](/api/lucid.special) for the full per-function signatures and definitions.
+</Callout>

@@ -29,6 +29,31 @@ const DOCS_SIDEBAR: SidebarItem[] = [
       { title: "C++ Engine", href: "/docs/cpp-engine" },
     ],
   },
+  {
+    title: "Performance",
+    items: [
+      { title: "Compile (JIT)",   href: "/docs/compile" },
+      { title: "Mixed Precision", href: "/docs/amp" },
+      { title: "Profiler",        href: "/docs/profiler" },
+    ],
+  },
+  {
+    title: "Numerics",
+    items: [
+      { title: "Linear Algebra",    href: "/docs/linalg" },
+      { title: "FFT",               href: "/docs/fft" },
+      { title: "Signal Windows",    href: "/docs/signal" },
+      { title: "Special Functions", href: "/docs/special" },
+      { title: "Distributions",     href: "/docs/distributions" },
+    ],
+  },
+  {
+    title: "Utilities",
+    items: [
+      { title: "Einops",        href: "/docs/einops" },
+      { title: "Serialization", href: "/docs/serialization" },
+    ],
+  },
 ];
 
 export default function DocsLayout({
