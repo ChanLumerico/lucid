@@ -8,9 +8,12 @@ Mirrors ``backend configuration`` semantics for Apple Silicon:
     lucid.backends.metal.benchmark = False           # reserved for future use
 """
 
+from typing import final
+
 from lucid._C import engine as _C_engine
 
 
+@final
 class _AccelerateBackend:
     """Apple Accelerate (CPU) backend settings."""
 
@@ -24,6 +27,7 @@ class _AccelerateBackend:
         _C_engine.set_deterministic(value)
 
 
+@final
 class _MetalBackend:
     """Apple Metal (GPU) backend settings."""
 

@@ -14,6 +14,8 @@ single-parametrization registration, ``is_parametrized`` introspection, and
 leaf parameter.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
@@ -39,6 +41,7 @@ class ParametrizationContainer(Module):
         self.parametrization: Module = parametrization
         self.original: Parameter = original
 
+    @override
     def forward(self, *args: object, **kwargs: object) -> Tensor:
         # Apply the transformation to the cached ``original`` weight.
         """Apply the layer / parametrization to the input."""

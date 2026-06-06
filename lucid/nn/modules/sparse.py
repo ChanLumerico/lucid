@@ -2,6 +2,8 @@
 Sparse / embedding modules.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
@@ -208,6 +210,7 @@ class Embedding(Module):
         new_w: Tensor = w * scale
         self.weight._impl = new_w._impl
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Look up embeddings for the given indices.
 
@@ -225,6 +228,7 @@ class Embedding(Module):
             self._renorm_weight_inplace()
         return embedding(x, self.weight, self.padding_idx)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"{self.num_embeddings}, {self.embedding_dim}"
@@ -376,6 +380,7 @@ class EmbeddingBag(Module):
         )
         init.normal_(self.weight)
 
+    @override
     def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Look up embeddings for the given indices.
 
@@ -400,6 +405,7 @@ class EmbeddingBag(Module):
             padding_idx=self.padding_idx,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (

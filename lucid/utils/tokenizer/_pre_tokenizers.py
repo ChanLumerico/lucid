@@ -32,6 +32,7 @@ extractive QA, etc.).
 """
 
 from abc import ABC, abstractmethod
+from typing import override
 import unicodedata
 
 # Public type alias for pre-tokenizer outputs.
@@ -86,6 +87,7 @@ class WhitespaceSplit(PreTokenizer):
     ByteLevel : Byte-level GPT-2 / RoBERTa pre-tokenizer.
     """
 
+    @override
     def pre_tokenize(self, text: str) -> list[Chunk]:
         """Split ``text`` on whitespace runs, dropping empty chunks."""
         out: list[Chunk] = []
@@ -122,6 +124,7 @@ class WhitespacePunctuationSplit(PreTokenizer):
     :func:`_is_punctuation`.
     """
 
+    @override
     def pre_tokenize(self, text: str) -> list[Chunk]:
         """Walk ``text`` emitting word / punctuation chunks separately."""
         out: list[Chunk] = []
@@ -251,6 +254,7 @@ class ByteLevel(PreTokenizer):
             cls._build_byte_tables_()
         return bytes(cls._byte_decoder[c] for c in encoded)
 
+    @override
     def pre_tokenize(self, text: str) -> list[Chunk]:
         """Chunk ``text`` along word/digit/punctuation boundaries
         and byte-encode each chunk."""

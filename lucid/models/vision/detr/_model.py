@@ -51,7 +51,7 @@ Faithfulness notes
 * Background class weight 0.1 for unmatched queries.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -100,6 +100,7 @@ class _FrozenBatchNorm2d(nn.Module):
         self.register_buffer("running_mean", lucid.zeros(num_features))
         self.register_buffer("running_var", lucid.ones(num_features))
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
         b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
@@ -135,6 +136,7 @@ class _Bottleneck(nn.Module):
         self.bn3 = _FrozenBatchNorm2d(out_ch)
         self.downsample = downsample
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
         out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
@@ -161,6 +163,7 @@ def _make_layer(
     return nn.Sequential(*blocks), out_ch
 
 
+@final
 class _ResNetC5(nn.Module):
     """ResNet backbone, returns C5 feature map (stride 32, 2048ch).
 
@@ -180,6 +183,7 @@ class _ResNetC5(nn.Module):
         self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=2)
         self.out_channels: int = c5
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
         x = cast(Tensor, self.pool(x))
@@ -194,6 +198,7 @@ class _ResNetC5(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PositionEmbeddingSine(nn.Module):
     """Reference ``PositionEmbeddingSine`` for an unpadded feature map.
 
@@ -219,6 +224,7 @@ class _PositionEmbeddingSine(nn.Module):
         self.scale = scale
         self.eps = eps
 
+    @override
     def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:  # type: ignore[override]
         npf = self.num_pos_feats
         ones = lucid.ones(1, height, width, dtype=lucid.float32, device=device)
@@ -254,6 +260,7 @@ def _with_pos(tensor: Tensor, pos: Tensor | None) -> Tensor:
     return tensor if pos is None else tensor + pos
 
 
+@final
 class _DETREncoderLayer(nn.Module):
     """One post-norm encoder layer with pos re-injection on Q/K.
 
@@ -273,6 +280,7 @@ class _DETREncoderLayer(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
+    @override
     def forward(self, src: Tensor, pos: Tensor | None) -> Tensor:  # type: ignore[override]
         q = _with_pos(src, pos)
         k = q
@@ -288,6 +296,7 @@ class _DETREncoderLayer(nn.Module):
         return src
 
 
+@final
 class _DETRDecoderLayer(nn.Module):
     """One post-norm decoder layer.
 
@@ -310,6 +319,7 @@ class _DETRDecoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
         self.dropout3 = nn.Dropout(dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         tgt: Tensor,
@@ -338,6 +348,7 @@ class _DETRDecoderLayer(nn.Module):
         return tgt
 
 
+@final
 class _DETREncoder(nn.Module):
     """Stack of encoder layers — NO final norm (reference removes it)."""
 
@@ -349,6 +360,7 @@ class _DETREncoder(nn.Module):
             [_DETREncoderLayer(d_model, n_head, dim_ff, dropout) for _ in range(depth)]
         )
 
+    @override
     def forward(self, src: Tensor, pos: Tensor | None) -> Tensor:  # type: ignore[override]
         output = src
         for layer in self.layers:
@@ -356,6 +368,7 @@ class _DETREncoder(nn.Module):
         return output
 
 
+@final
 class _DETRDecoder(nn.Module):
     """Stack of decoder layers + a final ``norm`` (LayerNorm).
 
@@ -372,6 +385,7 @@ class _DETRDecoder(nn.Module):
         )
         self.norm = nn.LayerNorm(d_model)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         tgt: Tensor,
@@ -385,6 +399,7 @@ class _DETRDecoder(nn.Module):
         return cast(Tensor, self.norm(output))
 
 
+@final
 class _DETRTransformer(nn.Module):
     """Reference DETR transformer: ``encoder`` + ``decoder``.
 
@@ -413,6 +428,7 @@ class _DETRTransformer(nn.Module):
             d_model, n_head, dim_feedforward, dropout, num_decoder_layers
         )
 
+    @override
     def forward(  # type: ignore[override]
         self, src: Tensor, pos_embed: Tensor, query_embed: Tensor
     ) -> Tensor:
@@ -455,6 +471,7 @@ class _MLP(nn.Module):
                 layers.append(nn.ReLU(inplace=True))
         self.net = nn.Sequential(*layers)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.net(x))
 
@@ -658,6 +675,7 @@ class DETRForObjectDetection(PretrainedModel):
             n_layers=config.num_bbox_layers,
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

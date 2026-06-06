@@ -3,10 +3,10 @@ Convolution and transposed convolution modules.
 """
 
 import math
-from typing import Callable
+from typing import Callable, cast, override
 
 from lucid._tensor.tensor import Tensor
-from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d
+from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d, PaddingMode
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
@@ -62,12 +62,12 @@ def _check_same_supported(stride_tuple: tuple[int, ...]) -> None:
         )
 
 
-def _validate_padding_mode(mode: str) -> str:
+def _validate_padding_mode(mode: str) -> PaddingMode:
     if mode not in _VALID_PADDING_MODES:
         raise ValueError(
             f"padding_mode must be one of {sorted(_VALID_PADDING_MODES)}, got {mode!r}"
         )
-    return mode
+    return cast(PaddingMode, mode)
 
 
 def _validate_int_padding(padding: object, label: str) -> None:
@@ -91,7 +91,7 @@ def _conv_forward_with_mode(
     pad_hi: tuple[int, ...],
     dilation: tuple[int, ...],
     groups: int,
-    padding_mode: str,
+    padding_mode: PaddingMode,
     conv_fn: _ConvFn,
 ) -> Tensor:
     """Dispatch a forward conv with arbitrary padding_mode and asymmetric pad.
@@ -294,7 +294,7 @@ class Conv1d(Module):
         dilation: int = 1,
         groups: int = 1,
         bias: bool = True,
-        padding_mode: str = "zeros",
+        padding_mode: PaddingMode = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -353,6 +353,7 @@ class Conv1d(Module):
             return (lo,), (hi,)
         return (self.padding,), (self.padding,)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -382,6 +383,7 @@ class Conv1d(Module):
             conv1d,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s = (
@@ -554,7 +556,7 @@ class Conv2d(Module):
         dilation: _Size2d = 1,
         groups: int = 1,
         bias: bool = True,
-        padding_mode: str = "zeros",
+        padding_mode: PaddingMode = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -612,6 +614,7 @@ class Conv2d(Module):
             return (lo_h, lo_w), (hi_h, hi_w)
         return self.padding, self.padding
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -641,6 +644,7 @@ class Conv2d(Module):
             conv2d,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s = (
@@ -778,7 +782,7 @@ class Conv3d(Module):
         dilation: _Size3d = 1,
         groups: int = 1,
         bias: bool = True,
-        padding_mode: str = "zeros",
+        padding_mode: PaddingMode = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -845,6 +849,7 @@ class Conv3d(Module):
             return (lo_d, lo_h, lo_w), (hi_d, hi_h, hi_w)
         return self.padding, self.padding
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -874,6 +879,7 @@ class Conv3d(Module):
             conv3d,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s = (
@@ -1049,6 +1055,7 @@ class ConvTranspose1d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -1075,6 +1082,7 @@ class ConvTranspose1d(Module):
             self.dilation,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1236,6 +1244,7 @@ class ConvTranspose2d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -1262,6 +1271,7 @@ class ConvTranspose2d(Module):
             self.dilation,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1420,6 +1430,7 @@ class ConvTranspose3d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -1446,6 +1457,7 @@ class ConvTranspose3d(Module):
             self.dilation,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1582,7 +1594,7 @@ class LazyConv1d(Conv1d):
         dilation: int = 1,
         groups: int = 1,
         bias: bool = True,
-        padding_mode: str = "zeros",
+        padding_mode: PaddingMode = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -1594,7 +1606,7 @@ class LazyConv1d(Conv1d):
         self.stride: int = stride
         self.dilation: int = dilation
         self.groups: int = groups
-        self.padding_mode: str = _validate_padding_mode(padding_mode)
+        self.padding_mode: PaddingMode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None
         if isinstance(padding, str):
             mode: str = padding.lower()
@@ -1635,6 +1647,7 @@ class LazyConv1d(Conv1d):
             self.bias = None
         _init_lazy_conv_weights(self.weight, self.bias)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -1677,6 +1690,7 @@ class LazyConv1d(Conv1d):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -1696,6 +1710,7 @@ class LazyConv1d(Conv1d):
             self._initialize(int(x.shape[1]))
         return Conv1d.forward(self, x)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = (
@@ -1805,7 +1820,7 @@ class LazyConv2d(Conv2d):
         dilation: _Size2d = 1,
         groups: int = 1,
         bias: bool = True,
-        padding_mode: str = "zeros",
+        padding_mode: PaddingMode = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -1817,7 +1832,7 @@ class LazyConv2d(Conv2d):
         self.stride: tuple[int, int] = _pair(stride)
         self.dilation: tuple[int, int] = _pair(dilation)
         self.groups: int = groups
-        self.padding_mode: str = _validate_padding_mode(padding_mode)
+        self.padding_mode: PaddingMode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None
         if isinstance(padding, str):
             mode: str = padding.lower()
@@ -1860,6 +1875,7 @@ class LazyConv2d(Conv2d):
             self.bias = None
         _init_lazy_conv_weights(self.weight, self.bias)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -1902,6 +1918,7 @@ class LazyConv2d(Conv2d):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -1921,6 +1938,7 @@ class LazyConv2d(Conv2d):
             self._initialize(int(x.shape[1]))
         return Conv2d.forward(self, x)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = (
@@ -2026,7 +2044,7 @@ class LazyConv3d(Conv3d):
         dilation: _Size3d = 1,
         groups: int = 1,
         bias: bool = True,
-        padding_mode: str = "zeros",
+        padding_mode: PaddingMode = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -2038,7 +2056,7 @@ class LazyConv3d(Conv3d):
         self.stride: tuple[int, int, int] = _triple(stride)
         self.dilation: tuple[int, int, int] = _triple(dilation)
         self.groups: int = groups
-        self.padding_mode: str = _validate_padding_mode(padding_mode)
+        self.padding_mode: PaddingMode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None
         if isinstance(padding, str):
             mode: str = padding.lower()
@@ -2082,6 +2100,7 @@ class LazyConv3d(Conv3d):
             self.bias = None
         _init_lazy_conv_weights(self.weight, self.bias)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -2124,6 +2143,7 @@ class LazyConv3d(Conv3d):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -2143,6 +2163,7 @@ class LazyConv3d(Conv3d):
             self._initialize(int(x.shape[1]))
         return Conv3d.forward(self, x)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = (
@@ -2297,6 +2318,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
             self.bias = None
         _init_lazy_conv_weights(self.weight, self.bias)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -2340,6 +2362,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -2359,6 +2382,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
             self._initialize(int(x.shape[1]))
         return ConvTranspose1d.forward(self, x)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -2509,6 +2533,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
             self.bias = None
         _init_lazy_conv_weights(self.weight, self.bias)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -2552,6 +2577,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -2571,6 +2597,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
             self._initialize(int(x.shape[1]))
         return ConvTranspose2d.forward(self, x)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -2724,6 +2751,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
             self.bias = None
         _init_lazy_conv_weights(self.weight, self.bias)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -2767,6 +2795,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the convolution to the input tensor.
 
@@ -2786,6 +2815,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
             self._initialize(int(x.shape[1]))
         return ConvTranspose3d.forward(self, x)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (

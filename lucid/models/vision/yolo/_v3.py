@@ -45,7 +45,7 @@ Loss (training)
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -109,7 +109,7 @@ from lucid.models._utils._detection import (
     of v1/v2.
     """,
 )
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class YOLOV3Config(ModelConfig):
     """Configuration for YOLOv3.
 
@@ -184,12 +184,14 @@ class _ConvBnLeaky(nn.Module):
         )
         self.bn = nn.BatchNorm2d(out_ch)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.leaky_relu(
             cast(Tensor, self.bn(cast(Tensor, self.conv(x)))), negative_slope=0.1
         )
 
 
+@final
 class _Dark53Block(nn.Module):
     """Darknet-53 residual unit: Conv(1×1) → Conv(3×3) + skip."""
 
@@ -199,6 +201,7 @@ class _Dark53Block(nn.Module):
         self.conv1 = _ConvBnLeaky(in_ch, mid_ch, 1)
         self.conv2 = _ConvBnLeaky(mid_ch, in_ch, 3)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return x + cast(Tensor, self.conv2(cast(Tensor, self.conv1(x))))
 
@@ -223,6 +226,7 @@ def _make_dark53_stage(
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Darknet53(nn.Module):
     """Darknet-53 backbone.
 
@@ -253,6 +257,7 @@ class _Darknet53(nn.Module):
         # Stage 5: 4×block(1024) [P5 final]
         self.stage5_blocks = nn.Sequential(*[_Dark53Block(1024) for _ in range(4)])
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.conv1(cast(Tensor, self.conv0(x))))
 
@@ -280,6 +285,7 @@ class _Darknet53(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Darknet53Tiny(nn.Module):
     """Lightweight Darknet backbone used by YOLOv3-Tiny.
 
@@ -308,6 +314,7 @@ class _Darknet53Tiny(nn.Module):
         self.conv7 = _ConvBnLeaky(512, 1024, 3)
         self.conv8 = _ConvBnLeaky(1024, 256, 1)  # bottleneck before P5 head
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.pool1(cast(Tensor, self.conv1(x))))
         x = cast(Tensor, self.pool2(cast(Tensor, self.conv2(x))))
@@ -764,6 +771,7 @@ class YOLOV3ForObjectDetection(PretrainedModel):
         self.p4_to_p3_conv = _ConvBnLeaky(256, 128, 1)  # 256→128
         self.p3_compress, self.p3_predict = _make_detection_head(128 + 128, 128, nA, C)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
@@ -932,6 +940,7 @@ class YOLOV3ForObjectDetection(PretrainedModel):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _YOLOV3Tiny(PretrainedModel):
     """YOLOv3-Tiny — 2-scale lightweight variant.
 
@@ -957,6 +966,7 @@ class _YOLOV3Tiny(PretrainedModel):
         self.p5_to_p4_conv = _ConvBnLeaky(128, 128, 1)
         self.p4_compress, self.p4_predict = _make_detection_head(256 + 128, 128, nA, C)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

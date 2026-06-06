@@ -11,7 +11,7 @@ because the standard ``make_params(image)`` hook only sees the image.
   boxes to choose the crop window).
 """
 
-from typing import Callable
+from typing import Callable, override
 
 import lucid
 from lucid._tensor import Tensor
@@ -52,15 +52,19 @@ class Lambda(_NoParams, Transform[Empty]):
         self.keypoints_fn = keypoints
         self.name = name
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return self.image_fn(img) if self.image_fn is not None else img
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         return self.mask_fn(mask) if self.mask_fn is not None else mask
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         return self.bboxes_fn(boxes) if self.bboxes_fn is not None else boxes
 
+    @override
     def __repr__(self) -> str:
         return f"Lambda(name={self.name!r}, p={self.p})"
 
@@ -135,9 +139,11 @@ class BBoxSafeRandomCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
         super().__init__(p=p)
         self.erosion_rate = erosion_rate
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return img  # real work happens in __call__
 
+    @override
     def __call__(self, inputs: object) -> object:
         ref = _find_reference(inputs)
         if ref is None:
@@ -152,6 +158,7 @@ class BBoxSafeRandomCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
             x0, y0, x1, y1 = self._safe_window(boxes)
         return Crop(x0, y0, x1, y1, p=1.0)(inputs)
 
+    @override
     def __repr__(self) -> str:
         return f"BBoxSafeRandomCrop(erosion_rate={self.erosion_rate}, p={self.p})"
 
@@ -201,9 +208,11 @@ class RandomSizedBBoxSafeCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
         self.erosion_rate = erosion_rate
         self.interpolation = interpolation
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return img
 
+    @override
     def __call__(self, inputs: object) -> object:
         ref = _find_reference(inputs)
         if ref is None:
@@ -221,6 +230,7 @@ class RandomSizedBBoxSafeCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
             cropped
         )
 
+    @override
     def __repr__(self) -> str:
         return (
             f"RandomSizedBBoxSafeCrop(height={self.height}, width={self.width}, "
@@ -242,9 +252,11 @@ class RandomCropNearBBox(_NoParams, Transform[Empty]):
         super().__init__(p=p)
         self.max_part_shift = max_part_shift
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return img
 
+    @override
     def __call__(self, inputs: object) -> object:
         ref = _find_reference(inputs)
         if ref is None:
@@ -269,6 +281,7 @@ class RandomCropNearBBox(_NoParams, Transform[Empty]):
         cy1 = min(int(y2 + _random.uniform(0, jy)), h)
         return Crop(cx0, cy0, max(cx1, cx0 + 1), max(cy1, cy0 + 1), p=1.0)(inputs)
 
+    @override
     def __repr__(self) -> str:
         return f"RandomCropNearBBox(max_part_shift={self.max_part_shift}, p={self.p})"
 
@@ -297,9 +310,11 @@ class MaskDropout(_NoParams, Transform[Empty]):
         self.image_fill_value = image_fill_value
         self.mask_fill_value = mask_fill_value
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return img
 
+    @override
     def __call__(self, inputs: object) -> object:
         if not isinstance(inputs, dict):
             return inputs
@@ -338,5 +353,6 @@ class MaskDropout(_NoParams, Transform[Empty]):
                 out[key] = Image(img_obj.data * kc + self.image_fill_value * (1.0 - kc))
         return out
 
+    @override
     def __repr__(self) -> str:
         return f"MaskDropout(max_objects={self.max_objects}, p={self.p})"

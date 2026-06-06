@@ -8,6 +8,7 @@ so it is safe to import from anywhere without circular-import risk.
 
 import threading
 from types import TracebackType
+from typing import final
 
 _local: threading.local = threading.local()
 
@@ -47,6 +48,7 @@ def set_randomness(mode: str) -> None:
     _local.randomness = mode
 
 
+@final
 class _RandomnessGuard:
     """RAII guard: push *mode* as the vmap randomness context, pop on exit.
 

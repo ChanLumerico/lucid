@@ -11,7 +11,7 @@ numpy ``str(arr.dtype)`` it used in v1/v2.
 import io
 import pickle
 import warnings
-from typing import Any, Callable, TYPE_CHECKING, cast
+from typing import Any, Callable, TYPE_CHECKING, cast, final, override
 
 from lucid._tensor.tensor import Tensor as _T
 from lucid._C import engine as _C_engine
@@ -36,9 +36,11 @@ _SAFE_CLASSES = frozenset(
 )
 
 
+@final
 class _SafeUnpickler(pickle.Unpickler):
     """Restricted Unpickler that only allows safe types (weights_only=True mode)."""
 
+    @override
     def find_class(self, module: str, name: str) -> type:
         full = f"{module}.{name}"
         if full in _SAFE_CLASSES:
@@ -49,6 +51,7 @@ class _SafeUnpickler(pickle.Unpickler):
             "(potential security risk)."
         )
 
+    @override
     def persistent_load(self, pid: object) -> object:
         return _LucidUnpickler.persistent_load(self, pid)  # type: ignore[arg-type]
 
@@ -56,7 +59,9 @@ class _SafeUnpickler(pickle.Unpickler):
 # ── Pickler / Unpickler ───────────────────────────────────────────────────────
 
 
+@final
 class _LucidPickler(pickle.Pickler):
+    @override
     def persistent_id(self, obj: object) -> object:
         if isinstance(obj, _T):
             return (
@@ -80,7 +85,9 @@ def _restore_tensor(
     return _wrap(impl)
 
 
+@final
 class _LucidUnpickler(pickle.Unpickler):
+    @override
     def persistent_load(self, pid: object) -> object:
         if isinstance(pid, tuple) and pid:
             tag = pid[0]

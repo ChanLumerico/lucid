@@ -2,6 +2,8 @@ r"""
 Normalization modules.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
@@ -174,6 +176,7 @@ class LayerNorm(Module):
             self.weight = None
             self.bias = None
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply normalisation to the input tensor.
 
@@ -191,6 +194,7 @@ class LayerNorm(Module):
             x, list(self.normalized_shape), self.weight, self.bias, self.eps
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -291,6 +295,7 @@ class RMSNorm(Module):
             ones(*self.normalized_shape, dtype=dtype, device=device)
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply normalisation to the input tensor.
 
@@ -306,6 +311,7 @@ class RMSNorm(Module):
         """
         return rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"{self.normalized_shape}, eps={self.eps}"
@@ -424,6 +430,7 @@ class GroupNorm(Module):
             self.weight = None
             self.bias = None
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply normalisation to the input tensor.
 
@@ -439,6 +446,7 @@ class GroupNorm(Module):
         """
         return group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"{self.num_groups}, {self.num_channels}, eps={self.eps}, affine={self.affine}"
@@ -576,6 +584,7 @@ class _BatchNormBase(Module):
             self.register_buffer("running_var", None)
             self.register_buffer("num_batches_tracked", None)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -611,6 +620,7 @@ class _BatchNormBase(Module):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # Update running stats before the forward when training with
         # tracking enabled.  Detach to avoid linking the buffer into the
@@ -836,6 +846,7 @@ class _BatchNormBase(Module):
             if x._impl.device.name == "GPU":
                 _eval_running_stats_metal(self._buffers)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1239,6 +1250,7 @@ class _InstanceNormBase(Module):
                 f"got ndim={x.ndim}"
             )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply normalisation to the input tensor.
 
@@ -1336,6 +1348,7 @@ class _InstanceNormBase(Module):
             if x._impl.device.name == "GPU":
                 _eval_running_stats_metal(self._buffers)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1693,6 +1706,7 @@ class LocalResponseNorm(Module):
         self.beta = beta
         self.k = k
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply normalisation to the input tensor.
 
@@ -1760,6 +1774,7 @@ class LocalResponseNorm(Module):
         )
         return _wrap(_C_engine.div(xi, scale))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"size={self.size}, alpha={self.alpha}, beta={self.beta}, k={self.k}"
@@ -1878,6 +1893,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
                 (), dtype=_lucid.int64, device=self._device
             )
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -1924,6 +1940,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply normalisation to the input tensor.
 
@@ -1941,6 +1958,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
             self._initialize(int(x.shape[1]))
         return _BatchNormBase.forward(self, x)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -2196,6 +2214,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
                 num_features, dtype=self._dtype, device=self._device
             )
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, Tensor],
@@ -2230,6 +2249,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply normalisation to the input tensor.
 

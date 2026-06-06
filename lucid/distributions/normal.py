@@ -1,6 +1,7 @@
 """Univariate ``Normal`` and ``LogNormal``."""
 
 import math
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -134,6 +135,7 @@ class Normal(ExponentialFamily):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the Normal distribution.
@@ -151,6 +153,7 @@ class Normal(ExponentialFamily):
         """
         return self.loc
 
+    @override
     @property
     def mode(self) -> Tensor:
         r"""Mode of the Normal distribution.
@@ -169,6 +172,7 @@ class Normal(ExponentialFamily):
         """
         return self.loc
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Normal distribution.
@@ -184,6 +188,7 @@ class Normal(ExponentialFamily):
         """
         return self.scale * self.scale
 
+    @override
     @property
     def stddev(self) -> Tensor:
         r"""Standard deviation of the Normal distribution.
@@ -202,6 +207,7 @@ class Normal(ExponentialFamily):
         """
         return self.scale
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw reparameterised samples via the location-scale trick.
 
@@ -232,6 +238,7 @@ class Normal(ExponentialFamily):
         eps = lucid.randn(*shape, dtype=self.loc.dtype, device=self.loc.device)
         return self.loc + self.scale * eps
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Normal distribution.
 
@@ -262,6 +269,7 @@ class Normal(ExponentialFamily):
         log_scale = self.scale.log()
         return -((value - self.loc) ** 2) / (2.0 * var) - log_scale - _LOG_SQRT_2PI
 
+    @override
     def cdf(self, value: Tensor) -> Tensor:
         r"""Cumulative distribution function of the Normal distribution.
 
@@ -286,6 +294,7 @@ class Normal(ExponentialFamily):
             1.0 + lucid.erf((value - self.loc) / (self.scale * math.sqrt(2.0)))
         )
 
+    @override
     def icdf(self, value: Tensor) -> Tensor:
         r"""Inverse CDF (quantile function / probit function) of the Normal.
 
@@ -305,6 +314,7 @@ class Normal(ExponentialFamily):
         """
         return self.loc + self.scale * lucid.erfinv(2.0 * value - 1.0) * math.sqrt(2.0)
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon differential entropy of the Normal distribution.
 
@@ -420,6 +430,7 @@ class LogNormal(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the Log-Normal distribution.
@@ -435,6 +446,7 @@ class LogNormal(Distribution):
         """
         return (self.loc + 0.5 * self.scale * self.scale).exp()
 
+    @override
     @property
     def mode(self) -> Tensor:
         r"""Mode of the Log-Normal distribution.
@@ -453,6 +465,7 @@ class LogNormal(Distribution):
         """
         return (self.loc - self.scale * self.scale).exp()
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Log-Normal distribution.
@@ -469,6 +482,7 @@ class LogNormal(Distribution):
         s2 = self.scale * self.scale
         return (s2.exp() - 1.0) * (2.0 * self.loc + s2).exp()
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw reparameterised samples.
 
@@ -493,6 +507,7 @@ class LogNormal(Distribution):
         """
         return self._base.rsample(sample_shape).exp()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Log-Normal distribution.
 
@@ -520,6 +535,7 @@ class LogNormal(Distribution):
         log_v = value.log()
         return self._base.log_prob(log_v) - log_v
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon differential entropy of the Log-Normal distribution.
 

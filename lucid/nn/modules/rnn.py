@@ -4,7 +4,7 @@ Recurrent modules: LSTM, GRU, RNN.
 
 import math
 from collections import OrderedDict
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
 
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
@@ -521,6 +521,7 @@ class LSTM(Module):
         c_impl: _C_engine.TensorImpl = lstm_result[2]
         return _wrap(out_impl), _wrap(h_impl), _wrap(c_impl)
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
@@ -601,6 +602,7 @@ class LSTM(Module):
 
         return layer_input, (h_n_final, c_n_final)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = (
@@ -739,6 +741,7 @@ class RNNCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
+    @override
     def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Run the recurrent forward pass.
 
@@ -761,6 +764,7 @@ class RNNCell(Module):
         )
         return tanh(pre) if self.nonlinearity == "tanh" else relu(pre)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -901,6 +905,7 @@ class LSTMCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
@@ -938,6 +943,7 @@ class LSTMCell(Module):
         h1 = o_gate * tanh(c1)
         return h1, c1
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"{self.input_size}, {self.hidden_size}"
@@ -1079,6 +1085,7 @@ class GRUCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
+    @override
     def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Run the recurrent forward pass.
 
@@ -1105,6 +1112,7 @@ class GRUCell(Module):
         h1 = (1.0 - z) * n + z * hx
         return h1
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"{self.input_size}, {self.hidden_size}"
@@ -1255,6 +1263,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
         return None
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
@@ -1331,6 +1340,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
 
         return out, h_n_tensor
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1501,6 +1511,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
         return None
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
@@ -1574,6 +1585,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
 
         return out, h_n_tensor
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (

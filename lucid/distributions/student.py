@@ -6,6 +6,7 @@ the rejection-based Gamma sampler so gradient is detached on it).
 """
 
 import math
+from typing import override
 
 import lucid
 import lucid.autograd
@@ -162,6 +163,7 @@ class StudentT(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Student's t-distribution.
@@ -191,6 +193,7 @@ class StudentT(Distribution):
         # return ``loc`` regardless.
         return self.loc + 0 * self.df
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Student's t-distribution.
@@ -220,6 +223,7 @@ class StudentT(Distribution):
         # Defined for df > 2:  scale² · df / (df − 2).
         return self.scale * self.scale * self.df / (self.df - 2.0)
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Reparameterised sample: gradient flows through the Normal variate.
 
@@ -234,6 +238,7 @@ class StudentT(Distribution):
         gamma_std = _sample_standard_gamma(self.df * 0.5, sample_shape).detach() * 2.0
         return self.loc + self.scale * z * (self.df / gamma_std).sqrt()
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw non-differentiable samples from the Student's t-distribution.
 
@@ -260,6 +265,7 @@ class StudentT(Distribution):
         with lucid.autograd.no_grad():
             return self.rsample(sample_shape)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Student's t-distribution.
 
@@ -300,6 +306,7 @@ class StudentT(Distribution):
         )
         return log_density
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Student's t-distribution (in nats).
 

@@ -1,6 +1,7 @@
 """``Exponential``, ``Laplace``, and ``Cauchy`` — icdf-sampled families."""
 
 import math
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -121,6 +122,7 @@ class Exponential(ExponentialFamily):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Exponential distribution.
@@ -141,6 +143,7 @@ class Exponential(ExponentialFamily):
         """
         return 1.0 / self.rate
 
+    @override
     @property
     def mode(self) -> Tensor:
         r"""Mode of the Exponential distribution.
@@ -165,6 +168,7 @@ class Exponential(ExponentialFamily):
         """
         return lucid.zeros_like(self.rate)
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Exponential distribution.
@@ -185,6 +189,7 @@ class Exponential(ExponentialFamily):
         """
         return 1.0 / (self.rate * self.rate)
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Reparameterised sample via the inverse-CDF method.
 
@@ -221,6 +226,7 @@ class Exponential(ExponentialFamily):
         u = lucid.rand(*shape, dtype=self.rate.dtype, device=self.rate.device)
         return -(1.0 - u).log() / self.rate
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Exponential distribution.
 
@@ -248,6 +254,7 @@ class Exponential(ExponentialFamily):
             self._validate_sample(value)
         return self.rate.log() - self.rate * value
 
+    @override
     def cdf(self, value: Tensor) -> Tensor:
         r"""Cumulative distribution function of the Exponential distribution.
 
@@ -272,6 +279,7 @@ class Exponential(ExponentialFamily):
         """
         return 1.0 - (-self.rate * value).exp()
 
+    @override
     def icdf(self, value: Tensor) -> Tensor:
         r"""Inverse CDF (quantile function) of the Exponential distribution.
 
@@ -296,6 +304,7 @@ class Exponential(ExponentialFamily):
         """
         return -(1.0 - value).log() / self.rate
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Exponential distribution (in nats).
 
@@ -432,6 +441,7 @@ class Laplace(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Laplace distribution.
@@ -452,6 +462,7 @@ class Laplace(Distribution):
         """
         return self.loc
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Laplace distribution.
@@ -472,6 +483,7 @@ class Laplace(Distribution):
         """
         return 2.0 * self.scale * self.scale
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Reparameterised sample via the inverse-CDF method.
 
@@ -506,6 +518,7 @@ class Laplace(Distribution):
         sign_u = u.sign()
         return self.loc - self.scale * sign_u * (1.0 - 2.0 * u.abs()).log()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Laplace distribution.
 
@@ -532,6 +545,7 @@ class Laplace(Distribution):
             self._validate_sample(value)
         return -((value - self.loc).abs()) / self.scale - (2.0 * self.scale).log()
 
+    @override
     def cdf(self, value: Tensor) -> Tensor:
         r"""Cumulative distribution function of the Laplace distribution.
 
@@ -554,6 +568,7 @@ class Laplace(Distribution):
         z = (value - self.loc) / self.scale
         return 0.5 - 0.5 * z.sign() * (1.0 - (-z.abs()).exp())
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Laplace distribution (in nats).
 
@@ -687,6 +702,7 @@ class Cauchy(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Reparameterised sample via the inverse-CDF method.
 
@@ -719,6 +735,7 @@ class Cauchy(Distribution):
         u = lucid.rand(*shape, dtype=self.loc.dtype, device=self.loc.device)
         return self.loc + self.scale * (math.pi * (u - 0.5)).tan()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Cauchy distribution.
 
@@ -745,6 +762,7 @@ class Cauchy(Distribution):
         z = (value - self.loc) / self.scale
         return -math.log(math.pi) - self.scale.log() - (1.0 + z * z).log()
 
+    @override
     def cdf(self, value: Tensor) -> Tensor:
         r"""Cumulative distribution function of the Cauchy distribution.
 
@@ -766,6 +784,7 @@ class Cauchy(Distribution):
         z = (value - self.loc) / self.scale
         return 0.5 + z.arctan() / math.pi
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Cauchy distribution (in nats).
 

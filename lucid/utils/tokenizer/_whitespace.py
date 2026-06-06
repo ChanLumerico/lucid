@@ -14,7 +14,7 @@ robustness + better compression.
 """
 
 import os
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -67,24 +67,29 @@ class WhitespaceTokenizer(Tokenizer):
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of distinct whitespace-split tokens currently registered."""
         return len(self._vocab)
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier (always ``"whitespace"``)."""
         return "whitespace"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return a copy of the word → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Return the word for ``token_id`` or ``None`` if unknown."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Whitespace-split + vocab lookup; OOV words are silently dropped."""
         out: list[int] = []
@@ -96,6 +101,7 @@ class WhitespaceTokenizer(Tokenizer):
             # contract.  Use WordTokenizer for explicit UNK fallback.
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Join known token surface forms with single spaces."""
         return " ".join(self._id_to_token[i] for i in ids if i in self._id_to_token)
@@ -131,6 +137,7 @@ class WhitespaceTokenizer(Tokenizer):
         self._id_to_token = {i: t for t, i in v.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Persist as ``vocab.txt`` + unified ``tokenizer.json``.
 
@@ -143,6 +150,7 @@ class WhitespaceTokenizer(Tokenizer):
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Emit the unified-format ``model`` block for the whitespace algo."""
         return {"model": {"type": "Whitespace", "vocab": self._vocab}}
@@ -219,6 +227,7 @@ class WhitespaceTokenizerFast(Tokenizer):
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of words in the live C++ vocab.
@@ -230,6 +239,7 @@ class WhitespaceTokenizerFast(Tokenizer):
         """
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"whitespace"``).
@@ -241,6 +251,7 @@ class WhitespaceTokenizerFast(Tokenizer):
         """
         return "whitespace"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a copy of the word → id map.
 
@@ -251,6 +262,7 @@ class WhitespaceTokenizerFast(Tokenizer):
         """
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         r"""Look up the word for ``token_id``.
 
@@ -266,10 +278,12 @@ class WhitespaceTokenizerFast(Tokenizer):
         """
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         r"""Delegate to the C++ encode hot path; OOV silently dropped."""
         return list(self._cpp.encode(text))
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         r"""C++ decode — joins known surface forms with single spaces."""
         return self._cpp.decode(list(ids))
@@ -301,6 +315,7 @@ class WhitespaceTokenizerFast(Tokenizer):
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         r"""Persist as ``vocab.txt`` + unified ``tokenizer.json``.
 
@@ -313,6 +328,7 @@ class WhitespaceTokenizerFast(Tokenizer):
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         r"""Emit the unified-format ``model`` block for the whitespace algo."""
         return {"model": {"type": "Whitespace", "vocab": self._vocab}}

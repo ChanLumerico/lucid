@@ -30,7 +30,7 @@ the previous layer's predicted foreground (``attn_mask = sigmoid(mask) <
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -46,6 +46,7 @@ from lucid.models.vision.mask2former._config import Mask2FormerConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SwinPatchEmbeddings(nn.Module):
     """Patch embedding: a ``projection`` conv stride/kernel = patch_size."""
 
@@ -56,6 +57,7 @@ class _SwinPatchEmbeddings(nn.Module):
             in_channels, embed_dim, kernel_size=patch_size, stride=patch_size
         )
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, tuple[int, int]]:  # type: ignore[override]
         emb: Tensor = cast(Tensor, self.projection(x))  # (B, C, H', W')
         h = int(emb.shape[2])
@@ -65,6 +67,7 @@ class _SwinPatchEmbeddings(nn.Module):
         return emb, (h, w)
 
 
+@final
 class _SwinEmbeddings(nn.Module):
     """Patch embeddings + LayerNorm (``patch_embeddings`` + ``norm``)."""
 
@@ -73,12 +76,14 @@ class _SwinEmbeddings(nn.Module):
         self.patch_embeddings = _SwinPatchEmbeddings(in_channels, embed_dim)
         self.norm = nn.LayerNorm(embed_dim)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, tuple[int, int]]:  # type: ignore[override]
         emb, dims = self.patch_embeddings.forward(x)
         emb = cast(Tensor, self.norm(emb))
         return emb, dims
 
 
+@final
 class _SwinPatchMerging(nn.Module):
     """Patch merging downsample (``reduction`` + ``norm``)."""
 
@@ -87,6 +92,7 @@ class _SwinPatchMerging(nn.Module):
         self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
         self.norm = nn.LayerNorm(4 * dim)
 
+    @override
     def forward(self, x: Tensor, dims: tuple[int, int]) -> Tensor:  # type: ignore[override]
         h, w = dims
         b = int(x.shape[0])
@@ -104,6 +110,7 @@ class _SwinPatchMerging(nn.Module):
         return merged
 
 
+@final
 class _SwinRelativePositionBias(nn.Module):
     """Window relative-position bias (``relative_position_bias_table``).
 
@@ -126,6 +133,7 @@ class _SwinRelativePositionBias(nn.Module):
             persistent=False,
         )
 
+    @override
     def forward(self) -> Tensor:  # type: ignore[override]
         idx: Tensor = cast(Tensor, self.relative_position_index)
         table: Tensor = cast(Tensor, self.relative_position_bias_table)
@@ -155,6 +163,7 @@ def _build_relative_position_index(window_size: int) -> list[list[int]]:
     return index
 
 
+@final
 class _SwinAttention(nn.Module):
     """Window multi-head self-attention with separate ``q/k/v/o_proj``."""
 
@@ -169,6 +178,7 @@ class _SwinAttention(nn.Module):
         self.o_proj = nn.Linear(dim, dim)
         self.relative_position_bias = _SwinRelativePositionBias(num_heads, window_size)
 
+    @override
     def forward(  # type: ignore[override]
         self, x: Tensor, attn_mask: Tensor | None = None
     ) -> Tensor:
@@ -209,6 +219,7 @@ class _SwinAttention(nn.Module):
         return cast(Tensor, self.o_proj(out))
 
 
+@final
 class _SwinMLP(nn.Module):
     """Swin block MLP (``fc1`` -> GELU -> ``fc2``)."""
 
@@ -218,6 +229,7 @@ class _SwinMLP(nn.Module):
         self.fc1 = nn.Linear(dim, hidden)
         self.fc2 = nn.Linear(hidden, dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.fc2(F.gelu(cast(Tensor, self.fc1(x)))))
 
@@ -278,6 +290,7 @@ def _build_swin_attn_mask(
     return attn_mask
 
 
+@final
 class _SwinLayer(nn.Module):
     """One Swin block: (S)W-MSA + MLP with pre-LayerNorms."""
 
@@ -297,6 +310,7 @@ class _SwinLayer(nn.Module):
         self.layernorm_after = nn.LayerNorm(dim)
         self.mlp = _SwinMLP(dim, mlp_ratio)
 
+    @override
     def forward(self, x: Tensor, dims: tuple[int, int]) -> Tensor:  # type: ignore[override]
         h, w = dims
         b = int(x.shape[0])
@@ -375,6 +389,7 @@ class _SwinStage(nn.Module):
             _SwinPatchMerging(dim) if downsample else None
         )
 
+    @override
     def forward(  # type: ignore[override]
         self, x: Tensor, dims: tuple[int, int]
     ) -> tuple[Tensor, Tensor, tuple[int, int]]:
@@ -392,6 +407,7 @@ class _SwinStage(nn.Module):
         return x, before, new_dims
 
 
+@final
 class _SwinEncoder(nn.Module):
     """Swin encoder: 4 ``layers`` (stages)."""
 
@@ -422,6 +438,7 @@ class _SwinEncoder(nn.Module):
                 dim *= 2
         self.layers = nn.ModuleList(stages)
 
+    @override
     def forward(  # type: ignore[override]
         self, x: Tensor, dims: tuple[int, int]
     ) -> list[tuple[Tensor, tuple[int, int]]]:
@@ -435,6 +452,7 @@ class _SwinEncoder(nn.Module):
         return out
 
 
+@final
 class _SwinModel(nn.Module):
     """Reference ``SwinModel`` (``embeddings`` + ``encoder``); no pooler."""
 
@@ -453,11 +471,13 @@ class _SwinModel(nn.Module):
             embed_dim, depths, num_heads, window_size, mlp_ratio
         )
 
+    @override
     def forward(self, x: Tensor) -> list[tuple[Tensor, tuple[int, int]]]:  # type: ignore[override]
         emb, dims = self.embeddings.forward(x)
         return self.encoder.forward(emb, dims)
 
 
+@final
 class _SwinBackbone(nn.Module):
     """Reference ``SwinBackbone``: ``swin`` model + per-stage ``hidden_states_norms``.
 
@@ -485,6 +505,7 @@ class _SwinBackbone(nn.Module):
             norms[f"stage{i + 1}"] = nn.LayerNorm(ch)
         self.hidden_states_norms = nn.ModuleDict(norms)
 
+    @override
     def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
         stage_outputs = self.swin.forward(x)
         feature_maps: list[Tensor] = []
@@ -524,6 +545,7 @@ class _SinePositionEmbedding(nn.Module):
         self.scale = scale
         self.eps = eps
 
+    @override
     def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:  # type: ignore[override]
         npf = self.num_position_features
         ones = lucid.ones(1, height, width, dtype=lucid.float32, device=device)
@@ -554,6 +576,7 @@ class _SinePositionEmbedding(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _DeformableAttention(nn.Module):
     """Multi-scale deformable attention (reference layer)."""
 
@@ -572,6 +595,7 @@ class _DeformableAttention(nn.Module):
         self.value_proj = nn.Linear(embed_dim, embed_dim)
         self.output_proj = nn.Linear(embed_dim, embed_dim)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden_states: Tensor,  # (B, S, C) + pos
@@ -617,6 +641,7 @@ class _DeformableAttention(nn.Module):
         return cast(Tensor, self.output_proj(out))
 
 
+@final
 class _PixelDecoderEncoderLayer(nn.Module):
     """One deformable-encoder layer (self-attn + FFN, post-norm)."""
 
@@ -628,6 +653,7 @@ class _PixelDecoderEncoderLayer(nn.Module):
         self.fc2 = nn.Linear(ffn_dim, embed_dim)
         self.final_layer_norm = nn.LayerNorm(embed_dim)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden_states: Tensor,
@@ -654,6 +680,7 @@ class _PixelDecoderEncoderLayer(nn.Module):
         return hidden_states
 
 
+@final
 class _PixelDecoderEncoder(nn.Module):
     """Stack of deformable-encoder layers (``layers``)."""
 
@@ -690,6 +717,7 @@ class _PixelDecoderEncoder(nn.Module):
         reference_points = reference_points[:, :, None].repeat(1, 1, n_levels, 1)
         return reference_points
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden_states: Tensor,
@@ -713,6 +741,7 @@ class _PixelDecoderEncoder(nn.Module):
         return hidden_states
 
 
+@final
 class _PixelDecoder(nn.Module):
     """Reference ``Mask2FormerPixelDecoder`` (MSDeformAttn pixel decoder)."""
 
@@ -782,6 +811,7 @@ class _PixelDecoder(nn.Module):
         self._lateral_convolutions = lateral_convs[::-1]
         self._output_convolutions = output_convs[::-1]
 
+    @override
     def forward(  # type: ignore[override]
         self, features: list[Tensor]
     ) -> tuple[Tensor, list[Tensor]]:
@@ -877,6 +907,7 @@ class _PixelLevelModule(nn.Module):
             common_stride=config.common_stride,
         )
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:  # type: ignore[override]
         features = self.encoder.forward(x)
         return self.decoder.forward(features)
@@ -887,6 +918,7 @@ class _PixelLevelModule(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _DecoderSelfAttention(nn.Module):
     """Decoder self-attention with separate ``q/k/v/out_proj`` (DETR-style)."""
 
@@ -904,6 +936,7 @@ class _DecoderSelfAttention(nn.Module):
     def _shape(self, x: Tensor, seq: int, b: int) -> Tensor:
         return x.reshape(b, seq, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
+    @override
     def forward(  # type: ignore[override]
         self, hidden_states: Tensor, position_embeddings: Tensor
     ) -> Tensor:
@@ -931,6 +964,7 @@ class _DecoderSelfAttention(nn.Module):
         return out.permute(1, 0, 2)  # back to (N, B, C)
 
 
+@final
 class _MaskedAttentionDecoderLayer(nn.Module):
     """Reference ``Mask2FormerMaskedAttentionDecoderLayer`` (post-norm)."""
 
@@ -944,6 +978,7 @@ class _MaskedAttentionDecoderLayer(nn.Module):
         self.fc2 = nn.Linear(ffn_dim, embed_dim)
         self.final_layer_norm = nn.LayerNorm(embed_dim)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden_states: Tensor,  # (N, B, C)
@@ -977,6 +1012,7 @@ class _MaskedAttentionDecoderLayer(nn.Module):
         return hidden_states
 
 
+@final
 class _MLPPredictionHead(nn.Sequential):
     """Reference ``Mask2FormerMLPPredictionHead`` (3-layer MLP).
 
@@ -999,6 +1035,7 @@ class _MLPPredictionHead(nn.Sequential):
         super().__init__(*blocks)
 
 
+@final
 class _MaskPredictor(nn.Module):
     """Reference ``Mask2FormerMaskPredictor``: ``mask_embedder`` MLP.
 
@@ -1015,6 +1052,7 @@ class _MaskPredictor(nn.Module):
             hidden_size, hidden_size, mask_feature_size
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         outputs: Tensor,  # (N, B, C)
@@ -1047,6 +1085,7 @@ class _MaskPredictor(nn.Module):
         return outputs_mask, attn_mask
 
 
+@final
 class _MaskedAttentionDecoder(nn.Module):
     """Reference ``Mask2FormerMaskedAttentionDecoder``.
 
@@ -1072,6 +1111,7 @@ class _MaskedAttentionDecoder(nn.Module):
             config.d_model, config.n_head, config.mask_feature_size
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         inputs_embeds: Tensor,  # (N, B, C) query features
@@ -1145,6 +1185,7 @@ class _TransformerModule(nn.Module):
         self.decoder = _MaskedAttentionDecoder(config)
         self.level_embed = nn.Embedding(self.num_feature_levels, d)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         multi_scale_features: list[Tensor],  # per-level (B, C, H, W)
@@ -1260,6 +1301,7 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
         self.transformer_module = _TransformerModule(config)
         self.class_predictor = nn.Linear(d, K + 1)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

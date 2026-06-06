@@ -29,7 +29,7 @@ per stage and the decoder's single ``z`` projection with a top-stage
 ``z_{L-2}, …, z_0``.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -65,6 +65,7 @@ def _resolve_hw(config: VAEConfig) -> tuple[int, int, int, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _VAEEncoder(nn.Module):
     """Conv-stack encoder with two operating modes.
 
@@ -112,6 +113,7 @@ class _VAEEncoder(nn.Module):
         """Global average pool over (H, W) → (B, C)."""
         return h.mean(dim=(-1, -2))
 
+    @override
     def forward(  # type: ignore[override]
         self, x: Tensor
     ) -> tuple[Tensor, Tensor] | tuple[list[Tensor], list[Tensor]]:
@@ -144,6 +146,7 @@ class _VAEEncoder(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _VAEDecoder(nn.Module):
     """Top-down decoder with two operating modes.
 
@@ -224,6 +227,7 @@ class _VAEDecoder(nn.Module):
             tuple(rev_channels[1:]) + (rev_channels[-1],) if self._hier else ()
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         z_or_zs: Tensor | list[Tensor],
@@ -374,6 +378,7 @@ class VAEModel(PretrainedModel):
         """Map a latent (or list of per-level latents) back to image space."""
         return cast(Tensor, self.decoder(z_or_zs=z_or_zs))
 
+    @override
     def forward(self, x: Tensor) -> VAEOutput:  # type: ignore[override]
         if self._is_hierarchical:
             mus, logvars = cast(tuple[list[Tensor], list[Tensor]], self.encode(x))
@@ -492,6 +497,7 @@ class VAEForImageGeneration(PretrainedModel):
         B = int(per_pixel.shape[0])
         return per_pixel.reshape(B, -1).sum(dim=-1).mean()
 
+    @override
     def forward(self, x: Tensor) -> VAEOutput:  # type: ignore[override]
         if self._is_hierarchical:
             mus, logvars = cast(tuple[list[Tensor], list[Tensor]], self.vae.encode(x))

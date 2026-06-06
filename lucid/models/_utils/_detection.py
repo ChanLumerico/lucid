@@ -10,7 +10,7 @@ Structure
 """
 
 import math
-from typing import cast
+from typing import cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -502,6 +502,7 @@ class AnchorGenerator(nn.Module):
         grid = shifts_t[:, None, :] + base_on_dev[None, :, :]
         return grid.reshape(G * A, 4)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         feature_maps: list[Tensor],
@@ -898,6 +899,7 @@ class FPN(nn.Module):
             ]
         )
 
+    @override
     def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         """
         Args:
@@ -972,6 +974,7 @@ class RPN(nn.Module):
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, 1)
         self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         features: list[Tensor],
@@ -1106,6 +1109,7 @@ class RoIHead(nn.Module):
         self.cls_score = nn.Linear(representation_size, num_classes + 1)
         self.bbox_pred = nn.Linear(representation_size, num_classes * 4)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         """
         Args:
@@ -1248,6 +1252,7 @@ class _FrozenBatchNorm2d(nn.Module):
         self.register_buffer("running_mean", lucid.zeros(num_features))
         self.register_buffer("running_var", lucid.ones(num_features))
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
         b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
@@ -1281,6 +1286,7 @@ class _ResNetBottleneck(nn.Module):
         self.bn3 = _FrozenBatchNorm2d(out_ch, eps=bn_eps)
         self.downsample = downsample
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
         out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
@@ -1309,6 +1315,7 @@ def _make_resnet_layer(
     return nn.Sequential(*blocks), out_ch
 
 
+@final
 class _ResNetBody(nn.Module):
     """ResNet trunk exposing C2-C5, frozen BN, reference key layout.
 
@@ -1333,6 +1340,7 @@ class _ResNetBody(nn.Module):
         self.layer4, c5 = _make_resnet_layer(c4, 512, layers[3], 2, bn_eps)
         self.out_channels_list: list[int] = [c2, c3, c4, c5]
 
+    @override
     def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x))))))
         x = cast(Tensor, self.maxpool(x))
@@ -1343,6 +1351,7 @@ class _ResNetBody(nn.Module):
         return [c2, c3, c4, c5]
 
 
+@final
 class _FeaturePyramidNetwork(nn.Module):
     """Reference FPN: ``inner_blocks`` (1x1 lateral) + ``layer_blocks`` (3x3).
 
@@ -1366,6 +1375,7 @@ class _FeaturePyramidNetwork(nn.Module):
             ]
         )
 
+    @override
     def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         """Top-down FPN over bottom-up maps (finest first) + a pool level.
 
@@ -1388,6 +1398,7 @@ class _FeaturePyramidNetwork(nn.Module):
         return results
 
 
+@final
 class _ReferenceAnchorGenerator(nn.Module):
     """Per-level anchors matching the reference ``AnchorGenerator`` exactly.
 
@@ -1446,6 +1457,7 @@ class _ReferenceAnchorGenerator(nn.Module):
         grid = shifts_t[:, None, :] + base_dev[None, :, :]
         return grid.reshape(-1, 4)
 
+    @override
     def forward(  # type: ignore[override]
         self, feature_maps: list[Tensor], strides: list[int]
     ) -> list[Tensor]:

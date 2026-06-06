@@ -6,7 +6,7 @@ import warnings
 from abc import ABC
 from dataclasses import asdict, fields, is_dataclass
 from pathlib import Path
-from typing import ClassVar, Self
+from typing import ClassVar, Self, override
 
 import lucid as _lucid
 import lucid.nn as nn
@@ -67,6 +67,7 @@ class ModelConfig(ABC):
 
     model_type: ClassVar[str] = "base"
 
+    @override
     def __init_subclass__(cls, **kwargs: object) -> None:
         r"""Layer-1 contract checks for family Configs (see
         ``arch-models-family-contract``).

@@ -17,7 +17,7 @@ Split-Attention convolution (SplitAttn):
   - Branches are recombined via softmax attention weights
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -33,6 +33,7 @@ from lucid.models.vision.resnest._config import ResNeStConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _RadixSoftmax(nn.Module):
     """Per-radix softmax (or sigmoid when radix==1)."""
 
@@ -41,6 +42,7 @@ class _RadixSoftmax(nn.Module):
         self._radix = radix
         self._groups = groups
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         batch = x.shape[0]
         if self._radix > 1:
@@ -58,6 +60,7 @@ class _RadixSoftmax(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SplitAttn(nn.Module):
     """Split-Attention (Splat) convolution.
 
@@ -118,6 +121,7 @@ class _SplitAttn(nn.Module):
         self.fc2 = nn.Conv2d(attn_chs, mid_chs, 1, groups=groups)
         self.rsoftmax = _RadixSoftmax(radix, groups)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv(x))
         x = cast(Tensor, self.bn0(x))
@@ -156,6 +160,7 @@ class _SplitAttn(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ResNeStBottleneck(nn.Module):
     """ResNeSt Bottleneck block.
 
@@ -240,6 +245,7 @@ class _ResNeStBottleneck(nn.Module):
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
         self.act3 = nn.ReLU(inplace=True)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
 
@@ -579,10 +585,12 @@ class ResNeSt(PretrainedModel, BackboneMixin):
         self.layer4 = l4
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.conv1(x))
         x = cast(Tensor, self.act1(cast(Tensor, self.bn1(x))))
@@ -593,6 +601,7 @@ class ResNeSt(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.layer4(x))
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -677,6 +686,7 @@ class ResNeStForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(out_ch, config.num_classes, dropout=config.dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

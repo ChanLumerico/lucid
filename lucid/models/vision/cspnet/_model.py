@@ -19,7 +19,7 @@ single converter handles all three variants with no per-arch
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
@@ -65,6 +65,7 @@ class _ConvBnAct(nn.Module):
         self.bn = nn.BatchNorm2d(out_chs)
         self.apply_act = apply_act
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv(x))
         x = cast(Tensor, self.bn(x))
@@ -78,6 +79,7 @@ class _ConvBnAct(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _BottleneckBlock(nn.Module):
     """1×1 → 3×3 (grouped) → 1×1 with a residual.
 
@@ -104,6 +106,7 @@ class _BottleneckBlock(nn.Module):
         self.attn3 = nn.Identity()
         self.drop_path = nn.Identity()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
         x = cast(Tensor, self.conv1(x))
@@ -120,6 +123,7 @@ class _BottleneckBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _DarkBlock(nn.Module):
     """1×1 → 3×3 with a residual (no final ReLU after addition).
 
@@ -140,6 +144,7 @@ class _DarkBlock(nn.Module):
         self.conv2 = _ConvBnAct(mid, out_chs, kernel_size=3, groups=groups)
         self.drop_path = nn.Identity()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
         x = cast(Tensor, self.conv1(x))
@@ -154,6 +159,7 @@ class _DarkBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CrossStage(nn.Module):
     """CSP-wrapped stage: split / process / concat / project.
 
@@ -258,6 +264,7 @@ class _CrossStage(nn.Module):
             kernel_size=1,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv_down(x))
         x = cast(Tensor, self.conv_exp(x))
@@ -275,6 +282,7 @@ class _CrossStage(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _DarkStage(nn.Module):
     """Plain sequential stage: down-conv then ``depth`` Darknet blocks."""
 
@@ -321,6 +329,7 @@ class _DarkStage(nn.Module):
                 )
         self.blocks = nn.Sequential(*blocks)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv_down(x))
         return cast(Tensor, self.blocks(x))
@@ -350,6 +359,7 @@ class _Stem(nn.Module):
         else:
             self.pool = nn.Identity()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv1(x))
         return cast(Tensor, self.pool(x))
@@ -434,15 +444,18 @@ class CSPNet(PretrainedModel, BackboneMixin):
         self._final_chs = final_chs
 
     @property
+    @override
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         for stage in self.stages:
             x = cast(Tensor, stage(x))
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -506,6 +519,7 @@ class CSPNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         # Match timm naming: ``head.fc`` (Linear).
         self._build_classifier(final_chs, config.num_classes, dropout=config.dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

@@ -7,6 +7,7 @@ small and built on top of the existing ``Normal`` / ``Cauchy`` /
 """
 
 import math
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -117,6 +118,7 @@ class Pareto(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         r"""Support of the Pareto distribution: positive reals :math:`(0, \infty)`.
@@ -134,6 +136,7 @@ class Pareto(Distribution):
         # positive constraint and rely on the user to know the family.
         return positive
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the Pareto distribution: :math:`E[X] = \alpha x_m / (\alpha - 1)`.
@@ -149,6 +152,7 @@ class Pareto(Distribution):
         # Defined only for α > 1.
         return self.alpha * self.scale / (self.alpha - 1.0)
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Pareto distribution.
@@ -166,6 +170,7 @@ class Pareto(Distribution):
         a: Tensor = self.alpha
         return self.scale * self.scale * a / ((a - 1.0) ** 2 * (a - 2.0))
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw reparameterised samples via the inverse-CDF trick.
 
@@ -188,6 +193,7 @@ class Pareto(Distribution):
         u: Tensor = lucid.rand(*shape, dtype=self.scale.dtype, device=self.scale.device)
         return self.scale * (1.0 - u) ** (-1.0 / self.alpha)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Pareto distribution.
 
@@ -211,6 +217,7 @@ class Pareto(Distribution):
             - (self.alpha + 1.0) * value.log()
         )
 
+    @override
     def entropy(self) -> Tensor:
         r"""Entropy of the Pareto distribution.
 
@@ -331,6 +338,7 @@ class Weibull(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         r"""Support of the Weibull distribution: :math:`[0, \infty)`.
@@ -342,6 +350,7 @@ class Weibull(Distribution):
         """
         return nonnegative
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the Weibull distribution: :math:`E[X] = \lambda \Gamma(1 + 1/k)`.
@@ -354,6 +363,7 @@ class Weibull(Distribution):
         # μ = λ · Γ(1 + 1/k).
         return self.scale * lucid.lgamma(1.0 + 1.0 / self.concentration).exp()
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Weibull distribution.
@@ -371,6 +381,7 @@ class Weibull(Distribution):
         g2: Tensor = lucid.lgamma(1.0 + 2.0 * k_inv).exp()
         return self.scale * self.scale * (g2 - g1 * g1)
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw reparameterised samples via the inverse-CDF.
 
@@ -393,6 +404,7 @@ class Weibull(Distribution):
         u: Tensor = lucid.rand(*shape, dtype=self.scale.dtype, device=self.scale.device)
         return self.scale * (-(1.0 - u).log()) ** (1.0 / self.concentration)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Weibull distribution.
 
@@ -414,6 +426,7 @@ class Weibull(Distribution):
         lam: Tensor = self.scale
         return k.log() - k * lam.log() + (k - 1.0) * value.log() - (value / lam) ** k
 
+    @override
     def entropy(self) -> Tensor:
         r"""Entropy of the Weibull distribution.
 
@@ -532,6 +545,7 @@ class HalfNormal(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the HalfNormal distribution: :math:`E[X] = \sigma\sqrt{2/\pi}`.
@@ -543,6 +557,7 @@ class HalfNormal(Distribution):
         """
         return self.scale * math.sqrt(2.0 / math.pi)
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the HalfNormal distribution: :math:`\operatorname{Var}[X] = \sigma^2(1 - 2/\pi)`.
@@ -554,6 +569,7 @@ class HalfNormal(Distribution):
         """
         return self.scale * self.scale * (1.0 - 2.0 / math.pi)
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw reparameterised samples by folding a Normal sample.
 
@@ -572,6 +588,7 @@ class HalfNormal(Distribution):
         """
         return self._base.rsample(sample_shape).abs()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the HalfNormal distribution.
 
@@ -592,6 +609,7 @@ class HalfNormal(Distribution):
         # log p(x) = log 2 + log_normal(x | 0, σ).
         return math.log(2.0) + self._base.log_prob(value)
 
+    @override
     def entropy(self) -> Tensor:
         r"""Entropy of the HalfNormal distribution.
 
@@ -697,6 +715,7 @@ class HalfCauchy(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw reparameterised samples by folding a Cauchy sample.
 
@@ -715,6 +734,7 @@ class HalfCauchy(Distribution):
         """
         return self._base.rsample(sample_shape).abs()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the HalfCauchy distribution.
 
@@ -838,6 +858,7 @@ class FisherSnedecor(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         """Mean of the F-distribution: :math:`E[X] = d_2 / (d_2 - 2)`.
@@ -852,6 +873,7 @@ class FisherSnedecor(Distribution):
         # Defined for d2 > 2.
         return self.df2 / (self.df2 - 2.0)
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the F-distribution.
@@ -870,6 +892,7 @@ class FisherSnedecor(Distribution):
         d1, d2 = self.df1, self.df2
         return 2.0 * d2 * d2 * (d1 + d2 - 2.0) / (d1 * (d2 - 2.0) ** 2 * (d2 - 4.0))
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the F-distribution.
 
@@ -891,6 +914,7 @@ class FisherSnedecor(Distribution):
         y: Tensor = self._chi2.sample(sample_shape)
         return (x / self.df1) / (y / self.df2)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the F-distribution.
 

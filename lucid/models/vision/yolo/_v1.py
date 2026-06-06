@@ -34,7 +34,7 @@ Multi-part MSE loss matching the paper §2.2:
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -635,6 +635,7 @@ class YOLOV1ForObjectDetection(PretrainedModel):
 
         return lucid.cat(loss_parts).mean()
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

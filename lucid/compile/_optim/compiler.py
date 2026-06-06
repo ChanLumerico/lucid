@@ -33,7 +33,7 @@ MPSGraph dispatch time alone, beating eager once the parameter
 count is large enough to amortise the per-call overhead.
 """
 
-from typing import TYPE_CHECKING, Callable, Sequence, cast
+from typing import TYPE_CHECKING, Callable, Sequence, cast, final, override
 
 from lucid._C import engine as _C_engine
 from lucid._device import device as _device_cls
@@ -731,6 +731,7 @@ class _CompiledStepBase:
 # ── SGD ─────────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledSGD(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.SGD` (with optional momentum / nesterov / weight_decay).
 
@@ -809,6 +810,7 @@ class _CompiledSGD(_CompiledStepBase):
         for i in range(len(self._momenta)):
             self._buffer_table[("mom", i)] = _list_getter(self._momenta, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -816,6 +818,7 @@ class _CompiledSGD(_CompiledStepBase):
         for i, m in enumerate(self._momenta):
             register("mom", i, m)
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -852,6 +855,7 @@ class _CompiledSGD(_CompiledStepBase):
             new_params.append(new_p)
         return new_params + new_momenta
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map executable outputs to ``params`` (first N) then ``momenta`` (next N)."""
         # First N outputs → self._params, next N → self._momenta.
@@ -952,6 +956,7 @@ class _CompiledAdam(_CompiledStepBase):
             self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
             self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -961,6 +966,7 @@ class _CompiledAdam(_CompiledStepBase):
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
+    @override
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
@@ -983,6 +989,7 @@ class _CompiledAdam(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -1021,10 +1028,12 @@ class _CompiledAdam(_CompiledStepBase):
             new_v.append(v_t)
         return new_params + new_m + new_v
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` in order."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
 
+    @override
     def _refresh_scalars(self) -> None:
         """Advance ``t`` and recompute ``bias1 = 1-β₁^t`` / ``bias2 = 1-β₂^t``.
 
@@ -1048,6 +1057,7 @@ class _CompiledAdam(_CompiledStepBase):
 # ── AdamW ───────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledAdamW(_CompiledAdam):
     r"""Compiled :class:`~lucid.optim.AdamW` — Adam with decoupled weight decay.
 
@@ -1120,6 +1130,7 @@ class _CompiledAdamW(_CompiledAdam):
             self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
             self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -1163,6 +1174,7 @@ class _CompiledAdamW(_CompiledAdam):
 # ── RMSprop ─────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledRMSprop(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.RMSprop`.
 
@@ -1240,6 +1252,7 @@ class _CompiledRMSprop(_CompiledStepBase):
         for i in range(len(self._momenta)):
             self._buffer_table[("mom", i)] = _list_getter(self._momenta, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -1249,6 +1262,7 @@ class _CompiledRMSprop(_CompiledStepBase):
         for i, m in enumerate(self._momenta):
             register("mom", i, m)
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -1287,6 +1301,7 @@ class _CompiledRMSprop(_CompiledStepBase):
             new_params.append(new_p)
         return new_params + new_sq + new_mom
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``square_avg`` then (optional) ``momenta``."""
         return list(self._params) + list(self._square_avg) + list(self._momenta)
@@ -1295,6 +1310,7 @@ class _CompiledRMSprop(_CompiledStepBase):
 # ── Adagrad ─────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledAdagrad(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.Adagrad`.
 
@@ -1354,6 +1370,7 @@ class _CompiledAdagrad(_CompiledStepBase):
         for i in range(len(self._params)):
             self._buffer_table[("state_sum", i)] = _list_getter(self._state_sum, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -1361,6 +1378,7 @@ class _CompiledAdagrad(_CompiledStepBase):
         for i, s in enumerate(self._state_sum):
             register("state_sum", i, s)
 
+    @override
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
@@ -1375,6 +1393,7 @@ class _CompiledAdagrad(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
+    @override
     def _refresh_scalars(self) -> None:
         """Advance ``t`` and copy fresh ``eff_lr`` value into the scalar holder."""
         import lucid as _lucid
@@ -1385,6 +1404,7 @@ class _CompiledAdagrad(_CompiledStepBase):
         dev = self._params[0].device
         self._scalar_slots["eff_lr"].copy_(_lucid.tensor(eff, dtype=dt, device=dev))
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -1409,6 +1429,7 @@ class _CompiledAdagrad(_CompiledStepBase):
             new_state.append(new_s)
         return new_params + new_state
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``state_sum``."""
         return list(self._params) + list(self._state_sum)
@@ -1417,6 +1438,7 @@ class _CompiledAdagrad(_CompiledStepBase):
 # ── Adadelta ────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledAdadelta(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.Adadelta` — auto-adaptive LR.
 
@@ -1478,6 +1500,7 @@ class _CompiledAdadelta(_CompiledStepBase):
             self._buffer_table[("square_avg", i)] = _list_getter(self._square_avg, i)
             self._buffer_table[("acc_delta", i)] = _list_getter(self._acc_delta, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -1487,6 +1510,7 @@ class _CompiledAdadelta(_CompiledStepBase):
         for i, ad in enumerate(self._acc_delta):
             register("acc_delta", i, ad)
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -1516,6 +1540,7 @@ class _CompiledAdadelta(_CompiledStepBase):
             new_ad.append(new_d)
         return new_params + new_sq + new_ad
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``square_avg`` then ``acc_delta``."""
         return list(self._params) + list(self._square_avg) + list(self._acc_delta)
@@ -1524,6 +1549,7 @@ class _CompiledAdadelta(_CompiledStepBase):
 # ── Adamax ──────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledAdamax(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.Adamax` — Adam with L∞-norm second moment.
 
@@ -1591,6 +1617,7 @@ class _CompiledAdamax(_CompiledStepBase):
             self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
             self._buffer_table[("u", i)] = _list_getter(self._u_buf, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -1600,6 +1627,7 @@ class _CompiledAdamax(_CompiledStepBase):
         for i, u in enumerate(self._u_buf):
             register("u", i, u)
 
+    @override
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
@@ -1613,6 +1641,7 @@ class _CompiledAdamax(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
+    @override
     def _refresh_scalars(self) -> None:
         """Advance ``t`` and copy fresh ``lr / (1 - β₁^t)`` into the scalar holder."""
         import lucid as _lucid
@@ -1623,6 +1652,7 @@ class _CompiledAdamax(_CompiledStepBase):
         dev = self._params[0].device
         self._scalar_slots["eff_lr"].copy_(_lucid.tensor(eff, dtype=dt, device=dev))
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -1654,6 +1684,7 @@ class _CompiledAdamax(_CompiledStepBase):
             new_u.append(u_t)
         return new_params + new_m + new_u
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``m_buf`` then ``u_buf`` (Adamax)."""
         return list(self._params) + list(self._m_buf) + list(self._u_buf)
@@ -1662,6 +1693,7 @@ class _CompiledAdamax(_CompiledStepBase):
 # ── NAdam ───────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledNAdam(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.NAdam` — Adam with Nesterov lookahead.
 
@@ -1749,6 +1781,7 @@ class _CompiledNAdam(_CompiledStepBase):
             self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
             self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -1758,6 +1791,7 @@ class _CompiledNAdam(_CompiledStepBase):
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
+    @override
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
@@ -1774,6 +1808,7 @@ class _CompiledNAdam(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
+    @override
     def _refresh_scalars(self) -> None:
         """Advance ``t``, recompute ``μ_t`` / ``μ_{t+1}`` / ``μ_product``, refresh c1 / c2 / inv_bc2.
 
@@ -1801,6 +1836,7 @@ class _CompiledNAdam(_CompiledStepBase):
             _lucid.tensor(inv_bc2, dtype=dt, device=dev)
         )
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -1839,6 +1875,7 @@ class _CompiledNAdam(_CompiledStepBase):
             new_v.append(v_t)
         return new_params + new_m + new_v
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` (NAdam)."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
@@ -1847,6 +1884,7 @@ class _CompiledNAdam(_CompiledStepBase):
 # ── SparseAdam ──────────────────────────────────────────────────────
 
 
+@final
 class _CompiledSparseAdam(_CompiledAdam):
     r"""Compiled :class:`~lucid.optim.SparseAdam` via dense Adam math.
 
@@ -1912,6 +1950,7 @@ class _CompiledSparseAdam(_CompiledAdam):
 # ── Rprop ───────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledRprop(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.Rprop` — sign-based per-element step adaptation.
 
@@ -1989,6 +2028,7 @@ class _CompiledRprop(_CompiledStepBase):
             self._buffer_table[("prev_grad", i)] = _list_getter(self._prev_grad, i)
             self._buffer_table[("step", i)] = _list_getter(self._step_buf, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -1998,6 +2038,7 @@ class _CompiledRprop(_CompiledStepBase):
         for i, st in enumerate(self._step_buf):
             register("step", i, st)
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -2057,6 +2098,7 @@ class _CompiledRprop(_CompiledStepBase):
             new_step.append(step_clamped)
         return new_params + new_prev_grad + new_step
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → prev_grad → step buffers, matching ``_trace_update`` order."""
         return list(self._params) + list(self._prev_grad) + list(self._step_buf)
@@ -2065,6 +2107,7 @@ class _CompiledRprop(_CompiledStepBase):
 # ── ASGD ────────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledASGD(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.ASGD` — averaged SGD with iteration-dependent
     learning rate and averaging coefficient.
@@ -2136,6 +2179,7 @@ class _CompiledASGD(_CompiledStepBase):
         for i in range(len(self._params)):
             self._buffer_table[("ax", i)] = _list_getter(self._ax, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -2143,6 +2187,7 @@ class _CompiledASGD(_CompiledStepBase):
         for i, ax in enumerate(self._ax):
             register("ax", i, ax)
 
+    @override
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
@@ -2159,6 +2204,7 @@ class _CompiledASGD(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
+    @override
     def _refresh_scalars(self) -> None:
         """Advance ``t`` + write the gated averaging coefficient.
 
@@ -2179,6 +2225,7 @@ class _CompiledASGD(_CompiledStepBase):
         dev = self._params[0].device
         self._scalar_slots["coef"].copy_(_lucid.tensor(coef_val, dtype=dt, device=dev))
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -2212,6 +2259,7 @@ class _CompiledASGD(_CompiledStepBase):
             new_ax.append(new_a)
         return new_params + new_ax
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → ax buffers, matching ``_trace_update`` return order."""
         return list(self._params) + list(self._ax)
@@ -2220,6 +2268,7 @@ class _CompiledASGD(_CompiledStepBase):
 # ── RAdam ───────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledRAdam(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.RAdam` — Rectified Adam with
     variance-tractability gating.
@@ -2294,6 +2343,7 @@ class _CompiledRAdam(_CompiledStepBase):
             self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
             self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -2303,6 +2353,7 @@ class _CompiledRAdam(_CompiledStepBase):
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
+    @override
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
@@ -2333,6 +2384,7 @@ class _CompiledRAdam(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
+    @override
     def _refresh_scalars(self) -> None:
         """Compute and copy in fresh ``bias1`` / ``bias2`` / ``rect`` / ``use_rect``."""
         import lucid as _lucid
@@ -2366,6 +2418,7 @@ class _CompiledRAdam(_CompiledStepBase):
             _lucid.tensor(use_rect_val, dtype=dt, device=dev)
         )
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -2412,6 +2465,7 @@ class _CompiledRAdam(_CompiledStepBase):
             new_v.append(v_t)
         return new_params + new_m + new_v
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → m_buf → v_buf, matching ``_trace_update`` order."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
@@ -2420,6 +2474,7 @@ class _CompiledRAdam(_CompiledStepBase):
 # ── LBFGS ───────────────────────────────────────────────────────────
 
 
+@final
 class _CompiledLBFGS(_CompiledStepBase):
     r"""Compiled :class:`~lucid.optim.LBFGS` — single-iteration, no-line-search variant.
 
@@ -2518,6 +2573,7 @@ class _CompiledLBFGS(_CompiledStepBase):
             self._buffer_table[("prev_param", i)] = _list_getter(self._prev_param, i)
             self._buffer_table[("prev_grad", i)] = _list_getter(self._prev_grad, i)
 
+    @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
@@ -2527,6 +2583,7 @@ class _CompiledLBFGS(_CompiledStepBase):
         for i, pg in enumerate(self._prev_grad):
             register("prev_grad", i, pg)
 
+    @override
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
@@ -2543,6 +2600,7 @@ class _CompiledLBFGS(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
+    @override
     def _refresh_scalars(self) -> None:
         """Flip ``use_history`` from 0 → 1 on the second call onward."""
         import lucid as _lucid
@@ -2555,6 +2613,7 @@ class _CompiledLBFGS(_CompiledStepBase):
             _lucid.tensor(val, dtype=dt, device=dev)
         )
 
+    @override
     def _trace_update(
         self,
         all_inputs: Sequence[Tensor] | None,
@@ -2597,6 +2656,7 @@ class _CompiledLBFGS(_CompiledStepBase):
             new_prev_grad.append(g)
         return new_params + new_prev_param + new_prev_grad
 
+    @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → prev_param → prev_grad — mirrors ``_trace_update``."""
         return list(self._params) + list(self._prev_param) + list(self._prev_grad)
@@ -2605,6 +2665,7 @@ class _CompiledLBFGS(_CompiledStepBase):
 # ── Multi-group wrapper ─────────────────────────────────────────────
 
 
+@final
 class _MultiGroupCompiledOptimizer:
     """Drop-in compiled-optimizer wrapper for multi-``param_group`` setups.
 

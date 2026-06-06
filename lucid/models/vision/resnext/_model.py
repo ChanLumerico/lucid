@@ -7,7 +7,7 @@ convolution.  The intermediate width is determined by:
 where base_width = 64 (the channel count at the first stage).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -24,6 +24,7 @@ from lucid.models.vision.resnext._config import ResNeXtConfig
 _BASE_WIDTH: int = 64
 
 
+@final
 class _ResNeXtBottleneck(nn.Module):
     """1×1 → grouped 3×3 → 1×1 bottleneck with cardinality."""
 
@@ -60,6 +61,7 @@ class _ResNeXtBottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
@@ -279,10 +281,12 @@ class ResNeXt(PretrainedModel, BackboneMixin):
         self.layer4 = l4
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.maxpool(x))
@@ -292,6 +296,7 @@ class ResNeXt(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.layer4(x))
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -379,6 +384,7 @@ class ResNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
             final_channels, config.num_classes, dropout=config.dropout
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

@@ -28,7 +28,7 @@ tuple — every target is routed to its typed hook with the *same*
 
 import abc
 from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar, runtime_checkable
+from typing import Protocol, override, runtime_checkable
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
@@ -40,7 +40,7 @@ from lucid.utils.transforms._datatypes import (
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Empty:
     r"""Parameter type for deterministic transforms (no per-call state).
 
@@ -54,8 +54,6 @@ class Empty:
 
 
 NO_PARAMS = Empty()
-
-P = TypeVar("P")
 
 
 @runtime_checkable
@@ -93,7 +91,7 @@ def _find_reference(obj: object) -> Tensor | None:
     return None
 
 
-class Transform(Generic[P], abc.ABC):
+class Transform[P](abc.ABC):
     """Abstract base for a transform parameterized by its sample-params ``P``.
 
     Parameters
@@ -160,7 +158,7 @@ class Transform(Generic[P], abc.ABC):
         return self._dispatch(inputs, self.make_params(ref))
 
 
-class GeometricTransform(Transform[P], abc.ABC):
+class GeometricTransform[P](Transform[P], abc.ABC):
     """Spatial transform — *must* move masks, boxes, and keypoints.
 
     Re-declaring the companion hooks as abstract turns "a geometric
@@ -169,20 +167,23 @@ class GeometricTransform(Transform[P], abc.ABC):
     move one of them.
     """
 
+    @override
     @abc.abstractmethod
     def _apply_mask(self, mask: Tensor, params: P) -> Tensor:
         raise NotImplementedError
 
+    @override
     @abc.abstractmethod
     def _apply_boxes(self, boxes: BoundingBoxes, params: P) -> BoundingBoxes:
         raise NotImplementedError
 
+    @override
     @abc.abstractmethod
     def _apply_keypoints(self, kps: Keypoints, params: P) -> Keypoints:
         raise NotImplementedError
 
 
-class PhotometricTransform(Transform[P], abc.ABC):
+class PhotometricTransform[P](Transform[P], abc.ABC):
     """Colour / intensity transform — non-image targets pass through.
 
     Inherits the identity companion hooks from :class:`Transform`; the
@@ -203,7 +204,7 @@ class _NoParams:
         return NO_PARAMS
 
 
-@dataclass
+@dataclass(slots=True)
 class BboxParams:
     r"""Bounding-box handling policy for :class:`Compose` (Albumentations-style).
 
@@ -327,12 +328,14 @@ class Compose(_NoParams, Transform[Empty]):
         self.transforms = list(transforms)
         self.bbox_params = bbox_params
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         out: object = img
         for tf in self.transforms:
             out = tf(out)
         return out  # type: ignore[return-value]
 
+    @override
     def __call__(self, inputs: object) -> object:
         from lucid.utils.transforms._datatypes import box_areas
 
@@ -345,6 +348,7 @@ class Compose(_NoParams, Transform[Empty]):
             inputs = _filter_boxes_in_sample(inputs, orig_areas, self.bbox_params, [0])
         return inputs
 
+    @override
     def __repr__(self) -> str:
         inner = ", ".join(repr(t) for t in self.transforms)
         return f"Compose([{inner}])"

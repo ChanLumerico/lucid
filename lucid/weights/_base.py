@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from lucid.utils.transforms._base import TransformLike as Transform
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class WeightEntry:
     r"""Immutable manifest describing one pretrained checkpoint.
 

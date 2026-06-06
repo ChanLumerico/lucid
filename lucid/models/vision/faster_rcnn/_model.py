@@ -40,7 +40,7 @@ Faithfulness notes
   produces the final per-image detections.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -66,6 +66,7 @@ from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _BackboneWithFPN(nn.Module):
     """ResNet trunk (``body``) feeding a Feature Pyramid Network (``fpn``).
 
@@ -85,6 +86,7 @@ class _BackboneWithFPN(nn.Module):
         self.fpn = _FeaturePyramidNetwork(self.body.out_channels_list, fpn_out_channels)
         self.out_channels = fpn_out_channels
 
+    @override
     def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
         c_feats = cast(list[Tensor], self.body(x))  # [C2, C3, C4, C5]
         return self.fpn.forward(c_feats)  # [P2, P3, P4, P5, pool]
@@ -95,6 +97,7 @@ class _BackboneWithFPN(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _RPNHead(nn.Module):
     """RPN head: shared 3×3 conv + ReLU, then cls / bbox 1×1 sibling convs.
 
@@ -111,6 +114,7 @@ class _RPNHead(nn.Module):
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, 1)
         self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
 
+    @override
     def forward(  # type: ignore[override]
         self, features: list[Tensor]
     ) -> tuple[list[Tensor], list[Tensor]]:
@@ -123,6 +127,7 @@ class _RPNHead(nn.Module):
         return logits, bbox
 
 
+@final
 class _RegionProposalNetwork(nn.Module):
     """Region Proposal Network — ``head`` + anchor-based proposal layer.
 
@@ -140,6 +145,7 @@ class _RegionProposalNetwork(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _TwoMLPHead(nn.Module):
     """Reference ``TwoMLPHead``: flatten → fc6 → ReLU → fc7 → ReLU."""
 
@@ -148,6 +154,7 @@ class _TwoMLPHead(nn.Module):
         self.fc6 = nn.Linear(in_channels, representation_size)
         self.fc7 = nn.Linear(representation_size, representation_size)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = x.flatten(1)
         x = F.relu(cast(Tensor, self.fc6(x)))
@@ -155,6 +162,7 @@ class _TwoMLPHead(nn.Module):
         return x
 
 
+@final
 class _FastRCNNPredictor(nn.Module):
     """Reference ``FastRCNNPredictor``: sibling cls_score + bbox_pred."""
 
@@ -163,10 +171,12 @@ class _FastRCNNPredictor(nn.Module):
         self.cls_score = nn.Linear(in_channels, num_classes)
         self.bbox_pred = nn.Linear(in_channels, num_classes * 4)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         return cast(Tensor, self.cls_score(x)), cast(Tensor, self.bbox_pred(x))
 
 
+@final
 class _RoIHeads(nn.Module):
     """RoI heads container — ``box_head`` (TwoMLPHead) + ``box_predictor``."""
 
@@ -183,6 +193,7 @@ class _RoIHeads(nn.Module):
         )
         self.box_predictor = _FastRCNNPredictor(representation_size, num_classes)
 
+    @override
     def forward(self, roi_feats: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         feats = cast(Tensor, self.box_head(roi_feats))
         return cast(tuple[Tensor, Tensor], self.box_predictor(feats))
@@ -383,6 +394,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     # Forward
     # ------------------------------------------------------------------
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

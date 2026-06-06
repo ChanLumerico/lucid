@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, overload
+from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, final, overload
 
 if TYPE_CHECKING:
     import numpy as np
@@ -2706,6 +2706,7 @@ class Tensor:
             _C_engine.reshape(self._impl, list(other._impl.shape))
         )
 
+    @final
     class _UntypedStorage:
         """Minimal storage object returned by :meth:`Tensor.untyped_storage`."""
 

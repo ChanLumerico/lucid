@@ -16,7 +16,7 @@ state dicts can be ported with a flat key rename.  Top-level layout:
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -38,6 +38,7 @@ from lucid.models.text.bert._config import BERTConfig
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _BERTEmbeddings(nn.Module):
     """Word + position + token-type embedding sum, then LN + Dropout."""
 
@@ -63,6 +64,7 @@ class _BERTEmbeddings(nn.Module):
         pos = lucid.arange(config.max_position_embeddings).long().unsqueeze(0)
         self.register_buffer("position_ids", pos, persistent=False)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -89,6 +91,7 @@ class _BERTEmbeddings(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _BERTSelfAttention(nn.Module):
     """Multi-head self-attention with separate Q / K / V projections.
 
@@ -111,6 +114,7 @@ class _BERTSelfAttention(nn.Module):
         # (B, T, hidden) → (B, H, T, head_dim)
         return x.reshape(B, T, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -140,6 +144,7 @@ class _BERTSelfAttention(nn.Module):
         return ctx
 
 
+@final
 class _BERTSelfOutput(nn.Module):
     """Post-attention dense + LN + residual."""
 
@@ -149,6 +154,7 @@ class _BERTSelfOutput(nn.Module):
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self, hidden: Tensor, input_tensor: Tensor
     ) -> Tensor:
@@ -156,6 +162,7 @@ class _BERTSelfOutput(nn.Module):
         return cast(Tensor, self.LayerNorm(h + input_tensor))
 
 
+@final
 class _BERTAttention(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -163,6 +170,7 @@ class _BERTAttention(nn.Module):
         self.self = _BERTSelfAttention(config)
         self.output = _BERTSelfOutput(config)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -177,16 +185,19 @@ class _BERTAttention(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _BERTIntermediate(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         self._act_name = config.hidden_act
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return text_activation(self._act_name, cast(Tensor, self.dense(x)))
 
 
+@final
 class _BERTOutput(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -194,6 +205,7 @@ class _BERTOutput(nn.Module):
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self, hidden: Tensor, input_tensor: Tensor
     ) -> Tensor:
@@ -206,6 +218,7 @@ class _BERTOutput(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _BERTLayer(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -213,6 +226,7 @@ class _BERTLayer(nn.Module):
         self.intermediate = _BERTIntermediate(config)
         self.output = _BERTOutput(config)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -223,6 +237,7 @@ class _BERTLayer(nn.Module):
         return cast(Tensor, self.output(inter, attn_out))
 
 
+@final
 class _BERTEncoder(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -230,6 +245,7 @@ class _BERTEncoder(nn.Module):
             [_BERTLayer(config) for _ in range(config.num_hidden_layers)]
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -245,11 +261,13 @@ class _BERTEncoder(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _BERTPooler(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
 
+    @override
     def forward(self, hidden: Tensor) -> Tensor:  # type: ignore[override]
         # CLS token is position 0 by tokenization convention.
         cls_hidden = hidden[:, 0]
@@ -343,9 +361,11 @@ class BERTModel(PretrainedModel):
         self.encoder = _BERTEncoder(config)
         self.pooler = _BERTPooler(config)
 
+    @override
     def get_input_embeddings(self) -> nn.Module:
         return self.embeddings.word_embeddings
 
+    @override
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
@@ -353,6 +373,7 @@ class BERTModel(PretrainedModel):
             )
         self.embeddings.word_embeddings = value
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -378,6 +399,7 @@ class BERTModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _BERTPredictionHeadTransform(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -385,12 +407,14 @@ class _BERTPredictionHeadTransform(nn.Module):
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self._act_name = config.hidden_act
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.dense(x))
         x = text_activation(self._act_name, x)
         return cast(Tensor, self.LayerNorm(x))
 
 
+@final
 class _BERTLMPredictionHead(nn.Module):
     """Decoder linear (weight tied to input embeddings) + standalone bias."""
 
@@ -407,17 +431,20 @@ class _BERTLMPredictionHead(nn.Module):
         # ``cls.predictions.decoder.weight``.
         self.bias = nn.Parameter(lucid.zeros(config.vocab_size))
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.transform(x))
         logits = cast(Tensor, self.decoder(x))
         return logits + self.bias
 
 
+@final
 class _BERTOnlyMLMHead(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.predictions = _BERTLMPredictionHead(config)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.predictions(x))
 
@@ -499,6 +526,7 @@ class BERTForMaskedLM(PretrainedModel, MaskedLMMixin):
             self.bert.embeddings.word_embeddings.weight
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -586,6 +614,7 @@ class BERTForSequenceClassification(PretrainedModel):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -682,6 +711,7 @@ class BERTForTokenClassification(PretrainedModel, MaskedLMMixin):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -770,6 +800,7 @@ class BERTForQuestionAnswering(PretrainedModel):
         self.bert = BERTModel(config)
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -809,7 +840,7 @@ class BERTForQuestionAnswering(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass
+@dataclass(slots=True)
 class BERTForPreTrainingOutput(ModelOutput):
     r"""Combined output for :class:`BERTForPreTraining`.
 
@@ -861,15 +892,18 @@ class BERTForPreTrainingOutput(ModelOutput):
     nsp_loss: Tensor | None = None
 
 
+@final
 class _BERTOnlyNSPHead(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
+    @override
     def forward(self, pooled_output: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.seq_relationship(pooled_output))
 
 
+@final
 class _BERTPreTrainingHeads(nn.Module):
     """MLM prediction head + NSP head — used by :class:`BERTForPreTraining`."""
 
@@ -878,6 +912,7 @@ class _BERTPreTrainingHeads(nn.Module):
         self.predictions = _BERTLMPredictionHead(config)
         self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
+    @override
     def forward(  # type: ignore[override]
         self, sequence_output: Tensor, pooled_output: Tensor
     ) -> tuple[Tensor, Tensor]:
@@ -957,6 +992,7 @@ class BERTForPreTraining(PretrainedModel, MaskedLMMixin):
                 self.bert.embeddings.word_embeddings.weight
             )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -1065,6 +1101,7 @@ class BERTForNextSentencePrediction(PretrainedModel):
         self.bert = BERTModel(config)
         self.cls = _BERTOnlyNSPHead(config)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -1186,6 +1223,7 @@ class BERTForCausalLM(PretrainedModel):
         pad_add = pad_add.reshape(B, 1, 1, T)
         return causal_add + pad_add
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,

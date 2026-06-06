@@ -49,7 +49,7 @@ Loss (training)
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -119,7 +119,7 @@ from lucid.models._utils._detection import (
     extend further.
     """,
 )
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class YOLOV4Config(ModelConfig):
     """Configuration for YOLOv4.
 
@@ -194,12 +194,14 @@ class _ConvBnLeaky(nn.Module):
         )
         self.bn = nn.BatchNorm2d(out_ch)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.leaky_relu(
             cast(Tensor, self.bn(cast(Tensor, self.conv(x)))), negative_slope=0.1
         )
 
 
+@final
 class _ConvBnMish(nn.Module):
     """Conv2d(bias=False) → BatchNorm2d → Mish.
 
@@ -223,6 +225,7 @@ class _ConvBnMish(nn.Module):
         self.bn = nn.BatchNorm2d(out_ch)
         self.act = nn.Mish()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.act(cast(Tensor, self.bn(cast(Tensor, self.conv(x))))))
 
@@ -232,6 +235,7 @@ class _ConvBnMish(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CSPBottleneck(nn.Module):
     """One CSP bottleneck unit (1×1 → 3×3) used inside _CSPBlock.
 
@@ -244,10 +248,12 @@ class _CSPBottleneck(nn.Module):
         self.conv1 = _ConvBnMish(ch, mid, 1)
         self.conv2 = _ConvBnMish(mid, ch, 3)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return x + cast(Tensor, self.conv2(cast(Tensor, self.conv1(x))))
 
 
+@final
 class _CSPBlock(nn.Module):
     """CSP block: split input into two routes, apply residuals to one, concat.
 
@@ -276,6 +282,7 @@ class _CSPBlock(nn.Module):
         )
         self.merge = Conv(in_ch, in_ch, 1)  # after concat
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r1 = cast(Tensor, self.route1(x))
         r2 = cast(Tensor, self.bottlenecks(cast(Tensor, self.route2(x))))
@@ -288,6 +295,7 @@ class _CSPBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CSPDarknet53(nn.Module):
     """CSPDarknet-53 backbone.
 
@@ -322,6 +330,7 @@ class _CSPDarknet53(nn.Module):
         self.down5 = _ConvBnMish(512, 1024, 3, stride=2)
         self.csp5 = _CSPBlock(1024, 4, act="mish")
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.csp1(cast(Tensor, self.down1(x))))
@@ -340,6 +349,7 @@ class _CSPDarknet53(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SPP(nn.Module):
     """Spatial Pyramid Pooling module used at P5.
 
@@ -372,6 +382,7 @@ class _SPP(nn.Module):
             _ConvBnLeaky(out_ch, out_ch, 1),
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.pre(x))  # (B, half, H, W)
         p5 = cast(Tensor, self.pool5(x))
@@ -386,6 +397,7 @@ class _SPP(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PANetNeck(nn.Module):
     """Path Aggregation Network neck.
 
@@ -425,6 +437,7 @@ class _PANetNeck(nn.Module):
         self.p4_down = _ConvBnLeaky(256, 256, 3, stride=2)
         self.p5_csp_bu = _CSPBlock(512, 2)  # 256+256 → 512ch
 
+    @override
     def forward(  # type: ignore[override]
         self,
         p3: Tensor,
@@ -906,6 +919,7 @@ class YOLOV4ForObjectDetection(PretrainedModel):
             nn.Conv2d(512, nA * (5 + C), 1, bias=True),
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

@@ -13,6 +13,7 @@ pattern so there is no in-place assignment.
 
 import math
 from dataclasses import dataclass
+from typing import final, override
 
 import lucid
 from lucid._tensor import Tensor
@@ -21,7 +22,8 @@ from lucid.utils.transforms import functional as F
 from lucid.utils.transforms._base import PhotometricTransform
 
 
-@dataclass(frozen=True)
+@final
+@dataclass(frozen=True, slots=True)
 class _ErasingParams:
     """Sampled erase rectangle + fill tensor (or no-op when no fit found)."""
 
@@ -110,6 +112,7 @@ class RandomErasing(PhotometricTransform[_ErasingParams]):
         self.ratio = ratio
         self.value = value
 
+    @override
     def make_params(self, img: Tensor) -> _ErasingParams:
         h, w = F._spatial_hw(img)
         c = int(img.shape[-3])
@@ -141,6 +144,7 @@ class RandomErasing(PhotometricTransform[_ErasingParams]):
         col = lucid.tensor(list(v), dtype=img.dtype).reshape(c, 1, 1)
         return col * lucid.ones(c, eh, ew, dtype=img.dtype)
 
+    @override
     def _apply_image(self, img: Tensor, params: _ErasingParams) -> Tensor:
         if params.fill is None:
             return img
@@ -175,6 +179,7 @@ class RandomErasing(PhotometricTransform[_ErasingParams]):
             fill_padded = fill_padded[None]
         return img * keep_c + fill_padded
 
+    @override
     def __repr__(self) -> str:
         return (
             f"RandomErasing(p={self.p}, scale={self.scale}, "

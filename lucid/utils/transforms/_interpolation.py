@@ -6,6 +6,7 @@ while the value still flows straight into
 """
 
 import enum
+from typing import override
 
 
 class Interpolation(str, enum.Enum):
@@ -23,6 +24,7 @@ class Interpolation(str, enum.Enum):
     TRILINEAR = "trilinear"
     AREA = "area"
 
+    @override
     def __str__(self) -> str:
         return self.value
 

@@ -45,7 +45,7 @@ re-use the compiled matcher across encode calls.
 
 import os
 import re
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -134,24 +134,29 @@ class RegexTokenizer(Tokenizer):
         """The original regex source — useful for serialisation."""
         return self._pattern_str
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Total number of tokens in the vocab."""
         return len(self._vocab)
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier — always ``"regex"``."""
         return "regex"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return a copy of the token-string → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Algorithm-specific encode: regex-match chunks → ids."""
         unk = self.unk_token_id
@@ -165,6 +170,7 @@ class RegexTokenizer(Tokenizer):
                 out.append(unk)
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Algorithm-specific decode: join known ids with a single space."""
         # Regex tokenizer has no canonical reconstruction — the
@@ -210,6 +216,7 @@ class RegexTokenizer(Tokenizer):
         self._id_to_token = {i: t for t, i in v.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Persist vocab + regex pattern + unified ``tokenizer.json``.
 
@@ -230,6 +237,7 @@ class RegexTokenizer(Tokenizer):
             f.write(self._pattern_str)
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Add ``model`` block (type / pattern / vocab) to ``tokenizer.json``."""
         return {
@@ -356,28 +364,34 @@ class RegexTokenizerFast(Tokenizer):
         """The original regex source — useful for serialisation."""
         return self._pattern_str
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Total number of tokens in the vocab (queried via C++)."""
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier — always ``"regex"``."""
         return "regex"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return a copy of the cached token-string → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """C++ encode path — single binding call per text."""
         return list(self._cpp.encode(text))
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """C++ decode path — returns the joined surface form."""
         return self._cpp.decode(list(ids))
@@ -404,6 +418,7 @@ class RegexTokenizerFast(Tokenizer):
         self._refresh_special_ids()
         self._sync_specials_to_cpp()
 
+    @override
     def save(self, directory: str) -> None:
         """Same on-disk format as :meth:`RegexTokenizer.save`.
 
@@ -420,6 +435,7 @@ class RegexTokenizerFast(Tokenizer):
             f.write(self._pattern_str)
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Add ``model`` block (type / pattern / vocab) to ``tokenizer.json``."""
         return {

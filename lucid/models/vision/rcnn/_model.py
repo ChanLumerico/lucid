@@ -23,7 +23,7 @@ Faithfulness notes
   deltas), matching the paper's formulation.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -43,6 +43,7 @@ from lucid.models.vision.rcnn._config import RCNNConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ConvFeatures(nn.Module):
     """AlexNet convolutional trunk applied to warped RoI crops.
 
@@ -86,6 +87,7 @@ class _ConvFeatures(nn.Module):
         )
         self.out_dim: int = 256 * 6 * 6  # = 9 216 for 227 × 227 input
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.features(x))
         return x.flatten(1)  # (N, 9216)
@@ -96,6 +98,7 @@ class _ConvFeatures(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _FCHead(nn.Module):
     """Two-layer FC trunk followed by dual prediction heads.
 
@@ -125,6 +128,7 @@ class _FCHead(nn.Module):
         self.cls_head = nn.Linear(4096, num_classes + 1)
         self.bbox_head = nn.Linear(4096, num_classes * 4)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         x = F.relu(cast(Tensor, self.fc6(x)))
         x = cast(Tensor, self.drop(x))
@@ -326,6 +330,7 @@ class RCNNForObjectDetection(PretrainedModel):
     # Forward
     # ------------------------------------------------------------------
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

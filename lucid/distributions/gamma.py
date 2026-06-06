@@ -6,6 +6,8 @@ expected reject rate is well under 5 % per sample, so 8 rounds drives
 the residual probability of any unsampled cell below ``2 ** −60``.
 """
 
+from typing import override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
@@ -206,6 +208,7 @@ class Gamma(ExponentialFamily):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Gamma distribution.
@@ -226,6 +229,7 @@ class Gamma(ExponentialFamily):
         """
         return self.concentration / self.rate
 
+    @override
     @property
     def mode(self) -> Tensor:
         r"""Mode of the Gamma distribution.
@@ -250,6 +254,7 @@ class Gamma(ExponentialFamily):
         """
         return ((self.concentration - 1.0).clip(0.0, float("inf"))) / self.rate
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Gamma distribution.
@@ -270,6 +275,7 @@ class Gamma(ExponentialFamily):
         """
         return self.concentration / (self.rate * self.rate)
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Gamma distribution.
 
@@ -297,6 +303,7 @@ class Gamma(ExponentialFamily):
         std = _sample_standard_gamma(self.concentration, sample_shape)
         return (std / self.rate).detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Gamma distribution.
 
@@ -327,6 +334,7 @@ class Gamma(ExponentialFamily):
             - lucid.lgamma(self.concentration)
         )
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Gamma distribution (in nats).
 
@@ -584,6 +592,7 @@ class Beta(ExponentialFamily):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Beta distribution.
@@ -604,6 +613,7 @@ class Beta(ExponentialFamily):
         """
         return self.concentration1 / (self.concentration1 + self.concentration0)
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Beta distribution.
@@ -628,6 +638,7 @@ class Beta(ExponentialFamily):
         ab = a + b
         return (a * b) / (ab * ab * (ab + 1.0))
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Beta distribution.
 
@@ -663,6 +674,7 @@ class Beta(ExponentialFamily):
         y = _sample_standard_gamma(self.concentration0, sample_shape)
         return (x / (x + y)).detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Beta distribution.
 
@@ -687,6 +699,7 @@ class Beta(ExponentialFamily):
         log_b = lucid.lgamma(a) + lucid.lgamma(b) - lucid.lgamma(a + b)
         return (a - 1.0) * value.log() + (b - 1.0) * (1.0 - value).log() - log_b
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Beta distribution (in nats).
 
@@ -850,6 +863,7 @@ class Dirichlet(ExponentialFamily):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Dirichlet distribution.
@@ -873,6 +887,7 @@ class Dirichlet(ExponentialFamily):
         s = self.concentration.sum(dim=-1, keepdim=True)
         return self.concentration / s
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Dirichlet distribution (component-wise).
@@ -894,6 +909,7 @@ class Dirichlet(ExponentialFamily):
         m = a / s
         return m * (1.0 - m) / (s + 1.0)
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Dirichlet distribution.
 
@@ -926,6 +942,7 @@ class Dirichlet(ExponentialFamily):
         gammas = _sample_standard_gamma(self.concentration, sample_shape)
         return (gammas / gammas.sum(dim=-1, keepdim=True)).detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Dirichlet distribution.
 
@@ -948,6 +965,7 @@ class Dirichlet(ExponentialFamily):
         log_b = lucid.lgamma(a).sum(dim=-1) - lucid.lgamma(a.sum(dim=-1))
         return ((a - 1.0) * value.log()).sum(dim=-1) - log_b
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Dirichlet distribution (in nats).
 

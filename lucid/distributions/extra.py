@@ -7,6 +7,7 @@ approximations or clamping where analytic expressions degenerate.
 """
 
 import math
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -128,16 +129,19 @@ class Gumbel(Distribution):
         )
 
     @property
+    @override
     def mean(self) -> Tensor:
         """``μ + s · γ`` where ``γ`` is the Euler–Mascheroni constant."""
         return self.loc + self.scale * _EULER_GAMMA
 
     @property
+    @override
     def variance(self) -> Tensor:
         """``(π · s)² / 6``."""
         return (math.pi * self.scale) ** 2 / 6.0
 
     @property
+    @override
     def mode(self) -> Tensor:
         """Mode of the Gumbel distribution.
 
@@ -149,6 +153,7 @@ class Gumbel(Distribution):
         """
         return self.loc
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Reparameterised sample via the Gumbel icdf: ``μ − s · log(−log U)``."""
         shape = self._extended_shape(sample_shape)
@@ -157,6 +162,7 @@ class Gumbel(Distribution):
         u = lucid.clamp(u, min=1e-6, max=1.0 - 1e-6)
         return self.loc - self.scale * (-(u.log())).log()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Gumbel distribution.
 
@@ -174,6 +180,7 @@ class Gumbel(Distribution):
         z: Tensor = (value - self.loc) / self.scale
         return -(z + (-z).exp()) - self.scale.log()
 
+    @override
     def entropy(self) -> Tensor:
         """``log(s) + γ + 1``."""
         return self.scale.log() + _EULER_GAMMA + 1.0
@@ -280,22 +287,26 @@ class InverseGamma(Distribution):
         )
 
     @property
+    @override
     def mean(self) -> Tensor:
         """Defined for ``concentration > 1``: ``β / (α − 1)``."""
         return self.rate / (self.concentration - 1.0)
 
     @property
+    @override
     def variance(self) -> Tensor:
         """Defined for ``concentration > 2``:
         ``β² / ((α − 1)² (α − 2))``."""
         c, r = self.concentration, self.rate
         return r * r / ((c - 1.0) ** 2 * (c - 2.0))
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Sample by taking the reciprocal of a ``Gamma`` sample."""
         y: Tensor = self._gamma.sample(sample_shape)
         return (1.0 / y).detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Inverse-Gamma distribution.
 
@@ -313,6 +324,7 @@ class InverseGamma(Distribution):
         c, r = self.concentration, self.rate
         return c * r.log() - lucid.lgamma(c) - (c + 1.0) * value.log() - r / value
 
+    @override
     def entropy(self) -> Tensor:
         """``α + log β + log Γ(α) − (1 + α) · ψ(α)``."""
         c, r = self.concentration, self.rate
@@ -421,6 +433,7 @@ class Kumaraswamy(Distribution):
         )
 
     @property
+    @override
     def mean(self) -> Tensor:
         """``E[X] = b · B(1 + 1/a, b)`` expressed via ``lgamma``."""
         a, b = self.concentration1, self.concentration0
@@ -433,6 +446,7 @@ class Kumaraswamy(Distribution):
         return log_mean.exp()
 
     @property
+    @override
     def variance(self) -> Tensor:
         """``Var[X] = E[X²] − E[X]²``  where ``E[X²] = b · B(1 + 2/a, b)``."""
         a, b = self.concentration1, self.concentration0
@@ -444,6 +458,7 @@ class Kumaraswamy(Distribution):
         )
         return log_sq_mean.exp() - self.mean**2
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Reparameterised sample via the icdf:
         ``x = (1 − (1 − U)^(1/b))^(1/a)``."""
@@ -457,6 +472,7 @@ class Kumaraswamy(Distribution):
         a, b = self.concentration1, self.concentration0
         return (1.0 - (1.0 - u) ** (1.0 / b)) ** (1.0 / a)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Kumaraswamy distribution.
 
@@ -478,6 +494,7 @@ class Kumaraswamy(Distribution):
             + (b - 1.0) * (1.0 - value**a).log()
         )
 
+    @override
     def entropy(self) -> Tensor:
         """Entropy via the Beta-distributed auxiliary variable Y = X^a.
 
@@ -618,6 +635,7 @@ class Multinomial(Distribution):
         )
 
     @property
+    @override
     def support(self) -> Constraint:  # type: ignore[override]
         """Support of the distribution: non-negative integers.
 
@@ -673,16 +691,19 @@ class Multinomial(Distribution):
         return self._total_count
 
     @property
+    @override
     def mean(self) -> Tensor:
         """``n · p`` (element-wise)."""
         return self._total_count * self._probs
 
     @property
+    @override
     def variance(self) -> Tensor:
         """``n · p · (1 − p)`` (element-wise)."""
         p: Tensor = self._probs
         return self._total_count * p * (1.0 - p)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         """``log C(n; k₁,…,kK) + Σ kᵢ log pᵢ``."""
         n: Tensor = self._total_count
@@ -694,6 +715,7 @@ class Multinomial(Distribution):
         log_p_term: Tensor = (value * self._probs.log()).sum(dim=-1)
         return log_coeff + log_p_term
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw samples by summing one-hot Categorical draws."""
         from lucid.distributions.categorical import Categorical
@@ -873,6 +895,7 @@ class ContinuousBernoulli(Distribution):
     # -- distribution interface ------------------------------------------------
 
     @property
+    @override
     def mean(self) -> Tensor:
         """``p / (2p−1) + 1 / (2 atanh(1−2p))``; ``½`` when ``p = ½``."""
         p: Tensor = self._probs
@@ -887,6 +910,7 @@ class ContinuousBernoulli(Distribution):
         return lucid.where(abs_u < eps, near, stable)
 
     @property
+    @override
     def variance(self) -> Tensor:
         """``E[X²] − E[X]²``; ``E[X²]`` computed via the same normaliser trick."""
         p: Tensor = self._probs
@@ -912,6 +936,7 @@ class ContinuousBernoulli(Distribution):
         sq_mean: Tensor = lucid.where(abs_u < eps, sq_mean_near, sq_mean_stable)
         return lucid.clamp(sq_mean - mean_val * mean_val, min=0.0)  # type: ignore[call-arg]
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Reparameterised sample via the closed-form icdf."""
         shape = self._extended_shape(sample_shape)
@@ -936,6 +961,7 @@ class ContinuousBernoulli(Distribution):
         near_x: Tensor = u  # uniform limit at p = ½
         return lucid.clamp(lucid.where(abs_d < eps, near_x, stable_x), min=0.0, max=1.0)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         """``x · l − softplus(l) + log C(p)``."""
         l: Tensor = self._logits

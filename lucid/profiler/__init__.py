@@ -13,7 +13,7 @@ Usage:
 """
 
 from contextlib import contextmanager
-from typing import Iterator, TYPE_CHECKING
+from typing import Iterator, override, TYPE_CHECKING
 from lucid._C import engine as _C_engine
 
 
@@ -85,6 +85,7 @@ class OpEvent:
         """Net memory allocated by this operation in bytes."""
         return int(self._impl.memory_delta_bytes)
 
+    @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         return (
@@ -154,6 +155,7 @@ class ProfileSummary:
         """Total FLOPs across all calls."""
         return sum(e.flops for e in self._events)
 
+    @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         return (
@@ -214,6 +216,7 @@ class MemoryStats:
         """Number of deallocations."""
         return int(self._impl.free_count)
 
+    @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         return (

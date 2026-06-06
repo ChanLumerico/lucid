@@ -4,11 +4,9 @@ Gradient mode context managers and decorators.
 
 import functools
 from contextlib import contextmanager
-from typing import Callable, Iterator, TypeVar
+from typing import Callable, Iterator
 
 from lucid._C import engine as _C_engine
-
-_F = TypeVar("_F", bound=Callable[..., object])
 
 
 class no_grad:
@@ -89,7 +87,7 @@ class no_grad:
         """Exit the context, restoring any state that was modified on entry."""
         _C_engine.set_grad_enabled(self._prev)
 
-    def __call__(self, fn: _F) -> _F:
+    def __call__[F: Callable[..., object]](self, fn: F) -> F:
         """Forward to the underlying callable (see class docstring)."""
 
         @functools.wraps(fn)
@@ -163,7 +161,7 @@ class enable_grad:
         """Exit the context, restoring any state that was modified on entry."""
         _C_engine.set_grad_enabled(self._prev)
 
-    def __call__(self, fn: _F) -> _F:
+    def __call__[F: Callable[..., object]](self, fn: F) -> F:
         """Forward to the underlying callable (see class docstring)."""
 
         @functools.wraps(fn)

@@ -5,7 +5,7 @@
 # fmt: off
 
 from contextlib import AbstractContextManager
-from typing import Sequence
+from typing import Callable, Sequence, overload
 import builtins
 
 _float = builtins.float
@@ -108,6 +108,29 @@ from lucid import metal as metal
 from lucid import backends as backends
 from lucid import test as test
 from lucid import dtypes as dtypes
+
+# ── lucid.compile (callable module) ───────────────────────────────────────────
+# ``lucid.compile`` is a *callable module*: its runtime class is swapped to a
+# ModuleType subclass so ``lucid.compile(model)`` works.  Type checkers can't
+# model a callable module, so the stub advertises ``compile`` as an overloaded,
+# signature-preserving function instead of re-exporting the submodule.  This is
+# what lets ``compiled = lucid.compile(fn); compiled(x, y)`` keep ``fn``'s
+# parameter list + return type.  Submodule symbols stay importable via the
+# explicit ``from lucid.compile import CompiledModule`` form below and direct
+# ``from lucid.compile._entry... import ...`` paths.
+from lucid.compile import CompiledModule as CompiledModule
+
+class _CompileDecorator:
+    def __call__[**P, R](
+        self, target: Callable[P, R], /
+    ) -> CompiledModule[P, R]: ...
+
+@overload
+def compile[**P, R](
+    target: Callable[P, R], *, dynamic: _bool = ...
+) -> CompiledModule[P, R]: ...
+@overload
+def compile(*, dynamic: _bool = ...) -> _CompileDecorator: ...
 
 # ── Type predicates ───────────────────────────────────────────────────────────
 def is_tensor(obj: object) -> _bool: ...

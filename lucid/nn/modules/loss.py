@@ -2,10 +2,13 @@
 Loss function modules.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from collections.abc import Callable
 
+from lucid._types import Reduction, ReductionKL
 from lucid.nn.functional.loss import (
     mse_loss,
     l1_loss,
@@ -93,11 +96,12 @@ class MSELoss(Module):
     >>> loss = criterion(x, y)  # shape (2, 2)
     """
 
-    def __init__(self, reduction: str = "mean") -> None:
+    def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the MSELoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -115,6 +119,7 @@ class MSELoss(Module):
         """
         return mse_loss(x, target, self.reduction)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -185,11 +190,12 @@ class L1Loss(Module):
     >>> loss = criterion(x, y)  # shape (2, 2): [[1., 2.], [0., 2.]]
     """
 
-    def __init__(self, reduction: str = "mean") -> None:
+    def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the L1Loss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -207,6 +213,7 @@ class L1Loss(Module):
         """
         return l1_loss(x, target, self.reduction)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -315,7 +322,7 @@ class CrossEntropyLoss(Module):
         self,
         weight: Tensor | None = None,
         ignore_index: int = -100,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
         label_smoothing: float = 0.0,
     ) -> None:
         """Initialise the CrossEntropyLoss module. See the class docstring for parameter semantics."""
@@ -325,6 +332,7 @@ class CrossEntropyLoss(Module):
         self.reduction = reduction
         self.label_smoothing = label_smoothing
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -349,6 +357,7 @@ class CrossEntropyLoss(Module):
             label_smoothing=self.label_smoothing,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -438,14 +447,15 @@ class NLLLoss(Module):
         self,
         weight: Tensor | None = None,
         ignore_index: int = -100,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
     ) -> None:
         """Initialise the NLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.weight: Tensor | None = weight
         self.ignore_index: int = ignore_index
-        self.reduction: str = reduction
+        self.reduction: Reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -469,6 +479,7 @@ class NLLLoss(Module):
             reduction=self.reduction,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"reduction={self.reduction!r}"
@@ -547,13 +558,14 @@ class BCELoss(Module):
     def __init__(
         self,
         weight: Tensor | None = None,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
     ) -> None:
         """Initialise the BCELoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.weight: Tensor | None = weight
-        self.reduction: str = reduction
+        self.reduction: Reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -573,6 +585,7 @@ class BCELoss(Module):
             x, target, weight=self.weight, reduction=self.reduction
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -666,15 +679,16 @@ class BCEWithLogitsLoss(Module):
     def __init__(
         self,
         weight: Tensor | None = None,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
         pos_weight: Tensor | None = None,
     ) -> None:
         """Initialise the BCEWithLogitsLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.weight: Tensor | None = weight
-        self.reduction: str = reduction
+        self.reduction: Reduction = reduction
         self.pos_weight: Tensor | None = pos_weight
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -698,6 +712,7 @@ class BCEWithLogitsLoss(Module):
             reduction=self.reduction,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -777,12 +792,13 @@ class HuberLoss(Module):
     >>> loss = criterion(x, y)
     """
 
-    def __init__(self, reduction: str = "mean", delta: float = 1.0) -> None:
+    def __init__(self, reduction: Reduction = "mean", delta: float = 1.0) -> None:
         """Initialise the HuberLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
         self.delta = delta
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -800,6 +816,7 @@ class HuberLoss(Module):
         """
         return huber_loss(x, target, self.delta, self.reduction)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"delta={self.delta}, reduction={self.reduction!r}"
@@ -875,12 +892,13 @@ class SmoothL1Loss(Module):
     >>> loss = criterion(x, y)
     """
 
-    def __init__(self, reduction: str = "mean", beta: float = 1.0) -> None:
+    def __init__(self, reduction: Reduction = "mean", beta: float = 1.0) -> None:
         """Initialise the SmoothL1Loss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
         self.beta = beta
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -898,6 +916,7 @@ class SmoothL1Loss(Module):
         """
         return smooth_l1_loss(x, target, beta=self.beta, reduction=self.reduction)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"beta={self.beta}, reduction={self.reduction!r}"
@@ -983,12 +1002,13 @@ class KLDivLoss(Module):
     >>> loss = criterion(log_p, log_q)
     """
 
-    def __init__(self, reduction: str = "mean", log_target: bool = False) -> None:
+    def __init__(self, reduction: ReductionKL = "mean", log_target: bool = False) -> None:
         """Initialise the KLDivLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
         self.log_target = log_target
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1006,6 +1026,7 @@ class KLDivLoss(Module):
         """
         return kl_div(x, target, reduction=self.reduction, log_target=self.log_target)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}, log_target={self.log_target}"
@@ -1108,7 +1129,7 @@ class TripletMarginLoss(Module):
         p: float = 2.0,
         eps: float = 1e-6,
         swap: bool = False,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
     ) -> None:
         """Initialise the TripletMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -1118,6 +1139,7 @@ class TripletMarginLoss(Module):
         self.swap = swap
         self.reduction = reduction
 
+    @override
     def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1146,6 +1168,7 @@ class TripletMarginLoss(Module):
             reduction=self.reduction,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"margin={self.margin}, p={self.p}, reduction={self.reduction!r}"
@@ -1224,12 +1247,13 @@ class CosineEmbeddingLoss(Module):
     >>> loss = criterion(x1, x2, y)
     """
 
-    def __init__(self, margin: float = 0.0, reduction: str = "mean") -> None:
+    def __init__(self, margin: float = 0.0, reduction: Reduction = "mean") -> None:
         """Initialise the CosineEmbeddingLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.margin = margin
         self.reduction = reduction
 
+    @override
     def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1251,6 +1275,7 @@ class CosineEmbeddingLoss(Module):
             x1, x2, y, margin=self.margin, reduction=self.reduction
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"margin={self.margin}, reduction={self.reduction!r}"
@@ -1324,12 +1349,13 @@ class MarginRankingLoss(Module):
     >>> loss = criterion(x1, x2, y)
     """
 
-    def __init__(self, margin: float = 0.0, reduction: str = "mean") -> None:
+    def __init__(self, margin: float = 0.0, reduction: Reduction = "mean") -> None:
         """Initialise the MarginRankingLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.margin = margin
         self.reduction = reduction
 
+    @override
     def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1351,6 +1377,7 @@ class MarginRankingLoss(Module):
             x1, x2, y, margin=self.margin, reduction=self.reduction
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"margin={self.margin}, reduction={self.reduction!r}"
@@ -1427,12 +1454,13 @@ class HingeEmbeddingLoss(Module):
     >>> loss = criterion(dists, labels)
     """
 
-    def __init__(self, margin: float = 1.0, reduction: str = "mean") -> None:
+    def __init__(self, margin: float = 1.0, reduction: Reduction = "mean") -> None:
         """Initialise the HingeEmbeddingLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.margin = margin
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1450,6 +1478,7 @@ class HingeEmbeddingLoss(Module):
         """
         return hinge_embedding_loss(x, y, margin=self.margin, reduction=self.reduction)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"margin={self.margin}, reduction={self.reduction!r}"
@@ -1546,7 +1575,7 @@ class PoissonNLLLoss(Module):
         log_input: bool = True,
         full: bool = False,
         eps: float = 1e-8,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
     ) -> None:
         """Initialise the PoissonNLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -1555,6 +1584,7 @@ class PoissonNLLLoss(Module):
         self.eps = eps
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1579,6 +1609,7 @@ class PoissonNLLLoss(Module):
             reduction=self.reduction,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"log_input={self.log_input}, reduction={self.reduction!r}"
@@ -1666,7 +1697,7 @@ class GaussianNLLLoss(Module):
         self,
         full: bool = False,
         eps: float = 1e-6,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
     ) -> None:
         """Initialise the GaussianNLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -1674,6 +1705,7 @@ class GaussianNLLLoss(Module):
         self.eps = eps
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor, var: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1695,6 +1727,7 @@ class GaussianNLLLoss(Module):
             x, target, var, full=self.full, eps=self.eps, reduction=self.reduction
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -1791,7 +1824,7 @@ class CTCLoss(Module):
     def __init__(
         self,
         blank: int = 0,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
         zero_infinity: bool = False,
     ) -> None:
         """Initialise the CTCLoss module. See the class docstring for parameter semantics."""
@@ -1800,6 +1833,7 @@ class CTCLoss(Module):
         self.reduction = reduction
         self.zero_infinity = zero_infinity
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         log_probs: Tensor,
@@ -1835,6 +1869,7 @@ class CTCLoss(Module):
             zero_infinity=self.zero_infinity,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"blank={self.blank}, reduction={self.reduction!r}"
@@ -1923,7 +1958,7 @@ class MultiMarginLoss(Module):
         p: int = 1,
         margin: float = 1.0,
         weight: Tensor | None = None,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
     ) -> None:
         """Initialise the MultiMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -1932,6 +1967,7 @@ class MultiMarginLoss(Module):
         self.weight = weight
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -1956,6 +1992,7 @@ class MultiMarginLoss(Module):
             reduction=self.reduction,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"p={self.p}, margin={self.margin}, reduction={self.reduction!r}"
@@ -2026,11 +2063,12 @@ class MultilabelMarginLoss(Module):
     >>> loss = criterion(scores, target)
     """
 
-    def __init__(self, reduction: str = "mean") -> None:
+    def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the MultilabelMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -2048,6 +2086,7 @@ class MultilabelMarginLoss(Module):
         """
         return multilabel_margin_loss(x, target, reduction=self.reduction)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -2168,11 +2207,12 @@ class SoftMarginLoss(Module):
     >>> loss = criterion(x, y)  # shape (2,)
     """
 
-    def __init__(self, reduction: str = "mean") -> None:
+    def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the SoftMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -2190,6 +2230,7 @@ class SoftMarginLoss(Module):
         """
         return soft_margin_loss(x, target, reduction=self.reduction)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -2269,12 +2310,13 @@ class MultiLabelSoftMarginLoss(Module):
     >>> loss = criterion(logits, targets)
     """
 
-    def __init__(self, weight: Tensor | None = None, reduction: str = "mean") -> None:
+    def __init__(self, weight: Tensor | None = None, reduction: Reduction = "mean") -> None:
         """Initialise the MultiLabelSoftMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.weight = weight
         self.reduction = reduction
 
+    @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Compute the loss between predictions and targets.
 
@@ -2294,6 +2336,7 @@ class MultiLabelSoftMarginLoss(Module):
             x, target, weight=self.weight, reduction=self.reduction
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"reduction={self.reduction!r}"
@@ -2396,7 +2439,7 @@ class TripletMarginWithDistanceLoss(Module):
         distance_function: Callable[[Tensor, Tensor], Tensor] | None = None,
         margin: float = 1.0,
         swap: bool = False,
-        reduction: str = "mean",
+        reduction: Reduction = "mean",
     ) -> None:
         """Initialise the TripletMarginWithDistanceLoss module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -2413,6 +2456,7 @@ class TripletMarginWithDistanceLoss(Module):
         self.swap = swap
         self.reduction = reduction
 
+    @override
     def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # Delegate to the functional implementation so the F. and nn.
         # surfaces stay byte-equivalent.
@@ -2444,6 +2488,7 @@ class TripletMarginWithDistanceLoss(Module):
             reduction=self.reduction,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (

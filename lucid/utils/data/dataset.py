@@ -2,7 +2,7 @@
 Dataset base classes and implementations.
 """
 
-from typing import Iterator, TYPE_CHECKING
+from typing import Iterator, TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -182,6 +182,7 @@ class TensorDataset(Dataset):
                 )
         self.tensors = tensors
 
+    @override
     def __getitem__(self, index: int) -> tuple[Tensor, ...]:
         """Return ``(t[index] for t in self.tensors)`` as a tuple.
 
@@ -257,6 +258,7 @@ class TensorDataset(Dataset):
             out.append(t[cached])
         return tuple(out)
 
+    @override
     def __len__(self) -> int:
         """Return the leading-dimension size shared by all wrapped tensors."""
         return self.tensors[0].shape[0]
@@ -303,10 +305,12 @@ class ConcatDataset(Dataset):
             result.append(total)
         return result
 
+    @override
     def __len__(self) -> int:
         """Return the total length — sum of all child dataset lengths."""
         return self.cumulative_sizes[-1] if self.cumulative_sizes else 0
 
+    @override
     def __getitem__(self, idx: int) -> Tensor | tuple[Tensor, ...]:
         """Return the sample at the given global index.
 
@@ -370,10 +374,12 @@ class Subset(Dataset):
         self.dataset = dataset
         self.indices = indices
 
+    @override
     def __len__(self) -> int:
         """Return the number of indices in the subset."""
         return len(self.indices)
 
+    @override
     def __getitem__(self, idx: int) -> Tensor | tuple[Tensor, ...]:
         """Return ``dataset[indices[idx]]``.
 
@@ -534,6 +540,7 @@ class ChainDataset(IterableDataset):
             )
         self.datasets: list[IterableDataset] = list(datasets)
 
+    @override
     def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
         """Iterate through each child dataset in registration order.
 
@@ -619,10 +626,12 @@ class StackDataset(Dataset):
         self._keys: tuple[str, ...] | None = tuple(kwargs.keys()) if kwargs else None
         self._n: int = n
 
+    @override
     def __len__(self) -> int:
         """Return the common length shared by all bundled child datasets."""
         return self._n
 
+    @override
     def __getitem__(self, idx: int) -> tuple[object, ...] | dict[str, object]:  # type: ignore[override]
         """Return one sample drawn from each child at index ``idx``.
 

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from lucid.models.generative._schedulers import DiffusionScheduler
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FeatureInfo:
     r"""Specification of one stage emitted by a feature-extracting backbone.
 

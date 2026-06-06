@@ -10,6 +10,7 @@ channel ops, CLAHE, …) lands in later batches.
 """
 
 from dataclasses import dataclass
+from typing import override
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
@@ -19,7 +20,7 @@ from lucid.utils.transforms._base import Empty, PhotometricTransform, _NoParams
 # ── parameter types ─────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ColorJitterParams:
     r"""Sampled per-call jitter factors + the order to apply them in.
 
@@ -62,9 +63,11 @@ class ToFloat(_NoParams, PhotometricTransform[Empty]):
         super().__init__(p=p)
         self.max_value = max_value
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return img / self.max_value
 
+    @override
     def __repr__(self) -> str:
         return f"ToFloat(max_value={self.max_value}, p={self.p})"
 
@@ -91,9 +94,11 @@ class FromFloat(_NoParams, PhotometricTransform[Empty]):
         self.max_value = max_value
         self.dtype = dtype
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return img * self.max_value
 
+    @override
     def __repr__(self) -> str:
         return f"FromFloat(max_value={self.max_value}, p={self.p})"
 
@@ -125,12 +130,14 @@ class Normalize(_NoParams, PhotometricTransform[Empty]):
         self.std = tuple(std)
         self.max_pixel_value = max_pixel_value
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         mv = self.max_pixel_value
         eff_mean = tuple(m * mv for m in self.mean)
         eff_std = tuple(s * mv for s in self.std)
         return F.normalize(img, eff_mean, eff_std)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"Normalize(mean={self.mean}, std={self.std}, "
@@ -197,6 +204,7 @@ class ColorJitter(PhotometricTransform[ColorJitterParams]):
             _jitter_range(hue, center=0.0),
         )
 
+    @override
     def make_params(self, img: Tensor) -> ColorJitterParams:
         factors = [
             None if rng is None else _random.uniform(rng[0], rng[1])
@@ -214,6 +222,7 @@ class ColorJitter(PhotometricTransform[ColorJitterParams]):
             hue=factors[3],
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: ColorJitterParams) -> Tensor:
         factors = (params.brightness, params.contrast, params.saturation, params.hue)
         for idx in params.order:
@@ -222,6 +231,7 @@ class ColorJitter(PhotometricTransform[ColorJitterParams]):
                 img = self._ADJUST[idx](img, factor)
         return img
 
+    @override
     def __repr__(self) -> str:
         b, c, s, h = self._ranges
         return (

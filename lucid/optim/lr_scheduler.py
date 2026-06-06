@@ -3,7 +3,7 @@ Learning rate schedulers.
 """
 
 import math
-from typing import Callable
+from typing import Callable, override
 from lucid.optim.optimizer import Optimizer
 
 
@@ -223,6 +223,7 @@ class StepLR(_LRScheduler):
         self.gamma = gamma
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -293,6 +294,7 @@ class ExponentialLR(_LRScheduler):
         self.gamma = gamma
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -368,6 +370,7 @@ class MultiStepLR(_LRScheduler):
         self.gamma = gamma
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -448,6 +451,7 @@ class CosineAnnealingLR(_LRScheduler):
         self.eta_min = eta_min
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -534,6 +538,7 @@ class LambdaLR(_LRScheduler):
             self.lr_lambdas = list(lr_lambda)
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -650,6 +655,7 @@ class CyclicLR(_LRScheduler):
         self.gamma = gamma
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -873,6 +879,7 @@ class NoamScheduler(_LRScheduler):
         self.warmup_steps = warmup_steps
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -949,6 +956,7 @@ class MultiplicativeLR(_LRScheduler):
         self.lr_lambda = lr_lambda
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -1044,6 +1052,7 @@ class LinearLR(_LRScheduler):
         self.total_iters = total_iters
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -1130,6 +1139,7 @@ class ConstantLR(_LRScheduler):
         self.total_iters = total_iters
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -1222,6 +1232,7 @@ class PolynomialLR(_LRScheduler):
         self.eta_min = eta_min
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -1327,6 +1338,7 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         self._T_i = T_0
         super().__init__(optimizer, last_epoch, verbose)
 
+    @override
     def step(self) -> None:
         """Advance the scheduler by one step and update the optimizer learning rates.
 
@@ -1349,6 +1361,7 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         if self.verbose:
             self.print_lr(self.verbose, self.last_epoch, values)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 
@@ -1478,6 +1491,7 @@ class OneCycleLR(_LRScheduler):
     def _annealing_linear(self, start: float, end: float, pct: float) -> float:
         return start + pct * (end - start)
 
+    @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step.
 

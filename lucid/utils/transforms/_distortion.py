@@ -8,6 +8,7 @@ Albumentations' own handling of these transforms.
 """
 
 from dataclasses import dataclass
+from typing import override
 
 import lucid
 from lucid._tensor import Tensor
@@ -24,7 +25,7 @@ from lucid.utils.transforms._datatypes import (
 from lucid.utils.transforms._interpolation import Interpolation, as_interpolation
 
 
-@dataclass
+@dataclass(slots=True)
 class DispParams:
     r"""A sampled displacement field for one call (pixel units).
 
@@ -66,12 +67,15 @@ class _DisplacementTransform(GeometricTransform[DispParams]):
     def _img_mode(self) -> str:
         return "nearest" if self.interpolation == Interpolation.NEAREST else "bilinear"
 
+    @override
     def _apply_image(self, img: Tensor, params: DispParams) -> Tensor:
         return F.remap(img, params.dx, params.dy, mode=self._img_mode())
 
+    @override
     def _apply_mask(self, mask: Tensor, params: DispParams) -> Tensor:
         return F.remap(mask, params.dx, params.dy, mode="nearest")
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: DispParams) -> BoundingBoxes:
         xy = to_xyxy(boxes)
         x1, y1, x2, y2 = xy[:, 0:1], xy[:, 1:2], xy[:, 2:3], xy[:, 3:4]
@@ -103,6 +107,7 @@ class _DisplacementTransform(GeometricTransform[DispParams]):
         )
         return _rebuild(boxes, F._cat([nx1, ny1, nx2, ny2], 1), (h, w))
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: DispParams) -> Keypoints:
         x, y, rest = _kp_xy_rest(kps)
         moved = _displace_points(F._cat([x, y], 1), params)
@@ -139,6 +144,7 @@ class ElasticTransform(_DisplacementTransform):
         self.sigma = sigma
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def make_params(self, img: Tensor) -> DispParams:
         r"""Sample per-call random parameters for :class:`ElasticTransform`.
 
@@ -165,6 +171,7 @@ class ElasticTransform(_DisplacementTransform):
         dy = F.gaussian_blur(ry, self.sigma)[0, 0] * self.alpha
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return f"ElasticTransform(alpha={self.alpha}, sigma={self.sigma}, p={self.p})"
 
@@ -196,6 +203,7 @@ class GridDistortion(_DisplacementTransform):
         self.distort_limit = (-lim, lim) if isinstance(lim, (int, float)) else lim
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def make_params(self, img: Tensor) -> DispParams:
         r"""Sample per-call random parameters for :class:`GridDistortion`.
 
@@ -243,6 +251,7 @@ class GridDistortion(_DisplacementTransform):
         ]
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return (
             f"GridDistortion(num_steps={self.num_steps}, "
@@ -277,6 +286,7 @@ class OpticalDistortion(_DisplacementTransform):
         self.shift_limit = (-sl, sl) if isinstance(sl, (int, float)) else sl
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def make_params(self, img: Tensor) -> DispParams:
         r"""Sample per-call random parameters for :class:`OpticalDistortion`.
 
@@ -311,6 +321,7 @@ class OpticalDistortion(_DisplacementTransform):
         dy = (yy - cy) * factor + cy - yy
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return (
             f"OpticalDistortion(distort_limit={self.distort_limit}, "
@@ -346,6 +357,7 @@ class GridElasticDeform(_DisplacementTransform):
         self.magnitude = magnitude
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def make_params(self, img: Tensor) -> DispParams:
         r"""Sample per-call random parameters for :class:`GridElasticDeform`.
 
@@ -391,6 +403,7 @@ class GridElasticDeform(_DisplacementTransform):
         )[0, 0]
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return (
             f"GridElasticDeform(num_grid_xy={self.num_grid_xy}, "

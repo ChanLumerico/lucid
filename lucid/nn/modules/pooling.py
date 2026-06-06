@@ -2,6 +2,8 @@
 Pooling modules.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid._types import _Size2d, _Size3d
 from lucid.nn.module import Module
@@ -137,6 +139,7 @@ class MaxPool1d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -161,6 +164,7 @@ class MaxPool1d(Module):
             self.ceil_mode,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -276,6 +280,7 @@ class MaxPool2d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -300,6 +305,7 @@ class MaxPool2d(Module):
             self.ceil_mode,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -406,6 +412,7 @@ class AvgPool1d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -429,6 +436,7 @@ class AvgPool1d(Module):
             self.count_include_pad,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
@@ -532,6 +540,7 @@ class AvgPool2d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -555,6 +564,7 @@ class AvgPool2d(Module):
             self.count_include_pad,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
@@ -625,6 +635,7 @@ class AdaptiveAvgPool1d(Module):
         super().__init__()
         self.output_size = output_size
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -641,6 +652,7 @@ class AdaptiveAvgPool1d(Module):
         """
         return adaptive_avg_pool1d(x, self.output_size)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
@@ -714,6 +726,7 @@ class AdaptiveAvgPool2d(Module):
         super().__init__()
         self.output_size = output_size
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -730,6 +743,7 @@ class AdaptiveAvgPool2d(Module):
         """
         return adaptive_avg_pool2d(x, self.output_size)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
@@ -803,6 +817,7 @@ class AdaptiveMaxPool2d(Module):
             )
         self.output_size = output_size
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -819,6 +834,7 @@ class AdaptiveMaxPool2d(Module):
         """
         return adaptive_max_pool2d(x, self.output_size)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
@@ -934,6 +950,7 @@ class MaxPool3d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -950,6 +967,7 @@ class MaxPool3d(Module):
         """
         return max_pool3d(x, self.kernel_size, self.stride, self.padding)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1054,6 +1072,7 @@ class AvgPool3d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -1070,6 +1089,7 @@ class AvgPool3d(Module):
         """
         return avg_pool3d(x, self.kernel_size, self.stride, self.padding)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
@@ -1141,6 +1161,7 @@ class AdaptiveAvgPool3d(Module):
         super().__init__()
         self.output_size = output_size
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -1157,6 +1178,7 @@ class AdaptiveAvgPool3d(Module):
         """
         return adaptive_avg_pool3d(x, self.output_size)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
@@ -1236,6 +1258,7 @@ class AdaptiveMaxPool1d(Module):
             )
         self.output_size = output_size
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -1252,6 +1275,7 @@ class AdaptiveMaxPool1d(Module):
         """
         return adaptive_max_pool1d(x, self.output_size)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
@@ -1328,6 +1352,7 @@ class AdaptiveMaxPool3d(Module):
             )
         self.output_size = output_size
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -1344,6 +1369,7 @@ class AdaptiveMaxPool3d(Module):
         """
         return adaptive_max_pool3d(x, self.output_size)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
@@ -1440,6 +1466,7 @@ class LPPool1d(Module):
         self.stride = stride if stride is not None else kernel_size
         self.ceil_mode = ceil_mode
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -1469,6 +1496,7 @@ class LPPool1d(Module):
         summed = _C_engine.sum(powered, [3], False)  # (N, C, L_out)
         return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"norm_type={self.norm_type}, kernel_size={self.kernel_size}, stride={self.stride}"
@@ -1577,6 +1605,7 @@ class LPPool2d(Module):
             self.sh, self.sw = (stride, stride) if isinstance(stride, int) else stride
         self.ceil_mode = ceil_mode
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -1608,6 +1637,7 @@ class LPPool2d(Module):
         summed = _C_engine.sum(powered, [4, 5], False)  # (N, C, H_out, W_out)
         return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1699,6 +1729,7 @@ class LPPool3d(Module):
         self.stride = stride if stride is not None else kernel_size
         self.ceil_mode = ceil_mode
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -1723,6 +1754,7 @@ class LPPool3d(Module):
             ceil_mode=self.ceil_mode,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1756,6 +1788,7 @@ class _MaxUnpoolNd(Module):
         self.stride = stride if stride is not None else kernel_size
         self.padding = padding
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -1842,6 +1875,7 @@ class MaxUnpool1d(_MaxUnpoolNd):
     (1, 4, 17)
     """
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
@@ -1946,6 +1980,7 @@ class MaxUnpool2d(_MaxUnpoolNd):
     (1, 16, 15, 15)
     """
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
@@ -2036,6 +2071,7 @@ class MaxUnpool3d(_MaxUnpoolNd):
     (1, 8, 7, 7, 7)
     """
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
@@ -2164,6 +2200,7 @@ class FractionalMaxPool2d(Module):
         self.output_ratio = output_ratio
         self.return_indices = return_indices
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 
@@ -2277,6 +2314,7 @@ class FractionalMaxPool3d(Module):
         self.output_ratio = output_ratio
         self.return_indices = return_indices
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the pooling operation to the input tensor.
 

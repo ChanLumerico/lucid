@@ -28,7 +28,16 @@ Acceptance gate (Plan §1.4):
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Iterator, Mapping, Protocol, cast
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Iterator,
+    Mapping,
+    Protocol,
+    Self,
+    cast,
+    final,
+)
 
 
 # Engine-side objects exposed via pybind11; the binding doesn't carry
@@ -171,7 +180,8 @@ def _repack_outputs(spec: object, outs_wrapped: list[object]) -> object:
 __all__ = ["CompiledModule"]
 
 
-@dataclass
+@final
+@dataclass(slots=True)
 class _CacheEntry:
     """One executable + the I/O plan needed to invoke it.
 
@@ -208,8 +218,13 @@ class _CacheEntry:
     last_run_ms: float = 0.0
 
 
-class CompiledModule:
+class CompiledModule[**P, R]:
     # ── Class-level annotations ──────────────────────────────────
+    # ``CompiledModule[**P, R]`` (PEP 695) captures the wrapped model's /
+    # callable's call signature so ``compiled(*args)`` keeps the original
+    # ``forward`` parameter list + return type at the type level instead of
+    # collapsing to ``object``.  ``P``/``R`` are bound by ``lucid.compile``
+    # from the ``Callable[P, R]`` it receives.
     # All instance attrs are written via ``object.__setattr__`` to
     # bypass ``Module.__setattr__`` (we are NOT an nn.Module
     # subclass — we just delegate to one).  Declaring them at the
@@ -481,7 +496,7 @@ class CompiledModule:
         self.clear_cache()
         return result
 
-    def train(self, mode: bool = True) -> CompiledModule:
+    def train(self, mode: bool = True) -> Self:
         """Flip training mode; **clears the cache** since BN / Dropout diverge."""
         # train ↔ eval flips force different BN / Dropout codepaths
         # → recompile.  Clearing on every flip is the safe default.
@@ -489,11 +504,11 @@ class CompiledModule:
         self.clear_cache()
         return self
 
-    def eval(self) -> CompiledModule:
+    def eval(self) -> Self:
         """Shorthand for ``self.train(False)``; also clears the cache."""
         return self.train(False)
 
-    def to(self, *args: object, **kwargs: object) -> CompiledModule:
+    def to(self, *args: object, **kwargs: object) -> Self:
         """Forward to ``model.to`` and **drop the cache**.
 
         Placeholders inside the cached MPSGraph executables are
@@ -718,7 +733,7 @@ class CompiledModule:
 
     # ── Call surface ─────────────────────────────────────────────
 
-    def __call__(self, *args: object, **kwargs: object) -> object:
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         """Route the call through the per-signature executable cache.
 
         On cache hit: bind the input tensors to the cached
@@ -727,6 +742,15 @@ class CompiledModule:
         / dataclass).  On miss: trace, compile, store, run — and on
         compile failure mark the signature ``eager_only`` so future
         calls skip the recompile attempt.
+
+        Typing
+        ------
+        ``CompiledModule[**P, R]`` carries the wrapped callable's
+        signature, so this returns ``R`` (the model's ``forward``
+        return type) instead of ``object``.  The runtime is
+        signature-agnostic; the static surface mirrors what
+        :func:`lucid.compile` captured from its ``Callable[P, R]``
+        argument.
 
         Parameters
         ----------
@@ -739,10 +763,27 @@ class CompiledModule:
 
         Returns
         -------
-        object
+        R
             Same structure the underlying ``model(*args, **kwargs)``
             produces — Tensor, tuple, dataclass, etc.
         """
+        # ``P.args``/``P.kwargs`` may only be forwarded, not inspected
+        # as concrete tuple/dict (PEP 612), so cast at the boundary into
+        # the signature-agnostic dispatcher and re-tag the result as R.
+        return cast(
+            R,
+            self._dispatch_call(
+                cast(tuple[object, ...], args),
+                cast(dict[str, object], kwargs),
+            ),
+        )
+
+    def _dispatch_call(
+        self,
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
+    ) -> object:
+        """Signature-agnostic cache lookup + execute (body of :meth:`__call__`)."""
         # Hashable signature.  If the signature itself is un-hashable
         # (e.g. an exotic input that we can't fingerprint), fall back
         # to eager without poisoning the cache.

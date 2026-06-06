@@ -24,7 +24,7 @@ restricted to the original input size for ``r``/``ir`` variants.
 """
 
 import math
-from typing import Sequence, TYPE_CHECKING, cast
+from typing import Sequence, TYPE_CHECKING, cast, final, override
 
 import lucid
 from lucid._C import engine as _C_engine
@@ -174,7 +174,9 @@ def _scale(x: Tensor, s: float) -> Tensor:
 # the gradient shape alone.
 
 
+@final
 class _FftnAutograd(_AutogradFunction):
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -194,6 +196,7 @@ class _FftnAutograd(_AutogradFunction):
             out = _scale(out, scale)
         return out
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # grad_x = ifft(grad_out, dual(norm)) restricted to the input axis sizes.
@@ -205,7 +208,9 @@ class _FftnAutograd(_AutogradFunction):
         return g
 
 
+@final
 class _IfftnAutograd(_AutogradFunction):
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -225,6 +230,7 @@ class _IfftnAutograd(_AutogradFunction):
             out = _scale(out, scale)
         return out
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         dual = _dual_norm(cast(str, ctx.norm))
@@ -235,7 +241,9 @@ class _IfftnAutograd(_AutogradFunction):
         return g
 
 
+@final
 class _RfftnAutograd(_AutogradFunction):
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -256,6 +264,7 @@ class _RfftnAutograd(_AutogradFunction):
             out = _scale(out, scale)
         return out
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # rfft backward: the dual transform is irfft restricted to the original
@@ -270,7 +279,9 @@ class _RfftnAutograd(_AutogradFunction):
         return g
 
 
+@final
 class _IrfftnAutograd(_AutogradFunction):
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -291,6 +302,7 @@ class _IrfftnAutograd(_AutogradFunction):
             out = _scale(out, scale)
         return out
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # irfft backward: rfft of the real grad with the same size along the

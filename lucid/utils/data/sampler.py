@@ -5,7 +5,7 @@ Sampler classes for DataLoader.
 """
 
 import math
-from typing import Iterator
+from typing import Iterator, override
 import random
 
 
@@ -85,10 +85,12 @@ class SequentialSampler(Sampler):
         """
         self.data_source = data_source
 
+    @override
     def __iter__(self) -> Iterator[int]:
         """Yield ``0, 1, ..., len(data_source) - 1`` in order."""
         return iter(range(len(self.data_source)))
 
+    @override
     def __len__(self) -> int:
         """Return ``len(data_source)``."""
         return len(self.data_source)
@@ -167,6 +169,7 @@ class RandomSampler(Sampler):
             else len(self.data_source)
         )
 
+    @override
     def __iter__(self) -> Iterator[int]:
         """Yield ``num_samples`` indices according to the configured strategy.
 
@@ -187,6 +190,7 @@ class RandomSampler(Sampler):
             random.shuffle(perm)
             yield from perm[: self.num_samples]
 
+    @override
     def __len__(self) -> int:
         """Return :attr:`num_samples`."""
         return self.num_samples
@@ -235,12 +239,14 @@ class SubsetRandomSampler(Sampler):
         self.indices = list(indices)
         self.generator = generator
 
+    @override
     def __iter__(self) -> Iterator[int]:
         """Yield ``self.indices`` in a freshly shuffled order each epoch."""
         perm = list(self.indices)
         random.shuffle(perm)
         yield from perm
 
+    @override
     def __len__(self) -> int:
         """Return the size of the index pool."""
         return len(self.indices)
@@ -320,6 +326,7 @@ class WeightedRandomSampler(Sampler):
         self.replacement = replacement
         self.generator = generator
 
+    @override
     def __iter__(self) -> Iterator[int]:
         """Yield ``num_samples`` indices proportional to the weights.
 
@@ -349,6 +356,7 @@ class WeightedRandomSampler(Sampler):
             chosen = _r.choices(indices, weights=self.weights, k=self.num_samples)
             yield from chosen
 
+    @override
     def __len__(self) -> int:
         """Return :attr:`num_samples`."""
         return self.num_samples
@@ -407,6 +415,7 @@ class BatchSampler(Sampler):
         self.batch_size = batch_size
         self.drop_last = drop_last
 
+    @override
     def __iter__(self) -> Iterator[list[int]]:  # type: ignore[override]
         """Yield successive batches of indices.
 
@@ -425,6 +434,7 @@ class BatchSampler(Sampler):
         if batch and not self.drop_last:
             yield batch
 
+    @override
     def __len__(self) -> int:
         """Return the number of batches produced per epoch.
 
@@ -536,6 +546,7 @@ class DistributedSampler(Sampler):
         """Set the epoch number — affects the shuffling RNG seed."""
         self.epoch = int(epoch)
 
+    @override
     def __iter__(self) -> Iterator[int]:
         """Yield this replica's slab of indices for the current epoch.
 
@@ -559,6 +570,7 @@ class DistributedSampler(Sampler):
         # Slab pick: take every ``num_replicas``-th index starting at ``rank``.
         return iter(indices[self.rank : self.total_size : self.num_replicas])
 
+    @override
     def __len__(self) -> int:
         """Return per-replica sample count — same on every rank."""
         return self.num_samples
@@ -656,6 +668,7 @@ class RASampler(Sampler):
         """Set the epoch — affects the shuffling RNG seed."""
         self.epoch = int(epoch)
 
+    @override
     def __iter__(self) -> Iterator[int]:
         n: int = len(self.dataset)
         indices: list[int] = list(range(n))
@@ -677,6 +690,7 @@ class RASampler(Sampler):
         # Truncate so the epoch size per rank matches an un-repeated pass.
         return iter(slab[: self.num_selected_samples])
 
+    @override
     def __len__(self) -> int:
         """Return per-replica yield count — ``floor(len(dataset) / num_replicas)``."""
         return self.num_selected_samples

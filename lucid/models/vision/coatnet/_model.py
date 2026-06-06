@@ -14,7 +14,7 @@ Architecture (CoAtNet-0, 4 stages after the stem):
 Reference param count: ~25.6 M (timm coatnet_0).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -38,6 +38,7 @@ class _SE(nn.Module):
         self.fc1 = nn.Linear(in_ch, se_ch)
         self.fc2 = nn.Linear(se_ch, in_ch)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C, H, W)  →  squeeze to (B, C)  →  excite  →  (B, C, 1, 1)
         s = x.mean(dim=(2, 3))  # global average pool
@@ -100,6 +101,7 @@ class _MBConv(nn.Module):
         else:
             self.shortcut = nn.Sequential()  # identity
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = cast(Tensor, self.shortcut(x))
 
@@ -116,6 +118,7 @@ class _MBConv(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _RelAttnBlock(nn.Module):
     """Pre-norm Transformer block with relative position bias.
 
@@ -205,6 +208,7 @@ class _RelAttnBlock(nn.Module):
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(out))
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, N, C)
         x = x + self._attn(cast(Tensor, self.norm1(x)))
@@ -220,6 +224,7 @@ class _RelAttnBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _TransformerStage(nn.Module):
     """Transformer stage: optional AvgPool2d(2) → linear channel proj → N×RelAttnBlock.
 
@@ -262,6 +267,7 @@ class _TransformerStage(nn.Module):
         )
         self.norm = nn.LayerNorm(out_ch)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C, H, W)
         x = cast(Tensor, self.pool(x))
@@ -474,10 +480,12 @@ class CoAtNet(PretrainedModel, BackboneMixin):
         self.s4 = s4
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.s1(x))
@@ -486,6 +494,7 @@ class CoAtNet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.s4(x))
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -588,6 +597,7 @@ class CoAtNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
             head_in = feat_dim
         self._build_classifier(head_in, config.num_classes, dropout=config.dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

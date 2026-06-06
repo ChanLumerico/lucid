@@ -46,7 +46,7 @@ class OptimizerKind(enum.IntEnum):
     NADAM = 7
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class OptimizerSpec:
     """Snapshot of an :class:`Optimizer`'s compile-relevant configuration.
 

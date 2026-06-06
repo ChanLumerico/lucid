@@ -15,7 +15,7 @@ Architecture overview (299×299 input):
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -60,6 +60,7 @@ class _ConvBnReLU(nn.Module):
         )
         self.bn = nn.BatchNorm2d(out_channels, eps=_BN_EPS)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
 
@@ -69,6 +70,7 @@ class _ConvBnReLU(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionA(nn.Module):
     """Inception-A block (factorized 5×5 into two 3×3)."""
 
@@ -87,6 +89,7 @@ class _InceptionA(nn.Module):
         self.branch4_pool = nn.AvgPool2d(3, stride=1, padding=1)
         self.branch4_conv = _ConvBnReLU(in_channels, pool_features, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1(x))
         b2 = cast(Tensor, self.branch2_b(cast(Tensor, self.branch2_a(x))))
@@ -105,6 +108,7 @@ class _InceptionA(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionB(nn.Module):
     """Reduction-A block: reduces 35×35 → 17×17."""
 
@@ -119,6 +123,7 @@ class _InceptionB(nn.Module):
         # branch3: MaxPool stride=2 (passthrough)
         self.branch3 = nn.MaxPool2d(3, stride=2)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1(x))
         b2 = cast(
@@ -136,6 +141,7 @@ class _InceptionB(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionC(nn.Module):
     """Inception-C block with 1×n / n×1 factorization (n=7)."""
 
@@ -164,6 +170,7 @@ class _InceptionC(nn.Module):
         self.branch4_pool = nn.AvgPool2d(3, stride=1, padding=1)
         self.branch4_conv = _ConvBnReLU(in_channels, 192, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1(x))
 
@@ -187,6 +194,7 @@ class _InceptionC(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionD(nn.Module):
     """Reduction-B block: reduces 17×17 → 8×8."""
 
@@ -205,6 +213,7 @@ class _InceptionD(nn.Module):
         # branch3: MaxPool stride=2
         self.branch3 = nn.MaxPool2d(3, stride=2)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1_b(cast(Tensor, self.branch1_a(x))))
 
@@ -222,6 +231,7 @@ class _InceptionD(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionE(nn.Module):
     """Inception-E block: expanded branches with parallel 1×3 / 3×1 convs."""
 
@@ -246,6 +256,7 @@ class _InceptionE(nn.Module):
         self.branch4_pool = nn.AvgPool2d(3, stride=1, padding=1)
         self.branch4_conv = _ConvBnReLU(in_channels, 192, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1(x))
 
@@ -277,6 +288,7 @@ class _InceptionE(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionAux(nn.Module):
     """Auxiliary classifier for Inception v3 (attaches after InceptionC[3]).
 
@@ -292,6 +304,7 @@ class _InceptionAux(nn.Module):
         self.adapt_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(768, num_classes)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.avgpool(x))
         x = cast(Tensor, self.conv0(x))
@@ -306,7 +319,7 @@ class _InceptionAux(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class InceptionV3Output:
     r"""Structured forward output for :class:`InceptionV3ForImageClassification`.
 
@@ -491,10 +504,12 @@ class InceptionV3(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=3, num_channels=2048, reduction=32),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.inception_a0(x))
@@ -510,6 +525,7 @@ class InceptionV3(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.inception_e1(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -626,6 +642,7 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         else:
             self.aux = nn.Identity()
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

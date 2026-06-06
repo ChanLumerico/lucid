@@ -3,7 +3,7 @@ Multi-head attention module.
 """
 
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
 
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
@@ -375,6 +375,7 @@ class MultiheadAttention(Module):
             init.xavier_normal_(self.bias_v)
 
     # ── reference-checkpoint loading: accept ``out_proj.weight`` / ``out_proj.bias``
+    @override
     def _load_from_state_dict(
         self,
         state_dict: dict[str, "Tensor"],
@@ -485,6 +486,7 @@ class MultiheadAttention(Module):
 
         return merged
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         query: Tensor,
@@ -642,6 +644,7 @@ class MultiheadAttention(Module):
         out: Tensor = _lucid.matmul(weights, v)
         return out, weights
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = (

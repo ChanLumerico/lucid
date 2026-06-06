@@ -25,7 +25,7 @@ HuggingFace parity (state-dict keys):
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -47,6 +47,7 @@ from lucid.models.text.gpt2._config import GPT2Config
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _GPT2SelfAttention(nn.Module):
     causal_mask: Tensor
 
@@ -65,6 +66,7 @@ class _GPT2SelfAttention(nn.Module):
         mask = lucid.tril(lucid.ones((T, T))).reshape(1, 1, T, T)
         self.register_buffer("causal_mask", mask, persistent=False)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -97,6 +99,7 @@ class _GPT2SelfAttention(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _GPT2MLP(nn.Module):
     def __init__(self, config: GPT2Config) -> None:
         super().__init__()
@@ -105,6 +108,7 @@ class _GPT2MLP(nn.Module):
         self.dropout = nn.Dropout(p=config.hidden_dropout)
         self._act_name = config.hidden_act
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         h = text_activation(self._act_name, cast(Tensor, self.c_fc(x)))
         h = cast(Tensor, self.c_proj(h))
@@ -116,6 +120,7 @@ class _GPT2MLP(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _GPT2Block(nn.Module):
     def __init__(self, config: GPT2Config) -> None:
         super().__init__()
@@ -124,6 +129,7 @@ class _GPT2Block(nn.Module):
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.mlp = _GPT2MLP(config)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -259,9 +265,11 @@ class GPT2Model(PretrainedModel):
         if config.scale_residual_init:
             _scale_residual_init(self, config.num_hidden_layers)
 
+    @override
     def get_input_embeddings(self) -> nn.Module:
         return self.wte
 
+    @override
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
@@ -269,6 +277,7 @@ class GPT2Model(PretrainedModel):
             )
         self.wte = value
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -366,6 +375,7 @@ class GPT2LMHeadModel(PretrainedModel, GenerationMixin):
     def _tie_lm_head_to_input_embeddings(self) -> None:
         self.lm_head.weight = self.transformer.wte.weight
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -462,6 +472,7 @@ class GPT2ForSequenceClassification(PretrainedModel):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels, bias=False)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -497,7 +508,7 @@ class GPT2ForSequenceClassification(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass
+@dataclass(slots=True)
 class GPT2DoubleHeadsOutput(ModelOutput):
     r"""Joint LM + multiple-choice output for :class:`GPT2DoubleHeadsModel`.
 
@@ -549,6 +560,7 @@ class GPT2DoubleHeadsOutput(ModelOutput):
     mc_loss: Tensor | None = None
 
 
+@final
 class _GPT2MultipleChoiceHead(nn.Module):
     """Per-choice pooled-token classifier (analogous to GPT-1's variant)."""
 
@@ -557,6 +569,7 @@ class _GPT2MultipleChoiceHead(nn.Module):
         self.summary = nn.Linear(config.hidden_size, 1)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
+    @override
     def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:  # type: ignore[override]
         N, C, L, H = hidden_states.shape
         pooled_rows: list[list[list[float]]] = []
@@ -648,6 +661,7 @@ class GPT2DoubleHeadsModel(PretrainedModel):
         if config.tie_word_embeddings:
             self.lm_head.weight = self.transformer.wte.weight
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,

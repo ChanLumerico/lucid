@@ -29,7 +29,7 @@ State-dict naming matches timm inception_next_tiny / small / base exactly:
   head.fc2.*    Linear (→ num_classes)
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -45,6 +45,7 @@ from lucid.models.vision.inception_next._config import InceptionNeXtConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionDWConv2d(nn.Module):
     """Three-branch depthwise conv mixer operating on channel splits.
 
@@ -70,6 +71,7 @@ class _InceptionDWConv2d(nn.Module):
         self.dwconv_w = nn.Conv2d(gc, gc, (1, band_kernel), padding=(0, pad), groups=gc)
         self.dwconv_h = nn.Conv2d(gc, gc, (band_kernel, 1), padding=(pad, 0), groups=gc)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         id_chs = self.identity_chs
         gc = self.gc
@@ -90,6 +92,7 @@ class _InceptionDWConv2d(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ConvMlp(nn.Module):
     """1×1 Conv2d MLP: fc1 → GELU → fc2 (NCHW, no norm inside)."""
 
@@ -99,6 +102,7 @@ class _ConvMlp(nn.Module):
         self.fc1 = nn.Conv2d(dim, hidden, 1)
         self.fc2 = nn.Conv2d(hidden, dim, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = F.gelu(cast(Tensor, self.fc1(x)))
         return cast(Tensor, self.fc2(x))
@@ -109,6 +113,7 @@ class _ConvMlp(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MetaNeXtBlock(nn.Module):
     """timm MetaNeXtBlock: token_mixer (NCHW) → BN → ConvMlp → LayerScale."""
 
@@ -125,6 +130,7 @@ class _MetaNeXtBlock(nn.Module):
         self.mlp = _ConvMlp(dim, mlp_ratio)
         self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
         x = cast(Tensor, self.token_mixer(x))
@@ -166,6 +172,7 @@ class _Stage(nn.Module):
             *[_MetaNeXtBlock(out_dim, band_kernel, mlp_ratio) for _ in range(depth)]
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.downsample(x))
         return cast(Tensor, self.blocks(x))
@@ -176,6 +183,7 @@ class _Stage(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MlpClassifierHead(nn.Module):
     """timm MlpClassifierHead: GlobalAvgPool → fc1 → GELU → norm → fc2."""
 
@@ -187,6 +195,7 @@ class _MlpClassifierHead(nn.Module):
         self.norm = nn.LayerNorm(hidden, eps=1e-6)
         self.fc2 = nn.Linear(hidden, num_classes)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C, H, W) — apply global avg pool, then mlp
         x = x.mean(dim=(2, 3))  # (B, C)
@@ -317,16 +326,19 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
         self._feature_info = fi
         self._out_dim = out_dim
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         for stage in self.stages:
             x = cast(Tensor, stage(x))
         return x.mean(dim=(2, 3))  # (B, C)
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -401,6 +413,7 @@ class InceptionNeXtForImageClassification(PretrainedModel):
         self.stages = stages
         self.head = _MlpClassifierHead(out_dim, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

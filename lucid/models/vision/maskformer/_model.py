@@ -41,7 +41,7 @@ the pretrained-weight converter is a near-identity key map:
     (3-layer MLP mask head).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -56,6 +56,7 @@ from lucid.models.vision.maskformer._config import MaskFormerConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ConvNorm(nn.Module):
     """``convolution`` + ``normalization`` (BatchNorm) with optional ReLU.
 
@@ -86,6 +87,7 @@ class _ConvNorm(nn.Module):
         self.normalization = nn.BatchNorm2d(out_ch)
         self._act = activation
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out: Tensor = cast(
             Tensor, self.normalization(cast(Tensor, self.convolution(x)))
@@ -95,6 +97,7 @@ class _ConvNorm(nn.Module):
         return out
 
 
+@final
 class _ResNetEmbedder(nn.Module):
     """Stem: a 7x7 stride-2 conv-BN-ReLU followed by a 3x3 stride-2 maxpool.
 
@@ -107,6 +110,7 @@ class _ResNetEmbedder(nn.Module):
         self.embedder = _ConvNorm(in_channels, 64, 7, stride=2, padding=3)
         self.pool = nn.MaxPool2d(3, stride=2, padding=1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.embedder(x))
         return cast(Tensor, self.pool(x))
@@ -142,12 +146,14 @@ class _ResNetBottleneck(nn.Module):
             _ConvNorm(mid_ch, out_ch, 1, activation=False),
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
         out: Tensor = cast(Tensor, self.layer(x))
         return F.relu(out + identity)
 
 
+@final
 class _ResNetStage(nn.Module):
     """A stack of bottleneck ``layers``; the first carries the stride/downsample."""
 
@@ -168,10 +174,12 @@ class _ResNetStage(nn.Module):
         self.layers = nn.Sequential(*blocks)
         self.out_channels: int = out_ch
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.layers(x))
 
 
+@final
 class _ResNetEncoderStages(nn.Module):
     """The four bottleneck ``stages`` of a ResNet trunk."""
 
@@ -191,6 +199,7 @@ class _ResNetEncoderStages(nn.Module):
             s3.out_channels,
         ]
 
+    @override
     def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
         feats: list[Tensor] = []
         out = x
@@ -200,6 +209,7 @@ class _ResNetEncoderStages(nn.Module):
         return feats
 
 
+@final
 class _ResNetBackbone(nn.Module):
     """ResNet backbone returning ``[C2, C3, C4, C5]`` feature maps.
 
@@ -218,6 +228,7 @@ class _ResNetBackbone(nn.Module):
         self.encoder = _ResNetEncoderStages(layers)
         self.out_channels: list[int] = self.encoder.out_channels
 
+    @override
     def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.embedder(x))
         return self.encoder.forward(x)
@@ -228,6 +239,7 @@ class _ResNetBackbone(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _FPNConvLayer(nn.Sequential):
     """3x3 conv → GroupNorm(32) → ReLU; reference ``MaskFormerFPNConvLayer``.
 
@@ -244,6 +256,7 @@ class _FPNConvLayer(nn.Sequential):
         )
 
 
+@final
 class _FPNLayer(nn.Module):
     """One FPN merge step: lateral ``proj`` + upsample-add + ``block``.
 
@@ -259,6 +272,7 @@ class _FPNLayer(nn.Module):
         )
         self.block = _FPNConvLayer(in_features, in_features)
 
+    @override
     def forward(self, down: Tensor, left: Tensor) -> Tensor:  # type: ignore[override]
         left = cast(Tensor, self.proj(left))
         h = int(left.shape[2])
@@ -268,6 +282,7 @@ class _FPNLayer(nn.Module):
         return cast(Tensor, self.block(down))
 
 
+@final
 class _FPNModel(nn.Module):
     """Feature Pyramid Network: a ``stem`` + top-down ``layers``.
 
@@ -287,6 +302,7 @@ class _FPNModel(nn.Module):
             *[_FPNLayer(feature_size, lw) for lw in lateral_widths[::-1]]
         )
 
+    @override
     def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         fpn_features: list[Tensor] = []
         last_feature = features[-1]
@@ -299,6 +315,7 @@ class _FPNModel(nn.Module):
         return fpn_features
 
 
+@final
 class _FPNPixelDecoder(nn.Module):
     """Reference ``MaskFormerPixelDecoder``: FPN + a 3x3 ``mask_projection``.
 
@@ -317,6 +334,7 @@ class _FPNPixelDecoder(nn.Module):
         self.fpn = _FPNModel(in_features, lateral_widths, feature_size)
         self.mask_projection = nn.Conv2d(feature_size, mask_feature_size, 3, padding=1)
 
+    @override
     def forward(self, features: list[Tensor]) -> Tensor:  # type: ignore[override]
         fpn_features = self.fpn.forward(features)
         return cast(Tensor, self.mask_projection(fpn_features[-1]))
@@ -350,6 +368,7 @@ class _SinePositionEmbedding(nn.Module):
         self.scale = scale
         self.eps = eps
 
+    @override
     def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:  # type: ignore[override]
         npf = self.num_position_features
         ones = lucid.ones(1, height, width, dtype=lucid.float32, device=device)
@@ -407,6 +426,7 @@ class _Attention(nn.Module):
         # (B, L, d) → (B, n_head, L, head_dim)
         return x.reshape(B, L, self.n_head, self.head_dim).permute(0, 2, 1, 3)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         query_input: Tensor,  # (B, Lq, d) — query stream (+ query pos)
@@ -429,6 +449,7 @@ class _Attention(nn.Module):
         return cast(Tensor, self.o_proj(out))
 
 
+@final
 class _DecoderMLP(nn.Module):
     """Feed-forward block (``fc1`` → ReLU → ``fc2``); reference ``MaskFormerDetrMLP``."""
 
@@ -437,10 +458,12 @@ class _DecoderMLP(nn.Module):
         self.fc1 = nn.Linear(d_model, dim_ff)
         self.fc2 = nn.Linear(dim_ff, d_model)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.fc2(F.relu(cast(Tensor, self.fc1(x)))))
 
 
+@final
 class _DecoderLayer(nn.Module):
     """One post-norm decoder layer (reference ``MaskFormerDetrDecoderLayer``).
 
@@ -459,6 +482,7 @@ class _DecoderLayer(nn.Module):
         self.mlp = _DecoderMLP(d_model, dim_ff)
         self.final_layer_norm = nn.LayerNorm(d_model)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,  # (B, N, d) query stream
@@ -491,6 +515,7 @@ class _DecoderLayer(nn.Module):
         return hidden
 
 
+@final
 class _TransformerDecoder(nn.Module):
     """Stack of decoder layers + a trailing ``layernorm`` (reference layout)."""
 
@@ -501,6 +526,7 @@ class _TransformerDecoder(nn.Module):
         )
         self.layernorm = nn.LayerNorm(d_model)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -536,6 +562,7 @@ class _TransformerModule(nn.Module):
         self.input_projection = nn.Conv2d(in_features, d_model, 1)
         self.decoder = _TransformerDecoder(d_model, n_head, dim_ff, depth)
 
+    @override
     def forward(self, image_features: Tensor) -> Tensor:  # type: ignore[override]
         feat: Tensor = cast(Tensor, self.input_projection(image_features))
         B = int(feat.shape[0])
@@ -577,6 +604,7 @@ class _PixelLevelModule(nn.Module):
             mask_feature_size=mask_feature_size,
         )
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         features = self.encoder.forward(x)
         pixel_embeddings = self.decoder.forward(features)
@@ -584,6 +612,7 @@ class _PixelLevelModule(nn.Module):
         return features[-1], pixel_embeddings
 
 
+@final
 class _MaskEmbedder(nn.Sequential):
     """3-layer MLP mask head (reference ``MaskformerMLPPredictionHead``).
 
@@ -779,6 +808,7 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
         self.class_predictor = nn.Linear(d, K + 1)
         self.mask_embedder = _MaskEmbedder(d, d)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

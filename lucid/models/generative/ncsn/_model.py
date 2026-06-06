@@ -13,7 +13,7 @@ Sampling uses the per-σ step-size rule from §4.3:
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -142,6 +142,7 @@ class NCSNModel(PretrainedModel):
     def num_noise_levels(self) -> int:
         return self._num_levels
 
+    @override
     def forward(  # type: ignore[override]
         self,
         sample: Tensor,
@@ -268,6 +269,7 @@ class NCSNForImageGeneration(PretrainedModel):
 
     # ── Training ────────────────────────────────────────────────────────────
 
+    @override
     def forward(self, sample: Tensor) -> DiffusionModelOutput:  # type: ignore[override]
         """Denoising Score Matching loss (Song 2019 Eq. 6).
 

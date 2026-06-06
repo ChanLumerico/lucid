@@ -8,7 +8,7 @@ depthwise conv, then project back to a smaller channel count with a linear
 and input channels match output channels.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -59,6 +59,7 @@ class _InvertedResidual(nn.Module):
         ]
         self.conv = nn.Sequential(*layers)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out = cast(Tensor, self.conv(x))
         if self._use_residual:
@@ -220,14 +221,17 @@ class MobileNetV2(PretrainedModel, BackboneMixin):
             )
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.features(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -316,6 +320,7 @@ class MobileNetV2ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(num_features, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

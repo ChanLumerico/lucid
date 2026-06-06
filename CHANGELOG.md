@@ -54,6 +54,10 @@ rules); compile-db deploy target aligned to 26.0; and dedicated padding /
 upsampling / transformer unit tests. The docs `SubsectionHeading` recipe is
 now a single component.
 
+### Changed
+
+- adopt PEP 695 generics, @override/@final, slots, Literal across codebase
+
 ---
 
 ## [3.5.0] — 2026-06-05

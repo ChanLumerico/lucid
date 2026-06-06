@@ -17,7 +17,7 @@ from lucid._C import engine as _C_engine
 from lucid._ops import _adapters as A  # accessor for every signature-normaliser
 
 
-@dataclass
+@dataclass(slots=True)
 class OpEntry:
     """Descriptor for a single engine operation registered with the dispatcher.
 

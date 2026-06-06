@@ -6,6 +6,7 @@ pass through unchanged, matching Albumentations' default.
 """
 
 from dataclasses import dataclass, field
+from typing import override
 
 import lucid
 from lucid._tensor import Tensor
@@ -14,7 +15,7 @@ from lucid.utils.transforms import functional as F
 from lucid.utils.transforms._base import PhotometricTransform
 
 
-@dataclass
+@dataclass(slots=True)
 class HoleParams:
     """Per-call list of ``(top, left, height, width)`` cutout windows.
 
@@ -78,6 +79,7 @@ class CoarseDropout(PhotometricTransform[HoleParams]):
         self.min_width = max_width if min_width is None else min_width
         self.fill_value = fill_value
 
+    @override
     def make_params(self, img: Tensor) -> HoleParams:
         h, w = F._spatial_hw(img)
         count = _random.randint(self.min_holes, self.max_holes + 1)
@@ -91,9 +93,11 @@ class CoarseDropout(PhotometricTransform[HoleParams]):
             holes.append((top, left, hh, ww))
         return HoleParams(holes=holes)
 
+    @override
     def _apply_image(self, img: Tensor, params: HoleParams) -> Tensor:
         return _apply_holes(img, params.holes, self.fill_value)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"CoarseDropout(max_holes={self.max_holes}, max_height={self.max_height}, "
@@ -126,6 +130,7 @@ class GridDropout(PhotometricTransform[HoleParams]):
         self.unit_size = unit_size
         self.fill_value = fill_value
 
+    @override
     def make_params(self, img: Tensor) -> HoleParams:
         h, w = F._spatial_hw(img)
         unit = self.unit_size
@@ -142,9 +147,11 @@ class GridDropout(PhotometricTransform[HoleParams]):
             top += unit
         return HoleParams(holes=holes)
 
+    @override
     def _apply_image(self, img: Tensor, params: HoleParams) -> Tensor:
         return _apply_holes(img, params.holes, self.fill_value)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"GridDropout(ratio={self.ratio}, unit_size={self.unit_size}, p={self.p})"

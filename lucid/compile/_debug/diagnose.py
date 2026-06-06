@@ -43,7 +43,7 @@ the offending op + a sample shape::
 
 import dataclasses
 from collections import Counter
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, override
 
 from lucid._C import engine as _C_engine
 
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 __all__ = ["OpInfo", "DiagnosisReport", "diagnose"]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class OpInfo:
     """Per-op-name summary inside a :class:`DiagnosisReport`.
 
@@ -85,7 +85,7 @@ class OpInfo:
     sample_dtype: str | None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class DiagnosisReport:
     """Result of :func:`diagnose`.
 
@@ -116,6 +116,7 @@ class DiagnosisReport:
     uncovered: list[OpInfo]
     recommendation: str
 
+    @override
     def __str__(self) -> str:
         """Render a short human-readable summary."""
         lines = [

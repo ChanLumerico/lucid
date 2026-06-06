@@ -12,6 +12,7 @@ Today this module ships:
 """
 
 from abc import ABC, abstractmethod
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -127,6 +128,7 @@ class DDPMScheduler(DiffusionScheduler):
         # Inference schedule defaults to the full training one.
         self.timesteps = lucid.arange(num_train_timesteps - 1, -1, -1).long()
 
+    @override
     def set_timesteps(self, num_inference_steps: int, *, device: str = "cpu") -> None:
         """Uniform-subsample the training schedule into ``num_inference_steps``."""
         if num_inference_steps <= 0:
@@ -144,6 +146,7 @@ class DDPMScheduler(DiffusionScheduler):
         ]
         self.timesteps = lucid.tensor(idx, device=device).long()
 
+    @override
     def add_noise(self, original: Tensor, noise: Tensor, timesteps: Tensor) -> Tensor:
         """Forward process at arbitrary timesteps.
 
@@ -163,6 +166,7 @@ class DDPMScheduler(DiffusionScheduler):
         )
         return sqrt_ab * original + sqrt_one_minus_ab * noise
 
+    @override
     def step(
         self,
         model_output: Tensor,

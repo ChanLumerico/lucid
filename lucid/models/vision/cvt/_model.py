@@ -18,7 +18,7 @@ Architecture (CvT-13, image=224):
   Head   : LN → mean-pool → FC(384, num_classes)
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -34,6 +34,7 @@ from lucid.models.vision.cvt._config import CvTConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ConvEmbed(nn.Module):
     """Overlapping convolutional patch embedding.
 
@@ -53,6 +54,7 @@ class _ConvEmbed(nn.Module):
         self.proj = nn.Conv2d(in_ch, out_ch, kernel, stride=stride, padding=padding)
         self.norm = nn.LayerNorm(out_ch)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
         # (B, C_in, H, W) → (B, C_out, H', W')
         x = cast(Tensor, self.proj(x))
@@ -70,6 +72,7 @@ class _ConvEmbed(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ConvProj(nn.Module):
     """Depthwise conv (3×3, stride) + BN + flatten → linear projection.
 
@@ -104,6 +107,7 @@ class _ConvProj(nn.Module):
         # biases in ``transformers.CvtForImageClassification``).
         self.proj = nn.Linear(dim, dim, bias=True)
 
+    @override
     def forward(  # type: ignore[override]
         self, x: Tensor, H: int, W: int, cls: Tensor | None = None
     ) -> Tensor:
@@ -126,6 +130,7 @@ class _ConvProj(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CvTAttention(nn.Module):
     """Multi-head self-attention with convolutional Q/K/V projections.
 
@@ -159,6 +164,7 @@ class _CvTAttention(nn.Module):
 
         self.out_proj = nn.Linear(dim, dim)
 
+    @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         B, N, C = x.shape
         head_dim = C // self.num_heads
@@ -204,6 +210,7 @@ class _MLP(nn.Module):
         self.fc2 = nn.Linear(hidden, dim)
         self.drop = nn.Dropout(p=dropout)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.drop(F.gelu(cast(Tensor, self.fc1(x)))))
         return cast(Tensor, self.drop(cast(Tensor, self.fc2(x))))
@@ -214,6 +221,7 @@ class _MLP(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CvTBlock(nn.Module):
     """Pre-norm CvT block: LN → ConvAttn → residual → LN → MLP → residual."""
 
@@ -234,6 +242,7 @@ class _CvTBlock(nn.Module):
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = _MLP(dim, mlp_ratio, dropout)
 
+    @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         # x: (B, N, C)
         n = cast(Tensor, self.norm1(x))
@@ -247,6 +256,7 @@ class _CvTBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CvTStage(nn.Module):
     """One CvT stage = ConvEmbed + N × CvTBlock.
 
@@ -307,6 +317,7 @@ class _CvTStage(nn.Module):
         # the entire trunk; there is no per-stage normalisation between
         # blocks.
 
+    @override
     def forward(  # type: ignore[override]
         self, x: Tensor
     ) -> tuple[Tensor, Tensor | None, int, int]:
@@ -438,10 +449,12 @@ class CvT(PretrainedModel, BackboneMixin):
         self.stages = nn.ModuleList(stage_list)  # type: ignore[arg-type]
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         cls: Tensor | None = None
         for stage in self.stages:
@@ -453,6 +466,7 @@ class CvT(PretrainedModel, BackboneMixin):
             return cls[:, 0]
         return x.flatten(2).mean(dim=2)
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -527,6 +541,7 @@ class CvTForImageClassification(PretrainedModel, ClassificationHeadMixin):
             config.dims[-1], config.num_classes, dropout=config.dropout
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

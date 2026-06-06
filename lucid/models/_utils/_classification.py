@@ -4,6 +4,8 @@ Shared building blocks for classification architectures that do not
 belong in any single model family's private namespace.
 """
 
+from typing import override
+
 import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
@@ -50,6 +52,7 @@ class LayerScale(nn.Module):
         super().__init__()
         self.gamma = nn.Parameter(lucid.full((dim,), init_value))
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         if x.ndim == 4:
             # (B, C, H, W) — reshape gamma to broadcast over spatial dims
@@ -102,6 +105,7 @@ class DropPath(nn.Module):
             raise ValueError(f"DropPath drop_prob must be in [0, 1), got {drop_prob}")
         self.drop_prob = drop_prob
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         if not self.training or self.drop_prob == 0.0:
             return x

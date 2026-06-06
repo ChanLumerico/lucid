@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 __all__ = ["TensorSig", "CacheKey", "signature_of"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TensorSig:
     """One tensor's hashable description.
 
@@ -118,7 +118,7 @@ class TensorSig:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CacheKey:
     """Hashable identity of a CompiledModule signature.
 

@@ -14,6 +14,7 @@ import math
 import lucid
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid._types import Reduction
 
 __all__ = [
     "make_beta_schedule",
@@ -114,7 +115,7 @@ def gaussian_kl_divergence(
     mu: Tensor,
     logvar: Tensor,
     *,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     """KL divergence ``KL(N(μ, σ²) ‖ N(0, I))`` of a diagonal Gaussian.
 

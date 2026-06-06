@@ -15,7 +15,7 @@ Architecture:
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -60,6 +60,7 @@ class _PatchEmbed(nn.Module):
         # A Conv2d with kernel=stride=patch_size extracts patches in one op.
         self.proj = nn.Conv2d(in_channels, dim, patch_size, stride=patch_size)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # (B, C, H, W) → (B, dim, H/p, W/p) → (B, num_patches, dim)
         x = cast(Tensor, self.proj(x))
@@ -121,6 +122,7 @@ class _Attention(nn.Module):
         self.proj = nn.Linear(dim, dim, bias=True)
         self.attn_drop = nn.Dropout(p=attn_drop)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, N, C = x.shape
         H, D = self.num_heads, self.head_dim
@@ -180,6 +182,7 @@ class _MLP(nn.Module):
         self.fc2 = nn.Linear(mlp_dim, dim)
         self.drop = nn.Dropout(p=dropout)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.drop(F.gelu(cast(Tensor, self.fc1(x)))))
         return cast(Tensor, self.drop(cast(Tensor, self.fc2(x))))
@@ -190,6 +193,7 @@ class _MLP(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ViTBlock(nn.Module):
     r"""Single transformer encoder block in pre-norm configuration.
 
@@ -249,6 +253,7 @@ class _ViTBlock(nn.Module):
         self.norm2 = nn.LayerNorm(dim, eps=eps)
         self.mlp = _MLP(dim, mlp_dim, dropout)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
         x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
@@ -410,10 +415,12 @@ class ViT(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=1, num_channels=config.dim, reduction=config.patch_size),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         B = x.shape[0]
         x = cast(Tensor, self.patch_embed(x))  # (B, N, dim)
@@ -425,6 +432,7 @@ class ViT(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.norm(x))
         return x[:, 0]  # CLS token: (B, dim)
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         # Unsqueeze to (B, 1, dim) so BaseModelOutput is spatially consistent
@@ -531,6 +539,7 @@ class ViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         # Named ``head`` to match timm's vit_base_patch16_224 state-dict keys.
         self.head = nn.Linear(config.dim, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

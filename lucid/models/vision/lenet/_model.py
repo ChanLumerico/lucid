@@ -16,7 +16,7 @@ and ``pooling`` config fields let callers switch to the modern ReLU/MaxPool
 convention without changing the topology.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -150,13 +150,16 @@ class LeNet(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=3, num_channels=120, reduction=32),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         return cast(Tensor, self.features(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -251,6 +254,7 @@ class LeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.act_f6 = _act(config.activation)
         self._build_classifier(84, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

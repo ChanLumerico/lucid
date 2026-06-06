@@ -1,5 +1,7 @@
 """``Categorical`` (discrete with K outcomes) and ``OneHotCategorical``."""
 
+from typing import override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
@@ -142,6 +144,7 @@ class Categorical(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         r"""Support of the distribution: integer interval :math:`\{0, \ldots, K-1\}`.
@@ -179,6 +182,7 @@ class Categorical(Distribution):
             return softmax(self.logits, dim=-1)
         return self.probs
 
+    @override
     @property
     def mean(self) -> Tensor:
         """Mean of the Categorical distribution (undefined — returns NaN).
@@ -201,6 +205,7 @@ class Categorical(Distribution):
             dtype=self._probs.dtype,
         )
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Categorical distribution.
 
@@ -229,6 +234,7 @@ class Categorical(Distribution):
         scores = self._log_probs + gumbel
         return scores.argmax(dim=-1).detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of the given category indices.
 
@@ -268,6 +274,7 @@ class Categorical(Distribution):
         gathered = lucid.gather(log_p, v_long, dim=-1)
         return gathered.squeeze(-1)
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Categorical distribution.
 
@@ -386,6 +393,7 @@ class OneHotCategorical(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         """Support of the distribution: the probability simplex.
@@ -398,6 +406,7 @@ class OneHotCategorical(Distribution):
         """
         return simplex
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw one-hot encoded samples.
 
@@ -423,6 +432,7 @@ class OneHotCategorical(Distribution):
             self._cat._probs.dtype
         )
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of a one-hot encoded sample.
 
@@ -446,6 +456,7 @@ class OneHotCategorical(Distribution):
         # value is one-hot — log_prob = sum(value * log_probs).
         return (value * self._cat._log_probs).sum(dim=-1)
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the OneHotCategorical distribution.
 

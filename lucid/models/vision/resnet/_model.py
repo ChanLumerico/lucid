@@ -1,6 +1,6 @@
 """ResNet backbone and classification head."""
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -15,6 +15,7 @@ from lucid.models.vision.resnet._config import ResNetConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _BasicBlock(nn.Module):
     r"""Two-convolution residual block used by ResNet-18 and ResNet-34.
 
@@ -88,6 +89,7 @@ class _BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
@@ -188,6 +190,7 @@ class _Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
@@ -411,10 +414,12 @@ class ResNet(PretrainedModel, BackboneMixin):
         if config.zero_init_residual:
             _zero_init_residual(self)
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.maxpool(x))
@@ -424,6 +429,7 @@ class ResNet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.layer4(x))
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -538,6 +544,7 @@ class ResNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         if config.zero_init_residual:
             _zero_init_residual(self)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

@@ -27,7 +27,7 @@ ResBlock conditioning recipe (Ho 2020 §3.2 + Appendix B):
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -43,6 +43,7 @@ from lucid.models.generative.ddpm._config import DDPMConfig
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _ResBlock(nn.Module):
     """Residual block with timestep conditioning.
 
@@ -79,6 +80,7 @@ class _ResBlock(nn.Module):
         else:
             self.skip = nn.Identity()
 
+    @override
     def forward(self, x: Tensor, t_emb: Tensor) -> Tensor:  # type: ignore[override]
         h = cast(Tensor, self.conv1(F.silu(cast(Tensor, self.norm1(x)))))
         # (B, out_ch) → (B, out_ch, 1, 1) so it broadcasts across spatial.
@@ -91,6 +93,7 @@ class _ResBlock(nn.Module):
         return h + cast(Tensor, self.skip(x))
 
 
+@final
 class _AttentionBlock(nn.Module):
     """Self-attention on a 2-D feature map (Ho 2020 §3.2).
 
@@ -118,6 +121,7 @@ class _AttentionBlock(nn.Module):
         self.head_dim = channels // num_heads
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, C, H, W = x.shape
         N = int(H) * int(W)
@@ -148,12 +152,14 @@ class _Downsample(nn.Module):
         super().__init__()
         self.op = nn.Conv2d(channels, channels, 3, stride=2, padding=0)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # F.pad order is (W_left, W_right, H_top, H_bottom).
         x = F.pad(x, (0, 1, 0, 1))
         return cast(Tensor, self.op(x))
 
 
+@final
 class _Upsample(nn.Module):
     """Nearest-neighbour ×2 + 3×3 conv (Ho 2020 §3.2)."""
 
@@ -161,6 +167,7 @@ class _Upsample(nn.Module):
         super().__init__()
         self.op = nn.Conv2d(channels, channels, 3, padding=1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, C, H, W = x.shape
         x_up = F.interpolate(x, scale_factor=2.0, mode="nearest")
@@ -390,6 +397,7 @@ class DDPMUNet(nn.Module):
         self._blocks_per_down_stage = config.num_res_blocks
         self._blocks_per_up_stage = config.num_res_blocks + 1
 
+    @override
     def forward(self, sample: Tensor, timestep: Tensor) -> Tensor:  # type: ignore[override]
         """Predict noise (or ``[noise, σ²]``) at the given timestep.
 
@@ -524,6 +532,7 @@ class DDPMModel(PretrainedModel, DiffusionMixin):
         super().__init__(config)
         self.unet = DDPMUNet(config)
 
+    @override
     def forward(  # type: ignore[override]
         self, sample: Tensor, timestep: Tensor
     ) -> DiffusionModelOutput:
@@ -635,6 +644,7 @@ class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
         half = C // 2
         return raw[:, :half], raw[:, half:]
 
+    @override
     def forward(  # type: ignore[override]
         self,
         sample: Tensor,

@@ -6,6 +6,8 @@ the CPU stream (Apple Accelerate) or the Metal GPU stream (MLX). Only
 only.
 """
 
+from typing import override
+
 from lucid._C import engine as _C_engine
 
 
@@ -65,10 +67,12 @@ class device:
         """``True`` if this device targets the Metal GPU stream."""
         return self.type in self._METAL_TYPES
 
+    @override
     def __repr__(self) -> str:
         """Return ``"device('<type>')"``."""
         return f"device('{self.type}')"
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Compare against another :class:`device` or a device-type string.
 
@@ -81,6 +85,7 @@ class device:
             return self._engine == other._engine
         return NotImplemented
 
+    @override
     def __hash__(self) -> int:
         """Hash by engine stream so equal devices hash equal."""
         return hash(self._engine)

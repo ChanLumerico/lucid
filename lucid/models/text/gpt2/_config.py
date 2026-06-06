@@ -8,7 +8,7 @@ choices that follow from them.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig, TextActivation
@@ -94,6 +94,7 @@ class GPT2Config(LanguageModelConfig):
     # up without re-deriving from ``num_hidden_layers``.
     scale_residual_init: bool = True
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         if self.num_labels <= 0:

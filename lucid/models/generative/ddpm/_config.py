@@ -12,7 +12,7 @@ Inherits noise-schedule knobs from :class:`DiffusionModelConfig`
 """
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.generative._config import DiffusionModelConfig
@@ -135,6 +135,7 @@ class DDPMConfig(DiffusionModelConfig):
     # Sampling.
     clip_denoised: bool = True
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         if self.base_channels <= 0:

@@ -3,6 +3,8 @@ Linear and related fully-connected layers.
 """
 
 import math
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
@@ -145,6 +147,7 @@ class Linear(Module):
             bound = 1.0 / math.sqrt(fan_in) if fan_in > 0 else 0.0
             init.uniform_(self.bias, -bound, bound)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the linear transformation to the input tensor.
 
@@ -160,6 +163,7 @@ class Linear(Module):
         """
         return linear(x, self.weight, self.bias)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}"
@@ -219,6 +223,7 @@ class Identity(Module):
     (1, 512)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the linear transformation to the input tensor.
 
@@ -373,6 +378,7 @@ class FusedLinear(Module):
             bound = 1.0 / _math.sqrt(fan_in) if fan_in > 0 else 0.0
             _init.uniform_(self.bias, -bound, bound)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the linear transformation to the input tensor.
 
@@ -397,6 +403,7 @@ class FusedLinear(Module):
             return fused_linear_relu(x, self.weight, self.bias)
         return fused_linear_gelu(x, self.weight, self.bias)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -518,6 +525,7 @@ class Bilinear(Module):
         if self.bias is not None:
             init.uniform_(self.bias, -bound, bound)
 
+    @override
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the linear transformation to the input tensor.
 
@@ -533,6 +541,7 @@ class Bilinear(Module):
         """
         return bilinear(x1, x2, self.weight, self.bias)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -677,6 +686,7 @@ class LazyLinear(Module):
         if self.bias is not None:
             init.uniform_(self.bias, -bound, bound)
 
+    @override
     def _load_from_state_dict(
         self,
         state_dict: StateDict,
@@ -742,6 +752,7 @@ class LazyLinear(Module):
             error_msgs,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the linear transformation to the input tensor.
 
@@ -759,6 +770,7 @@ class LazyLinear(Module):
             self._initialize(x.shape[-1])
         return linear(x, self.weight, self.bias)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (

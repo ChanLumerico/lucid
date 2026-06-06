@@ -53,7 +53,7 @@ where the responsible anchor is the one with highest IoU vs GT.
 
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -177,6 +177,7 @@ def _conv_bn_lrelu(
     )
 
 
+@final
 class _Darknet19(nn.Module):
     """Darknet-19 backbone.
 
@@ -230,6 +231,7 @@ class _Darknet19(nn.Module):
             _conv_bn_lrelu(512, 1024, 3, padding=1),
         )
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         """Run Darknet-19 and return (route, out).
 
@@ -248,6 +250,7 @@ class _Darknet19(nn.Module):
         return route, out
 
 
+@final
 class _Darknet19Tiny(nn.Module):
     """Lightweight Darknet-19 backbone without bottleneck layers in stages 3–5.
 
@@ -293,6 +296,7 @@ class _Darknet19Tiny(nn.Module):
             _conv_bn_lrelu(512, 1024, 3, padding=1),
         )
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.stage1(x))  # stride-2
         x = cast(Tensor, self.stage2(x))  # stride-4
@@ -722,6 +726,7 @@ class YOLOV2ForObjectDetection(PretrainedModel):
 
         return lucid.cat(loss_parts).mean()
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

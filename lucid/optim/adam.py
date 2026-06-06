@@ -2,7 +2,7 @@
 Adam and AdamW optimizers.
 """
 
-from typing import Iterable, cast
+from typing import Iterable, cast, override
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
@@ -98,6 +98,7 @@ class Adam(Optimizer):
         )
         super().__init__(params, defaults)
 
+    @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
         from lucid.nn.parameter import Parameter as _P
 
@@ -113,6 +114,7 @@ class Adam(Optimizer):
             )
         )
 
+    @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adam optimisation step.
 
@@ -232,6 +234,7 @@ class AdamW(Optimizer):
         )
         super().__init__(params, defaults)
 
+    @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
         from lucid.nn.parameter import Parameter as _P
 
@@ -247,6 +250,7 @@ class AdamW(Optimizer):
             )
         )
 
+    @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single AdamW optimisation step.
 

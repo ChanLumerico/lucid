@@ -8,6 +8,8 @@ The hierarchy mirrors the reference framework's set, but trimmed to the
 constraints actually used by the distributions Lucid ships.
 """
 
+from typing import final, override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 
@@ -60,24 +62,29 @@ class Constraint:
         """
         raise NotImplementedError(f"{type(self).__name__}.check is not implemented")
 
+    @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         return f"{type(self).__name__}()"
 
 
+@final
 class _Real(Constraint):
     """``ℝ`` — all finite reals."""
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value`` is finite."""
         return lucid.isfinite(value)
 
 
+@final
 class _Boolean(Constraint):
     """``{0, 1}``."""
 
     is_discrete = True
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value`` equals ``0`` or ``1``."""
         zero = lucid.zeros_like(value)
@@ -85,38 +92,47 @@ class _Boolean(Constraint):
         return (value == zero) | (value == one)
 
 
+@final
 class _Positive(Constraint):
     """``(0, ∞)``."""
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value > 0``."""
         return value > 0
 
 
+@final
 class _Nonnegative(Constraint):
     """``[0, ∞)``."""
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value >= 0``."""
         return value >= 0
 
 
+@final
 class _UnitInterval(Constraint):
     """``[0, 1]``."""
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``0 <= value <= 1``."""
         return (value >= 0) & (value <= 1)
 
 
+@final
 class _OpenUnitInterval(Constraint):
     """``(0, 1)``."""
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``0 < value < 1``."""
         return (value > 0) & (value < 1)
 
 
+@final
 class _GreaterThan(Constraint):
     """``(lower_bound, ∞)``."""
 
@@ -124,14 +140,17 @@ class _GreaterThan(Constraint):
         """Store the strict lower bound used by :meth:`check`."""
         self.lower_bound = lower_bound
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value > lower_bound``."""
         return value > self.lower_bound
 
+    @override
     def __repr__(self) -> str:
         return f"GreaterThan(lower_bound={self.lower_bound})"
 
 
+@final
 class _GreaterThanEq(Constraint):
     """``[lower_bound, ∞)``."""
 
@@ -139,14 +158,17 @@ class _GreaterThanEq(Constraint):
         """Store the non-strict lower bound used by :meth:`check`."""
         self.lower_bound = lower_bound
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value >= lower_bound``."""
         return value >= self.lower_bound
 
+    @override
     def __repr__(self) -> str:
         return f"GreaterThanEq(lower_bound={self.lower_bound})"
 
 
+@final
 class _LessThan(Constraint):
     """``(-∞, upper_bound)``."""
 
@@ -154,14 +176,17 @@ class _LessThan(Constraint):
         """Store the strict upper bound used by :meth:`check`."""
         self.upper_bound = upper_bound
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value < upper_bound``."""
         return value < self.upper_bound
 
+    @override
     def __repr__(self) -> str:
         return f"LessThan(upper_bound={self.upper_bound})"
 
 
+@final
 class _Interval(Constraint):
     """``[lower_bound, upper_bound]``."""
 
@@ -170,10 +195,12 @@ class _Interval(Constraint):
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``lower_bound <= value <= upper_bound``."""
         return (value >= self.lower_bound) & (value <= self.upper_bound)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"Interval(lower_bound={self.lower_bound}, "
@@ -181,6 +208,7 @@ class _Interval(Constraint):
         )
 
 
+@final
 class _IntegerInterval(Constraint):
     """``{lower_bound, lower_bound+1, ..., upper_bound}``."""
 
@@ -191,6 +219,7 @@ class _IntegerInterval(Constraint):
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value`` is an integer in ``[lower_bound, upper_bound]``.
 
@@ -200,6 +229,7 @@ class _IntegerInterval(Constraint):
         # Integer-valued: floor(x) == x.
         return in_range & (lucid.floor(value) == value)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"IntegerInterval(lower_bound={self.lower_bound}, "
@@ -207,21 +237,25 @@ class _IntegerInterval(Constraint):
         )
 
 
+@final
 class _NonnegativeInteger(Constraint):
     """``{0, 1, 2, ...}``."""
 
     is_discrete = True
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value`` is a non-negative integer."""
         return (value >= 0) & (lucid.floor(value) == value)
 
 
+@final
 class _Simplex(Constraint):
     """The K-simplex: ``x ≥ 0`` and ``Σ x = 1`` along the last dimension."""
 
     event_dim = 1
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` where ``value`` lies on the unit simplex.
 
@@ -236,6 +270,7 @@ class _Simplex(Constraint):
         return nonneg & unit
 
 
+@final
 class _PositiveDefinite(Constraint):
     """Matrix is positive-definite (symmetric, all eigenvalues > 0).
 
@@ -245,6 +280,7 @@ class _PositiveDefinite(Constraint):
 
     event_dim = 2
 
+    @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` when ``value`` admits a Cholesky factorisation.
 

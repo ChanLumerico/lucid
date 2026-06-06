@@ -17,7 +17,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
-from typing import cast
+from typing import cast, override
 import lucid
 import lucid.nn as nn
 import lucid.optim as optim
@@ -34,6 +34,7 @@ class _MLP(nn.Module):
         self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, 10)
 
+    @override
     def forward(self, x: lucid.Tensor) -> lucid.Tensor:  # type: ignore[override]
         x = lucid.relu(cast(lucid.Tensor, self.fc1(x)))
         x = lucid.relu(cast(lucid.Tensor, self.fc2(x)))

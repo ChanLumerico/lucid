@@ -9,7 +9,7 @@ expected, but ``import lucid.utils.data`` itself stays numpy-free.
 import multiprocessing as _mp
 import queue
 import random
-from typing import Callable, Iterator, cast
+from typing import Callable, Iterator, cast, final
 
 from lucid._tensor.tensor import Tensor
 from lucid._factories.converters import tensor as _tensor_fn
@@ -270,6 +270,7 @@ def _worker_loop(
 # ── single-process iterator ───────────────────────────────────────────────────
 
 
+@final
 class _SingleProcessDataLoaderIter:
     def __init__(self, loader: DataLoader) -> None:
         self._dataset = loader.dataset
@@ -307,6 +308,7 @@ class _SingleProcessDataLoaderIter:
 # ── multi-process iterator ────────────────────────────────────────────────────
 
 
+@final
 class _MultiProcessDataLoaderIter:
     """Multi-worker iterator with prefetching and ordered delivery.
 

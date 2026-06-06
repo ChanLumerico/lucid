@@ -8,7 +8,7 @@ and plus the RoPE-specific ``rotary_base``.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig
@@ -98,6 +98,7 @@ class RoFormerConfig(LanguageModelConfig):
     num_labels: int = 2
     classifier_dropout: float | None = None
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         head_dim = self.hidden_size // self.num_attention_heads

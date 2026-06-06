@@ -2,7 +2,7 @@
 autograd.Function: base class for custom differentiable operations.
 """
 
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._tensor.tensor import Tensor
@@ -154,6 +154,7 @@ class FunctionCtx:
         """
         self._non_differentiable = list(tensors)
 
+    @override
     def __setattr__(self, name: str, value: object) -> None:
         """Route user-defined attributes onto the ``_extra`` dict.
 

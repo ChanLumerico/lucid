@@ -7,6 +7,8 @@ with their probability gate bypassed.  Each child handles its own
 multi-target dispatch, so composition works on tensors or full samples.
 """
 
+from typing import override
+
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
 from lucid.utils.transforms._base import (
@@ -36,6 +38,7 @@ class _Container(_NoParams, Transform[Empty]):
         super().__init__(p=p)
         self.transforms = list(transforms)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:  # unused
         return img
 
@@ -78,6 +81,7 @@ class OneOf(_Container):
         total = sum(weights)
         self._weights = [w / total for w in weights] if total > 0 else None
 
+    @override
     def __call__(self, inputs: object) -> object:
         if not self.transforms or not self._gate_or_pass(inputs):
             return inputs
@@ -92,6 +96,7 @@ class OneOf(_Container):
                 break
         return _force(chosen, inputs)
 
+    @override
     def __repr__(self) -> str:
         return f"OneOf({self.transforms}, p={self.p})"
 
@@ -113,6 +118,7 @@ class SomeOf(_Container):
         super().__init__(transforms, p=p)
         self.n = n
 
+    @override
     def __call__(self, inputs: object) -> object:
         if not self.transforms or not self._gate_or_pass(inputs):
             return inputs
@@ -126,6 +132,7 @@ class SomeOf(_Container):
             inputs = _force(self.transforms[i], inputs)
         return inputs
 
+    @override
     def __repr__(self) -> str:
         return f"SomeOf({self.transforms}, n={self.n}, p={self.p})"
 
@@ -153,6 +160,7 @@ class Sequential(_Container):
     def __init__(self, transforms: list[TransformLike], p: float = 1.0) -> None:
         super().__init__(transforms, p=p)
 
+    @override
     def __call__(self, inputs: object) -> object:
         if not self._gate_or_pass(inputs):
             return inputs
@@ -160,6 +168,7 @@ class Sequential(_Container):
             inputs = tf(inputs)
         return inputs
 
+    @override
     def __repr__(self) -> str:
         return f"Sequential({self.transforms}, p={self.p})"
 
@@ -200,10 +209,12 @@ class OneOrOther(_Container):
         self.second = second
         self.switch = p
 
+    @override
     def __call__(self, inputs: object) -> object:
         chosen = self.first if _random.rand() < self.switch else self.second
         return _force(chosen, inputs)
 
+    @override
     def __repr__(self) -> str:
         return f"OneOrOther(p={self.switch})"
 
@@ -220,6 +231,7 @@ class ReplayCompose(_Container):
         super().__init__(transforms, p=p)
         self.replay_data: list[tuple[TransformLike, object, bool]] = []
 
+    @override
     def __call__(self, inputs: object) -> object:
         from lucid.utils.transforms._base import _find_reference
 
@@ -275,5 +287,6 @@ class ReplayCompose(_Container):
                 out = tf(out)
         return out
 
+    @override
     def __repr__(self) -> str:
         return f"ReplayCompose({self.transforms}, p={self.p})"

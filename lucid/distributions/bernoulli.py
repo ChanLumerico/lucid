@@ -1,5 +1,7 @@
 """Discrete ``Bernoulli`` and ``Geometric``."""
 
+from typing import override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
@@ -218,6 +220,7 @@ class Bernoulli(ExponentialFamily):
         """
         return self.logits if self._is_logits else _probs_to_logits(self.probs)
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the distribution.
@@ -241,6 +244,7 @@ class Bernoulli(ExponentialFamily):
         """
         return self._probs
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the distribution.
@@ -268,6 +272,7 @@ class Bernoulli(ExponentialFamily):
         p = self._probs
         return p * (1.0 - p)
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Bernoulli distribution.
 
@@ -306,6 +311,7 @@ class Bernoulli(ExponentialFamily):
         out = (u < p).to(self._probs.dtype)
         return out.detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of ``value`` under the Bernoulli distribution.
 
@@ -341,6 +347,7 @@ class Bernoulli(ExponentialFamily):
         l = self._logits
         return value * l - (1.0 + l.exp()).log()
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Bernoulli distribution (in nats).
 
@@ -495,6 +502,7 @@ class Geometric(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected number of failures before the first success.
@@ -515,6 +523,7 @@ class Geometric(Distribution):
         """
         return (1.0 - self.probs) / self.probs
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the number of failures before the first success.
@@ -535,6 +544,7 @@ class Geometric(Distribution):
         """
         return (1.0 - self.probs) / (self.probs * self.probs)
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Geometric distribution.
 
@@ -573,6 +583,7 @@ class Geometric(Distribution):
         u_safe = u.clip(1e-7, 1.0 - 1e-7)
         return (u_safe.log() / (1.0 - self.probs).log()).floor().detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of ``value`` under the Geometric distribution.
 
@@ -598,6 +609,7 @@ class Geometric(Distribution):
         """
         return value * (1.0 - self.probs).log() + self.probs.log()
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Geometric distribution (in nats).
 

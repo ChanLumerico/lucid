@@ -122,7 +122,7 @@ class ModelOutput:
         return [(k, getattr(self, k)) for k in self.keys()]
 
 
-@dataclass
+@dataclass(slots=True)
 class BaseModelOutput(ModelOutput):
     r"""Generic backbone forward output — sequence model variant.
 
@@ -160,7 +160,7 @@ class BaseModelOutput(ModelOutput):
     attentions: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class BaseModelOutputWithPooling(ModelOutput):
     r"""Backbone output + pooled representation (e.g. CLS).
 
@@ -199,7 +199,7 @@ class BaseModelOutputWithPooling(ModelOutput):
     attentions: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ImageClassificationOutput(ModelOutput):
     r"""Output of any ``{Family}ForImageClassification`` model.
 
@@ -236,7 +236,7 @@ class ImageClassificationOutput(ModelOutput):
     attentions: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ObjectDetectionOutput(ModelOutput):
     r"""Output of any ``{Family}ForObjectDetection`` model.
 
@@ -283,7 +283,7 @@ class ObjectDetectionOutput(ModelOutput):
     proposals: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class InstanceSegmentationOutput(ModelOutput):
     r"""Output of any instance-segmentation model.
 
@@ -322,7 +322,7 @@ class InstanceSegmentationOutput(ModelOutput):
     hidden_states: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class SemanticSegmentationOutput(ModelOutput):
     r"""Output of any ``{Family}ForSemanticSegmentation`` model.
 
@@ -356,7 +356,7 @@ class SemanticSegmentationOutput(ModelOutput):
     hidden_states: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class CausalLMOutput(ModelOutput):
     r"""Output of any causal (left-to-right) language model head.
 
@@ -398,7 +398,7 @@ class CausalLMOutput(ModelOutput):
     attentions: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class MaskedLMOutput(ModelOutput):
     r"""Output of any masked-LM head (BERT, RoFormer, …).
 
@@ -434,7 +434,7 @@ class MaskedLMOutput(ModelOutput):
     attentions: tuple[Tensor, ...] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Seq2SeqLMOutput(ModelOutput):
     r"""Output of any encoder-decoder seq2seq language model.
 
@@ -489,7 +489,7 @@ class Seq2SeqLMOutput(ModelOutput):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass
+@dataclass(slots=True)
 class DiffusionModelOutput(ModelOutput):
     r"""Single-step output of a diffusion U-Net's forward pass.
 
@@ -526,7 +526,7 @@ class DiffusionModelOutput(ModelOutput):
     loss: Tensor | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class VAEOutput(ModelOutput):
     r"""End-to-end VAE forward output.
 
@@ -572,7 +572,7 @@ class VAEOutput(ModelOutput):
     kl_loss: Tensor | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class GenerationOutput(ModelOutput):
     r"""Final result of a generative model's sampling loop.
 

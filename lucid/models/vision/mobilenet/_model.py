@@ -23,7 +23,7 @@ Architecture (width_mult=1.0):
   AvgPool(7×7) → FC(1024, num_classes)
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -197,14 +197,17 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=5, num_channels=_ch(1024), reduction=32),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.features(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -297,6 +300,7 @@ class MobileNetV1ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(num_features, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

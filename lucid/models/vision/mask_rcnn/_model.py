@@ -46,7 +46,7 @@ Faithfulness notes
   model).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -79,6 +79,7 @@ from lucid.models.vision.mask_rcnn._config import MaskRCNNConfig
 #   roi_heads.mask_predictor.mask_fcn_logits.{weight,bias}
 
 
+@final
 class _MaskRCNNHeads(nn.Sequential):
     """Reference ``MaskRCNNHeads``: four ``Conv3×3 + ReLU`` blocks.
 
@@ -104,6 +105,7 @@ class _MaskRCNNHeads(nn.Sequential):
         super().__init__(*blocks)
 
 
+@final
 class _MaskRCNNPredictor(nn.Module):
     """Reference ``MaskRCNNPredictor``: deconv-upsample then 1×1 logits.
 
@@ -119,6 +121,7 @@ class _MaskRCNNPredictor(nn.Module):
         self.conv5_mask = nn.ConvTranspose2d(in_channels, hidden_channels, 2, stride=2)
         self.mask_fcn_logits = nn.Conv2d(hidden_channels, num_classes, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = F.relu(cast(Tensor, self.conv5_mask(x)))
         return cast(Tensor, self.mask_fcn_logits(x))
@@ -129,6 +132,7 @@ class _MaskRCNNPredictor(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MaskRoIHeads(nn.Module):
     """RoI heads container: ``box_head`` + ``box_predictor`` (reused from
     Faster R-CNN) plus the new ``mask_head`` + ``mask_predictor``.
@@ -164,6 +168,7 @@ class _MaskRoIHeads(nn.Module):
             mask_hidden_channels, mask_predictor_hidden, num_classes
         )
 
+    @override
     def forward(self, roi_feats: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         feats = cast(Tensor, self.box_head(roi_feats))
         return cast(tuple[Tensor, Tensor], self.box_predictor(feats))
@@ -302,6 +307,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
     # Forward
     # ------------------------------------------------------------------
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

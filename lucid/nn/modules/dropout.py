@@ -2,6 +2,8 @@
 Dropout modules.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid._C import engine as _C_engine
@@ -107,6 +109,7 @@ class Dropout(Module):
         self.p = p
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply dropout to the input tensor.
 
@@ -123,6 +126,7 @@ class Dropout(Module):
         """
         return dropout(x, self.p, self.training, self.inplace)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
@@ -207,6 +211,7 @@ class Dropout1d(Module):
         self.p = p
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # The engine's ``dropoutnd`` kernel handles 3-D / 4-D / 5-D inputs by
         # building the mask along the channel axis, so the same call works
@@ -226,6 +231,7 @@ class Dropout1d(Module):
         """
         return dropout2d(x, self.p, self.training)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
@@ -311,6 +317,7 @@ class Dropout2d(Module):
         self.p = p
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply dropout to the input tensor.
 
@@ -327,6 +334,7 @@ class Dropout2d(Module):
         """
         return dropout2d(x, self.p, self.training)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
@@ -428,6 +436,7 @@ class AlphaDropout(Module):
         self.p = p
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply dropout to the input tensor.
 
@@ -444,6 +453,7 @@ class AlphaDropout(Module):
         """
         return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), self.p, self.training))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
@@ -526,6 +536,7 @@ class Dropout3d(Module):
         self.p = p
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply dropout to the input tensor.
 
@@ -544,6 +555,7 @@ class Dropout3d(Module):
 
         return dropout3d(x, self.p, self.training)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
@@ -645,6 +657,7 @@ class FeatureAlphaDropout(Module):
         self.p = p
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply dropout to the input tensor.
 
@@ -661,6 +674,7 @@ class FeatureAlphaDropout(Module):
         """
         return feature_alpha_dropout(x, self.p, self.training, self.inplace)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"

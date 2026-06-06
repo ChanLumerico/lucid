@@ -2,7 +2,7 @@
 Gradient checkpointing: trade memory for recomputation during backward.
 """
 
-from typing import Callable, cast
+from typing import Callable, cast, override
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.autograd._grad_mode import no_grad, enable_grad
@@ -82,6 +82,7 @@ def checkpoint(
     class CheckpointFunction(Function):
         """Custom autograd Function that runs the wrapped callable without saving intermediates, then re-executes it during backward to recompute the activations on demand."""
 
+        @override
         @staticmethod
         def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor | tuple[Tensor, ...]:
             """Apply the layer / parametrization to the input."""
@@ -92,6 +93,7 @@ def checkpoint(
             with no_grad():
                 return function(*inputs, **kwargs)
 
+        @override
         @staticmethod
         def backward(
             ctx: FunctionCtx, *grad_outputs: Tensor

@@ -29,7 +29,7 @@ timm key layout (pvt_v2_b1):
   head.weight  head.bias
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -44,6 +44,7 @@ from lucid.models.vision.pvt._config import PVTConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _OverlapPatchEmbed(nn.Module):
     """Overlapping patch embedding via strided Conv2d + LayerNorm.
 
@@ -66,6 +67,7 @@ class _OverlapPatchEmbed(nn.Module):
         )
         self.norm = nn.LayerNorm(embed_dim)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
         x = cast(Tensor, self.proj(x))  # (B, C, H', W')
         B, C, H, W = x.shape
@@ -80,6 +82,7 @@ class _OverlapPatchEmbed(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _DWConvMLP(nn.Module):
     """Two-layer MLP with a DWConv after fc1 for spatial mixing.
 
@@ -93,6 +96,7 @@ class _DWConvMLP(nn.Module):
         self.dwconv = nn.Conv2d(hidden, hidden, 3, padding=1, groups=hidden)
         self.fc2 = nn.Linear(hidden, dim)
 
+    @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         B, _N, _C = x.shape
         x = cast(Tensor, self.fc1(x))
@@ -110,6 +114,7 @@ class _DWConvMLP(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SRAttention(nn.Module):
     """MHA with optional spatial reduction on K and V.
 
@@ -135,6 +140,7 @@ class _SRAttention(nn.Module):
             self.sr = None  # type: ignore[assignment]
             self.norm = None  # type: ignore[assignment]
 
+    @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         B, N, C = x.shape
         head_dim = C // self.num_heads
@@ -167,6 +173,7 @@ class _SRAttention(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PVTBlock(nn.Module):
     def __init__(
         self,
@@ -181,6 +188,7 @@ class _PVTBlock(nn.Module):
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = _DWConvMLP(dim, mlp_ratio)
 
+    @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x)), H, W))  # type: ignore[arg-type]
         x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)), H, W))  # type: ignore[arg-type]
@@ -192,6 +200,7 @@ class _PVTBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PVTStage(nn.Module):
     """One PVT v2 stage = optional downsample + N × Block + LayerNorm.
 
@@ -232,6 +241,7 @@ class _PVTStage(nn.Module):
         x_out = tokens.permute(0, 2, 1).reshape(B, C, H, W)
         return x_out, H, W
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
         # x is a spatial map (B, C_in, H_in, W_in).
         # For stage 0 this should NOT be called directly — call forward_tokens.
@@ -381,10 +391,12 @@ class PVT(PretrainedModel, BackboneMixin):
         self._feature_info = fi
         self._out_dim = out_dim
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         # Stage 0: use top-level patch_embed then stage blocks
         tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
@@ -395,6 +407,7 @@ class PVT(PretrainedModel, BackboneMixin):
         # x_spatial: (B, C, H, W) — global average pool to (B, C)
         return x_spatial.flatten(2).mean(dim=2)
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -469,6 +482,7 @@ class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.patch_embed, self.stages, _, out_dim = _build_pvt(config)
         self._build_classifier(out_dim, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

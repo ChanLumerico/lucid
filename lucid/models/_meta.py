@@ -18,14 +18,12 @@ Convention rationale: see ``arch-models-canonical-name``.
 """
 
 from dataclasses import dataclass, is_dataclass, field, fields
-from typing import Callable, TypeVar, dataclass_transform
+from typing import Callable, dataclass_transform
 
 from lucid.models._base import ModelConfig
 
-_C = TypeVar("_C", bound=type[ModelConfig])
 
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ModelFamilyMeta:
     r"""Immutable container for a family's docs-facing metadata.
 
@@ -49,12 +47,12 @@ class ModelFamilyMeta:
 
 
 @dataclass_transform(frozen_default=True, field_specifiers=(field,))
-def model_family_meta(
+def model_family_meta[C: type[ModelConfig]](
     *,
     canonical_name: str,
     citation: str,
     theory: str,
-) -> Callable[[_C], _C]:
+) -> Callable[[C], C]:
     r"""Class decorator: attach paper / theory / display metadata to a
     ``ModelConfig`` subclass.
 
@@ -86,7 +84,7 @@ def model_family_meta(
 
     Returns
     -------
-    Callable[[_C], _C]
+    Callable[[C], C]
         The decorator function.  The returned class is *the same class
         object*, with ``__model_family_meta__`` set.
 
@@ -137,7 +135,7 @@ def model_family_meta(
         theory=theory,
     )
 
-    def _wrap(cls: _C) -> _C:
+    def _wrap(cls: C) -> C:
         # Per-class structural checks at decorator-application time.
         if not isinstance(cls, type) or not issubclass(cls, ModelConfig):
             raise TypeError(

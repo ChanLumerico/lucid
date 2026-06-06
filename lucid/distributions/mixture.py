@@ -1,5 +1,7 @@
 """``MixtureSameFamily`` — finite mixture of identically-typed components."""
 
+from typing import override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.categorical import Categorical
@@ -142,6 +144,7 @@ class MixtureSameFamily(Distribution):
         )
 
     @property
+    @override
     def mean(self) -> Tensor:
         r"""Expected value via the law of total expectation: :math:`E[X] = \sum_k \pi_k \mu_k`.
 
@@ -159,6 +162,7 @@ class MixtureSameFamily(Distribution):
         return (weight * comp_mean).sum(dim=-1 - len(self._event_shape))
 
     @property
+    @override
     def variance(self) -> Tensor:
         r"""Variance via the law of total variance.
 
@@ -185,6 +189,7 @@ class MixtureSameFamily(Distribution):
         between: Tensor = (weight * (comp_mean - mean_of_mean) ** 2).sum(dim=ax)
         return within + between
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the mixture by ancestral sampling.
 
@@ -225,6 +230,7 @@ class MixtureSameFamily(Distribution):
         gathered: Tensor = lucid.gather(comp_samples, idx_b, ax)
         return gathered.squeeze(ax)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of the mixture evaluated at ``value``.
 

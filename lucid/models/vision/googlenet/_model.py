@@ -33,7 +33,7 @@ and 4d:
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -53,6 +53,7 @@ _NEG_FILL = -1e30
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CeilMaxPool2d(nn.Module):
     r"""Max pool with ``ceil_mode=True`` semantics.
 
@@ -75,6 +76,7 @@ class _CeilMaxPool2d(nn.Module):
         self.stride = stride
         self.padding = padding
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         k, s, p = self.kernel_size, self.stride, self.padding
         _, _, h, w = x.shape
@@ -89,6 +91,7 @@ class _CeilMaxPool2d(nn.Module):
             x = F.pad(x, (0, need_w, 0, need_h), mode="constant", value=_NEG_FILL)
         return F.max_pool2d(x, k, stride=s, padding=p)
 
+    @override
     def extra_repr(self) -> str:
         return (
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
@@ -101,6 +104,7 @@ class _CeilMaxPool2d(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _BasicConv2d(nn.Module):
     """Conv (no bias) → BatchNorm → ReLU, the GoogLeNet conv primitive."""
 
@@ -123,6 +127,7 @@ class _BasicConv2d(nn.Module):
         )
         self.bn = nn.BatchNorm2d(out_channels, eps=0.001)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
 
@@ -132,6 +137,7 @@ class _BasicConv2d(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _InceptionModule(nn.Module):
     """Single Inception block with four parallel branches."""
 
@@ -164,6 +170,7 @@ class _InceptionModule(nn.Module):
             _BasicConv2d(in_channels, out_pool_proj, kernel_size=1),
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1(x))
         b2 = cast(Tensor, self.branch2(x))
@@ -177,6 +184,7 @@ class _InceptionModule(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _AuxClassifier(nn.Module):
     """Auxiliary classifier attached at Inception 4a and 4d."""
 
@@ -187,6 +195,7 @@ class _AuxClassifier(nn.Module):
         self.fc2 = nn.Linear(1024, num_classes)
         self.dropout = nn.Dropout(p=dropout)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = F.adaptive_avg_pool2d(x, (4, 4))
         x = cast(Tensor, self.conv(x))
@@ -201,7 +210,7 @@ class _AuxClassifier(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class GoogLeNetOutput:
     r"""Structured forward output for :class:`GoogLeNetForImageClassification`.
 
@@ -404,10 +413,12 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=5, num_channels=1024, reduction=32),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.conv1(x))
         x = cast(Tensor, self.maxpool1(x))
@@ -427,6 +438,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.inception5b(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> GoogLeNetOutput:  # type: ignore[override]
         return GoogLeNetOutput(logits=self.forward_features(x))
 
@@ -560,6 +572,7 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(1024, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

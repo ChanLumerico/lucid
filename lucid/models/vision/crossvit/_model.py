@@ -29,7 +29,7 @@ is identical.
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -53,6 +53,7 @@ class _PatchEmbed(nn.Module):
         super().__init__()
         self.proj = nn.Conv2d(in_channels, embed_dim, patch_size, stride=patch_size)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.proj(x))  # (B, C, H', W')
         B, C, H, W = x.shape
@@ -85,6 +86,7 @@ class _Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, N, C = x.shape
         qkv = cast(Tensor, self.qkv(x)).reshape(B, N, 3, self.num_heads, self.head_dim)
@@ -113,6 +115,7 @@ class _Mlp(nn.Module):
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = F.gelu(cast(Tensor, self.fc1(x)))
         x = cast(Tensor, self.drop(x))
@@ -120,6 +123,7 @@ class _Mlp(nn.Module):
         return cast(Tensor, self.drop(x))
 
 
+@final
 class _Block(nn.Module):
     """Standard ViT transformer block: LN → MSA → LN → MLP + residuals."""
 
@@ -143,6 +147,7 @@ class _Block(nn.Module):
         self.norm2 = nn.LayerNorm(dim, eps=layer_norm_eps)
         self.mlp = _Mlp(dim, int(dim * mlp_ratio), dim, drop=drop)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         n1 = cast(Tensor, self.norm1(x))
         x = x + cast(Tensor, self.drop_path(cast(Tensor, self.attn(n1))))
@@ -156,6 +161,7 @@ class _Block(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _CrossAttention(nn.Module):
     """Cross-attention: query = single CLS token, KV = patch sequence.
 
@@ -187,6 +193,7 @@ class _CrossAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x = concat(cls_query, kv_sequence) along token dim.
         # timm's CrossAttention takes only the first token as query,
@@ -215,6 +222,7 @@ class _CrossAttention(nn.Module):
         return cast(Tensor, self.proj_drop(x))
 
 
+@final
 class _CrossAttentionBlock(nn.Module):
     """Pre-norm cross-attention block (no MLP, mirroring the paper)."""
 
@@ -235,6 +243,7 @@ class _CrossAttentionBlock(nn.Module):
         )
         self.drop_path = DropPath(drop_path)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # Residual is added only to the CLS query token (first slot).
         cls_q = x[:, 0:1, :]
@@ -256,6 +265,7 @@ def _make_proj(in_dim: int, out_dim: int, layer_norm_eps: float) -> nn.Sequentia
     )
 
 
+@final
 class _MultiScaleBlock(nn.Module):
     """One CrossViT stage: independent branches → CLS-token fusion."""
 
@@ -332,6 +342,7 @@ class _MultiScaleBlock(nn.Module):
             ]
         )
 
+    @override
     def forward(self, xs: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         # Per-branch self-attention.
         xs = [cast(Tensor, self.blocks[d](xs[d])) for d in range(self.num_branches)]
@@ -557,6 +568,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=2, num_channels=D[1], reduction=P[1]),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
@@ -572,6 +584,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
         x = x + pos
         return cast(Tensor, self.pos_drop(x))
 
+    @override
     def forward_features(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         cfg = cast(CrossViTConfig, self.config)
         # Rescale per branch to the same absolute targets used to size the
@@ -590,6 +603,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
         # Return the two CLS tokens.
         return xs[0][:, 0], xs[1][:, 0]
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         cls_s, cls_l = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=lucid.cat([cls_s, cls_l], dim=-1))
@@ -679,6 +693,7 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x = x + pos
         return cast(Tensor, self.pos_drop(x))
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

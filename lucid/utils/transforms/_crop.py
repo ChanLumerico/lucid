@@ -5,6 +5,7 @@ geometric, moving mask / boxes / keypoints with the image.
 """
 
 from dataclasses import dataclass
+from typing import override
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
@@ -23,7 +24,7 @@ from lucid.utils.transforms._datatypes import (
 from lucid.utils.transforms._interpolation import Interpolation, as_interpolation
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CropBox:
     r"""Per-call crop window for :class:`RandomSizedCrop`.
 
@@ -83,22 +84,27 @@ class Crop(_NoParams, GeometricTransform[Empty]):
     def _hw(self) -> tuple[int, int]:
         return self.y_max - self.y_min, self.x_max - self.x_min
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         h, w = self._hw
         return F.crop(img, self.y_min, self.x_min, h, w)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         h, w = self._hw
         return F.crop(mask, self.y_min, self.x_min, h, w)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         h, w = self._hw
         return crop_boxes(boxes, self.y_min, self.x_min, h, w)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         h, w = self._hw
         return crop_keypoints(kps, self.y_min, self.x_min, h, w)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"Crop(x_min={self.x_min}, y_min={self.y_min}, "
@@ -140,24 +146,29 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
         top, left = dh // 2, dw // 2
         return left, dw - left, top, dh - top  # (l, r, t, b)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         h, w = F._spatial_hw(img)
         return F.pad(img, self._pads(h, w), value=self.value)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         h, w = F._spatial_hw(mask)
         return F.pad(mask, self._pads(h, w), value=self.mask_value)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         h, w = boxes.canvas_size
         left, right, top, bottom = self._pads(h, w)
         return pad_boxes(boxes, left, top, h + top + bottom, w + left + right)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         h, w = kps.canvas_size
         left, right, top, bottom = self._pads(h, w)
         return pad_keypoints(kps, left, top, h + top + bottom, w + left + right)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"PadIfNeeded(min_height={self.min_height}, "
@@ -196,6 +207,7 @@ class RandomSizedCrop(GeometricTransform[CropBox]):
         self.w2h_ratio = w2h_ratio
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def make_params(self, img: Tensor) -> CropBox:
         r"""Sample per-call random parameters for :class:`RandomSizedCrop`.
 
@@ -225,6 +237,7 @@ class RandomSizedCrop(GeometricTransform[CropBox]):
             width=cw,
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
             img,
@@ -236,6 +249,7 @@ class RandomSizedCrop(GeometricTransform[CropBox]):
             interpolation=self.interpolation,
         )
 
+    @override
     def _apply_mask(self, mask: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
             mask,
@@ -247,18 +261,21 @@ class RandomSizedCrop(GeometricTransform[CropBox]):
             interpolation=Interpolation.NEAREST,
         )
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: CropBox) -> BoundingBoxes:
         cropped = crop_boxes(
             boxes, params.top, params.left, params.height, params.width
         )
         return resize_boxes(cropped, self.height, self.width)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: CropBox) -> Keypoints:
         cropped = crop_keypoints(
             kps, params.top, params.left, params.height, params.width
         )
         return resize_keypoints(cropped, self.height, self.width)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"RandomSizedCrop(min_max_height={self.min_max_height}, "
@@ -293,12 +310,15 @@ class CropAndPad(_NoParams, GeometricTransform[Empty]):
         h, w = F._spatial_hw(x)
         return F.crop(x, c, c, h - 2 * c, w - 2 * c)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return self._img_like(img)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         return self._img_like(mask)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         h, w = boxes.canvas_size
         if self.px >= 0:
@@ -306,6 +326,7 @@ class CropAndPad(_NoParams, GeometricTransform[Empty]):
         c = -self.px
         return crop_boxes(boxes, c, c, h - 2 * c, w - 2 * c)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         h, w = kps.canvas_size
         if self.px >= 0:
@@ -315,5 +336,6 @@ class CropAndPad(_NoParams, GeometricTransform[Empty]):
         c = -self.px
         return crop_keypoints(kps, c, c, h - 2 * c, w - 2 * c)
 
+    @override
     def __repr__(self) -> str:
         return f"CropAndPad(px={self.px}, p={self.p})"

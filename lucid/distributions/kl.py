@@ -3,7 +3,7 @@ type, mirroring the reference framework's ``register_kl`` mechanism.
 """
 
 from collections.abc import Callable
-from typing import TypeVar, cast
+from typing import cast
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -18,10 +18,8 @@ from lucid.distributions.student import StudentT
 _KLFn = Callable[[Distribution, Distribution], Tensor]
 _KL_REGISTRY: dict[tuple[type, type], _KLFn] = {}
 
-_F = TypeVar("_F", bound=Callable[..., Tensor])
 
-
-def register_kl(p_cls: type, q_cls: type) -> Callable[[_F], _F]:
+def register_kl[F: Callable[..., Tensor]](p_cls: type, q_cls: type) -> Callable[[F], F]:
     r"""Register a closed-form KL implementation for a distribution pair.
 
     Decorator used to add an analytical
@@ -75,7 +73,7 @@ def register_kl(p_cls: type, q_cls: type) -> Callable[[_F], _F]:
     Tensor(...)
     """
 
-    def _decorator(fn: _F) -> _F:
+    def _decorator(fn: F) -> F:
         """Insert ``fn`` into the KL registry under ``(p_cls, q_cls)``."""
         _KL_REGISTRY[(p_cls, q_cls)] = fn
         return fn

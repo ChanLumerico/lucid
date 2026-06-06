@@ -27,7 +27,7 @@ Each MBConv block:
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -64,6 +64,7 @@ class _SEBlock(nn.Module):
         self.fc1 = nn.Conv2d(in_channels, se_channels, 1)
         self.fc2 = nn.Conv2d(se_channels, in_channels, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         scale = cast(Tensor, self.squeeze(x))
         scale = F.silu(cast(Tensor, self.fc1(scale)))
@@ -76,6 +77,7 @@ class _SEBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MBConvBlock(nn.Module):
     """Mobile Inverted Bottleneck Convolution with SE."""
 
@@ -127,6 +129,7 @@ class _MBConvBlock(nn.Module):
         self.project_conv = nn.Conv2d(expanded, out_channels, 1, bias=False)
         self.project_bn = nn.BatchNorm2d(out_channels)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out = cast(Tensor, self.conv(x))
         out = cast(Tensor, self.se(out))
@@ -317,14 +320,17 @@ class EfficientNet(PretrainedModel, BackboneMixin):
             )
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.features(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -413,6 +419,7 @@ class EfficientNetForImageClassification(PretrainedModel, ClassificationHeadMixi
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(num_features, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

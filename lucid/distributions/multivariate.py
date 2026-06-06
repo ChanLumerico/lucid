@@ -1,6 +1,7 @@
 """``MultivariateNormal`` parameterised by a Cholesky factor."""
 
 import math
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -182,6 +183,7 @@ class MultivariateNormal(Distribution):
         """
         return self.scale_tril @ self.scale_tril.mT
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the MultivariateNormal: :math:`E[X] = \mu`.
@@ -193,6 +195,7 @@ class MultivariateNormal(Distribution):
         """
         return self.loc
 
+    @override
     @property
     def mode(self) -> Tensor:
         r"""Mode of the MultivariateNormal: equal to the mean :math:`\mu`.
@@ -206,6 +209,7 @@ class MultivariateNormal(Distribution):
         """
         return self.loc
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Marginal variances — diagonal entries of :math:`\Sigma = LL^\top`.
@@ -217,6 +221,7 @@ class MultivariateNormal(Distribution):
         """
         return (self.scale_tril * self.scale_tril).sum(dim=-1)
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw reparameterised samples via the Cholesky factorisation.
 
@@ -241,6 +246,7 @@ class MultivariateNormal(Distribution):
         # x = loc + L · eps  — matmul with the Cholesky factor.
         return self.loc + (self.scale_tril @ eps.unsqueeze(-1)).squeeze(-1)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the MultivariateNormal distribution.
 
@@ -270,6 +276,7 @@ class MultivariateNormal(Distribution):
         log_det = diag.log().sum(dim=-1)
         return -0.5 * sq - log_det - 0.5 * self._D * math.log(2.0 * math.pi)
 
+    @override
     def entropy(self) -> Tensor:
         r"""Entropy of the MultivariateNormal distribution.
 

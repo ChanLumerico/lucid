@@ -8,6 +8,8 @@ implemented raise :class:`NotImplementedError`, ``sample`` is
 ``rsample`` detached, and ``stddev = √variance``.
 """
 
+from typing import override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import Constraint
@@ -502,6 +504,7 @@ class Distribution:
 
     # ── pretty-printing ────────────────────────────────────────────────────
 
+    @override
     def __repr__(self) -> str:
         """Concise string representation showing parameter shapes.
 

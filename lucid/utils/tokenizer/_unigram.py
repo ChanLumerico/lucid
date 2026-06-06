@@ -36,7 +36,7 @@ disable (matches plain "non-SentencePiece" Unigram behaviour).
 
 import json
 import os
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -83,6 +83,7 @@ class SentencePiecePreTokenizer(PreTokenizer):
         """
         self._add_dummy_prefix = add_dummy_prefix
 
+    @override
     def pre_tokenize(self, text: str) -> list[tuple[str, tuple[int, int]]]:
         """Replace whitespace with ``▁`` and split on ``▁`` boundaries."""
         # Replace every whitespace run with SP_SPACE.  Optionally
@@ -293,6 +294,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
             (len(p.encode("utf-8")) for p, _ in self._pieces), default=0
         )
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of pieces in the Unigram vocabulary.
@@ -304,6 +306,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         """
         return len(self._pieces)
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"unigram"``).
@@ -315,6 +318,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         """
         return "unigram"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a copy of the piece → id map.
 
@@ -325,6 +329,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         """
         return dict(self._piece_to_id)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         r"""Look up the piece string for a token id.
 
@@ -434,6 +439,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         ids.reverse()
         return ids
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Normalize + pre-tokenize + per-chunk Viterbi encode."""
         out: list[int] = []
@@ -441,6 +447,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
             out.extend(self._viterbi_encode_chunk(chunk))
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Concatenate pieces and convert ``▁`` markers back to spaces."""
         # Standard SentencePiece decode: join surface forms, replace
@@ -491,6 +498,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         self._rebuild_tables()
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Persist as unified ``tokenizer.json`` + ``special_tokens_map.json``.
 
@@ -511,6 +519,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         # Also write the special_tokens_map.json via the base.
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Add the ``model`` block to the unified ``tokenizer.json``."""
         return {
@@ -667,6 +676,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
             special_tokens = SpecialTokens(unk=unk_token)
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of pieces in the live C++ vocabulary.
@@ -678,6 +688,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         """
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"unigram"``).
@@ -689,6 +700,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         """
         return "unigram"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a piece → id map from the C++ backend.
 
@@ -699,6 +711,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         """
         return dict(self._cpp.get_vocab())
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         r"""Look up the piece string for a token id.
 
@@ -726,6 +739,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         """
         return list(self._pieces)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Normalize + pre-tokenize in Python, per-chunk Viterbi in C++."""
         out: list[int] = []
@@ -733,6 +747,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
             out.extend(self._cpp.encode(chunk))
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """C++ decode + ``▁`` → space replacement for parity."""
         raw = self._cpp.decode(list(ids))
@@ -768,6 +783,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         self._id_to_piece = {i: p for i, (p, _) in enumerate(self._pieces)}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Same format as :meth:`UnigramTokenizer.save`."""
         os.makedirs(directory, exist_ok=True)
@@ -779,6 +795,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         )
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Add the ``model`` block to the unified ``tokenizer.json``."""
         return {

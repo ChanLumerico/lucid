@@ -17,6 +17,7 @@ The protocol mirrors the reference framework:
 """
 
 from collections import OrderedDict, namedtuple
+from typing import final
 
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
@@ -29,6 +30,7 @@ from lucid.nn.module import Module
 from lucid._types import StateDict
 
 
+@final
 class _IncompatibleKeys(
     namedtuple("_IncompatibleKeys", ["missing_keys", "unexpected_keys"])
 ):

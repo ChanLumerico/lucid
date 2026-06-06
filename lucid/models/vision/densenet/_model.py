@@ -29,7 +29,7 @@ State-dict key structure mirrors timm densenet121:
     classifier.weight/bias
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -45,6 +45,7 @@ from lucid.models.vision.densenet._config import DenseNetConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _DenseLayer(nn.Module):
     """Single dense layer: BN-ReLU-Conv1×1-BN-ReLU-Conv3×3."""
 
@@ -63,6 +64,7 @@ class _DenseLayer(nn.Module):
         self.conv2 = nn.Conv2d(inter_features, growth_rate, 3, padding=1, bias=False)
         self.drop = nn.Dropout(p=dropout_rate) if dropout_rate > 0.0 else None
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out = cast(Tensor, self.conv1(F.relu(cast(Tensor, self.norm1(x)))))
         out = cast(Tensor, self.conv2(F.relu(cast(Tensor, self.norm2(out)))))
@@ -77,6 +79,7 @@ class _DenseLayer(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _DenseBlock(nn.Module):
     """N stacked _DenseLayers; each layer receives all previous outputs.
 
@@ -102,6 +105,7 @@ class _DenseBlock(nn.Module):
             )
             self.add_module(f"denselayer{i + 1}", layer)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         for module in self.children():
             x = cast(Tensor, module(x))
@@ -113,6 +117,7 @@ class _DenseBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Transition(nn.Module):
     """BN-ReLU-Conv1×1-AvgPool — halves channels and spatial resolution."""
 
@@ -122,6 +127,7 @@ class _Transition(nn.Module):
         self.conv = nn.Conv2d(num_input_features, num_output_features, 1, bias=False)
         self.pool = nn.AvgPool2d(2, stride=2)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv(F.relu(cast(Tensor, self.norm(x)))))
         return cast(Tensor, self.pool(x))
@@ -145,6 +151,7 @@ class _Transition(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Features(nn.Module):
     """Flat-attribute container whose state-dict key prefix is ``features``."""
 
@@ -185,6 +192,7 @@ class _Features(nn.Module):
     def num_features(self) -> int:
         return self._num_features
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(
             Tensor,
@@ -304,13 +312,16 @@ class DenseNet(PretrainedModel, BackboneMixin):
         self._feature_info = fi
 
     @property
+    @override
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = F.relu(cast(Tensor, self.features(x)))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -383,6 +394,7 @@ class DenseNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(self.features.num_features, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

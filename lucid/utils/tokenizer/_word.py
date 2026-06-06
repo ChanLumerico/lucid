@@ -34,7 +34,7 @@ information loss.
 """
 
 import os
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -108,24 +108,29 @@ class WordTokenizer(Tokenizer):
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Total number of tokens in the vocab."""
         return len(self._vocab)
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier — always ``"word"``."""
         return "word"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return a copy of the token-string → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Algorithm-specific encode: whitespace-split + dict lookup."""
         out: list[int] = []
@@ -144,6 +149,7 @@ class WordTokenizer(Tokenizer):
                 )
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Algorithm-specific decode: join known ids with a single space."""
         return " ".join(self._id_to_token[i] for i in ids if i in self._id_to_token)
@@ -187,6 +193,7 @@ class WordTokenizer(Tokenizer):
         self._id_to_token = {i: t for t, i in v.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Persist vocab + unified ``tokenizer.json``.
 
@@ -201,6 +208,7 @@ class WordTokenizer(Tokenizer):
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Add ``model`` block (type / vocab) to ``tokenizer.json``."""
         return {"model": {"type": "Word", "vocab": self._vocab}}
@@ -312,24 +320,29 @@ class WordTokenizerFast(Tokenizer):
                 setattr(st, name, tid)
         self._cpp.special_tokens = st
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Total number of tokens in the vocab (queried via C++)."""
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier — always ``"word"``."""
         return "word"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return a copy of the cached token-string → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """C++ encode path with a Python-side OOV pre-check."""
         # The C++ tokenizer falls back to UNK silently or drops the
@@ -345,6 +358,7 @@ class WordTokenizerFast(Tokenizer):
                     )
         return list(self._cpp.encode(text))
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """C++ decode path — returns the joined surface form."""
         return self._cpp.decode(list(ids))
@@ -371,6 +385,7 @@ class WordTokenizerFast(Tokenizer):
         self._refresh_special_ids()
         self._sync_specials_to_cpp()
 
+    @override
     def save(self, directory: str) -> None:
         """Same on-disk format as :meth:`WordTokenizer.save`.
 
@@ -383,6 +398,7 @@ class WordTokenizerFast(Tokenizer):
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Add ``model`` block (type / vocab) to ``tokenizer.json``."""
         return {"model": {"type": "Word", "vocab": self._vocab}}

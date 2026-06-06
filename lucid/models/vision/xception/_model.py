@@ -27,7 +27,7 @@ SepConv sub-module attribute names (timm layout):
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -42,6 +42,7 @@ from lucid.models.vision.xception._config import XceptionConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SepConvOp(nn.Module):
     """Depthwise + pointwise conv (no BN, no activation).
 
@@ -68,6 +69,7 @@ class _SepConvOp(nn.Module):
         )
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, bias=False)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv1(x))
         return cast(Tensor, self.pointwise(x))
@@ -106,6 +108,7 @@ def _make_entry_block(
       rep.6                  — MaxPool2d
     """
 
+    @final
     class _EntryBlock(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -124,6 +127,7 @@ def _make_entry_block(
             self.skip = nn.Conv2d(in_channels, out_channels, 1, stride=2, bias=False)
             self.skipbn = nn.BatchNorm2d(out_channels)
 
+        @override
         def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
             residual = cast(Tensor, self.skipbn(cast(Tensor, self.skip(x))))
             return cast(Tensor, self.rep(x)) + residual
@@ -156,6 +160,7 @@ def _make_middle_block(channels: int) -> nn.Module:
       8 — BN
     """
 
+    @final
     class _MiddleBlock(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -171,6 +176,7 @@ def _make_middle_block(channels: int) -> nn.Module:
                 nn.BatchNorm2d(channels),
             )
 
+        @override
         def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
             return cast(Tensor, self.rep(x)) + x
 
@@ -201,6 +207,7 @@ def _make_exit_block() -> nn.Module:
       6 — MaxPool2d(3, stride=2, padding=1)
     """
 
+    @final
     class _ExitBlock(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -216,6 +223,7 @@ def _make_exit_block() -> nn.Module:
             self.skip = nn.Conv2d(728, 1024, 1, stride=2, bias=False)
             self.skipbn = nn.BatchNorm2d(1024)
 
+        @override
         def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
             residual = cast(Tensor, self.skipbn(cast(Tensor, self.skip(x))))
             return cast(Tensor, self.rep(x)) + residual
@@ -228,6 +236,7 @@ def _make_exit_block() -> nn.Module:
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ExitSepConv(nn.Module):
     """Exit-flow final SepConv (conv3/conv4): dw+pw, no activation.
 
@@ -242,6 +251,7 @@ class _ExitSepConv(nn.Module):
         )
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, bias=False)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv1(x))
         return cast(Tensor, self.pointwise(x))
@@ -252,7 +262,7 @@ class _ExitSepConv(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class XceptionOutput:
     r"""Forward-return dataclass for :class:`XceptionForImageClassification`.
 
@@ -465,13 +475,16 @@ class Xception(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=4, num_channels=2048, reduction=32),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         return _xception_forward_features(self, x)
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -546,6 +559,7 @@ class XceptionForImageClassification(PretrainedModel, ClassificationHeadMixin):
             setattr(self, name, module)
         self._build_classifier(2048, config.num_classes, dropout=config.dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

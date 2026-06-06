@@ -32,7 +32,7 @@ Losses (training)
   Uses cross-entropy loss: F.cross_entropy(logits, targets).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -61,10 +61,12 @@ class _DoubleConv(nn.Module):
             nn.ReLU(inplace=True),
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.net(x))
 
 
+@final
 class _AttentionGate(nn.Module):
     """Soft attention gate for U-Net skip connections.
 
@@ -81,6 +83,7 @@ class _AttentionGate(nn.Module):
         self.psi = nn.Conv2d(inter_channels, 1, 1, bias=True)
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
 
+    @override
     def forward(self, x: Tensor, g: Tensor) -> Tensor:  # type: ignore[override]
         """Apply attention gate.
 
@@ -110,6 +113,7 @@ class _EncoderBlock(nn.Module):
         self.conv = _DoubleConv(in_ch, out_ch)
         self.pool = nn.MaxPool2d(2, stride=2)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         """Returns (pooled, skip)."""
         skip: Tensor = self.conv.forward(x)
@@ -139,6 +143,7 @@ class _DecoderBlock(nn.Module):
             self.up = nn.ConvTranspose2d(in_ch, in_ch // 2, 2, stride=2)
             self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch)
 
+    @override
     def forward(self, x: Tensor, skip: Tensor) -> Tensor:  # type: ignore[override]
         """Decode one level.
 
@@ -270,6 +275,7 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         # Segmentation head
         self.head = nn.Conv2d(enc_channels[0], config.num_classes, 1)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

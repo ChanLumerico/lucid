@@ -7,7 +7,7 @@ Statistics (mean, median, p95) are computed by BenchResult.
 
 import statistics
 import time
-from typing import Callable
+from typing import Callable, override
 
 # ── defaults ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +54,7 @@ class BenchResult:
             "n_iter": len(self._ns),
         }
 
+    @override
     def __repr__(self) -> str:
         return (
             f"BenchResult({self.name!r}  "

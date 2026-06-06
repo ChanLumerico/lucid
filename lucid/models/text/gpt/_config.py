@@ -15,7 +15,7 @@ Differences from BERT:
 """
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig, TextActivation
@@ -90,6 +90,7 @@ class GPTConfig(LanguageModelConfig):
     num_labels: int = 2
     classifier_dropout: float | None = None  # falls back to ``hidden_dropout``
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         if self.num_labels <= 0:

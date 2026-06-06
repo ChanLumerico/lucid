@@ -25,7 +25,7 @@ ConvNeXt block (all ops on (B, C, H, W)):
   permute back → + residual
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -42,6 +42,7 @@ from lucid.models.vision.convnext._config import ConvNeXtConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ConvNeXtBlock(nn.Module):
     """Depthwise 7×7 + inverted-bottleneck MLP + layer scale + DropPath."""
 
@@ -60,6 +61,7 @@ class _ConvNeXtBlock(nn.Module):
         self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
         self.drop_path = DropPath(drop_path_rate)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
         x = cast(Tensor, self.dwconv(x))  # (B, C, H, W)
@@ -83,6 +85,7 @@ class _Downsample(nn.Module):
         self.norm = nn.LayerNorm(in_dim, eps=layer_norm_eps)
         self.conv = nn.Conv2d(in_dim, out_dim, 2, stride=2)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C, H, W) → norm in channel-last → back → strided conv
         x = x.permute(0, 2, 3, 1)
@@ -162,12 +165,14 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
     )
 
 
+@final
 class _StemWithNorm(nn.Module):
     def __init__(self, conv: nn.Sequential, norm: nn.LayerNorm) -> None:
         super().__init__()
         self.conv = conv
         self.norm = norm
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv(x))  # (B, C, H, W)
         x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
@@ -269,10 +274,12 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
         self._feature_info = fi
         self.avgpool = nn.AdaptiveAvgPool2d(1)
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         for i, stage in enumerate(self.stages):
@@ -286,6 +293,7 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.head_norm(x))
         return x.permute(0, 3, 1, 2).flatten(1)  # (B, C)
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -373,6 +381,7 @@ class ConvNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self._build_classifier(out_dim, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

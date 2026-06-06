@@ -2,6 +2,8 @@
 Flatten, Unflatten, Unfold, and Fold modules.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid._types import _Size2d
 from lucid.nn.module import Module
@@ -94,6 +96,7 @@ class Flatten(Module):
         self.start_dim = start_dim
         self.end_dim = end_dim
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Flatten (or unflatten) the specified dimensions of the input.
 
@@ -109,6 +112,7 @@ class Flatten(Module):
         """
         return _wrap(_C_engine.flatten(_unwrap(x), self.start_dim, self.end_dim))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"start_dim={self.start_dim}, end_dim={self.end_dim}"
@@ -192,6 +196,7 @@ class Unflatten(Module):
         self.dim = dim
         self.unflattened_size = unflattened_size
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Flatten (or unflatten) the specified dimensions of the input.
 
@@ -211,6 +216,7 @@ class Unflatten(Module):
         )
         return _wrap(_C_engine.reshape(_unwrap(x), new_shape))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}, unflattened_size={self.unflattened_size}"
@@ -317,6 +323,7 @@ class Unfold(Module):
         self.padding = padding
         self.stride = stride
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Flatten (or unflatten) the specified dimensions of the input.
 
@@ -334,6 +341,7 @@ class Unfold(Module):
 
         return _unfold(x, self.kernel_size, self.dilation, self.padding, self.stride)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -475,6 +483,7 @@ class Fold(Module):
         self.padding = padding if isinstance(padding, tuple) else (padding, padding)
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Flatten (or unflatten) the specified dimensions of the input.
 
@@ -499,6 +508,7 @@ class Fold(Module):
             x, (oH, oW), (kH, kW), dilation=(dH, dW), padding=(pH, pW), stride=(sH, sW)
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (

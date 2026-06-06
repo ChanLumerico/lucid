@@ -40,7 +40,7 @@ fallback policy).
 import sys
 import types
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Callable, Iterator, Protocol, cast
+from typing import TYPE_CHECKING, Callable, Iterator, Protocol, cast, final, override
 
 from lucid._C import engine as _C_engine
 from lucid._tensor import Tensor
@@ -229,6 +229,7 @@ def load_compiled(path: str) -> object:
         )
     exe = cast(_ExecutableHandle, exe_raw)
 
+    @final
     class _LoadedExecutable:
         """Thin wrapper that runs the deserialised executable."""
 
@@ -380,7 +381,9 @@ def _tracing() -> Iterator[Tracer]:
         dump_to_path_if_debug_enabled(tracer.graph)
 
 
-def compile(target: object, *, dynamic: bool = False) -> object:
+def compile[**P, R](
+    target: Callable[P, R], *, dynamic: bool = False
+) -> CompiledModule[P, R]:
     """Wrap ``target`` so calls are routed through cached MPSGraph executables.
 
     Accepts three call styles:
@@ -453,19 +456,22 @@ def compile(target: object, *, dynamic: bool = False) -> object:
     from lucid.compile._entry.module import CompiledModule as _CM
 
     if isinstance(target, _Module):
-        return _CM(target, dynamic=dynamic)
+        # ``_CM`` can't infer P/R from its ``model`` argument, so re-tag
+        # the wrapper with the signature captured from ``target``.
+        return cast(_CM[P, R], _CM(target, dynamic=dynamic))
     if callable(target):
         # Wrap plain callable as a synthetic Module so the existing
         # CompiledModule machinery (signature_of / trace / cache) works
         # without changes.  The synthetic module holds zero parameters
         # so ``param_fingerprint`` collapses to an empty tuple.
-        return _CM(_CallableModule(target), dynamic=dynamic)
+        return cast(_CM[P, R], _CM(_CallableModule(target), dynamic=dynamic))
     raise TypeError(
         f"lucid.compile: target must be an nn.Module or a callable, "
         f"got {type(target).__name__}"
     )
 
 
+@final
 class _CallableModule(_Module):
     """Internal adapter: wraps a plain callable as an :class:`nn.Module`.
 
@@ -493,6 +499,7 @@ class _CallableModule(_Module):
         # Parameter / Tensor / Module-routing — ``fn`` is none of those.
         object.__setattr__(self, "_fn", fn)
 
+    @override
     def forward(self, *args: object, **kwargs: object) -> _ModuleOutput:
         """Invoke the wrapped callable and return its result as a Module output.
 
@@ -514,13 +521,14 @@ class _CallableModule(_Module):
             )
         return cast(_ModuleOutput, out)
 
+    @override
     def __repr__(self) -> str:
         """Diagnostic repr including the wrapped callable's qualname."""
         name = getattr(self._fn, "__qualname__", repr(self._fn))
         return f"<_CallableModule wrapping {name}>"
 
 
-def _compile_decorator_factory(*, dynamic: bool = False) -> "object":
+def _compile_decorator_factory(*, dynamic: bool = False) -> object:
     """Return a decorator that applies :func:`compile` with the given options.
 
     Powers the ``@lucid.compile(dynamic=False)`` factory form when the
@@ -530,11 +538,14 @@ def _compile_decorator_factory(*, dynamic: bool = False) -> "object":
 
     def _decorator(target: object) -> object:
         """Apply :func:`compile` to ``target`` with the captured ``dynamic`` flag."""
-        return compile(target, dynamic=dynamic)
+        # ``target`` is ``object`` at this dynamic boundary; ``compile``
+        # validates callability internally, so widen for the call.
+        return compile(cast(Callable[..., object], target), dynamic=dynamic)
 
     return _decorator
 
 
+@final
 class _CallableCompileModule(types.ModuleType):
     """Module subclass so ``lucid.compile(...)`` is callable.
 
@@ -571,7 +582,9 @@ class _CallableCompileModule(types.ModuleType):
                 f"lucid.compile: expected 0 or 1 positional argument, "
                 f"got {len(args)}"
             )
-        return compile(args[0], dynamic=dynamic)
+        # ``args[0]`` is ``object`` here; ``compile`` validates callability
+        # internally (raising TypeError otherwise), so widen for the call.
+        return compile(cast(Callable[..., object], args[0]), dynamic=dynamic)
 
 
 sys.modules[__name__].__class__ = _CallableCompileModule

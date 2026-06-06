@@ -7,7 +7,7 @@ The SE output is multiplied channel-wise with the block's feature map.
 rd_channels = C // reduction (matches the canonical SE-ResNet design).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -37,6 +37,7 @@ class _SEBlock(nn.Module):
         self.fc1 = nn.Conv2d(channels, rd_channels, kernel_size=1, bias=True)
         self.fc2 = nn.Conv2d(rd_channels, channels, kernel_size=1, bias=True)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # Squeeze: (B, C, H, W) → (B, C, 1, 1)
         s = cast(Tensor, self.pool(x))
@@ -52,6 +53,7 @@ class _SEBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SEBasicBlock(nn.Module):
     """Two stacked 3×3 convolutions with SE gate — used in SE-ResNet-18/34."""
 
@@ -77,6 +79,7 @@ class _SEBasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
@@ -100,6 +103,7 @@ class _SEBasicBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SEBottleneck(nn.Module):
     """1×1 → 3×3 → 1×1 bottleneck with SE gate — used in SE-ResNet-50+."""
 
@@ -129,6 +133,7 @@ class _SEBottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
@@ -153,6 +158,7 @@ class _SEBottleneck(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _LegacyStemPool(nn.Module):
     """Canonical SENet stem pool — 3×3 stride-2, no padding, ceil rounding.
 
@@ -170,6 +176,7 @@ class _LegacyStemPool(nn.Module):
         super().__init__()
         self.pool = nn.MaxPool2d(3, stride=2, padding=0, ceil_mode=False)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = F.pad(x, (0, 1, 0, 1), mode="constant", value=self._NEG_FILL)
         return cast(Tensor, self.pool(x))
@@ -365,9 +372,11 @@ class SENet(PretrainedModel, BackboneMixin):
         self._feature_info = fi
 
     @property
+    @override
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
         x = cast(Tensor, self.maxpool(x))
@@ -377,6 +386,7 @@ class SENet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.layer4(x))
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -457,6 +467,7 @@ class SENetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(final_channels, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

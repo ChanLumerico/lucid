@@ -8,6 +8,7 @@ All computation is done in pure Lucid — no external libraries.
 """
 
 import math
+from typing import override
 
 import lucid
 import lucid.linalg as _la
@@ -176,16 +177,19 @@ class Wishart(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         """Constraint: positive-definite symmetric matrices."""
         return positive_definite
 
+    @override
     @property
     def mean(self) -> Tensor:
         """``df · Σ``."""
         return self.df * self._cov
 
+    @override
     @property
     def variance(self) -> Tensor:
         """``Var[W_{ij}] = df · (Σ_{ij}² + Σ_{ii} Σ_{jj})``."""
@@ -196,6 +200,7 @@ class Wishart(Distribution):
 
     # -- sampling (Bartlett decomposition) ------------------------------------
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw a sample via the Bartlett decomposition.
 
@@ -234,6 +239,7 @@ class Wishart(Distribution):
 
     # -- log probability ──────────────────────────────────────────────────────
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         """Log-density of the Wishart distribution.
 
@@ -394,11 +400,13 @@ class LKJCholesky(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         """Constraint: positive-definite matrices (proxy for correlation-Cholesky support)."""
         return positive_definite  # approximate — actual support is corr-cholesky
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw a sample via the vectorised Onion method (Lewandowski 2009 §3).
 
@@ -444,6 +452,7 @@ class LKJCholesky(Distribution):
         L = w + lucid.diag_embed(diag_elems)
         return L.detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         """Log-density of the LKJ distribution on a Cholesky factor.
 

@@ -24,11 +24,10 @@ Naming conventions
 
 from typing import (
     Callable,
+    Literal,
     Protocol,
     TYPE_CHECKING,
     TypedDict,
-    TypeVar,
-    ParamSpec,
     runtime_checkable,
 )
 
@@ -42,18 +41,7 @@ if TYPE_CHECKING:
 
 
 # ── TypeVars ──────────────────────────────────────────────────────────────────
-
-DT = TypeVar("DT", bound=_DType)
-"""TypeVar for dtype-parametric functions."""
-
-DV = TypeVar("DV", bound=_Device)
-"""TypeVar for device-parametric functions."""
-
-_T = TypeVar("_T")
-"""Generic return TypeVar used in decorator helpers."""
-
-_P = ParamSpec("_P")
-"""ParamSpec for preserving callable signatures through decorators."""
+# (none — generics use inline PEP 695 type parameters; no module-level TypeVars.)
 
 
 # ── Public type aliases (no Tensor dependency) ───────────────────────────────
@@ -76,6 +64,16 @@ type ShapeLike = int | tuple[int, ...]
 type _Size1d = int | tuple[int]
 type _Size2d = int | tuple[int, int]
 type _Size3d = int | tuple[int, int, int]
+
+# String-enum modes — call-site Literal checking. Each set is the *complete*
+# authoritative value list its op accepts (see the validating helper beside the
+# consumer). These are domain-specific: a same-named param in another context
+# (einops ``reduce`` reduction, ``grid_sample`` padding_mode / mode, image
+# interpolation) has a different value set and intentionally stays ``str``.
+type Reduction = Literal["none", "mean", "sum"]
+type ReductionKL = Literal["none", "mean", "sum", "batchmean"]
+type PaddingMode = Literal["zeros", "reflect", "replicate", "circular"]
+type GeluApproximate = Literal["none", "tanh"]
 
 
 # ── Protocols ─────────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ bottleneck width per the ResNeXt formula:
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -29,6 +29,7 @@ from lucid.models.vision.sknet._config import SKNetConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SelectiveKernelAttn(nn.Module):
     """Attention module for SelectiveKernel.
 
@@ -57,6 +58,7 @@ class _SelectiveKernelAttn(nn.Module):
         # breaks ``.to(device)``/``state_dict`` round-trips.
         self.gap = nn.AdaptiveAvgPool2d(1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, num_paths, C, H, W)
         # Sum paths then global-average-pool → (B, C, 1, 1)
@@ -118,6 +120,7 @@ class _ConvBnAct(nn.Module):
         if apply_act:
             self.act: nn.Module = nn.ReLU(inplace=True)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out = cast(Tensor, self.conv(x))
         out = cast(Tensor, self.bn(out))
@@ -131,6 +134,7 @@ class _ConvBnAct(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SelectiveKernel(nn.Module):
     """Two-branch selective-kernel convolution.
 
@@ -185,6 +189,7 @@ class _SelectiveKernel(nn.Module):
         attn_channels = _make_divisible(out_channels * rd_ratio, divisor=rd_divisor)
         self.attn = _SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         if self.split_input:
             half = self.in_channels // self.num_paths
@@ -212,6 +217,7 @@ class _SelectiveKernel(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SelectiveKernelBasic(nn.Module):
     """SK 3×3 → plain 3×3 basic block (expansion=1) for shallow SK-ResNets.
 
@@ -261,6 +267,7 @@ class _SelectiveKernelBasic(nn.Module):
         self.act = nn.ReLU(inplace=True)
         self.downsample = downsample
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
@@ -279,6 +286,7 @@ class _SelectiveKernelBasic(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SelectiveKernelBottleneck(nn.Module):
     """1×1 → SK(3×3/3×3 dilated) → 1×1 bottleneck with SK attention."""
 
@@ -317,6 +325,7 @@ class _SelectiveKernelBottleneck(nn.Module):
         self.act = nn.ReLU(inplace=True)
         self.downsample = downsample
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
@@ -538,10 +547,12 @@ class SKNet(PretrainedModel, BackboneMixin):
         self.layer4 = l4
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.maxpool(x))
@@ -551,6 +562,7 @@ class SKNet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.layer4(x))
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -636,6 +648,7 @@ class SKNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(final_channels, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

@@ -34,7 +34,7 @@ Limitations
 * ``use_reentrant=False`` (non-reentrant mode) is not yet supported.
 """
 
-from typing import Callable, TYPE_CHECKING, cast
+from typing import Callable, TYPE_CHECKING, cast, final, override
 
 from lucid.autograd._grad_mode import no_grad, enable_grad
 from lucid.autograd.function import Function, FunctionCtx
@@ -96,7 +96,9 @@ def checkpoint(
     fn = function
     kw = kwargs
 
+    @final
     class _CheckpointFn(Function):
+        @override
         @staticmethod
         def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor:
             ctx.save_for_backward(*inputs)
@@ -105,6 +107,7 @@ def checkpoint(
                 output = fn(*inputs, **kw)
             return output
 
+        @override
         @staticmethod
         def backward(  # type: ignore[override]  # reason: narrower return (tuple[Tensor|None,...]) than base's union — established convention; see linalg/__init__.py.
             ctx: FunctionCtx, grad_output: Tensor

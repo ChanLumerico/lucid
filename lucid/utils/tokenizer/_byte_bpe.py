@@ -24,7 +24,7 @@ pre-tokenizer + post-decode.
 """
 
 import os
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid.utils.tokenizer._base import SpecialTokens
 from lucid.utils.tokenizer._bpe import (
@@ -165,6 +165,7 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
             special_tokens=special_tokens,
         )
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"byte_bpe"``).
@@ -177,6 +178,7 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
         """
         return "byte_bpe"
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         r"""Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
         return {
@@ -188,6 +190,7 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
             }
         }
 
+    @override
     @classmethod
     def from_file(  # type: ignore[override]
         cls,
@@ -266,6 +269,7 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
 
     from_pretrained = from_file  # type: ignore[assignment]
 
+    @override
     def train(
         self,
         corpus: Iterable[str],
@@ -354,6 +358,7 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
             special_tokens=special_tokens,
         )
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"byte_bpe"``).
@@ -365,6 +370,7 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         """
         return "byte_bpe"
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         r"""Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
         return {
@@ -376,6 +382,7 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
             }
         }
 
+    @override
     @classmethod
     def from_file(  # type: ignore[override]
         cls,
@@ -447,6 +454,7 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
 
     from_pretrained = from_file  # type: ignore[assignment]
 
+    @override
     def train(
         self,
         corpus: Iterable[str],

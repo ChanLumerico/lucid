@@ -41,7 +41,7 @@ State-dict naming matches timm inception_resnet_v2 exactly:
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -86,6 +86,7 @@ class _ConvBnReLU(nn.Module):
         )
         self.bn = nn.BatchNorm2d(out_channels, eps=1e-3)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
 
@@ -95,6 +96,7 @@ class _ConvBnReLU(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _AvgPoolExclPad(nn.Module):
     r"""3×3 stride-1 padded average pool that excludes padding cells.
 
@@ -118,6 +120,7 @@ class _AvgPoolExclPad(nn.Module):
         self._pool = nn.AvgPool2d(kernel_size, stride=stride, padding=padding)
         self._area = float(kernel_size * kernel_size)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         window_sum = cast(Tensor, self._pool(x)) * self._area
         valid = cast(Tensor, self._pool(lucid.ones_like(x))) * self._area
@@ -129,6 +132,7 @@ class _AvgPoolExclPad(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Mixed5b(nn.Module):
     """Initial Inception-style block: 192 → 96+64+96+64 = 320 channels.
 
@@ -162,6 +166,7 @@ class _Mixed5b(nn.Module):
             _ConvBnReLU(192, 64, 1),
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b0 = cast(Tensor, self.branch0(x))
         b1 = cast(Tensor, self.branch1(x))
@@ -175,6 +180,7 @@ class _Mixed5b(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Block35(nn.Module):
     """Residual Inception-A: 35×35×320 → 35×35×320.
 
@@ -198,6 +204,7 @@ class _Block35(nn.Module):
         # timm uses `conv2d` (not `proj`) with bias=True
         self.conv2d = nn.Conv2d(128, 320, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b0 = cast(Tensor, self.branch0(x))
         b1 = cast(Tensor, self.branch1(x))
@@ -212,6 +219,7 @@ class _Block35(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Mixed6a(nn.Module):
     """Reduction-A: 35×35×320 → 17×17×1088.
 
@@ -231,6 +239,7 @@ class _Mixed6a(nn.Module):
         )
         self.branch2 = nn.MaxPool2d(3, stride=2)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b0 = cast(Tensor, self.branch0(x))
         b1 = cast(Tensor, self.branch1(x))
@@ -243,6 +252,7 @@ class _Mixed6a(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Block17(nn.Module):
     """Residual Inception-B: 17×17×1088 → 17×17×1088.
 
@@ -260,6 +270,7 @@ class _Block17(nn.Module):
         )
         self.conv2d = nn.Conv2d(384, 1088, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b0 = cast(Tensor, self.branch0(x))
         b1 = cast(Tensor, self.branch1(x))
@@ -273,6 +284,7 @@ class _Block17(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Mixed7a(nn.Module):
     """Reduction-B: 17×17×1088 → 8×8×2080.
 
@@ -300,6 +312,7 @@ class _Mixed7a(nn.Module):
         )
         self.branch3 = nn.MaxPool2d(3, stride=2)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b0 = cast(Tensor, self.branch0(x))
         b1 = cast(Tensor, self.branch1(x))
@@ -313,6 +326,7 @@ class _Mixed7a(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Block8(nn.Module):
     """Residual Inception-C: 8×8×2080 → 8×8×2080.
 
@@ -332,6 +346,7 @@ class _Block8(nn.Module):
         )
         self.conv2d = nn.Conv2d(448, 2080, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b0 = cast(Tensor, self.branch0(x))
         b1 = cast(Tensor, self.branch1(x))
@@ -348,7 +363,7 @@ class _Block8(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class InceptionResNetOutput:
     r"""Structured forward output for :class:`InceptionResNetV2ForImageClassification`.
 
@@ -532,6 +547,7 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=3, num_channels=1536, reduction=32),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
@@ -546,6 +562,7 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self._pool2(x))
         return x
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = self._forward_stem(x)
         x = cast(Tensor, self.mixed_5b(x))
@@ -558,6 +575,7 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.conv2d_7b(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -673,6 +691,7 @@ class InceptionResNetV2ForImageClassification(PretrainedModel):
         x = cast(Tensor, self._pool2(x))
         return x
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

@@ -7,6 +7,7 @@ affine-points path for boxes/keypoints, so all targets stay aligned.
 """
 
 from dataclasses import dataclass
+from typing import override
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
@@ -45,7 +46,7 @@ def _pad_mode(border_mode: int) -> str:
 # ── parameter types ─────────────────────────────────────────────────
 
 
-@dataclass
+@dataclass(slots=True)
 class WarpParams:
     r"""Sampled forward pixel matrix + output canvas size for one warp call.
 
@@ -66,7 +67,7 @@ class WarpParams:
     out_hw: tuple[int, int]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FlipAxis:
     """Per-call flip axis used by :class:`Flip` / :class:`Transpose`.
 
@@ -76,7 +77,7 @@ class FlipAxis:
     code: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Rot90Param:
     r"""Per-call number of 90° rotations for :class:`RandomRotate90`.
 
@@ -114,18 +115,23 @@ class Transpose(_NoParams, GeometricTransform[Empty]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return lucid.swapaxes(img, -1, -2)  # type: ignore[arg-type]
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         return lucid.swapaxes(mask, -1, -2)  # type: ignore[arg-type]
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         return transpose_boxes(boxes)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         return transpose_keypoints(kps)
 
+    @override
     def __repr__(self) -> str:
         return f"Transpose(p={self.p})"
 
@@ -139,6 +145,7 @@ class Flip(GeometricTransform[FlipAxis]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def make_params(self, img: Tensor) -> FlipAxis:
         r"""Sample per-call random parameters for :class:`Flip`.
 
@@ -163,12 +170,15 @@ class Flip(GeometricTransform[FlipAxis]):
             x = F.vflip(x)
         return x
 
+    @override
     def _apply_image(self, img: Tensor, params: FlipAxis) -> Tensor:
         return self._flip(img, params.code)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: FlipAxis) -> Tensor:
         return self._flip(mask, params.code)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: FlipAxis) -> BoundingBoxes:
         from lucid.utils.transforms._datatypes import flip_boxes
 
@@ -178,6 +188,7 @@ class Flip(GeometricTransform[FlipAxis]):
             boxes = flip_boxes(boxes, horizontal=False)
         return boxes
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: FlipAxis) -> Keypoints:
         from lucid.utils.transforms._datatypes import flip_keypoints
 
@@ -187,6 +198,7 @@ class Flip(GeometricTransform[FlipAxis]):
             kps = flip_keypoints(kps, horizontal=False)
         return kps
 
+    @override
     def __repr__(self) -> str:
         return f"Flip(p={self.p})"
 
@@ -208,6 +220,7 @@ class RandomRotate90(GeometricTransform[Rot90Param]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def make_params(self, img: Tensor) -> Rot90Param:
         r"""Sample per-call random parameters for :class:`RandomRotate90`.
 
@@ -223,18 +236,23 @@ class RandomRotate90(GeometricTransform[Rot90Param]):
         """
         return Rot90Param(k=_random.randint(0, 4))  # 0..3
 
+    @override
     def _apply_image(self, img: Tensor, params: Rot90Param) -> Tensor:
         return lucid.rot90(img, params.k, dims=(-2, -1))  # type: ignore[arg-type]
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Rot90Param) -> Tensor:
         return lucid.rot90(mask, params.k, dims=(-2, -1))  # type: ignore[arg-type]
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Rot90Param) -> BoundingBoxes:
         return rot90_boxes(boxes, params.k)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Rot90Param) -> Keypoints:
         return rot90_keypoints(kps, params.k)
 
+    @override
     def __repr__(self) -> str:
         return f"RandomRotate90(p={self.p})"
 
@@ -251,6 +269,7 @@ class _WarpTransform(GeometricTransform[WarpParams]):
     def _img_mode(self) -> str:
         return "nearest" if self.interpolation == Interpolation.NEAREST else "bilinear"
 
+    @override
     def _apply_image(self, img: Tensor, params: WarpParams) -> Tensor:
         return F.warp_affine(
             img,
@@ -260,12 +279,15 @@ class _WarpTransform(GeometricTransform[WarpParams]):
             fill=0.0 if _pad_mode(self.border_mode) == "zeros" else 0.0,
         )
 
+    @override
     def _apply_mask(self, mask: Tensor, params: WarpParams) -> Tensor:
         return F.warp_affine(mask, params.matrix, params.out_hw, mode="nearest")
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: WarpParams) -> BoundingBoxes:
         return affine_boxes(boxes, params.matrix, params.out_hw)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: WarpParams) -> Keypoints:
         return affine_keypoints(kps, params.matrix, params.out_hw)
 
@@ -299,6 +321,7 @@ class Rotate(_WarpTransform):
         self.border_mode = border_mode
         self.value = value
 
+    @override
     def make_params(self, img: Tensor) -> WarpParams:
         r"""Sample per-call random parameters for :class:`Rotate`.
 
@@ -320,6 +343,7 @@ class Rotate(_WarpTransform):
         matrix = F.rotation_matrix(angle, (w - 1) / 2.0, (h - 1) / 2.0)
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return f"Rotate(limit={self.limit}, p={self.p})"
 
@@ -357,6 +381,7 @@ class ShiftScaleRotate(_WarpTransform):
         self.border_mode = border_mode
         self.value = value
 
+    @override
     def make_params(self, img: Tensor) -> WarpParams:
         r"""Sample per-call random parameters for :class:`ShiftScaleRotate`.
 
@@ -401,6 +426,7 @@ class ShiftScaleRotate(_WarpTransform):
         )
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return (
             f"ShiftScaleRotate(shift_limit={self.shift_limit}, "
@@ -446,6 +472,7 @@ class Affine(_WarpTransform):
         self.border_mode = border_mode
         self.value = value
 
+    @override
     def make_params(self, img: Tensor) -> WarpParams:
         r"""Sample per-call random parameters for :class:`Affine`.
 
@@ -491,6 +518,7 @@ class Affine(_WarpTransform):
         )
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return (
             f"Affine(scale={self.scale}, translate_percent={self.translate_percent}, "
@@ -524,6 +552,7 @@ class Perspective(_WarpTransform):
         self.border_mode = border_mode
         self.value = value
 
+    @override
     def make_params(self, img: Tensor) -> WarpParams:
         r"""Sample per-call random parameters for :class:`Perspective`.
 
@@ -554,6 +583,7 @@ class Perspective(_WarpTransform):
         matrix = F.perspective_matrix(dst, src)
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
+    @override
     def __repr__(self) -> str:
         return f"Perspective(scale={self.scale}, p={self.p})"
 
@@ -561,7 +591,7 @@ class Perspective(_WarpTransform):
 # ── B8: additional spatial transforms ───────────────────────────────
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScaleParam:
     r"""Per-call target spatial size for :class:`RandomScale`.
 
@@ -611,6 +641,7 @@ class RandomScale(GeometricTransform[ScaleParam]):
         self.scale_limit = _to_range(scale_limit)
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def make_params(self, img: Tensor) -> ScaleParam:
         r"""Sample per-call random parameters for :class:`RandomScale`.
 
@@ -634,31 +665,36 @@ class RandomScale(GeometricTransform[ScaleParam]):
             new_h=max(int(round(h * f)), 1), new_w=max(int(round(w * f)), 1)
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: ScaleParam) -> Tensor:
         return F.resize(
             img, (params.new_h, params.new_w), interpolation=self.interpolation
         )
 
+    @override
     def _apply_mask(self, mask: Tensor, params: ScaleParam) -> Tensor:
         return F.resize(
             mask, (params.new_h, params.new_w), interpolation=Interpolation.NEAREST
         )
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: ScaleParam) -> BoundingBoxes:
         from lucid.utils.transforms._datatypes import resize_boxes
 
         return resize_boxes(boxes, params.new_h, params.new_w)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: ScaleParam) -> Keypoints:
         from lucid.utils.transforms._datatypes import resize_keypoints
 
         return resize_keypoints(kps, params.new_h, params.new_w)
 
+    @override
     def __repr__(self) -> str:
         return f"RandomScale(scale_limit={self.scale_limit}, p={self.p})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class D4Param:
     """Per-call dihedral-4 (square symmetry) parameters used by :class:`D4`.
 
@@ -680,6 +716,7 @@ class D4(GeometricTransform[D4Param]):
     def __init__(self, p: float = 1.0) -> None:
         super().__init__(p=p)
 
+    @override
     def make_params(self, img: Tensor) -> D4Param:
         r"""Sample per-call random parameters for :class:`D4`.
 
@@ -699,26 +736,31 @@ class D4(GeometricTransform[D4Param]):
         g = _random.randint(0, 8)
         return D4Param(k=g % 4, flip=g >= 4)
 
+    @override
     def _apply_image(self, img: Tensor, params: D4Param) -> Tensor:
         out = lucid.rot90(img, params.k, dims=(-2, -1))  # type: ignore[arg-type]
         return F.hflip(out) if params.flip else out
 
+    @override
     def _apply_mask(self, mask: Tensor, params: D4Param) -> Tensor:
         out = lucid.rot90(mask, params.k, dims=(-2, -1))  # type: ignore[arg-type]
         return F.hflip(out) if params.flip else out
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: D4Param) -> BoundingBoxes:
         from lucid.utils.transforms._datatypes import flip_boxes
 
         out = rot90_boxes(boxes, params.k)
         return flip_boxes(out, horizontal=True) if params.flip else out
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: D4Param) -> Keypoints:
         from lucid.utils.transforms._datatypes import flip_keypoints
 
         out = rot90_keypoints(kps, params.k)
         return flip_keypoints(out, horizontal=True) if params.flip else out
 
+    @override
     def __repr__(self) -> str:
         return f"D4(p={self.p})"
 
@@ -781,6 +823,7 @@ class SafeRotate(_WarpTransform):
         self.border_mode = border_mode
         self.value = value
 
+    @override
     def make_params(self, img: Tensor) -> WarpParams:
         r"""Sample per-call random parameters for :class:`SafeRotate`.
 
@@ -824,11 +867,12 @@ class SafeRotate(_WarpTransform):
         matrix = lucid.matmul(shift, rot)
         return WarpParams(matrix=matrix, out_hw=(new_h, new_w))
 
+    @override
     def __repr__(self) -> str:
         return f"SafeRotate(limit={self.limit}, p={self.p})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ShuffleParam:
     """Per-call cell permutation and ``(rows, cols)`` grid for :class:`RandomGridShuffle`."""
 
@@ -850,6 +894,7 @@ class RandomGridShuffle(GeometricTransform[ShuffleParam]):
         super().__init__(p=p)
         self.grid = grid
 
+    @override
     def make_params(self, img: Tensor) -> ShuffleParam:
         r"""Sample per-call random parameters for :class:`RandomGridShuffle`.
 
@@ -903,17 +948,22 @@ class RandomGridShuffle(GeometricTransform[ShuffleParam]):
             rows_out.append(F._cat(row_imgs, -1))
         return F._cat(rows_out, -2)
 
+    @override
     def _apply_image(self, img: Tensor, params: ShuffleParam) -> Tensor:
         return self._shuffle(img, params)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: ShuffleParam) -> Tensor:
         return self._shuffle(mask, params)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: ShuffleParam) -> BoundingBoxes:
         return boxes  # box semantics under cell-shuffle are ill-defined
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: ShuffleParam) -> Keypoints:
         return kps
 
+    @override
     def __repr__(self) -> str:
         return f"RandomGridShuffle(grid={self.grid}, p={self.p})"

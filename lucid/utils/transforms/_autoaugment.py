@@ -24,7 +24,7 @@ All ops act on float images in ``[0, 1]`` with ``(C, H, W)`` or
 
 import math
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, final, override
 
 import lucid
 from lucid._tensor import Tensor
@@ -362,7 +362,8 @@ OpFn = Callable[[Tensor, float], Tensor]
 # ── policy classes ──────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
+@final
+@dataclass(frozen=True, slots=True)
 class _SingleOpParams:
     """Sampled (op_name, signed_magnitude) for one call."""
 
@@ -432,6 +433,7 @@ class TrivialAugmentWide(PhotometricTransform[_SingleOpParams]):
         self.interpolation = interpolation
         self.fill = fill
 
+    @override
     def make_params(self, img: Tensor) -> _SingleOpParams:
         r"""Sample per-call random parameters for :class:`TrivialAugmentWide`.
 
@@ -461,6 +463,7 @@ class TrivialAugmentWide(PhotometricTransform[_SingleOpParams]):
             value = -value
         return _SingleOpParams(op_name=op_name, magnitude=value)
 
+    @override
     def _apply_image(self, img: Tensor, params: _SingleOpParams) -> Tensor:
         return apply_op(
             img,
@@ -470,6 +473,7 @@ class TrivialAugmentWide(PhotometricTransform[_SingleOpParams]):
             fill=self.fill,
         )
 
+    @override
     def __repr__(self) -> str:
         return (
             f"TrivialAugmentWide(num_magnitude_bins={self.num_magnitude_bins}, "
@@ -478,7 +482,8 @@ class TrivialAugmentWide(PhotometricTransform[_SingleOpParams]):
         )
 
 
-@dataclass(frozen=True)
+@final
+@dataclass(frozen=True, slots=True)
 class _RandAugmentParams:
     """Sampled (op_name, signed_magnitude) sequence for one call."""
 
@@ -558,6 +563,7 @@ class RandAugment(PhotometricTransform[_RandAugmentParams]):
         self.interpolation = interpolation
         self.fill = fill
 
+    @override
     def make_params(self, img: Tensor) -> _RandAugmentParams:
         r"""Sample per-call random parameters for :class:`RandAugment`.
 
@@ -590,6 +596,7 @@ class RandAugment(PhotometricTransform[_RandAugmentParams]):
             ops.append((op_name, value))
         return _RandAugmentParams(ops=tuple(ops))
 
+    @override
     def _apply_image(self, img: Tensor, params: _RandAugmentParams) -> Tensor:
         out = img
         for op_name, mag in params.ops:
@@ -602,6 +609,7 @@ class RandAugment(PhotometricTransform[_RandAugmentParams]):
             )
         return out
 
+    @override
     def __repr__(self) -> str:
         return (
             f"RandAugment(num_ops={self.num_ops}, magnitude={self.magnitude}, "
@@ -718,7 +726,8 @@ _POLICY_TABLES: dict[str, _PolicyTable] = {
 }
 
 
-@dataclass(frozen=True)
+@final
+@dataclass(frozen=True, slots=True)
 class _AutoAugmentParams:
     """Resolved ops to apply after sampling a sub-policy + probability gates."""
 
@@ -811,6 +820,7 @@ class AutoAugment(PhotometricTransform[_AutoAugmentParams]):
         self.interpolation = interpolation
         self.fill = fill
 
+    @override
     def make_params(self, img: Tensor) -> _AutoAugmentParams:
         r"""Sample per-call random parameters for :class:`AutoAugment`.
 
@@ -846,6 +856,7 @@ class AutoAugment(PhotometricTransform[_AutoAugmentParams]):
             ops.append((op_name, value))
         return _AutoAugmentParams(ops=tuple(ops))
 
+    @override
     def _apply_image(self, img: Tensor, params: _AutoAugmentParams) -> Tensor:
         out = img
         for op_name, mag in params.ops:
@@ -858,6 +869,7 @@ class AutoAugment(PhotometricTransform[_AutoAugmentParams]):
             )
         return out
 
+    @override
     def __repr__(self) -> str:
         return (
             f"AutoAugment(policy={self.policy!r}, "

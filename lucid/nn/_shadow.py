@@ -37,7 +37,7 @@ Constraints
 """
 
 import contextlib
-from typing import Any, Iterator, cast
+from typing import Any, Iterator, cast, final
 
 from lucid._C import engine as _C_engine
 
@@ -121,6 +121,7 @@ class PhantomImpl:
         return _PhantomMethod(self)
 
 
+@final
 class _PhantomMethod:
     """Callable proxy for unknown methods — returns the phantom impl
     so ``impl.unknown_op(...).another(...)`` keeps chaining."""

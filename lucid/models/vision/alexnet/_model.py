@@ -26,7 +26,7 @@ classifier publication) — it adds compute without measurable accuracy
 gain once dropout + ReLU + heavy augmentation are present.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -158,14 +158,17 @@ class AlexNet(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=5, num_channels=256, reduction=32),
         ]
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.features(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -260,6 +263,7 @@ class AlexNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.drop7 = nn.Dropout(p=config.dropout)
         self._build_classifier(4096, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

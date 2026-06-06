@@ -15,7 +15,7 @@ when you need an open-vocab universal fallback.
 """
 
 import os
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -71,24 +71,29 @@ class CharTokenizer(Tokenizer):
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Number of distinct codepoint ids currently registered."""
         return len(self._vocab)
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier (always ``"char"``)."""
         return "char"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return a copy of the codepoint → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Return the codepoint string for ``token_id`` or ``None``."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Per-codepoint vocab lookup with optional UNK fallback."""
         unk = self.unk_token_id
@@ -101,6 +106,7 @@ class CharTokenizer(Tokenizer):
                 out.append(unk)
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Concatenate codepoint surface forms for known ids."""
         return "".join(self._id_to_token[i] for i in ids if i in self._id_to_token)
@@ -138,6 +144,7 @@ class CharTokenizer(Tokenizer):
         self._id_to_token = {i: c for c, i in v.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Persist the vocab as ``vocab.txt`` + unified ``tokenizer.json``.
 
@@ -150,6 +157,7 @@ class CharTokenizer(Tokenizer):
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Emit the unified-format ``model`` block for the char algo."""
         return {"model": {"type": "Char", "vocab": self._vocab}}
@@ -234,28 +242,34 @@ class CharTokenizerFast(Tokenizer):
         self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Number of distinct codepoint ids (queried from C++)."""
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier (always ``"char"``)."""
         return "char"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return a copy of the codepoint → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Return the codepoint string for ``token_id`` or ``None``."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Delegate to the C++ char tokenizer for the codepoint loop."""
         return list(self._cpp.encode(text))
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Delegate to the C++ char tokenizer for surface concatenation."""
         return self._cpp.decode(list(ids))
@@ -280,12 +294,14 @@ class CharTokenizerFast(Tokenizer):
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Persist as ``vocab.txt`` + unified ``tokenizer.json``."""
         os.makedirs(directory, exist_ok=True)
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Emit the unified-format ``model`` block for the char algo."""
         return {"model": {"type": "Char", "vocab": self._vocab}}

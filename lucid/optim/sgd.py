@@ -2,7 +2,7 @@
 SGD optimizer.
 """
 
-from typing import Iterable, cast
+from typing import Iterable, cast, override
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
@@ -108,6 +108,7 @@ class SGD(Optimizer):
         )
         super().__init__(params, defaults)
 
+    @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
         from lucid.nn.parameter import Parameter as _P
 
@@ -123,6 +124,7 @@ class SGD(Optimizer):
             )
         )
 
+    @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single SGD step."""
         loss: Tensor | None = closure() if closure is not None else None

@@ -46,7 +46,7 @@ Faithfulness notes
 * Loss: focal loss for classification + smooth-L1 for regression (paper §4.2).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -68,6 +68,7 @@ from lucid.models.vision.efficientdet._config import EfficientDetConfig
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SepConv(nn.Module):
     """Depthwise-separable conv: DWConv(k,k,groups=C) + PWConv(1,1) + BN + ReLU."""
 
@@ -84,6 +85,7 @@ class _SepConv(nn.Module):
         self.pw = nn.Conv2d(channels, channels, 1, bias=False)
         self.bn = nn.BatchNorm2d(channels)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.relu(
             cast(Tensor, self.bn(cast(Tensor, self.pw(cast(Tensor, self.dw(x))))))
@@ -97,6 +99,7 @@ class _SepConv(nn.Module):
 _EPS = 1e-4
 
 
+@final
 class _BiFPNLayer(nn.Module):
     """One BiFPN repetition (bidirectional top-down + bottom-up fusion)."""
 
@@ -123,6 +126,7 @@ class _BiFPNLayer(nn.Module):
         # Registered down-sampler (avoids allocating a new module each forward call)
         self.down = nn.MaxPool2d(2, stride=2)
 
+    @override
     def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         """
         Args:
@@ -213,6 +217,7 @@ class _MBConv(nn.Module):
         self.block = nn.Sequential(*layers)
         self.use_skip = stride == 1 and in_ch == out_ch
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out: Tensor = cast(Tensor, self.block(x))
         return out + x if self.use_skip else out
@@ -227,6 +232,7 @@ def _make_mbconv_stage(
     return nn.Sequential(*blocks)
 
 
+@final
 class _EfficientNetBackbone(nn.Module):
     """Simplified EfficientNet-B0 backbone.
 
@@ -257,6 +263,7 @@ class _EfficientNetBackbone(nn.Module):
         self.p4_channels: int = 112
         self.p5_channels: int = 320
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.stage0(x))
@@ -274,6 +281,7 @@ class _EfficientNetBackbone(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PredictionHead(nn.Module):
     """Shared-weight prediction head for all BiFPN levels.
 
@@ -320,6 +328,7 @@ class _PredictionHead(nn.Module):
         )
         self.predictor = nn.Conv2d(in_channels, num_outputs, 1)
 
+    @override
     def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         """
         Args:
@@ -535,6 +544,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
     # Forward
     # ------------------------------------------------------------------
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

@@ -31,7 +31,7 @@ Faithfulness notes
 * Smooth-L1 loss with σ = 1 per §3 (matches paper eq. 3).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -64,6 +64,7 @@ def _vgg16_block(in_ch: int, out_ch: int, n: int) -> list[nn.Module]:
     return layers
 
 
+@final
 class _VGG16Features(nn.Module):
     """VGG16 conv layers conv1_1 … conv5_3 (pool5 omitted).
 
@@ -94,6 +95,7 @@ class _VGG16Features(nn.Module):
         )
         self.out_channels: int = 512
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.features(x))
 
@@ -103,6 +105,7 @@ class _VGG16Features(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _FastRCNNHead(nn.Module):
     """RoI-level feature processing and prediction heads.
 
@@ -136,6 +139,7 @@ class _FastRCNNHead(nn.Module):
         self.cls_score = nn.Linear(4096, num_classes + 1)
         self.bbox_pred = nn.Linear(4096, num_classes * 4)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         x = x.flatten(1)
         x = cast(Tensor, self.drop(F.relu(cast(Tensor, self.fc6(x)))))
@@ -435,6 +439,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
     # Forward
     # ------------------------------------------------------------------
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

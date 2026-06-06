@@ -30,7 +30,7 @@ Losses (training)
   total loss:     primary + 0.4 × auxiliary
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -75,6 +75,7 @@ class _Bottleneck(nn.Module):
         self.bn3 = nn.BatchNorm2d(out_ch)
         self.downsample = downsample
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
         out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
@@ -121,6 +122,7 @@ def _make_layer(
     return nn.Sequential(*blocks), out_ch
 
 
+@final
 class _DilatedResNet(nn.Module):
     """ResNet backbone with dilated convolutions for dense prediction.
 
@@ -163,6 +165,7 @@ class _DilatedResNet(nn.Module):
         self.c4_channels: int = c4
         self.c5_channels: int = c5
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         """Return (c4, c5) feature maps.
 
@@ -184,6 +187,7 @@ class _DilatedResNet(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _FCNHead(nn.Sequential):
     """FCN segmentation head: Conv3×3-BN-ReLU-Dropout-Conv1×1.
 
@@ -309,6 +313,7 @@ class FCNForSemanticSegmentation(PretrainedModel):
             config.dropout,
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

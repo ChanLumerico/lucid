@@ -5,6 +5,7 @@ act only on the image and leave masks / boxes / keypoints untouched.
 """
 
 import math
+from typing import override
 from dataclasses import dataclass
 
 import lucid
@@ -18,7 +19,7 @@ def _odd(k: int) -> int:
     return k if k % 2 == 1 else k + 1
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class KSizeParam:
     r"""Per-call kernel-size parameter for box / median / motion blur.
 
@@ -36,7 +37,7 @@ class KSizeParam:
     ksize: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SigmaParam:
     r"""Per-call kernel size + Gaussian standard deviation.
 
@@ -58,7 +59,7 @@ class SigmaParam:
     sigma: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MotionParam:
     r"""Per-call motion-blur kernel size and streak angle.
 
@@ -78,7 +79,7 @@ class MotionParam:
     angle: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class NoiseParam:
     r"""Per-call noise magnitude for additive / sensor-style noise.
 
@@ -98,7 +99,7 @@ class NoiseParam:
     std: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MultiplierParam:
     r"""Per-call multiplicative-noise bounds.
 
@@ -119,7 +120,7 @@ class MultiplierParam:
     hi: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScaleParam:
     r"""Per-call downscale factor used by :class:`Downscale`.
 
@@ -161,6 +162,7 @@ class Blur(PhotometricTransform[KSizeParam]):
         super().__init__(p=p)
         self.blur_limit = blur_limit
 
+    @override
     def make_params(self, img: Tensor) -> KSizeParam:
         r"""Sample per-call random parameters for :class:`Blur`.
 
@@ -183,11 +185,13 @@ class Blur(PhotometricTransform[KSizeParam]):
         """
         return KSizeParam(ksize=_odd(_random.randint(3, self.blur_limit + 1)))
 
+    @override
     def _apply_image(self, img: Tensor, params: KSizeParam) -> Tensor:
         k = params.ksize
         kernel = [[1.0 / (k * k)] * k for _ in range(k)]
         return F.depthwise_conv2d(img, kernel)
 
+    @override
     def __repr__(self) -> str:
         return f"Blur(blur_limit={self.blur_limit}, p={self.p})"
 
@@ -213,6 +217,7 @@ class MedianBlur(PhotometricTransform[KSizeParam]):
         super().__init__(p=p)
         self.blur_limit = blur_limit
 
+    @override
     def make_params(self, img: Tensor) -> KSizeParam:
         r"""Sample per-call random parameters for :class:`MedianBlur`.
 
@@ -235,6 +240,7 @@ class MedianBlur(PhotometricTransform[KSizeParam]):
         """
         return KSizeParam(ksize=_odd(_random.randint(3, self.blur_limit + 1)))
 
+    @override
     def _apply_image(self, img: Tensor, params: KSizeParam) -> Tensor:
         k = params.ksize
         half = k // 2
@@ -247,6 +253,7 @@ class MedianBlur(PhotometricTransform[KSizeParam]):
         ordered = lucid.sort(stacked, dim=0)
         return ordered[(k * k) // 2]
 
+    @override
     def __repr__(self) -> str:
         return f"MedianBlur(blur_limit={self.blur_limit}, p={self.p})"
 
@@ -272,6 +279,7 @@ class MotionBlur(PhotometricTransform[MotionParam]):
         super().__init__(p=p)
         self.blur_limit = blur_limit
 
+    @override
     def make_params(self, img: Tensor) -> MotionParam:
         r"""Sample per-call random parameters for :class:`MotionBlur`.
 
@@ -298,6 +306,7 @@ class MotionBlur(PhotometricTransform[MotionParam]):
             angle=_random.uniform(0.0, 180.0),
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: MotionParam) -> Tensor:
         k = params.ksize
         half = k // 2
@@ -313,6 +322,7 @@ class MotionBlur(PhotometricTransform[MotionParam]):
         kernel = [[v / total for v in r] for r in kernel]
         return F.depthwise_conv2d(img, kernel)
 
+    @override
     def __repr__(self) -> str:
         return f"MotionBlur(blur_limit={self.blur_limit}, p={self.p})"
 
@@ -349,6 +359,7 @@ class GaussianBlur(PhotometricTransform[SigmaParam]):
             (0.0, sigma_limit) if isinstance(sigma_limit, (int, float)) else sigma_limit
         )
 
+    @override
     def make_params(self, img: Tensor) -> SigmaParam:
         r"""Sample per-call random parameters for :class:`GaussianBlur`.
 
@@ -375,9 +386,11 @@ class GaussianBlur(PhotometricTransform[SigmaParam]):
             sigma = 0.3 * ((k - 1) * 0.5 - 1.0) + 0.8  # OpenCV default
         return SigmaParam(ksize=k, sigma=sigma)
 
+    @override
     def _apply_image(self, img: Tensor, params: SigmaParam) -> Tensor:
         return F.gaussian_blur(img, params.sigma, ksize=params.ksize)
 
+    @override
     def __repr__(self) -> str:
         return f"GaussianBlur(blur_limit={self.blur_limit}, p={self.p})"
 
@@ -401,6 +414,7 @@ class GaussNoise(PhotometricTransform[NoiseParam]):
         self.var_limit = var_limit
         self.mean = mean
 
+    @override
     def make_params(self, img: Tensor) -> NoiseParam:
         r"""Sample per-call random parameters for :class:`GaussNoise`.
 
@@ -425,10 +439,12 @@ class GaussNoise(PhotometricTransform[NoiseParam]):
         var = _random.uniform(self.var_limit[0], self.var_limit[1])
         return NoiseParam(std=math.sqrt(var) / 255.0)
 
+    @override
     def _apply_image(self, img: Tensor, params: NoiseParam) -> Tensor:
         noise = lucid.randn(*img.shape) * params.std + self.mean / 255.0
         return lucid.clip(img + noise, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"GaussNoise(var_limit={self.var_limit}, p={self.p})"
 
@@ -462,6 +478,7 @@ class MultiplicativeNoise(PhotometricTransform[MultiplierParam]):
         self.multiplier = multiplier
         self.elementwise = elementwise
 
+    @override
     def make_params(self, img: Tensor) -> MultiplierParam:
         r"""Sample per-call random parameters for :class:`MultiplicativeNoise`.
 
@@ -481,6 +498,7 @@ class MultiplicativeNoise(PhotometricTransform[MultiplierParam]):
         """
         return MultiplierParam(lo=self.multiplier[0], hi=self.multiplier[1])
 
+    @override
     def _apply_image(self, img: Tensor, params: MultiplierParam) -> Tensor:
         if self.elementwise:
             mult = lucid.rand(*img.shape) * (params.hi - params.lo) + params.lo
@@ -488,6 +506,7 @@ class MultiplicativeNoise(PhotometricTransform[MultiplierParam]):
         scalar = _random.uniform(params.lo, params.hi)
         return lucid.clip(img * scalar, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"MultiplicativeNoise(multiplier={self.multiplier}, p={self.p})"
 
@@ -509,6 +528,7 @@ class ISONoise(PhotometricTransform[NoiseParam]):
         self.color_shift = color_shift
         self.intensity = intensity
 
+    @override
     def make_params(self, img: Tensor) -> NoiseParam:
         r"""Sample per-call random parameters for :class:`ISONoise`.
 
@@ -526,12 +546,14 @@ class ISONoise(PhotometricTransform[NoiseParam]):
         """
         return NoiseParam(std=_random.uniform(self.intensity[0], self.intensity[1]))
 
+    @override
     def _apply_image(self, img: Tensor, params: NoiseParam) -> Tensor:
         cs = _random.uniform(self.color_shift[0], self.color_shift[1])
         out = F.adjust_saturation(img, 1.0 + cs)
         noise = lucid.randn(*out.shape) * (params.std * 0.1)
         return lucid.clip(out + noise, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"ISONoise(color_shift={self.color_shift}, intensity={self.intensity}, "
@@ -568,6 +590,7 @@ class Downscale(PhotometricTransform[ScaleParam]):
         self.scale_min = scale_min
         self.scale_max = scale_max
 
+    @override
     def make_params(self, img: Tensor) -> ScaleParam:
         r"""Sample per-call random parameters for :class:`Downscale`.
 
@@ -584,6 +607,7 @@ class Downscale(PhotometricTransform[ScaleParam]):
         """
         return ScaleParam(scale=_random.uniform(self.scale_min, self.scale_max))
 
+    @override
     def _apply_image(self, img: Tensor, params: ScaleParam) -> Tensor:
         h, w = F._spatial_hw(img)
         dh = max(int(round(h * params.scale)), 1)
@@ -591,6 +615,7 @@ class Downscale(PhotometricTransform[ScaleParam]):
         small = F.resize(img, (dh, dw), interpolation="nearest")
         return F.resize(small, (h, w), interpolation="nearest")
 
+    @override
     def __repr__(self) -> str:
         return (
             f"Downscale(scale_min={self.scale_min}, scale_max={self.scale_max}, "
@@ -601,7 +626,7 @@ class Downscale(PhotometricTransform[ScaleParam]):
 # ── B8: defocus / zoom blur ─────────────────────────────────────────
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RadiusParam:
     r"""Per-call disk-kernel radius used by :class:`Defocus`.
 
@@ -642,6 +667,7 @@ class Defocus(PhotometricTransform[RadiusParam]):
         super().__init__(p=p)
         self.radius = radius
 
+    @override
     def make_params(self, img: Tensor) -> RadiusParam:
         r"""Sample per-call random parameters for :class:`Defocus`.
 
@@ -658,6 +684,7 @@ class Defocus(PhotometricTransform[RadiusParam]):
         """
         return RadiusParam(radius=_random.randint(self.radius[0], self.radius[1] + 1))
 
+    @override
     def _apply_image(self, img: Tensor, params: RadiusParam) -> Tensor:
         r = params.radius
         k = 2 * r + 1
@@ -669,11 +696,12 @@ class Defocus(PhotometricTransform[RadiusParam]):
         disk = [[v / total for v in row] for row in disk]
         return F.depthwise_conv2d(img, disk)
 
+    @override
     def __repr__(self) -> str:
         return f"Defocus(radius={self.radius}, p={self.p})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ZoomParam:
     r"""Per-call zoom factor used by :class:`ZoomBlur`.
 
@@ -720,6 +748,7 @@ class ZoomBlur(PhotometricTransform[ZoomParam]):
         self.max_factor = max_factor
         self.step_factor = step_factor
 
+    @override
     def make_params(self, img: Tensor) -> ZoomParam:
         r"""Sample per-call random parameters for :class:`ZoomBlur`.
 
@@ -737,6 +766,7 @@ class ZoomBlur(PhotometricTransform[ZoomParam]):
         """
         return ZoomParam(factor=_random.uniform(1.0, self.max_factor))
 
+    @override
     def _apply_image(self, img: Tensor, params: ZoomParam) -> Tensor:
         h, w = F._spatial_hw(img)
         n = 5
@@ -751,5 +781,6 @@ class ZoomBlur(PhotometricTransform[ZoomParam]):
             acc = acc + zoomed
         return lucid.clip(acc / (n + 1), 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"ZoomBlur(max_factor={self.max_factor}, p={self.p})"

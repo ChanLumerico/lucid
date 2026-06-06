@@ -2,7 +2,7 @@
 nn.Parameter: a Tensor that is automatically registered by Module.
 """
 
-from typing import cast
+from typing import cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
@@ -128,6 +128,7 @@ class Parameter(Tensor):
         """Initialise the instance.  See the class docstring for parameter semantics."""
         pass
 
+    @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         return f"Parameter containing:\n{super().__repr__()}"

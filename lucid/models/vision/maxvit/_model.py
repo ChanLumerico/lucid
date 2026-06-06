@@ -44,7 +44,7 @@ Head:
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -170,6 +170,7 @@ def _pad_to_multiple(x_cl: Tensor, ws: int) -> tuple[Tensor, int, int]:
 # ---------------------------------------------------------------------------
 
 
+@final
 class _RelPosBias(nn.Module):
     """Learnable relative position bias table: (num_heads, 2*ws-1, 2*ws-1).
 
@@ -207,6 +208,7 @@ class _RelPosBias(nn.Module):
         self._row_flat = row_flat
         self._col_flat = col_flat
 
+    @override
     def forward(self) -> Tensor:  # type: ignore[override]
         """Return bias tensor of shape (1, num_heads, ws², ws²)."""
         table = self.relative_position_bias_table  # (H, T, T)
@@ -233,6 +235,7 @@ class _RelPosBias(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _AttnCl(nn.Module):
     """Attention with relative position bias.
 
@@ -253,6 +256,7 @@ class _AttnCl(nn.Module):
         self.rel_pos = _RelPosBias(num_heads, window_size)
         self.proj = nn.Linear(dim, dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, N, C)  where B may be a compound batch
         B, N, C = x.shape
@@ -292,6 +296,7 @@ class _MLP(nn.Module):
         self.fc1 = nn.Linear(dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.fc1(x))
         x = F.gelu(x, approximate="tanh")
@@ -303,6 +308,7 @@ class _MLP(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PartitionAttn(nn.Module):
     """Pre-LN attention block matching timm's PartitionAttentionCl.
 
@@ -320,6 +326,7 @@ class _PartitionAttn(nn.Module):
         hidden = int(dim * mlp_ratio)
         self.mlp = _MLP(dim, hidden)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
         x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
@@ -345,6 +352,7 @@ class _SE(nn.Module):
         self.fc1 = nn.Conv2d(expanded_dim, se_mid, 1)
         self.fc2 = nn.Conv2d(se_mid, expanded_dim, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C, H, W)
         s = F.adaptive_avg_pool2d(x, (1, 1))
@@ -358,6 +366,7 @@ class _SE(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Shortcut(nn.Module):
     """Cross-stage shortcut: AvgPool (stride) + expand Conv2d.
 
@@ -381,6 +390,7 @@ class _Shortcut(nn.Module):
         else:
             self.expand = nn.Identity()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.pool(x))
         return cast(Tensor, self.expand(x))
@@ -432,6 +442,7 @@ class _MBConv(nn.Module):
         self.se = _SE(mid)
         self.conv3_1x1 = nn.Conv2d(mid, out_dim, 1, bias=True)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # Shortcut path
         if hasattr(self, "shortcut"):
@@ -457,6 +468,7 @@ class _MBConv(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MaxViTBlock(nn.Module):
     """Single MaxViT block = MBConv + window attention + grid attention.
 
@@ -482,6 +494,7 @@ class _MaxViTBlock(nn.Module):
         self.attn_block = _PartitionAttn(out_dim, num_heads, mlp_ratio, window_size)
         self.attn_grid = _PartitionAttn(out_dim, num_heads, mlp_ratio, window_size)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C_in, H, W)
         ws = self.ws
@@ -522,6 +535,7 @@ class _MaxViTBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MaxViTStage(nn.Module):
     """One MaxViT stage: a 'blocks' Sequential of _MaxViTBlock modules.
 
@@ -555,6 +569,7 @@ class _MaxViTStage(nn.Module):
             )
         self.blocks = nn.Sequential(*block_list)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.blocks(x))
 
@@ -564,6 +579,7 @@ class _MaxViTStage(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PreLogits(nn.Module):
     """Pre-logits: Linear → Tanh  (matches timm head.pre_logits.fc)."""
 
@@ -571,6 +587,7 @@ class _PreLogits(nn.Module):
         super().__init__()
         self.fc = nn.Linear(in_dim, out_dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.tanh(cast(Tensor, self.fc(x)))
 
@@ -606,6 +623,7 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
             # conv2 is stride=1 so symmetric padding=1 matches TF-same exactly
             self.conv2 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1, bias=True)
 
+        @override
         def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
             x = _tf_same_pad2d(x, kernel_size=3, stride=2)
             x = cast(Tensor, self.conv1(x))
@@ -723,10 +741,12 @@ class MaxViT(PretrainedModel, BackboneMixin):
         self._out_dim = out_dim
         self.head = _HeadNorm(out_dim, out_dim, config.num_classes)
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
         for stage in self.stages:
@@ -735,6 +755,7 @@ class MaxViT(PretrainedModel, BackboneMixin):
         x = F.adaptive_avg_pool2d(x, (1, 1)).flatten(1)
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -745,6 +766,7 @@ class MaxViT(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _HeadNorm(nn.Module):
     """Classifier head: LayerNorm2d → flatten → pre_logits.fc → Tanh → fc.
 
@@ -758,6 +780,7 @@ class _HeadNorm(nn.Module):
         self.pre_logits = _PreLogits(in_dim, pre_logits_dim)
         self.fc = nn.Linear(pre_logits_dim, num_classes)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C) after global pool + flatten
         x = cast(Tensor, self.norm(x))
@@ -834,6 +857,7 @@ class MaxViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.stages = stages
         self.head = _HeadNorm(out_dim, out_dim, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

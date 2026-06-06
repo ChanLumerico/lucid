@@ -9,6 +9,8 @@ Both forward into :func:`lucid.nn.functional.gumbel_softmax` for the
 sampling math, so the same Lucid Philox stream applies.
 """
 
+from typing import override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
@@ -166,6 +168,7 @@ class RelaxedBernoulli(Distribution):
         """
         return self.probs if not self._is_logits else _logits_to_probs(self.logits)
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw a reparameterised sample via the Gumbel-sigmoid trick.
 
@@ -196,6 +199,7 @@ class RelaxedBernoulli(Distribution):
         g2: Tensor = -(-(u2.log())).log()
         return ((l + g1 - g2) / self.temperature).sigmoid()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Concrete/RelaxedBernoulli distribution.
 
@@ -372,6 +376,7 @@ class RelaxedOneHotCategorical(Distribution):
             return self.logits
         return self.probs.log()
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw a reparameterised sample via the Gumbel-softmax trick.
 
@@ -402,6 +407,7 @@ class RelaxedOneHotCategorical(Distribution):
         )
         return gumbel_softmax(l, tau=float(self.temperature.item()), hard=False)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         """Log-probability density of the Concrete distribution over the simplex.
 

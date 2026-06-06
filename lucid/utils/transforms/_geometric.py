@@ -8,6 +8,7 @@ GeometricTransform`: every transform here moves the image, its mask
 
 import math
 from dataclasses import dataclass
+from typing import override
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
@@ -32,7 +33,7 @@ from lucid.utils.transforms._interpolation import Interpolation, as_interpolatio
 # ── parameter types ─────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CropBox:
     r"""Sampled crop window ``(top, left, height, width)`` for one call.
 
@@ -81,22 +82,27 @@ class Resize(_NoParams, GeometricTransform[Empty]):
         self.width = width
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.resize(
             img, (self.height, self.width), interpolation=self.interpolation
         )
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         return F.resize(
             mask, (self.height, self.width), interpolation=Interpolation.NEAREST
         )
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         return resize_boxes(boxes, self.height, self.width)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         return resize_keypoints(kps, self.height, self.width)
 
+    @override
     def __repr__(self) -> str:
         return f"Resize(height={self.height}, width={self.width}, p={self.p})"
 
@@ -117,18 +123,22 @@ class _MaxSizeResize(_NoParams, GeometricTransform[Empty]):
     def _target(self, h: int, w: int) -> tuple[int, int]:
         raise NotImplementedError
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         h, w = F._spatial_hw(img)
         return F.resize(img, self._target(h, w), interpolation=self.interpolation)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         h, w = F._spatial_hw(mask)
         return F.resize(mask, self._target(h, w), interpolation=Interpolation.NEAREST)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         new_h, new_w = self._target(*boxes.canvas_size)
         return resize_boxes(boxes, new_h, new_w)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         new_h, new_w = self._target(*kps.canvas_size)
         return resize_keypoints(kps, new_h, new_w)
@@ -152,10 +162,12 @@ class SmallestMaxSize(_MaxSizeResize):
         Probability of applying the transform.
     """
 
+    @override
     def _target(self, h: int, w: int) -> tuple[int, int]:
         scale = self.max_size / min(h, w)
         return int(round(h * scale)), int(round(w * scale))
 
+    @override
     def __repr__(self) -> str:
         return f"SmallestMaxSize(max_size={self.max_size}, p={self.p})"
 
@@ -178,10 +190,12 @@ class LongestMaxSize(_MaxSizeResize):
         Probability of applying the transform.
     """
 
+    @override
     def _target(self, h: int, w: int) -> tuple[int, int]:
         scale = self.max_size / max(h, w)
         return int(round(h * scale)), int(round(w * scale))
 
+    @override
     def __repr__(self) -> str:
         return f"LongestMaxSize(max_size={self.max_size}, p={self.p})"
 
@@ -211,9 +225,11 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
         self.height = height
         self.width = width
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.center_crop(img, (self.height, self.width))
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         return F.center_crop(mask, (self.height, self.width))
 
@@ -221,19 +237,22 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
         h, w = canvas
         return max((h - self.height) // 2, 0), max((w - self.width) // 2, 0)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         top, left = self._offsets(boxes.canvas_size)
         return crop_boxes(boxes, top, left, self.height, self.width)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         top, left = self._offsets(kps.canvas_size)
         return crop_keypoints(kps, top, left, self.height, self.width)
 
+    @override
     def __repr__(self) -> str:
         return f"CenterCrop(height={self.height}, width={self.width}, p={self.p})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Offset:
     r"""Per-call top-left pixel offset for :class:`RandomCrop`.
 
@@ -275,6 +294,7 @@ class RandomCrop(GeometricTransform[Offset]):
         self.height = height
         self.width = width
 
+    @override
     def make_params(self, img: Tensor) -> Offset:
         r"""Sample per-call random parameters for :class:`RandomCrop`.
 
@@ -297,18 +317,23 @@ class RandomCrop(GeometricTransform[Offset]):
             left=_random.randint(0, w - self.width + 1),
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: Offset) -> Tensor:
         return F.crop(img, params.top, params.left, self.height, self.width)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Offset) -> Tensor:
         return F.crop(mask, params.top, params.left, self.height, self.width)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Offset) -> BoundingBoxes:
         return crop_boxes(boxes, params.top, params.left, self.height, self.width)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Offset) -> Keypoints:
         return crop_keypoints(kps, params.top, params.left, self.height, self.width)
 
+    @override
     def __repr__(self) -> str:
         return f"RandomCrop(height={self.height}, width={self.width}, p={self.p})"
 
@@ -335,6 +360,7 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
         self.ratio = ratio
         self.interpolation = as_interpolation(interpolation)
 
+    @override
     def make_params(self, img: Tensor) -> CropBox:
         r"""Sample per-call random parameters for :class:`RandomResizedCrop`.
 
@@ -377,6 +403,7 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
             cw, ch = w, h
         return CropBox(top=(h - ch) // 2, left=(w - cw) // 2, height=ch, width=cw)
 
+    @override
     def _apply_image(self, img: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
             img,
@@ -388,6 +415,7 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
             interpolation=self.interpolation,
         )
 
+    @override
     def _apply_mask(self, mask: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
             mask,
@@ -399,18 +427,21 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
             interpolation=Interpolation.NEAREST,
         )
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: CropBox) -> BoundingBoxes:
         cropped = crop_boxes(
             boxes, params.top, params.left, params.height, params.width
         )
         return resize_boxes(cropped, self.height, self.width)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: CropBox) -> Keypoints:
         cropped = crop_keypoints(
             kps, params.top, params.left, params.height, params.width
         )
         return resize_keypoints(cropped, self.height, self.width)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"RandomResizedCrop(height={self.height}, width={self.width}, "
@@ -437,18 +468,23 @@ class HorizontalFlip(_NoParams, GeometricTransform[Empty]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.hflip(img)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         return F.hflip(mask)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         return flip_boxes(boxes, horizontal=True)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         return flip_keypoints(kps, horizontal=True)
 
+    @override
     def __repr__(self) -> str:
         return f"HorizontalFlip(p={self.p})"
 
@@ -470,17 +506,22 @@ class VerticalFlip(_NoParams, GeometricTransform[Empty]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.vflip(img)
 
+    @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
         return F.vflip(mask)
 
+    @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         return flip_boxes(boxes, horizontal=False)
 
+    @override
     def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
         return flip_keypoints(kps, horizontal=False)
 
+    @override
     def __repr__(self) -> str:
         return f"VerticalFlip(p={self.p})"

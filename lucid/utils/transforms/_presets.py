@@ -40,7 +40,7 @@ True
 """
 
 import abc
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms._autoaugment import (
@@ -200,14 +200,17 @@ class TransformsPreset(_NoParams, Transform[Empty], abc.ABC):
 
     # ── Transform interface (delegates to the inner pipeline) ───────
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return cast(Tensor, self._pipeline(img))
 
+    @override
     def __call__(self, inputs: object) -> object:
         # Wholesale delegation so multi-target samples thread through
         # the inner stages with consistent params per call.
         return self._pipeline(inputs)
 
+    @override
     def __repr__(self) -> str:
         kw = ", ".join(f"{k}={v!r}" for k, v in self._init_kwargs().items())
         return f"{type(self).__name__}({kw})"
@@ -325,6 +328,7 @@ class ImageClassification(TransformsPreset):
             ]
         )
 
+    @override
     def _init_kwargs(self) -> dict[str, object]:
         interp = self.interpolation
         return {
@@ -483,6 +487,7 @@ class ImageClassificationAugment(TransformsPreset):
             stages.append(RandomErasing(p=random_erasing))
         self._pipeline = Compose(stages)
 
+    @override
     def _init_kwargs(self) -> dict[str, object]:
         interp = self.interpolation
         return {
@@ -555,6 +560,7 @@ class Detection(TransformsPreset):
             bbox_params=BboxParams(min_area=min_area, min_visibility=min_visibility),
         )
 
+    @override
     def _init_kwargs(self) -> dict[str, object]:
         interp = self.interpolation
         return {
@@ -617,6 +623,7 @@ class Segmentation(TransformsPreset):
             ]
         )
 
+    @override
     def _init_kwargs(self) -> dict[str, object]:
         interp = self.interpolation
         return {
@@ -674,6 +681,7 @@ class Pose(TransformsPreset):
             ]
         )
 
+    @override
     def _init_kwargs(self) -> dict[str, object]:
         interp = self.interpolation
         return {

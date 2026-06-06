@@ -1,6 +1,7 @@
 """Continuous ``Uniform(low, high)``."""
 
 import math
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -135,6 +136,7 @@ class Uniform(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         """The support constraint of the Uniform distribution.
@@ -153,6 +155,7 @@ class Uniform(Distribution):
         # the simple ``check`` doesn't handle).
         return real
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Uniform distribution.
@@ -173,6 +176,7 @@ class Uniform(Distribution):
         """
         return 0.5 * (self.low + self.high)
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Uniform distribution.
@@ -194,6 +198,7 @@ class Uniform(Distribution):
         d = self.high - self.low
         return d * d / 12.0
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Reparameterised sample using the location-scale transform.
 
@@ -224,6 +229,7 @@ class Uniform(Distribution):
         u = lucid.rand(*shape, dtype=self.low.dtype, device=self.low.device)
         return self.low + (self.high - self.low) * u
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-density of ``value`` under the Uniform distribution.
 
@@ -269,6 +275,7 @@ class Uniform(Distribution):
             ),
         )
 
+    @override
     def cdf(self, value: Tensor) -> Tensor:
         r"""Cumulative distribution function of the Uniform distribution.
 
@@ -293,6 +300,7 @@ class Uniform(Distribution):
         """
         return ((value - self.low) / (self.high - self.low)).clip(0.0, 1.0)
 
+    @override
     def icdf(self, value: Tensor) -> Tensor:
         r"""Inverse CDF (quantile function) of the Uniform distribution.
 
@@ -317,6 +325,7 @@ class Uniform(Distribution):
         """
         return self.low + value * (self.high - self.low)
 
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Uniform distribution (in nats).
 

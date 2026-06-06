@@ -12,7 +12,7 @@ amount to a flat rename.
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -38,6 +38,7 @@ from lucid.models.text.roformer._config import RoFormerConfig
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _RoFormerRotaryEmbedding(Module):
     """Precompute interleaved-layout ``(cos, sin)`` tables for RoPE.
 
@@ -89,6 +90,7 @@ class _RoFormerRotaryEmbedding(Module):
         self.register_buffer("cos_cached", lucid.tensor(cos_rows), persistent=False)
         self.register_buffer("sin_cached", lucid.tensor(sin_rows), persistent=False)
 
+    @override
     def forward(self) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         return self.cos_cached, self.sin_cached
 
@@ -98,6 +100,7 @@ class _RoFormerRotaryEmbedding(Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _RoFormerEmbeddings(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
@@ -110,6 +113,7 @@ class _RoFormerEmbeddings(nn.Module):
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -132,6 +136,7 @@ class _RoFormerEmbeddings(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _RoFormerSelfAttention(nn.Module):
     """Multi-head self-attention with RoPE applied to Q and K."""
 
@@ -149,6 +154,7 @@ class _RoFormerSelfAttention(nn.Module):
     def _shape(self, x: Tensor, B: int, T: int) -> Tensor:
         return x.reshape(B, T, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -174,6 +180,7 @@ class _RoFormerSelfAttention(nn.Module):
         return ctx.permute(0, 2, 1, 3).reshape(B, T, self.num_heads * self.head_dim)
 
 
+@final
 class _RoFormerSelfOutput(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
@@ -181,6 +188,7 @@ class _RoFormerSelfOutput(nn.Module):
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self, hidden: Tensor, input_tensor: Tensor
     ) -> Tensor:
@@ -188,12 +196,14 @@ class _RoFormerSelfOutput(nn.Module):
         return cast(Tensor, self.LayerNorm(h + input_tensor))
 
 
+@final
 class _RoFormerAttention(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
         self.self = _RoFormerSelfAttention(config)
         self.output = _RoFormerSelfOutput(config)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -207,16 +217,19 @@ class _RoFormerAttention(nn.Module):
         return cast(Tensor, self.output(attn_out, hidden))
 
 
+@final
 class _RoFormerIntermediate(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         self._act_name = config.hidden_act
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return text_activation(self._act_name, cast(Tensor, self.dense(x)))
 
 
+@final
 class _RoFormerOutput(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
@@ -224,6 +237,7 @@ class _RoFormerOutput(nn.Module):
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
+    @override
     def forward(  # type: ignore[override]
         self, hidden: Tensor, input_tensor: Tensor
     ) -> Tensor:
@@ -231,6 +245,7 @@ class _RoFormerOutput(nn.Module):
         return cast(Tensor, self.LayerNorm(h + input_tensor))
 
 
+@final
 class _RoFormerLayer(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
@@ -238,6 +253,7 @@ class _RoFormerLayer(nn.Module):
         self.intermediate = _RoFormerIntermediate(config)
         self.output = _RoFormerOutput(config)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -252,6 +268,7 @@ class _RoFormerLayer(nn.Module):
         return cast(Tensor, self.output(inter, attn_out))
 
 
+@final
 class _RoFormerEncoder(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
@@ -259,6 +276,7 @@ class _RoFormerEncoder(nn.Module):
             [_RoFormerLayer(config) for _ in range(config.num_hidden_layers)]
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -273,11 +291,13 @@ class _RoFormerEncoder(nn.Module):
         return hidden
 
 
+@final
 class _RoFormerPooler(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
 
+    @override
     def forward(self, hidden: Tensor) -> Tensor:  # type: ignore[override]
         cls_hidden = hidden[:, 0]
         return F.tanh(cast(Tensor, self.dense(cls_hidden)))
@@ -376,9 +396,11 @@ class RoFormerModel(PretrainedModel):
         self.encoder = _RoFormerEncoder(config)
         self.pooler = _RoFormerPooler(config)
 
+    @override
     def get_input_embeddings(self) -> nn.Module:
         return self.embeddings.word_embeddings
 
+    @override
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
@@ -387,6 +409,7 @@ class RoFormerModel(PretrainedModel):
             )
         self.embeddings.word_embeddings = value
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -422,6 +445,7 @@ class RoFormerModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _RoFormerPredictionHeadTransform(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
@@ -429,12 +453,14 @@ class _RoFormerPredictionHeadTransform(nn.Module):
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self._act_name = config.hidden_act
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.dense(x))
         x = text_activation(self._act_name, x)
         return cast(Tensor, self.LayerNorm(x))
 
 
+@final
 class _RoFormerLMPredictionHead(nn.Module):
     bias: Tensor
 
@@ -444,17 +470,20 @@ class _RoFormerLMPredictionHead(nn.Module):
         self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.bias = nn.Parameter(lucid.zeros(config.vocab_size))
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.transform(x))
         logits = cast(Tensor, self.decoder(x))
         return logits + self.bias
 
 
+@final
 class _RoFormerOnlyMLMHead(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
         self.predictions = _RoFormerLMPredictionHead(config)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.predictions(x))
 
@@ -526,6 +555,7 @@ class RoFormerForMaskedLM(PretrainedModel, MaskedLMMixin):
                 self.roformer.embeddings.word_embeddings.weight
             )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -619,6 +649,7 @@ class RoFormerForSequenceClassification(PretrainedModel):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -715,6 +746,7 @@ class RoFormerForTokenClassification(PretrainedModel, MaskedLMMixin):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -813,6 +845,7 @@ class RoFormerForMultipleChoice(PretrainedModel):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, 1)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -919,6 +952,7 @@ class RoFormerForQuestionAnswering(PretrainedModel):
         self.roformer = RoFormerModel(config)
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,

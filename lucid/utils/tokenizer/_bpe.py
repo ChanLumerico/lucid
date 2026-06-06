@@ -29,7 +29,7 @@ RoBERTa, BART, distilGPT, ...) load without modification.
 
 import json
 import os
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -274,6 +274,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
 
     # ── Tokenizer interface ────────────────────────────────────────
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of tokens currently registered in the vocab.
@@ -286,6 +287,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         """
         return len(self._vocab)
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"bpe"``).
@@ -298,6 +300,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         """
         return "bpe"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a shallow copy of the token → id map.
 
@@ -309,6 +312,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         """
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         r"""Look up the surface string for a token id.
 
@@ -325,6 +329,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         """
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         r"""Algorithm-specific encode: chunk → ids via BPE merges."""
         all_ids: list[int] = []
@@ -332,6 +337,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
             all_ids.extend(self._encode_chunk(chunk))
         return all_ids
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         r"""Concatenate surface strings for ``ids``; unknown ids are
         silently dropped.
@@ -478,6 +484,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
 
     # ── Persistence ─────────────────────────────────────────────────
 
+    @override
     def save(self, directory: str) -> None:
         """Persist as both legacy (``vocab.json`` + ``merges.txt``)
         AND unified (``tokenizer.json``) formats.
@@ -493,6 +500,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         # Delegate to base for tokenizer.json + special_tokens_map.json.
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Add ``model`` block to the unified ``tokenizer.json``."""
         return {
@@ -702,6 +710,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
 
     # ── Tokenizer interface ────────────────────────────────────────
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of tokens in the C++ side vocab.
@@ -715,6 +724,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         """
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"bpe"``).
@@ -726,6 +736,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         """
         return "bpe"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a shallow copy of the token → id map.
 
@@ -744,6 +755,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         # sync by ``train`` + ``__init__``.
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         r"""Look up the surface string for a token id.
 
@@ -760,6 +772,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         """
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         r"""C++ encode path: normalize + pre-tokenize in Python,
         per-chunk merge in C++.
@@ -769,6 +782,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
             all_ids.extend(self._cpp.encode(chunk))
         return all_ids
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         r"""C++ decode for parity with the Python flavour.
 
@@ -814,6 +828,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
 
     # ── Persistence ─────────────────────────────────────────────────
 
+    @override
     def save(self, directory: str) -> None:
         """Same format as :meth:`BPETokenizer.save`."""
         os.makedirs(directory, exist_ok=True)
@@ -821,6 +836,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         _save_merges_txt(self._merges, os.path.join(directory, "merges.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         r"""Emit the BPE ``model`` block for the unified ``tokenizer.json``."""
         return {

@@ -14,7 +14,7 @@ side) and adds the seq2seq-specific knobs:
 """
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig
@@ -107,6 +107,7 @@ class TransformerConfig(LanguageModelConfig):
     num_labels: int = 2
     classifier_dropout: float | None = None
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         if self.num_decoder_layers <= 0:

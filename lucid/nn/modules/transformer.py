@@ -3,7 +3,7 @@ Transformer modules: TransformerEncoderLayer, TransformerEncoder,
 TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
-from typing import cast
+from typing import cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -212,6 +212,7 @@ class TransformerEncoderLayer(Module):
         h = cast(Tensor, self.linear1(x))
         return self.linear2(cast(Tensor, self.dropout2(act(h))))  # type: ignore[return-value]
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         src: Tensor,
@@ -268,6 +269,7 @@ class TransformerEncoderLayer(Module):
             )
         return src
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -412,6 +414,7 @@ class TransformerEncoder(Module):
             self.add_module("norm", norm)
         self.num_layers = num_layers
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         src: Tensor,
@@ -444,6 +447,7 @@ class TransformerEncoder(Module):
             output = cast(Tensor, self.norm(output))
         return output
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"num_layers={self.num_layers}"
@@ -660,6 +664,7 @@ class TransformerDecoderLayer(Module):
         h = cast(Tensor, self.linear1(x))
         return self.linear2(cast(Tensor, self.dropout2(act(h))))  # type: ignore[return-value]
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         tgt: Tensor,
@@ -748,6 +753,7 @@ class TransformerDecoderLayer(Module):
             )
         return tgt
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
@@ -890,6 +896,7 @@ class TransformerDecoder(Module):
             self.add_module("norm", norm)
         self.num_layers = num_layers
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         tgt: Tensor,
@@ -931,6 +938,7 @@ class TransformerDecoder(Module):
             output = cast(Tensor, self.norm(output))
         return output
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"num_layers={self.num_layers}"
@@ -1127,6 +1135,7 @@ class Transformer(Module):
         self.d_model = d_model
         self.nhead = nhead
 
+    @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         src: Tensor,
@@ -1173,6 +1182,7 @@ class Transformer(Module):
             self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask),
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"d_model={self.d_model}, nhead={self.nhead}"

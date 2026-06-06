@@ -23,7 +23,7 @@ Each SwinBlock:
   Alternating blocks use cyclic shift + mask to implement shifted windows.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -46,6 +46,7 @@ class _PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_ch, embed_dim, patch_size, stride=patch_size)
         self.norm = nn.LayerNorm(embed_dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.proj(x))  # (B, C, H, W)
         B, C, H, W = x.shape
@@ -59,12 +60,14 @@ class _PatchEmbed(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _PatchMerge(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
         self.norm = nn.LayerNorm(4 * dim)
         self.proj = nn.Linear(4 * dim, 2 * dim, bias=False)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, H, W, C)
         B, H, W, C = x.shape
@@ -105,6 +108,7 @@ def _window_reverse(windows: Tensor, ws: int, nH: int, nW: int) -> Tensor:
 # ---------------------------------------------------------------------------
 
 
+@final
 class _WindowAttention(nn.Module):
     """Local window attention with learnable relative position bias."""
 
@@ -144,6 +148,7 @@ class _WindowAttention(nn.Module):
         rel_idx = rel_y * (2 * window_size - 1) + rel_x  # (ws^2, ws^2)
         self.register_buffer("rel_pos_idx", rel_idx, persistent=False)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
@@ -187,6 +192,7 @@ class _WindowAttention(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _SwinBlock(nn.Module):
     """One Swin Transformer block (regular or shifted window)."""
 
@@ -245,6 +251,7 @@ class _SwinBlock(nn.Module):
         )
         return mask
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, H, W, C = x.shape
         shortcut = x
@@ -318,6 +325,7 @@ class _SwinStage(nn.Module):
         )
         self.downsample: nn.Module | None = _PatchMerge(dim) if downsample else None
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
@@ -479,10 +487,12 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
         self._out_dim = out_dim
         self.avgpool = nn.AdaptiveAvgPool2d(1)
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.patch_embed(x))  # (B, H/p, W/p, C)
         for stage in self.stages:
@@ -494,6 +504,7 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.avgpool(x)).flatten(1)  # (B, C)
         return x
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -578,6 +589,7 @@ class SwinTransformerForImageClassification(PretrainedModel, ClassificationHeadM
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self._build_classifier(out_dim, config.num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

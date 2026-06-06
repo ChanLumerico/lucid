@@ -6,6 +6,8 @@ All three are pure-Lucid composites — sampling reuses
 closed-form via lgamma.
 """
 
+from typing import override
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
@@ -106,6 +108,7 @@ class Poisson(ExponentialFamily):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the Poisson distribution: :math:`E[X] = \lambda`.
@@ -117,6 +120,7 @@ class Poisson(ExponentialFamily):
         """
         return self.rate
 
+    @override
     @property
     def mode(self) -> Tensor:
         r"""Mode of the Poisson distribution: :math:`\lfloor \lambda \rfloor`.
@@ -134,6 +138,7 @@ class Poisson(ExponentialFamily):
         # are modes; we follow the reference framework and take floor.
         return self.rate.floor()
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Poisson distribution: :math:`\operatorname{Var}[X] = \lambda`.
@@ -145,6 +150,7 @@ class Poisson(ExponentialFamily):
         """
         return self.rate
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Poisson distribution.
 
@@ -173,6 +179,7 @@ class Poisson(ExponentialFamily):
         )
         return lucid.poisson(rate_b)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of the given counts under the Poisson distribution.
 
@@ -193,6 +200,7 @@ class Poisson(ExponentialFamily):
         # log p(k | λ) = k·log(λ) − λ − lgamma(k+1).
         return value * self.rate.log() - self.rate - lucid.lgamma(value + 1.0)
 
+    @override
     def entropy(self) -> Tensor:
         """Entropy of the Poisson distribution (not available in closed form).
 
@@ -338,6 +346,7 @@ class Binomial(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
         r"""Support of the Binomial distribution: non-negative integers.
@@ -377,6 +386,7 @@ class Binomial(Distribution):
         """
         return self.logits if self._is_logits else _probs_to_logits(self.probs)
 
+    @override
     @property
     def mean(self) -> Tensor:
         """Mean of the Binomial distribution: :math:`E[X] = np`.
@@ -388,6 +398,7 @@ class Binomial(Distribution):
         """
         return self.total_count * self._probs
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Binomial distribution: :math:`\operatorname{Var}[X] = np(1-p)`.
@@ -400,6 +411,7 @@ class Binomial(Distribution):
         p: Tensor = self._probs
         return self.total_count * p * (1.0 - p)
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Binomial distribution.
 
@@ -460,6 +472,7 @@ class Binomial(Distribution):
         sample = sample.maximum(zero).minimum(tc_b)
         return sample.to(lucid.int64).detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of the given counts under the Binomial distribution.
 
@@ -643,6 +656,7 @@ class NegativeBinomial(Distribution):
         """
         return self.logits if self._is_logits else _probs_to_logits(self.probs)
 
+    @override
     @property
     def mean(self) -> Tensor:
         """Mean of the Negative Binomial: :math:`E[X] = r p / (1-p)`.
@@ -656,6 +670,7 @@ class NegativeBinomial(Distribution):
         p: Tensor = self._probs
         return self.total_count * p / (1.0 - p)
 
+    @override
     @property
     def variance(self) -> Tensor:
         r"""Variance of the Negative Binomial: :math:`\operatorname{Var}[X] = r p / (1-p)^2`.
@@ -669,6 +684,7 @@ class NegativeBinomial(Distribution):
         p: Tensor = self._probs
         return self.total_count * p / ((1.0 - p) ** 2)
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples via the Gamma-Poisson compound representation.
 
@@ -704,6 +720,7 @@ class NegativeBinomial(Distribution):
         lam: Tensor = std_gamma / rate
         return lucid.poisson(lam).detach()
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of counts under the Negative Binomial distribution.
 

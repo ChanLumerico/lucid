@@ -2,6 +2,8 @@
 Padding modules: Constant, Reflection, Replication, Zero padding.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid._types import _Size2d
 from lucid.nn.module import Module
@@ -43,6 +45,7 @@ class _ConstantPadNd(Module):
         )
         self.value = value
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -59,6 +62,7 @@ class _ConstantPadNd(Module):
         """
         return pad(x, self.padding, mode="constant", value=self.value)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}, value={self.value}"
@@ -306,6 +310,7 @@ class ZeroPad1d(ConstantPad1d):
         """Initialise the ZeroPad1d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value=0.0)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -362,6 +367,7 @@ class ZeroPad2d(ConstantPad2d):
         """Initialise the ZeroPad2d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value=0.0)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -416,6 +422,7 @@ class ZeroPad3d(ConstantPad3d):
         """Initialise the ZeroPad3d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value=0.0)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -488,6 +495,7 @@ class ReflectionPad1d(Module):
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -504,6 +512,7 @@ class ReflectionPad1d(Module):
         """
         return pad(x, self.padding, mode="reflect")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -576,6 +585,7 @@ class ReflectionPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -592,6 +602,7 @@ class ReflectionPad2d(Module):
         """
         return pad(x, self.padding, mode="reflect")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -662,6 +673,7 @@ class ReplicationPad1d(Module):
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -678,6 +690,7 @@ class ReplicationPad1d(Module):
         """
         return pad(x, self.padding, mode="replicate")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -749,6 +762,7 @@ class ReplicationPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -765,6 +779,7 @@ class ReplicationPad2d(Module):
         """
         return pad(x, self.padding, mode="replicate")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -818,6 +833,7 @@ class ReplicationPad3d(Module):
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -834,6 +850,7 @@ class ReplicationPad3d(Module):
         """
         return pad(x, self.padding, mode="replicate")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -896,6 +913,7 @@ class ReflectionPad3d(Module):
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -912,6 +930,7 @@ class ReflectionPad3d(Module):
         """
         return pad(x, self.padding, mode="reflect")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -982,6 +1001,7 @@ class CircularPad1d(Module):
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -998,6 +1018,7 @@ class CircularPad1d(Module):
         """
         return pad(x, self.padding, mode="circular")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -1069,6 +1090,7 @@ class CircularPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -1085,6 +1107,7 @@ class CircularPad2d(Module):
         """
         return pad(x, self.padding, mode="circular")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
@@ -1152,6 +1175,7 @@ class CircularPad3d(Module):
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Pad the input tensor according to the configured padding.
 
@@ -1168,6 +1192,7 @@ class CircularPad3d(Module):
         """
         return pad(x, self.padding, mode="circular")
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"

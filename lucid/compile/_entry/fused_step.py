@@ -72,7 +72,7 @@ Limitations
 """
 
 import threading
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, final
 
 from lucid._C import engine as _C_engine
 from lucid._device import device as _device_cls
@@ -235,6 +235,7 @@ def _zeros_like(t: Tensor) -> Tensor:
     return _lucid.zeros(*t.shape, dtype=t.dtype, device=t.device)
 
 
+@final
 class _FusedStep:
     r"""Driver behind :func:`fused_step` — one executable, whole training step.
 

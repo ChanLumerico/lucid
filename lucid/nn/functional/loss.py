@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._types import Reduction, ReductionKL
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -24,7 +25,7 @@ def _validate_reduction(reduction: str, allow_batchmean: bool = False) -> None:
         raise ValueError(f"reduction must be one of {valid}, got {reduction!r}")
 
 
-def mse_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
+def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     r"""Mean-squared-error (L2) loss between input and target.
 
     The workhorse loss for regression problems.  Penalises large
@@ -86,7 +87,7 @@ def mse_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     return _wrap(_C_engine.nn.mse_loss(_unwrap(x), _unwrap(target), red))
 
 
-def l1_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
+def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     r"""Mean-absolute-error (L1) loss between input and target.
 
     Robust regression loss whose gradient is constant in magnitude
@@ -146,7 +147,7 @@ def l1_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
 
 
 def smooth_l1_loss(
-    x: Tensor, target: Tensor, beta: float = 1.0, reduction: str = "mean"
+    x: Tensor, target: Tensor, beta: float = 1.0, reduction: Reduction = "mean"
 ) -> Tensor:
     r"""Smooth L1 loss — a quadratic-near-zero, linear-far-from-zero hybrid.
 
@@ -209,7 +210,7 @@ def smooth_l1_loss(
 
 
 def huber_loss(
-    x: Tensor, target: Tensor, delta: float = 1.0, reduction: str = "mean"
+    x: Tensor, target: Tensor, delta: float = 1.0, reduction: Reduction = "mean"
 ) -> Tensor:
     r"""Huber loss — robust regression with a tunable transition point.
 
@@ -277,7 +278,7 @@ def cross_entropy(
     target: Tensor,
     weight: Tensor | None = None,
     ignore_index: int = -100,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
     label_smoothing: float = 0.0,
 ) -> Tensor:
     r"""Cross-entropy loss for multi-class classification.
@@ -423,7 +424,7 @@ def nll_loss(
     target: Tensor,
     weight: Tensor | None = None,
     ignore_index: int = -100,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Negative log-likelihood loss for multi-class classification.
 
@@ -516,7 +517,7 @@ def binary_cross_entropy(
     x: Tensor,
     target: Tensor,
     weight: Tensor | None = None,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Binary cross-entropy between predicted probabilities and targets.
 
@@ -590,7 +591,7 @@ def binary_cross_entropy_with_logits(
     target: Tensor,
     weight: Tensor | None = None,
     pos_weight: Tensor | None = None,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Binary cross-entropy from raw logits (numerically stable).
 
@@ -681,7 +682,7 @@ def kl_div(
     x: Tensor,
     target: Tensor,
     size_average: bool | None = None,
-    reduction: str = "mean",
+    reduction: ReductionKL = "mean",
     log_target: bool = False,
 ) -> Tensor:
     r"""Kullback-Leibler divergence between two distributions.
@@ -777,7 +778,7 @@ def kl_div(
     return _wrap(kl)
 
 
-def _apply_reduction(t: _C_engine.TensorImpl, reduction: str) -> Tensor:
+def _apply_reduction(t: _C_engine.TensorImpl, reduction: Reduction) -> Tensor:
     """Apply reduction to a batch of per-sample losses."""
     if reduction == "mean":
         return _wrap(_C_engine.mean(t, [], False))
@@ -794,7 +795,7 @@ def triplet_margin_loss(
     p: float = 2.0,
     eps: float = 1e-6,
     swap: bool = False,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Triplet margin loss for metric learning.
 
@@ -882,7 +883,7 @@ def triplet_margin_with_distance_loss(
     distance_function: object | None = None,
     margin: float = 1.0,
     swap: bool = False,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Triplet margin loss with a user-supplied distance function.
 
@@ -979,7 +980,7 @@ def cosine_embedding_loss(
     x2: Tensor,
     y: Tensor,
     margin: float = 0.0,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Cosine embedding loss for pairwise similarity learning.
 
@@ -1056,7 +1057,7 @@ def margin_ranking_loss(
     x2: Tensor,
     y: Tensor,
     margin: float = 0.0,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Pairwise ranking hinge loss.
 
@@ -1120,7 +1121,7 @@ def hinge_embedding_loss(
     x: Tensor,
     y: Tensor,
     margin: float = 1.0,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Hinge embedding loss.
 
@@ -1191,7 +1192,7 @@ def poisson_nll_loss(
     log_input: bool = True,
     full: bool = False,
     eps: float = 1e-8,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Poisson negative log-likelihood loss for count regression.
 
@@ -1276,7 +1277,7 @@ def gaussian_nll_loss(
     var: Tensor,
     full: bool = False,
     eps: float = 1e-6,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Gaussian negative log-likelihood for heteroscedastic regression.
 
@@ -1363,7 +1364,7 @@ def ctc_loss(
     input_lengths: Tensor,
     target_lengths: Tensor,
     blank: int = 0,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
     zero_infinity: bool = False,
 ) -> Tensor:
     r"""Connectionist Temporal Classification (CTC) loss.
@@ -1473,7 +1474,7 @@ def multi_margin_loss(
     p: int = 1,
     margin: float = 1.0,
     weight: Tensor | None = None,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Multi-class hinge (margin) loss — Crammer-Singer SVM objective.
 
@@ -1587,7 +1588,7 @@ def multi_margin_loss(
 def multilabel_margin_loss(
     x: Tensor,
     target: Tensor,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Multi-label hinge loss for set-valued targets.
 
@@ -1710,7 +1711,7 @@ def multilabel_margin_loss(
 def soft_margin_loss(
     input: Tensor,
     target: Tensor,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Logistic (softplus) loss for binary classification with ±1 labels.
 
@@ -1778,7 +1779,7 @@ def multilabel_soft_margin_loss(
     input: Tensor,
     target: Tensor,
     weight: Tensor | None = None,
-    reduction: str = "mean",
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Per-class logistic loss averaged over labels (multi-label BCE).
 

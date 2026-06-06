@@ -14,7 +14,7 @@ Two tiers:
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, override
 
 from lucid.models._base import ModelConfig
 
@@ -87,6 +87,7 @@ class DiffusionModelConfig(GenerativeModelConfig):
     beta_schedule: BetaSchedule = "linear"
     prediction_type: Literal["epsilon", "sample", "v_prediction"] = "epsilon"
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         if self.num_train_timesteps <= 0:

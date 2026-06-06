@@ -3,7 +3,7 @@ nn.Module: base class for all neural network layers.
 """
 
 from collections import OrderedDict
-from typing import Callable, ClassVar, Iterator, Self, TYPE_CHECKING, cast
+from typing import Callable, ClassVar, Iterator, Self, TYPE_CHECKING, cast, final, override
 
 if TYPE_CHECKING:
     from lucid.autograd.function import FunctionCtx
@@ -343,6 +343,7 @@ class Module:
         ]
         return _wrap(wrapped_impl)
 
+    @override
     def __setattr__(self, name: str, value: object) -> None:
         """Attribute setter; routes Tensor / Parameter / Module assignments to the proper internal registries."""
         if not isinstance(name, str):
@@ -387,6 +388,7 @@ class Module:
             return cast(Tensor | Parameter | Module, m[name])
         raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
+    @override
     def __delattr__(self, name: str) -> None:
         """Attribute deletion; mirrors :meth:`__setattr__` by removing the entry from the corresponding registry."""
         if name in self._parameters:
@@ -1092,6 +1094,7 @@ class Module:
 
     # ── repr ──────────────────────────────────────────────────────────────
 
+    @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         extra = self.extra_repr()
@@ -1112,6 +1115,7 @@ class Module:
         return ""
 
 
+@final
 class _ModuleBackwardState:
     def __init__(self, module: Module, n_inputs: int) -> None:
         self.module = module
@@ -1240,18 +1244,22 @@ class _ModuleBackwardState:
         self.full_hooks_ran = True
 
 
+@final
 class _ModuleInputBackwardHookFunction:
     @staticmethod
     def apply(x: Tensor, state: _ModuleBackwardState, index: int) -> Tensor:
         from lucid.autograd import Function
 
+        @final
         class _InputHook(Function):
+            @override
             @staticmethod
             def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific than Function.forward(*args)
                 ctx.state = state
                 ctx.index = index
                 return x
 
+            @override
             @staticmethod
             def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
                 return cast(
@@ -1268,18 +1276,22 @@ class _ModuleInputBackwardHookFunction:
         return result
 
 
+@final
 class _ModuleOutputBackwardHookFunction:
     @staticmethod
     def apply(output: Tensor, state: _ModuleBackwardState, index: int) -> Tensor:
         from lucid.autograd import Function
 
+        @final
         class _OutputHook(Function):
+            @override
             @staticmethod
             def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
                 ctx.state = state
                 ctx.index = index
                 return x
 
+            @override
             @staticmethod
             def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
                 updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)  # type: ignore[attr-defined]

@@ -10,8 +10,10 @@ their slopes as :class:`~lucid.nn.Parameter` instances and are updated
 by any standard optimiser.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
-from lucid._types import DeviceLike, DTypeLike
+from lucid._types import DeviceLike, DTypeLike, GeluApproximate
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import full
@@ -93,6 +95,7 @@ class ReLU(Module):
         super().__init__()
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -108,6 +111,7 @@ class ReLU(Module):
         """
         return relu(x, self.inplace)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"inplace={self.inplace}" if self.inplace else ""
@@ -165,6 +169,7 @@ class LeakyReLU(Module):
         self.negative_slope = negative_slope
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -180,6 +185,7 @@ class LeakyReLU(Module):
         """
         return leaky_relu(x, self.negative_slope, self.inplace)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"negative_slope={self.negative_slope}"
@@ -238,6 +244,7 @@ class ELU(Module):
         self.alpha = alpha
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -253,6 +260,7 @@ class ELU(Module):
         """
         return elu(x, self.alpha, self.inplace)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"alpha={self.alpha}"
@@ -318,6 +326,7 @@ class SELU(Module):
         super().__init__()
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -397,11 +406,12 @@ class GELU(Module):
     (4, 512)
     """
 
-    def __init__(self, approximate: str = "none") -> None:
+    def __init__(self, approximate: GeluApproximate = "none") -> None:
         """Initialise the GELU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.approximate = approximate
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -417,6 +427,7 @@ class GELU(Module):
         """
         return gelu(x, self.approximate)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"approximate={self.approximate!r}" if self.approximate != "none" else ""
@@ -473,6 +484,7 @@ class SiLU(Module):
         """Initialise the SiLU module. See the class docstring for parameter semantics."""
         super().__init__()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -531,6 +543,7 @@ class Mish(Module):
     (4, 128, 7, 7)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -606,6 +619,7 @@ class Softplus(Module):
         self.beta = beta
         self.threshold = threshold
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -621,6 +635,7 @@ class Softplus(Module):
         """
         return softplus(x, self.beta, self.threshold)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         if self.beta == 1.0 and self.threshold == 20.0:
@@ -674,6 +689,7 @@ class Hardswish(Module):
     (1, 96, 28, 28)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -725,6 +741,7 @@ class Hardsigmoid(Module):
     (2, 32)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -780,6 +797,7 @@ class Sigmoid(Module):
     (16, 1)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -836,6 +854,7 @@ class Tanh(Module):
     (32, 128)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -905,6 +924,7 @@ class Softmax(Module):
         super().__init__()
         self.dim = dim
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -920,6 +940,7 @@ class Softmax(Module):
         """
         return softmax(x, self.dim)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
@@ -975,6 +996,7 @@ class LogSoftmax(Module):
         super().__init__()
         self.dim = dim
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -990,6 +1012,7 @@ class LogSoftmax(Module):
         """
         return log_softmax(x, self.dim)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
@@ -1036,6 +1059,7 @@ class Softmax2d(Module):
     (2, 8, 8)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1124,6 +1148,7 @@ class RReLU(Module):
         self.upper = upper
         self.inplace = inplace
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1141,6 +1166,7 @@ class RReLU(Module):
             x, self.lower, self.upper, training=self.training, inplace=self.inplace
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"lower={self.lower}, upper={self.upper}"
@@ -1191,6 +1217,7 @@ class ReLU6(Module):
         """Initialise the ReLU6 module. See the class docstring for parameter semantics."""
         super().__init__()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1288,6 +1315,7 @@ class PReLU(Module):
             full((num_parameters,), init, dtype=dtype, device=device)
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1303,6 +1331,7 @@ class PReLU(Module):
         """
         return prelu(x, self.weight)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"num_parameters={self.num_parameters}"
@@ -1363,6 +1392,7 @@ class Threshold(Module):
         self.threshold = threshold
         self.value = value
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1382,6 +1412,7 @@ class Threshold(Module):
         mask = _C_engine.greater(impl, thresh)
         return _wrap(_C_engine.where(mask, impl, fill))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"threshold={self.threshold}, value={self.value}"
@@ -1451,6 +1482,7 @@ class Hardtanh(Module):
         self.min_val = min_val
         self.max_val = max_val
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1467,6 +1499,7 @@ class Hardtanh(Module):
         impl = _unwrap(x)
         return _wrap(_C_engine.clip(impl, self.min_val, self.max_val))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"min_val={self.min_val}, max_val={self.max_val}"
@@ -1515,6 +1548,7 @@ class LogSigmoid(Module):
     (32, 1)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1572,6 +1606,7 @@ class Softsign(Module):
     (8, 64)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1639,6 +1674,7 @@ class Softmin(Module):
         super().__init__()
         self.dim = dim
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1654,6 +1690,7 @@ class Softmin(Module):
         """
         return softmin(x, self.dim)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
@@ -1716,6 +1753,7 @@ class GLU(Module):
         super().__init__()
         self.dim = dim
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1731,6 +1769,7 @@ class GLU(Module):
         """
         return glu(x, self.dim)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
@@ -1788,6 +1827,7 @@ class CELU(Module):
         super().__init__()
         self.alpha = alpha
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1803,6 +1843,7 @@ class CELU(Module):
         """
         return celu(x, self.alpha)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"alpha={self.alpha}"
@@ -1858,6 +1899,7 @@ class Hardshrink(Module):
         super().__init__()
         self.lambd = lambd
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1873,6 +1915,7 @@ class Hardshrink(Module):
         """
         return hardshrink(x, self.lambd)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"lambd={self.lambd}"
@@ -1919,6 +1962,7 @@ class Tanhshrink(Module):
     (4, 256)
     """
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -1992,6 +2036,7 @@ class Softshrink(Module):
         super().__init__()
         self.lambd = lambd
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -2007,6 +2052,7 @@ class Softshrink(Module):
         """
         return softshrink(x, self.lambd)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"lambd={self.lambd}"
@@ -2069,6 +2115,7 @@ class CosineSimilarity(Module):
         self.dim = dim
         self.eps = eps
 
+    @override
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -2084,6 +2131,7 @@ class CosineSimilarity(Module):
         """
         return cosine_similarity(x1, x2, dim=self.dim, eps=self.eps)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}, eps={self.eps}"
@@ -2158,6 +2206,7 @@ class PairwiseDistance(Module):
         self.eps = eps
         self.keepdim = keepdim
 
+    @override
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Apply the activation function element-wise.
 
@@ -2173,6 +2222,7 @@ class PairwiseDistance(Module):
         """
         return pairwise_distance(x1, x2, p=self.p, eps=self.eps, keepdim=self.keepdim)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"p={self.p}, eps={self.eps}, keepdim={self.keepdim}"

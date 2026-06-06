@@ -6,6 +6,7 @@ keypoints untouched.
 """
 
 from dataclasses import dataclass
+from typing import override
 
 import lucid
 from lucid._tensor import Tensor
@@ -21,7 +22,7 @@ def _rng(value: float | tuple[float, float]) -> tuple[float, float]:
 # ── parameter types ─────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BCParams:
     r"""Per-call brightness offset and contrast delta.
 
@@ -41,7 +42,7 @@ class BCParams:
     contrast: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScalarParams:
     r"""Per-call single-scalar parameter for tone / curve transforms.
 
@@ -61,7 +62,7 @@ class ScalarParams:
     value: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TripletParams:
     r"""Per-call three-scalar parameter pack for multi-knob transforms.
 
@@ -87,7 +88,7 @@ class TripletParams:
     c: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PermParams:
     r"""Per-call RGB-channel permutation used by :class:`ChannelShuffle`.
 
@@ -104,7 +105,7 @@ class PermParams:
     order: tuple[int, int, int]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ChannelDropParams:
     r"""Per-call set of channel indices to replace with the fill value.
 
@@ -164,6 +165,7 @@ class RandomBrightnessContrast(PhotometricTransform[BCParams]):
         self.brightness_limit = _rng(brightness_limit)
         self.contrast_limit = _rng(contrast_limit)
 
+    @override
     def make_params(self, img: Tensor) -> BCParams:
         r"""Sample per-call random parameters for :class:`RandomBrightnessContrast`.
 
@@ -184,10 +186,12 @@ class RandomBrightnessContrast(PhotometricTransform[BCParams]):
             contrast=_random.uniform(*self.contrast_limit),
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: BCParams) -> Tensor:
         out = img * (1.0 + params.contrast) + params.brightness
         return lucid.clip(out, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"RandomBrightnessContrast(brightness_limit={self.brightness_limit}, "
@@ -227,6 +231,7 @@ class RandomGamma(PhotometricTransform[ScalarParams]):
         super().__init__(p=p)
         self.gamma_limit = gamma_limit
 
+    @override
     def make_params(self, img: Tensor) -> ScalarParams:
         r"""Sample per-call random parameters for :class:`RandomGamma`.
 
@@ -246,9 +251,11 @@ class RandomGamma(PhotometricTransform[ScalarParams]):
             value=_random.uniform(self.gamma_limit[0], self.gamma_limit[1]) / 100.0
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
         return lucid.clip(img, 0.0, 1.0) ** params.value
 
+    @override
     def __repr__(self) -> str:
         return f"RandomGamma(gamma_limit={self.gamma_limit}, p={self.p})"
 
@@ -311,6 +318,7 @@ class HueSaturationValue(PhotometricTransform[TripletParams]):
         self.sat_shift_limit = _rng(sat_shift_limit)
         self.val_shift_limit = _rng(val_shift_limit)
 
+    @override
     def make_params(self, img: Tensor) -> TripletParams:
         r"""Sample per-call random parameters for :class:`HueSaturationValue`.
 
@@ -333,10 +341,12 @@ class HueSaturationValue(PhotometricTransform[TripletParams]):
             c=_random.uniform(*self.val_shift_limit),
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
         self._require_channels(img, 3)
         return F.adjust_hsv(img, params.a, params.b, params.c)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"HueSaturationValue(hue_shift_limit={self.hue_shift_limit}, "
@@ -393,6 +403,7 @@ class RGBShift(PhotometricTransform[TripletParams]):
         self.g = _rng(g_shift_limit)
         self.b = _rng(b_shift_limit)
 
+    @override
     def make_params(self, img: Tensor) -> TripletParams:
         r"""Sample per-call random parameters for :class:`RGBShift`.
 
@@ -414,12 +425,14 @@ class RGBShift(PhotometricTransform[TripletParams]):
             c=_random.uniform(*self.b) / 255.0,
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
         self._require_channels(img, 3)
         shift = lucid.tensor([params.a, params.b, params.c], dtype=img.dtype)
         shift = shift.reshape(1, 3, 1, 1) if img.ndim == 4 else shift.reshape(3, 1, 1)
         return lucid.clip(img + shift, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"RGBShift(r={self.r}, g={self.g}, b={self.b}, p={self.p})"
 
@@ -458,6 +471,7 @@ class ChannelShuffle(PhotometricTransform[PermParams]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def make_params(self, img: Tensor) -> PermParams:
         r"""Sample per-call random parameters for :class:`ChannelShuffle`.
 
@@ -478,12 +492,14 @@ class ChannelShuffle(PhotometricTransform[PermParams]):
             order[i], order[j] = order[j], order[i]
         return PermParams(order=(order[0], order[1], order[2]))
 
+    @override
     def _apply_image(self, img: Tensor, params: PermParams) -> Tensor:
         self._require_channels(img, 3)
         ax = -3
         ch = [img[..., i : i + 1, :, :] for i in params.order]
         return F._cat(ch, ax)
 
+    @override
     def __repr__(self) -> str:
         return f"ChannelShuffle(p={self.p})"
 
@@ -526,6 +542,7 @@ class ChannelDropout(PhotometricTransform[ChannelDropParams]):
         self.channel_drop_range = channel_drop_range
         self.fill_value = fill_value
 
+    @override
     def make_params(self, img: Tensor) -> ChannelDropParams:
         r"""Sample per-call random parameters for :class:`ChannelDropout`.
 
@@ -558,6 +575,7 @@ class ChannelDropout(PhotometricTransform[ChannelDropParams]):
             chosen.append(idxs.pop(k))
         return ChannelDropParams(channels=tuple(chosen))
 
+    @override
     def _apply_image(self, img: Tensor, params: ChannelDropParams) -> Tensor:
         c = int(img.shape[-3])
         keep = [0.0 if i in params.channels else 1.0 for i in range(c)]
@@ -565,6 +583,7 @@ class ChannelDropout(PhotometricTransform[ChannelDropParams]):
         mask = mask.reshape(1, c, 1, 1) if img.ndim == 4 else mask.reshape(c, 1, 1)
         return img * mask + self.fill_value * (1.0 - mask)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"ChannelDropout(channel_drop_range={self.channel_drop_range}, p={self.p})"
@@ -601,9 +620,11 @@ class Equalize(_NoParams, PhotometricTransform[Empty]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.equalize(img)
 
+    @override
     def __repr__(self) -> str:
         return f"Equalize(p={self.p})"
 
@@ -656,9 +677,11 @@ class CLAHE(_NoParams, PhotometricTransform[Empty]):
         self.clip_limit = clip_limit
         self.tile_grid_size = tile_grid_size
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.clahe(img, self.clip_limit, self.tile_grid_size)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"CLAHE(clip_limit={self.clip_limit}, "
@@ -705,6 +728,7 @@ class Solarize(PhotometricTransform[ScalarParams]):
             (threshold, threshold) if isinstance(threshold, (int, float)) else threshold
         )
 
+    @override
     def make_params(self, img: Tensor) -> ScalarParams:
         r"""Sample per-call random parameters for :class:`Solarize`.
 
@@ -722,9 +746,11 @@ class Solarize(PhotometricTransform[ScalarParams]):
         """
         return ScalarParams(value=_random.uniform(*self.threshold) / 255.0)
 
+    @override
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
         return lucid.where(img >= params.value, 1.0 - img, img)
 
+    @override
     def __repr__(self) -> str:
         return f"Solarize(threshold={self.threshold}, p={self.p})"
 
@@ -794,6 +820,7 @@ class Posterize(PhotometricTransform[Empty]):
         self.num_bits = num_bits
         self.mode = mode
 
+    @override
     def make_params(self, img: Tensor) -> Empty:
         r"""Return the no-op parameter sentinel for :class:`Posterize`.
 
@@ -813,6 +840,7 @@ class Posterize(PhotometricTransform[Empty]):
 
         return NO_PARAMS
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         if self.mode == "float":
             levels = float(2**self.num_bits)
@@ -823,6 +851,7 @@ class Posterize(PhotometricTransform[Empty]):
         masked = u8 & mask_int
         return masked.to(img.dtype) / 255.0
 
+    @override
     def __repr__(self) -> str:
         return f"Posterize(num_bits={self.num_bits}, mode={self.mode!r}, p={self.p})"
 
@@ -853,9 +882,11 @@ class InvertImg(_NoParams, PhotometricTransform[Empty]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return 1.0 - img
 
+    @override
     def __repr__(self) -> str:
         return f"InvertImg(p={self.p})"
 
@@ -886,9 +917,11 @@ class ToGray(_NoParams, PhotometricTransform[Empty]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.rgb_to_grayscale(img, keep_channels=True)
 
+    @override
     def __repr__(self) -> str:
         return f"ToGray(p={self.p})"
 
@@ -929,6 +962,7 @@ class ToSepia(_NoParams, PhotometricTransform[Empty]):
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         self._require_channels(img, 3)
         r = img[..., 0:1, :, :]
@@ -940,6 +974,7 @@ class ToSepia(_NoParams, PhotometricTransform[Empty]):
         nb = m[2][0] * r + m[2][1] * g + m[2][2] * b
         return lucid.clip(F._cat([nr, ng, nb], -3), 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"ToSepia(p={self.p})"
 
@@ -988,6 +1023,7 @@ class Sharpen(PhotometricTransform[TripletParams]):
         self.alpha = alpha
         self.lightness = lightness
 
+    @override
     def make_params(self, img: Tensor) -> TripletParams:
         r"""Sample per-call random parameters for :class:`Sharpen`.
 
@@ -1010,6 +1046,7 @@ class Sharpen(PhotometricTransform[TripletParams]):
             c=0.0,
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
         light = params.b
         kernel = [[-1.0, -1.0, -1.0], [-1.0, 8.0 + light, -1.0], [-1.0, -1.0, -1.0]]
@@ -1017,6 +1054,7 @@ class Sharpen(PhotometricTransform[TripletParams]):
         out = (1.0 - params.a) * img + params.a * sharp
         return lucid.clip(out, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"Sharpen(alpha={self.alpha}, lightness={self.lightness}, p={self.p})"
 
@@ -1061,6 +1099,7 @@ class Emboss(PhotometricTransform[TripletParams]):
         self.alpha = alpha
         self.strength = strength
 
+    @override
     def make_params(self, img: Tensor) -> TripletParams:
         r"""Sample per-call random parameters for :class:`Emboss`.
 
@@ -1083,6 +1122,7 @@ class Emboss(PhotometricTransform[TripletParams]):
             c=0.0,
         )
 
+    @override
     def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
         s = params.b
         kernel = [[-1.0 - s, -s, 0.0], [-s, 1.0, s], [0.0, s, 1.0 + s]]
@@ -1090,6 +1130,7 @@ class Emboss(PhotometricTransform[TripletParams]):
         out = (1.0 - params.a) * img + params.a * emb
         return lucid.clip(out, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"Emboss(alpha={self.alpha}, strength={self.strength}, p={self.p})"
 
@@ -1125,6 +1166,7 @@ class RandomToneCurve(PhotometricTransform[ScalarParams]):
         super().__init__(p=p)
         self.scale = scale
 
+    @override
     def make_params(self, img: Tensor) -> ScalarParams:
         r"""Sample per-call random parameters for :class:`RandomToneCurve`.
 
@@ -1142,12 +1184,14 @@ class RandomToneCurve(PhotometricTransform[ScalarParams]):
         """
         return ScalarParams(value=_random.uniform(-self.scale, self.scale))
 
+    @override
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
         # Smooth S-curve around 0.5 controlled by the sampled amount.
         x = lucid.clip(img, 0.0, 1.0)
         out = x + params.value * lucid.sin(x * (2.0 * 3.141592653589793))
         return lucid.clip(out, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"RandomToneCurve(scale={self.scale}, p={self.p})"
 
@@ -1187,6 +1231,7 @@ class RandomBrightness(PhotometricTransform[ScalarParams]):
         super().__init__(p=p)
         self.limit = _rng(limit)
 
+    @override
     def make_params(self, img: Tensor) -> ScalarParams:
         r"""Sample per-call random parameters for :class:`RandomBrightness`.
 
@@ -1203,9 +1248,11 @@ class RandomBrightness(PhotometricTransform[ScalarParams]):
         """
         return ScalarParams(value=_random.uniform(*self.limit))
 
+    @override
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
         return lucid.clip(img + params.value, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"RandomBrightness(limit={self.limit}, p={self.p})"
 
@@ -1242,6 +1289,7 @@ class RandomContrast(PhotometricTransform[ScalarParams]):
         super().__init__(p=p)
         self.limit = _rng(limit)
 
+    @override
     def make_params(self, img: Tensor) -> ScalarParams:
         r"""Sample per-call random parameters for :class:`RandomContrast`.
 
@@ -1258,9 +1306,11 @@ class RandomContrast(PhotometricTransform[ScalarParams]):
         """
         return ScalarParams(value=_random.uniform(*self.limit))
 
+    @override
     def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
         return lucid.clip(img * (1.0 + params.value), 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"RandomContrast(limit={self.limit}, p={self.p})"
 
@@ -1322,6 +1372,7 @@ class UnsharpMask(PhotometricTransform[TripletParams]):
         self.alpha = alpha
         self.threshold = threshold
 
+    @override
     def make_params(self, img: Tensor) -> TripletParams:
         r"""Sample per-call random parameters for :class:`UnsharpMask`.
 
@@ -1351,10 +1402,12 @@ class UnsharpMask(PhotometricTransform[TripletParams]):
             sigma = 0.3 * ((k - 1) * 0.5 - 1.0) + 0.8
         return TripletParams(a=_random.uniform(*self.alpha), b=float(k), c=sigma)
 
+    @override
     def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
         blur = F.gaussian_blur(img, params.c, ksize=int(params.b))
         return lucid.clip(img + params.a * (img - blur), 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"UnsharpMask(blur_limit={self.blur_limit}, alpha={self.alpha}, p={self.p})"
@@ -1394,6 +1447,7 @@ class RingingOvershoot(PhotometricTransform[Empty]):
         super().__init__(p=p)
         self.blur_limit = blur_limit
 
+    @override
     def make_params(self, img: Tensor) -> Empty:
         r"""Return the no-op parameter sentinel for :class:`RingingOvershoot`.
 
@@ -1414,11 +1468,13 @@ class RingingOvershoot(PhotometricTransform[Empty]):
 
         return NO_PARAMS
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         # Approximate ringing with a sharpening (high-pass) kernel.
         kernel = [[0.0, -0.25, 0.0], [-0.25, 2.0, -0.25], [0.0, -0.25, 0.0]]
         return lucid.clip(F.depthwise_conv2d(img, kernel), 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"RingingOvershoot(blur_limit={self.blur_limit}, p={self.p})"
 
@@ -1459,6 +1515,7 @@ class FancyPCA(PhotometricTransform[Empty]):
         super().__init__(p=p)
         self.alpha = alpha
 
+    @override
     def make_params(self, img: Tensor) -> Empty:
         r"""Return the no-op parameter sentinel for :class:`FancyPCA`.
 
@@ -1479,6 +1536,7 @@ class FancyPCA(PhotometricTransform[Empty]):
 
         return NO_PARAMS
 
+    @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         self._require_channels(img, 3)
         c = 3
@@ -1496,11 +1554,12 @@ class FancyPCA(PhotometricTransform[Empty]):
             delta = delta[None]
         return lucid.clip(img + delta, 0.0, 1.0)
 
+    @override
     def __repr__(self) -> str:
         return f"FancyPCA(alpha={self.alpha}, p={self.p})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PixelMaskParams:
     """Per-call dropout mask (broadcastable to the image) used by :class:`PixelDropout`."""
 
@@ -1552,6 +1611,7 @@ class PixelDropout(PhotometricTransform[PixelMaskParams]):
         self.per_channel = per_channel
         self.drop_value = drop_value
 
+    @override
     def make_params(self, img: Tensor) -> PixelMaskParams:
         r"""Sample per-call random parameters for :class:`PixelDropout`.
 
@@ -1574,15 +1634,17 @@ class PixelDropout(PhotometricTransform[PixelMaskParams]):
         keep = (lucid.rand(*shape) >= self.dropout_prob).to(img.dtype)
         return PixelMaskParams(mask=keep)
 
+    @override
     def _apply_image(self, img: Tensor, params: PixelMaskParams) -> Tensor:
         keep = params.mask[None] if img.ndim == 4 else params.mask
         return img * keep + self.drop_value * (1.0 - keep)
 
+    @override
     def __repr__(self) -> str:
         return f"PixelDropout(dropout_prob={self.dropout_prob}, p={self.p})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BandParams:
     """Per-call row / column band intervals used by :class:`XYMasking`.
 
@@ -1644,6 +1706,7 @@ class XYMasking(PhotometricTransform[BandParams]):
         self.mask_y_length = mask_y_length
         self.fill_value = fill_value
 
+    @override
     def make_params(self, img: Tensor) -> BandParams:
         r"""Sample per-call random parameters for :class:`XYMasking`.
 
@@ -1676,6 +1739,7 @@ class XYMasking(PhotometricTransform[BandParams]):
         )
         return BandParams(rows=rows, cols=cols)
 
+    @override
     def _apply_image(self, img: Tensor, params: BandParams) -> Tensor:
         h, w = F._spatial_hw(img)
         keep = lucid.ones(1, h, w, dtype=img.dtype)
@@ -1696,6 +1760,7 @@ class XYMasking(PhotometricTransform[BandParams]):
         keep_b = keep[None] if img.ndim == 4 else keep
         return img * keep_b + self.fill_value * (1.0 - keep_b)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"XYMasking(num_masks_x={self.num_masks_x}, "

@@ -8,7 +8,7 @@ Key innovations:
   - NAS-designed architecture for Large and Small variants.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -41,6 +41,7 @@ class _SEBlock(nn.Module):
         self.fc1 = nn.Conv2d(in_channels, se_channels, 1)
         self.fc2 = nn.Conv2d(se_channels, in_channels, 1)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         scale = cast(Tensor, self.pool(x))
         scale = F.relu(cast(Tensor, self.fc1(scale)), inplace=True)
@@ -104,6 +105,7 @@ class _InvertedResidual(nn.Module):
         ]
         self.block = nn.Sequential(*layers)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out = cast(Tensor, self.block(x))
         if self._use_residual:
@@ -321,14 +323,17 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
             fi.append(FeatureInfo(stage=i + 1, num_channels=o_ch, reduction=cumulative))
         self._feature_info = fi
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.features(x))
         return cast(Tensor, self.avgpool(x))
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
@@ -412,6 +417,7 @@ class MobileNetV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
             penultimate_ch, head_ch, config.num_classes, config.dropout
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

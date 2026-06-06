@@ -8,6 +8,8 @@ multivariate distribution with diagonal covariance, e.g.
     Independent(base, 1)  # event_shape == (D,), batch_shape == (B,)
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.distribution import Distribution
 
@@ -134,6 +136,7 @@ class Independent(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def has_rsample(self) -> bool:  # type: ignore[override]
         """Whether reparameterised sampling is supported.
@@ -149,6 +152,7 @@ class Independent(Distribution):
         """
         return self.base_dist.has_rsample
 
+    @override
     @property
     def support(self) -> object:  # type: ignore[override]
         """Support of the distribution — delegates to ``base_dist.support``.
@@ -160,6 +164,7 @@ class Independent(Distribution):
         """
         return self.base_dist.support
 
+    @override
     @property
     def mean(self) -> Tensor:
         """Mean of the distribution — delegates to ``base_dist.mean``.
@@ -171,6 +176,7 @@ class Independent(Distribution):
         """
         return self.base_dist.mean
 
+    @override
     @property
     def mode(self) -> Tensor:
         """Mode of the distribution — delegates to ``base_dist.mode``.
@@ -182,6 +188,7 @@ class Independent(Distribution):
         """
         return self.base_dist.mode
 
+    @override
     @property
     def variance(self) -> Tensor:
         """Variance of the distribution — delegates to ``base_dist.variance``.
@@ -193,6 +200,7 @@ class Independent(Distribution):
         """
         return self.base_dist.variance
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw reparameterised samples — delegates to ``base_dist.rsample``.
 
@@ -208,6 +216,7 @@ class Independent(Distribution):
         """
         return self.base_dist.rsample(sample_shape)
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw samples — delegates to ``base_dist.sample``.
 
@@ -223,6 +232,7 @@ class Independent(Distribution):
         """
         return self.base_dist.sample(sample_shape)
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log joint probability summed over re-interpreted event dimensions.
 
@@ -251,6 +261,7 @@ class Independent(Distribution):
         dims = list(range(log_p.ndim - self.reinterpreted_batch_ndims, log_p.ndim))
         return log_p.sum(dim=dims)
 
+    @override
     def entropy(self) -> Tensor:
         r"""Joint entropy summed over re-interpreted event dimensions.
 

@@ -10,7 +10,7 @@ from lucid.utils.data.dataset import Dataset
 _worker_local = threading.local()
 
 
-@dataclass
+@dataclass(slots=True)
 class WorkerInfo:
     r"""Per-worker context published inside a :class:`DataLoader` worker process.
 

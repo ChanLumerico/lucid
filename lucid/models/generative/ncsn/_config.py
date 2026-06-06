@@ -16,7 +16,7 @@ the same modern U-Net as diffusion).  The differences live in:
 """
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.generative._config import GenerativeModelConfig
@@ -126,6 +126,7 @@ class NCSNConfig(GenerativeModelConfig):
     langevin_steps: int = 100
     langevin_eps: float = 2e-5
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         if self.base_channels <= 0:

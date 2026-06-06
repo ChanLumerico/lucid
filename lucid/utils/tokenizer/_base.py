@@ -34,7 +34,7 @@ from typing import Callable, Iterable
 _CANONICAL_SPECIAL_SLOTS = ("pad", "unk", "bos", "eos", "mask", "sep", "cls")
 
 
-@dataclass
+@dataclass(slots=True)
 class SpecialTokens:
     """Canonical special-token registry.
 

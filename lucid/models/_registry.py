@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, final
 
 if TYPE_CHECKING:
     from lucid.models._base import ModelConfig, PretrainedModel
@@ -58,7 +58,8 @@ class ModelFactory(Protocol):
     ) -> PretrainedModel: ...
 
 
-@dataclass(frozen=True)
+@final
+@dataclass(frozen=True, slots=True)
 class _RegistryEntry:
     r"""Internal record stored under each registered name.
 

@@ -10,7 +10,7 @@ from collections.abc import (
     Mapping,
     ValuesView,
 )
-from typing import Iterator, cast, overload
+from typing import Iterator, cast, overload, override
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._tensor.tensor import Tensor
@@ -129,6 +129,7 @@ class Sequential(Module):
             for idx, module in enumerate(args):  # type: ignore[assignment]
                 self.add_module(str(idx), module)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Apply the contained modules to the input.
 
@@ -368,6 +369,7 @@ class ModuleList(Module):
         for i, module in enumerate(items):
             self.add_module(str(i), module)
 
+    @override
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Apply the contained modules to the input.
 
@@ -543,6 +545,7 @@ class ModuleDict(Module):
         for key, module in items:
             self.add_module(key, module)
 
+    @override
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Apply the contained modules to the input.
 
@@ -691,6 +694,7 @@ class ParameterList(Module):
         for i, param in enumerate(items):
             self.register_parameter(str(i), param)
 
+    @override
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Apply the contained modules to the input.
 
@@ -868,6 +872,7 @@ class ParameterDict(Module):
         for key, param in items:
             self.register_parameter(key, param)
 
+    @override
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         """Apply the contained modules to the input.
 

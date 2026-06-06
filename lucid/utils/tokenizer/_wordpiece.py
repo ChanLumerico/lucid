@@ -29,7 +29,7 @@ configure via the constructor if you need a different one.
 """
 
 import os
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -198,6 +198,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
             special_tokens = SpecialTokens(unk=unk_token)
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of WordPiece tokens currently registered.
@@ -209,6 +210,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         """
         return len(self._vocab)
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"wordpiece"``).
@@ -220,6 +222,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         """
         return "wordpiece"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a shallow copy of the token → id map.
 
@@ -230,6 +233,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         """
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         r"""Look up the surface string for a token id.
 
@@ -278,6 +282,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
             start = match_end
         return ids
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         r"""Normalize + pre-tokenize + greedy longest-match per word."""
         out: list[int] = []
@@ -285,6 +290,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
             out.extend(self._encode_word(word))
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         r"""BERT-style decode join — strips ``##`` continuations and
         re-inserts spaces between whole-word starts.
@@ -384,6 +390,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         self._id_to_token = {v: k for k, v in new_vocab.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Persist as a BERT-style directory (``vocab.txt`` +
         unified ``tokenizer.json`` + ``special_tokens_map.json``).
@@ -401,6 +408,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Emit the WordPiece ``model`` block for ``tokenizer.json``."""
         return {
@@ -557,6 +565,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
             special_tokens = SpecialTokens(unk=unk_token)
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         r"""Number of WordPiece tokens in the live C++ vocab.
@@ -568,6 +577,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         """
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         r"""Algorithm identifier (always ``"wordpiece"``).
@@ -579,6 +589,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         """
         return "wordpiece"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a copy of the token → id map from the Python cache.
 
@@ -590,6 +601,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         """
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         r"""Look up the surface string for a token id.
 
@@ -605,6 +617,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         """
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Normalize + pre-tokenize in Python; encode each word in C++."""
         out: list[int] = []
@@ -612,6 +625,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
             out.extend(self._cpp.encode(word))
         return out
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         r"""BERT-style decode join — same surface form as the Python
         flavour for parity.
@@ -650,12 +664,14 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         self._refresh_special_ids()
 
+    @override
     def save(self, directory: str) -> None:
         """Same format as :meth:`WordPieceTokenizer.save`."""
         os.makedirs(directory, exist_ok=True)
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Emit the WordPiece ``model`` block for ``tokenizer.json``."""
         return {

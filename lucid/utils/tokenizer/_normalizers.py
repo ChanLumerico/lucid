@@ -17,6 +17,7 @@ and aren't the hot path (encoding dominates).  No C++ counterpart.
 """
 
 from abc import ABC, abstractmethod
+from typing import override
 import unicodedata
 
 
@@ -67,6 +68,7 @@ class Sequence(Normalizer):
         """
         self._normalizers = list(normalizers)
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Apply every wrapped normalizer in order.
 
@@ -85,6 +87,7 @@ class Sequence(Normalizer):
             text = n.normalize(text)
         return text
 
+    @override
     def __repr__(self) -> str:
         r"""Return a developer-readable representation listing the
         wrapped primitives in apply order.
@@ -104,6 +107,7 @@ class NFC(Normalizer):
     (e.g. ``a + ◌́  → á``).  No-op on most ASCII text.
     """
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Apply Unicode NFC normalisation.
 
@@ -129,6 +133,7 @@ class NFD(Normalizer):
     :class:`StripAccents`.
     """
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Apply Unicode NFD normalisation.
 
@@ -155,6 +160,7 @@ class NFKC(Normalizer):
     (e.g. fullwidth digits → ASCII digits).
     """
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Apply Unicode NFKC normalisation.
 
@@ -191,6 +197,7 @@ class NFKD(Normalizer):
     decomposition without the compatibility fold.
     """
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Apply Unicode NFKD normalisation.
 
@@ -223,6 +230,7 @@ class Lowercase(Normalizer):
     locale-specific folds (e.g. Turkish dotless-I).
     """
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Lowercase every character via :meth:`str.lower`.
 
@@ -247,6 +255,7 @@ class StripAccents(Normalizer):
     characters pass through unchanged.
     """
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Drop every combining mark.
 
@@ -290,6 +299,7 @@ class Strip(Normalizer):
         self._left = left
         self._right = right
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Strip whitespace per the configured sides.
 
@@ -338,6 +348,7 @@ class Replace(Normalizer):
         self._pattern = pattern
         self._replacement = replacement
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Replace every occurrence of ``pattern`` with ``replacement``.
 
@@ -402,6 +413,7 @@ class BERTNormalizer(Normalizer):
         self._clean_text = clean_text
         self._handle_chinese_chars = handle_chinese_chars
 
+    @override
     def normalize(self, text: str) -> str:
         r"""Run the configured BERT normalisation pipeline.
 

@@ -75,7 +75,7 @@ def _cat(tensors: list[Tensor], dim: int) -> Tensor:
     return lucid.concat(tensors, dim=dim)  # type: ignore[arg-type]
 
 
-@dataclass
+@dataclass(slots=True)
 class Image:
     """Wraps a pixel image tensor ``(C, H, W)`` or ``(B, C, H, W)``.
 
@@ -97,7 +97,7 @@ class Image:
     data: Tensor
 
 
-@dataclass
+@dataclass(slots=True)
 class Mask:
     """Wraps a segmentation / label mask, resampled with nearest mode.
 
@@ -118,7 +118,7 @@ class Mask:
     data: Tensor
 
 
-@dataclass
+@dataclass(slots=True)
 class Keypoints:
     """Wraps ``(N, D)`` keypoints (``D >= 2``; first two columns ``x, y``).
 
@@ -137,7 +137,7 @@ class Keypoints:
     canvas_size: tuple[int, int]
 
 
-@dataclass
+@dataclass(slots=True)
 class BoundingBoxes:
     r"""Wraps ``(N, 4)`` bounding boxes with a format + canvas size.
 

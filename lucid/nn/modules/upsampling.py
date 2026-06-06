@@ -2,6 +2,8 @@
 Upsampling and pixel-shuffle modules.
 """
 
+from typing import override
+
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid._C import engine as _C_engine
@@ -135,6 +137,7 @@ class Upsample(Module):
         self.mode = mode
         self.align_corners = align_corners
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Upsample the input tensor.
 
@@ -156,6 +159,7 @@ class Upsample(Module):
             align_corners=self.align_corners,
         )
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         parts = []
@@ -389,6 +393,7 @@ class PixelShuffle(Module):
         super().__init__()
         self.upscale_factor = upscale_factor
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Upsample the input tensor.
 
@@ -410,6 +415,7 @@ class PixelShuffle(Module):
         t = _C_engine.permute(t, [0, 1, 4, 2, 5, 3])
         return _wrap(_C_engine.reshape(t, [n, c, h * r, w * r]))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"upscale_factor={self.upscale_factor}"
@@ -482,6 +488,7 @@ class PixelUnshuffle(Module):
         super().__init__()
         self.downscale_factor = downscale_factor
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Upsample the input tensor.
 
@@ -503,6 +510,7 @@ class PixelUnshuffle(Module):
         t = _C_engine.permute(t, [0, 1, 3, 5, 2, 4])
         return _wrap(_C_engine.reshape(t, [n, c * r * r, h, w]))
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"downscale_factor={self.downscale_factor}"
@@ -607,6 +615,7 @@ class ChannelShuffle(Module):
         super().__init__()
         self.groups = groups
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r"""Upsample the input tensor.
 
@@ -622,6 +631,7 @@ class ChannelShuffle(Module):
         """
         return channel_shuffle(x, groups=self.groups)
 
+    @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return f"groups={self.groups}"

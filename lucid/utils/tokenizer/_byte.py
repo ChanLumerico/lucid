@@ -20,7 +20,7 @@ robustness more important than throughput).
 
 import json
 import os
-from typing import Iterable
+from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -65,29 +65,35 @@ class ByteTokenizer(Tokenizer):
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Fixed vocab size = 256 (one id per possible byte value)."""
         return 256
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier (always ``"byte"``)."""
         return "byte"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return the canonical 256-entry byte → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Inverse of the byte vocab; returns the Latin-1 char for
         valid byte ids, ``None`` otherwise."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """Encode by UTF-8 byte expansion (id = byte value)."""
         return list(text.encode("utf-8"))
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Decode by re-assembling bytes; malformed UTF-8 is replaced."""
         # Filter to valid byte range, then UTF-8 decode (replace
@@ -108,6 +114,7 @@ class ByteTokenizer(Tokenizer):
         """
         # Intentionally silent; the contract is "byte vocab is fixed".
 
+    @override
     def save(self, directory: str) -> None:
         """Persist as ``tokenizer.json`` only (no per-algorithm
         legacy file — there's no vocab.txt convention for byte
@@ -121,6 +128,7 @@ class ByteTokenizer(Tokenizer):
         """
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Emit the unified-format ``model`` block for byte tokenizers."""
         return {"model": {"type": "Byte"}}
@@ -204,24 +212,29 @@ class ByteTokenizerFast(Tokenizer):
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
 
+    @override
     @property
     def vocab_size(self) -> int:
         """Fixed vocab size (256), as reported by the C++ backend."""
         return self._cpp.vocab_size()
 
+    @override
     @property
     def algo(self) -> str:
         """Algorithm identifier (always ``"byte"``)."""
         return "byte"
 
+    @override
     def get_vocab(self) -> dict[str, int]:
         """Return the canonical 256-entry byte → id map."""
         return dict(self._vocab)
 
+    @override
     def id_to_token(self, token_id: int) -> str | None:
         """Return the Latin-1 char for ``token_id`` or ``None``."""
         return self._id_to_token.get(token_id)
 
+    @override
     def _encode_one(self, text: str) -> list[int]:
         """UTF-8 byte expansion (Python ``str.encode`` is the hot path)."""
         # The C++ ByteTokenizer.encode iterates byte-by-byte; that's
@@ -230,6 +243,7 @@ class ByteTokenizerFast(Tokenizer):
         # identical to the C++ version (same UTF-8 byte sequence).
         return list(text.encode("utf-8"))
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Inverse byte expansion; malformed UTF-8 replaced."""
         bs = bytes(i for i in ids if 0 <= i < 256)
@@ -239,6 +253,7 @@ class ByteTokenizerFast(Tokenizer):
         """No-op — the byte vocab is fixed at 256.  See
         :meth:`ByteTokenizer.train`."""
 
+    @override
     def save(self, directory: str) -> None:
         """Persist as ``tokenizer.json`` + ``special_tokens_map.json``.
 
@@ -249,6 +264,7 @@ class ByteTokenizerFast(Tokenizer):
         """
         super().save(directory)
 
+    @override
     def _save_extras(self) -> dict[str, object]:
         """Emit the unified-format ``model`` block for byte tokenizers."""
         return {"model": {"type": "Byte"}}

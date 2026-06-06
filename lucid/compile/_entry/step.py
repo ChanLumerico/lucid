@@ -30,7 +30,7 @@ Acceptance:
 
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Protocol, cast
+from typing import TYPE_CHECKING, Any, Callable, Protocol, cast, final, override
 
 from lucid._C import engine as _C_engine
 from lucid.autograd.function import Function, FunctionCtx
@@ -51,7 +51,8 @@ if TYPE_CHECKING:
 __all__ = ["make_step"]
 
 
-@dataclass
+@final
+@dataclass(slots=True)
 class _StepEntry:
     """One compiled fwd+bwd executable + the I/O plan to invoke it."""
 
@@ -320,11 +321,10 @@ def make_step(
             _buf.copy_(_wrap(cast(_C_engine.TensorImpl, outs[n_loss_grad + _i])))
         # outs = [loss_impl, grad_param_0_impl, …]
         loss_impl = cast(_C_engine.TensorImpl, outs[0])
-        grad_impls = [
-            cast(_C_engine.TensorImpl, g) for g in outs[1 : 1 + len(params)]
-        ]
+        grad_impls = [cast(_C_engine.TensorImpl, g) for g in outs[1 : 1 + len(params)]]
         return loss_impl, grad_impls
 
+    @final
     class _CompiledStepFunction(Function):
         """Inner autograd.Function — only the *compiled* path runs through here.
 
@@ -334,6 +334,7 @@ def make_step(
         via the first positional argument.
         """
 
+        @override
         @staticmethod
         def forward(  # type: ignore[override]  # reason: takes a non-Tensor ``entry_holder`` 1st positional (the _StepEntry holder); Function.forward base types *args as Tensor. Documented as an exception per CompiledModule's design.
             ctx: FunctionCtx,
@@ -366,6 +367,7 @@ def make_step(
             ctx.n_user = n_user
             return _wrap(loss_impl)
 
+        @override
         @staticmethod
         def backward(  # type: ignore[override]  # reason: returns tuple[Tensor|None, ...] (one slot per next-edge: None for user inputs, Tensors for params); base returns Tensor|tuple[Tensor,...].
             ctx: FunctionCtx, grad_loss: Tensor
@@ -383,9 +385,7 @@ def make_step(
             # optimizer ignores).  The ``entry_holder`` non-Tensor
             # input does not appear in ``next_edges`` so no slot is
             # produced for it here.
-            saved_grad_impls = cast(
-                list[_C_engine.TensorImpl], ctx.saved_grad_impls
-            )
+            saved_grad_impls = cast(list[_C_engine.TensorImpl], ctx.saved_grad_impls)
             n_user = cast(int, ctx.n_user)
             scaled = [grad_loss * _wrap(g) for g in saved_grad_impls]
             return tuple([None] * n_user + scaled)

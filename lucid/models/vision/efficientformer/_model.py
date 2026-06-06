@@ -31,7 +31,7 @@ Architecture (EfficientFormer-L1, image=224):
   Head   : Flat -> LN -> mean pool tokens -> (head + head_dist) / 2
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -60,6 +60,7 @@ class _Stem(nn.Module):
         self.norm2 = nn.BatchNorm2d(out_chs)
         self.act2 = nn.ReLU()
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(
             Tensor, self.act1(cast(Tensor, self.norm1(cast(Tensor, self.conv1(x)))))
@@ -81,6 +82,7 @@ class _Downsample(nn.Module):
         self.conv = nn.Conv2d(in_dim, out_dim, 3, stride=2, padding=1)
         self.norm = nn.BatchNorm2d(out_dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.norm(cast(Tensor, self.conv(x))))
 
@@ -90,6 +92,7 @@ class _Downsample(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _ConvMlpWithNorm(nn.Module):
     """MLP via 1x1 convolutions over (B, C, H, W) with BatchNorm + GELU."""
 
@@ -100,6 +103,7 @@ class _ConvMlpWithNorm(nn.Module):
         self.fc2 = nn.Conv2d(hidden, dim, 1)
         self.norm2 = nn.BatchNorm2d(dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.norm1(cast(Tensor, self.fc1(x))))
         x = F.gelu(x)
@@ -118,6 +122,7 @@ class _Mlp(nn.Module):
         self.fc1 = nn.Linear(dim, hidden)
         self.fc2 = nn.Linear(hidden, dim)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.fc2(F.gelu(cast(Tensor, self.fc1(x)))))
 
@@ -127,6 +132,7 @@ class _Mlp(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Pooling(nn.Module):
     """AvgPool(pool_size, count_include_pad=False) - identity.
 
@@ -148,6 +154,7 @@ class _Pooling(nn.Module):
             count_include_pad=True,
         )
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         num = cast(Tensor, self.pool(x))
         den = cast(Tensor, self.pool(lucid.ones(x.shape, device=x.device.type)))
@@ -215,6 +222,7 @@ class _Attention(nn.Module):
         gathered = self.attention_biases[:, idx.reshape(-1)]  # (heads, n*n)
         return gathered.reshape(self.num_heads, n, n)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, N, _ = x.shape
         qkv = cast(Tensor, self.qkv(x))  # (B, N, key*2 + val) * heads
@@ -237,6 +245,7 @@ class _Attention(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MetaBlock2d(nn.Module):
     """Pooling MetaFormer block operating in (B, C, H, W) layout."""
 
@@ -256,6 +265,7 @@ class _MetaBlock2d(nn.Module):
         self.ls2 = LayerScale(dim, layer_scale_init)
         self.drop_path2 = DropPath(drop_path_rate)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = x + cast(
             Tensor,
@@ -273,6 +283,7 @@ class _MetaBlock2d(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _MetaBlock1d(nn.Module):
     """Attention MetaFormer block operating in (B, N, C) layout."""
 
@@ -297,6 +308,7 @@ class _MetaBlock1d(nn.Module):
         self.ls2 = LayerScale(dim, layer_scale_init)
         self.drop_path2 = DropPath(drop_path_rate)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = x + cast(
             Tensor,
@@ -326,9 +338,11 @@ class _MetaBlock1d(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@final
 class _Flat(nn.Module):
     """Flatten spatial dims and move channels last: (B,C,H,W) -> (B,H*W,C)."""
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return x.flatten(2).permute(0, 2, 1)
 
@@ -399,6 +413,7 @@ class _Stage(nn.Module):
 
         self.blocks = nn.ModuleList(blocks)
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.downsample(x))
         for block in self.blocks:
@@ -561,14 +576,17 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
         self._feature_info = fi
         self._out_dim = out_dim
 
+    @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
+    @override
     def forward_features(self, x: Tensor) -> Tensor:
         seq = _forward_trunk(self.stem, self.stages, self.norm, x)  # (B, N, C)
         return seq.mean(dim=1)
 
+    @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -658,11 +676,13 @@ class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadM
         self.head = nn.Linear(out_dim, config.num_classes)
         self.head_dist = nn.Linear(out_dim, config.num_classes)
 
+    @override
     def reset_classifier(self, num_classes: int) -> None:
         in_features = int(self.head.in_features)
         self.head = nn.Linear(in_features, num_classes)
         self.head_dist = nn.Linear(in_features, num_classes)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

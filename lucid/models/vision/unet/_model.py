@@ -42,7 +42,7 @@ Losses (training)
   Uses cross-entropy loss: F.cross_entropy(logits, targets).
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -131,6 +131,7 @@ class _DoubleConv(nn.Module):
         else:
             self.shortcut = None
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out: Tensor = cast(Tensor, self.body(x))
         if self._residual:
@@ -159,6 +160,7 @@ class _EncoderBlock(nn.Module):
         self.conv = _DoubleConv(in_ch, out_ch, dim, dropout, residual)
         self.pool = _pool(dim)
 
+    @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         skip: Tensor = self.conv.forward(x)
         pooled: Tensor = cast(Tensor, self.pool(skip))
@@ -191,6 +193,7 @@ class _DecoderBlock(nn.Module):
                 in_ch // 2 + skip_ch, out_ch, dim, dropout, residual
             )
 
+    @override
     def forward(self, x: Tensor, skip: Tensor) -> Tensor:  # type: ignore[override]
         x_up: Tensor = cast(Tensor, self.up(x))
 
@@ -362,6 +365,7 @@ class UNetForSemanticSegmentation(PretrainedModel):
             dim, enc_channels[0], config.num_classes, k=1, padding=0, bias=True
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,

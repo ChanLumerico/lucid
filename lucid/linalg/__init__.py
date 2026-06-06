@@ -3,7 +3,7 @@ lucid.linalg: linear algebra operations.
 """
 
 import functools
-from typing import Callable, cast
+from typing import Callable, cast, final, override
 
 import lucid
 from lucid._C import engine as _C_engine
@@ -239,11 +239,13 @@ from lucid.autograd.function import Function as _AutogradFunction
 from lucid.autograd.function import FunctionCtx
 
 
+@final
 class _CholeskyAutograd(_AutogradFunction):
     """Custom-autograd wrapper around the engine's non-differentiable
     cholesky_op. Forward calls the engine; backward computes the input
     gradient via Murray (2016)."""
 
+    @override
     @staticmethod
     def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         out = _wrap(_la.cholesky(_unwrap(x), upper))
@@ -251,6 +253,7 @@ class _CholeskyAutograd(_AutogradFunction):
         ctx.upper = bool(upper)
         return out
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         (factor,) = ctx.saved_tensors  # L (upper=False) or U (upper=True)
@@ -416,9 +419,11 @@ def _svd_loewner(S: Tensor) -> Tensor:
     return F
 
 
+@final
 class _SVDSGrad(_AutogradFunction):
     """Backward: singular-value contribution  dA = U diag(G_S) Vh."""
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -432,6 +437,7 @@ class _SVDSGrad(_AutogradFunction):
         ctx.vh_impl = vh_impl
         return _wrap(s_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_S: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
@@ -439,9 +445,11 @@ class _SVDSGrad(_AutogradFunction):
         return U @ lucid.diag_embed(G_S) @ Vh
 
 
+@final
 class _SVDUGrad(_AutogradFunction):
     """Backward: left-singular-vector contribution to dA."""
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -455,6 +463,7 @@ class _SVDUGrad(_AutogradFunction):
         ctx.vh_impl = vh_impl
         return _wrap(u_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_U: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
@@ -473,9 +482,11 @@ class _SVDUGrad(_AutogradFunction):
         return dA
 
 
+@final
 class _SVDVhGrad(_AutogradFunction):
     """Backward: right-singular-vector (Vh) contribution to dA."""
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -489,6 +500,7 @@ class _SVDVhGrad(_AutogradFunction):
         ctx.vh_impl = vh_impl
         return _wrap(vh_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_Vh: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
@@ -647,6 +659,7 @@ def svdvals(x: Tensor) -> Tensor:
 # Function wrapper that handles both Q and R gradients together.
 
 
+@final
 class _QRCombinedGrad(_AutogradFunction):
     """Joint backward for QR: accumulates G_Q and G_R and computes dA.
 
@@ -665,10 +678,12 @@ class _QRCombinedGrad(_AutogradFunction):
     """
 
 
+@final
 class _QRRGrad(_AutogradFunction):
     """Backward: R contribution.  Uses Cholesky route for correctness with
     LAPACK's sign convention (negative diagonal R elements are allowed)."""
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -679,6 +694,7 @@ class _QRRGrad(_AutogradFunction):
         ctx.r_impl = r_impl
         return _wrap(r_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # R backward via Cholesky of A^T A:
@@ -729,9 +745,11 @@ class _QRRGrad(_AutogradFunction):
         )
 
 
+@final
 class _QRRGradWithA(_AutogradFunction):
     """Backward: R contribution to dA via Cholesky of A^T A."""
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -742,6 +760,7 @@ class _QRRGradWithA(_AutogradFunction):
         ctx.r_impl = r_impl
         return _wrap(r_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         A = _wrap(ctx.A_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
@@ -769,6 +788,7 @@ class _QRRGradWithA(_AutogradFunction):
         return (2.0 * A) @ G_B
 
 
+@final
 class _QRQGrad(_AutogradFunction):
     """Backward: Q contribution to dA.
 
@@ -780,6 +800,7 @@ class _QRQGrad(_AutogradFunction):
     For m > n: add the off-range projection (I - QQ^T) G_Q R^{-T}.
     """
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -791,6 +812,7 @@ class _QRQGrad(_AutogradFunction):
         ctx.r_impl = r_impl
         return _wrap(q_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         Q = _wrap(ctx.q_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
@@ -1100,6 +1122,7 @@ def eigvals(x: Tensor) -> Tensor:
 # Split into two Function wrappers so the engine accumulates contributions.
 
 
+@final
 class _EighWGrad(_AutogradFunction):
     """Backward: eigenvalue contribution  dA = V diag(G_w) V^T.
 
@@ -1107,6 +1130,7 @@ class _EighWGrad(_AutogradFunction):
     skips them in the differentiable-input scan — only A gets a gradient edge.
     """
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -1117,15 +1141,18 @@ class _EighWGrad(_AutogradFunction):
         ctx.V_impl = V_impl  # store TensorImpl, not Tensor
         return _wrap(w_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_w: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         V = _wrap(ctx.V_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         return V @ lucid.diag_embed(G_w) @ V.mT
 
 
+@final
 class _EighVGrad(_AutogradFunction):
     """Backward: eigenvector contribution  dA = sym(V (F ⊙ V^T G_V) V^T)."""
 
+    @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
@@ -1137,6 +1164,7 @@ class _EighVGrad(_AutogradFunction):
         ctx.V_impl = V_impl
         return _wrap(V_impl)
 
+    @override
     @staticmethod
     def backward(ctx: FunctionCtx, G_V: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         w = _wrap(ctx.w_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime

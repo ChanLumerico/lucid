@@ -7,6 +7,8 @@ querying numerical limits of floating / integer dtypes, mirroring the
 NumPy API.
 """
 
+from typing import override
+
 from lucid._C import engine as _C_engine
 
 
@@ -58,14 +60,17 @@ class dtype:
         self._engine = engine_dtype
         self.itemsize = itemsize
 
+    @override
     def __repr__(self) -> str:
         """Return ``"lucid.<name>"`` (e.g. ``"lucid.float32"``)."""
         return f"lucid.{self._name}"
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Identity comparison — dtypes are singletons."""
         return self is other
 
+    @override
     def __hash__(self) -> int:
         """Identity-based hash so dtypes can key dicts/sets."""
         return id(self)

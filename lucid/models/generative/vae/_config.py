@@ -17,7 +17,7 @@ three modes.
 """
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.generative._config import GenerativeModelConfig
@@ -123,6 +123,7 @@ class VAEConfig(GenerativeModelConfig):
     kl_weight: float = 1.0
     recon_loss: Literal["mse", "bce"] = "mse"
 
+    @override
     def __post_init__(self) -> None:
         super().__post_init__()
         if not self.down_block_channels:

@@ -11,6 +11,7 @@ without worrying about Jacobian bookkeeping.
 """
 
 import math
+from typing import final, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -140,11 +141,13 @@ class Transform:
         """
         raise NotImplementedError(f"{type(self).__name__}.log_abs_det_jacobian")
 
+    @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         return f"{type(self).__name__}()"
 
 
+@final
 class _InverseTransform(Transform):
     """View of the inverse of an underlying transform."""
 
@@ -156,19 +159,23 @@ class _InverseTransform(Transform):
         self.sign = base.sign
         self._inv = base
 
+    @override
     @property
     def inv(self) -> Transform:
         """Return the wrapped base transform (inverse of this view)."""
         return self._base
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward direction of the inverse view = ``base._inverse``."""
         return self._base._inverse(x)
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse direction of the inverse view = ``base._call``."""
         return self._base._call(y)
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Jacobian of the inverse view — negate the base with roles swapped.
 
@@ -225,14 +232,17 @@ class ExpTransform(Transform):
     Tensor(0.0)
     """
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = e^x`."""
         return x.exp()
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: :math:`x = \\log(y)`."""
         return y.log()
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r""":math:`\log|\partial y/\partial x| = x` since :math:`|dy/dx| = e^x`.
 
@@ -288,14 +298,17 @@ class SigmoidTransform(Transform):
     Tensor(0.5)
     """
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = \\sigma(x)`."""
         return x.sigmoid()
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: :math:`x = \\log(y/(1-y))`."""
         return y.log() - (1.0 - y).log()
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Log-Jacobian :math:`\log\bigl(y\,(1-y)\bigr)` of the sigmoid map.
 
@@ -353,14 +366,17 @@ class TanhTransform(Transform):
     Tensor(0.0)
     """
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = \\tanh(x)`."""
         return x.tanh()
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         r"""Inverse: :math:`x = \tfrac{1}{2}\log\!\bigl((1+y)/(1-y)\bigr)`."""
         return 0.5 * ((1.0 + y) / (1.0 - y)).log()
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Numerically-stable :math:`\log(1 - \tanh^2(x))`.
 
@@ -441,14 +457,17 @@ class AffineTransform(Transform):
         self.scale = _as_tensor(scale)
         self.sign = 1  # Caller is responsible for ``scale > 0``.
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = \\text{loc} + \\text{scale} \\cdot x`."""
         return self.loc + self.scale * x
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: :math:`x = (y - \\text{loc}) / \\text{scale}`."""
         return (y - self.loc) / self.scale
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Constant log-Jacobian :math:`\log|\text{scale}|`.
 
@@ -522,14 +541,17 @@ class PowerTransform(Transform):
         super().__init__()
         self.exponent = _as_tensor(exponent)
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = x^{\\text{exponent}}`."""
         return x**self.exponent
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: :math:`x = y^{1/\\text{exponent}}`."""
         return y ** (1.0 / self.exponent)
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r""":math:`\log|\partial y/\partial x| = \log|\text{exponent}| + (\text{exponent} - 1)\log x`.
 
@@ -604,12 +626,14 @@ class SoftmaxTransform(Transform):
 
     event_dim: int = 1
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: ``softmax(x, dim=-1)``."""
         from lucid.nn.functional.activations import softmax
 
         return softmax(x, dim=-1)
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: ``log(y)``, anchored at the un-normalised log-probabilities.
 
@@ -620,6 +644,7 @@ class SoftmaxTransform(Transform):
         # Any constant shift gives the same softmax — we anchor at log y.
         return y.log()
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Pseudo-Jacobian :math:`\sum_k \log y_k` for the over-parameterised softmax.
 
@@ -697,6 +722,7 @@ class StickBreakingTransform(Transform):
 
     event_dim: int = 1
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         r"""Forward stick-breaking: ``x ∈ ℝ^{K-1}`` → simplex ``y ∈ Δ^K``.
 
@@ -728,6 +754,7 @@ class StickBreakingTransform(Transform):
         )
         return lucid.cat([head, last], dim=-1)
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         r"""Inverse stick-breaking: simplex ``y ∈ Δ^K`` → ``x ∈ ℝ^{K-1}``.
 
@@ -756,6 +783,7 @@ class StickBreakingTransform(Transform):
         offsets: Tensor = lucid.arange(K_minus_1, 0, -1, dtype=y.dtype, device=y.device)
         return (z.log() - (1.0 - z).log()) + offsets.log()
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Standard simplex-to-:math:`\mathbb{R}^{K-1}` log-Jacobian.
 
@@ -846,6 +874,7 @@ class LowerCholeskyTransform(Transform):
 
     event_dim: int = 2
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: lower-triangular extraction with softplus on the diagonal.
 
@@ -868,6 +897,7 @@ class LowerCholeskyTransform(Transform):
         off: Tensor = x * off_mask
         return diag + off
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: invert softplus on the diagonal, leave the rest unchanged.
 
@@ -889,6 +919,7 @@ class LowerCholeskyTransform(Transform):
         off_in: Tensor = y * off_mask
         return diag_in + off_in
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Sum of :math:`\log \sigma(x_{ii})` over the diagonal.
 
@@ -978,14 +1009,17 @@ class AbsTransform(Transform):
     bijective: bool = False
     sign: int = 1
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = |x|`."""
         return x.abs()
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Pseudo-inverse: returns ``y`` unchanged (assumes non-negative input)."""
         return y  # convention: non-negative pre-image
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Zero everywhere — :math:`|dy/dx| = 1` outside the kink at zero."""
         return lucid.zeros(tuple(x.shape), dtype=x.dtype, device=x.device)
@@ -1047,14 +1081,17 @@ class IndependentTransform(Transform):
         self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
         self.event_dim = transform.event_dim + reinterpreted_batch_ndims
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Apply the wrapped transform element-wise."""
         return self.transform(x)
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Apply the wrapped transform's inverse element-wise."""
         return self.transform._inverse(y)
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Sum the wrapped Jacobian over the reinterpreted trailing dims."""
         lp = self.transform.log_abs_det_jacobian(x, y)
@@ -1140,16 +1177,19 @@ class ReshapeTransform(Transform):
         self.out_shape = out_shape
         self.event_dim = max(len(in_shape), len(out_shape))
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Reshape the event tail of ``x`` from ``in_shape`` to ``out_shape``."""
         batch = x.shape[: x.dim() - len(self.in_shape)]
         return x.reshape(*batch, *self.out_shape)
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Reshape the event tail of ``y`` from ``out_shape`` back to ``in_shape``."""
         batch = y.shape[: y.dim() - len(self.out_shape)]
         return y.reshape(*batch, *self.in_shape)
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Zero Jacobian — pure reshape is volume-preserving."""
         batch = x.shape[: x.dim() - len(self.in_shape)]
@@ -1233,6 +1273,7 @@ class CorrCholeskyTransform(Transform):
         d = self.dim
         return d * (d - 1) // 2
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Map unconstrained ``(..., d*(d-1)/2)`` vector to ``(..., d, d)`` Chol."""
         d = self.dim
@@ -1358,6 +1399,7 @@ class CorrCholeskyTransform(Transform):
         # Helper — not used in the final path, kept for reference.
         return L
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Extract the free parameters ``x`` from a Cholesky factor ``L``."""
         d = self.dim
@@ -1401,6 +1443,7 @@ class CorrCholeskyTransform(Transform):
         )
         return 0.5 * ((1.0 + z) / denom).log()
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Log-Jacobian of the unconstrained-to-Cholesky correlation map.
 
@@ -1518,14 +1561,17 @@ class CumulativeDistributionTransform(Transform):
         super().__init__()
         self.distribution = distribution
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = F(x)` via ``distribution.cdf``."""
         return self.distribution.cdf(x)
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: :math:`x = F^{-1}(y)` via ``distribution.icdf``."""
         return self.distribution.icdf(y)
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r""":math:`\log|F'(x)| = \log p(x)` — the base distribution's log-density at ``x``."""
         return self.distribution.log_prob(x)
@@ -1602,6 +1648,7 @@ class StackTransform(Transform):
         self.dim = dim
         self.event_dim = max(t.event_dim for t in transforms)
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Unbind ``x`` along ``dim`` and apply each transform to the matching slice.
 
@@ -1620,6 +1667,7 @@ class StackTransform(Transform):
             [t(s) for t, s in zip(self.transforms, slices)], dim=self.dim
         )
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Unbind ``y`` along ``dim`` and apply each transform's inverse per slice."""
         slices = y.unbind(self.dim)
@@ -1627,6 +1675,7 @@ class StackTransform(Transform):
             [t._inverse(s) for t, s in zip(self.transforms, slices)], dim=self.dim
         )
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Per-slice Jacobians stacked back along ``dim``."""
         xs = x.unbind(self.dim)
@@ -1738,11 +1787,13 @@ class CatTransform(Transform):
             lengths = self.lengths
         return list(x.split(lengths, dim=self.dim))
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Split ``x`` along ``dim``, apply each transform, and concatenate."""
         parts = self._split(x)
         return lucid.cat([t(p) for t, p in zip(self.transforms, parts)], dim=self.dim)
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Split ``y`` along ``dim``, apply each inverse, and concatenate."""
         parts = self._split(y)
@@ -1750,6 +1801,7 @@ class CatTransform(Transform):
             [t._inverse(p) for t, p in zip(self.transforms, parts)], dim=self.dim
         )
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Per-partition Jacobians concatenated back along ``dim``."""
         xs = self._split(x)
@@ -1833,18 +1885,21 @@ class ComposeTransform(Transform):
         self.parts = list(parts)
         self.event_dim = max(p.event_dim for p in parts)
 
+    @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: apply every sub-transform in order."""
         for p in self.parts:
             x = p(x)
         return x
 
+    @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: apply each sub-transform's inverse in reverse order."""
         for p in reversed(self.parts):
             y = p._inverse(y)
         return y
 
+    @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Cumulative log-Jacobian across the composition.
 
@@ -1974,6 +2029,7 @@ class TransformedDistribution(Distribution):
             validate_args=validate_args,
         )
 
+    @override
     @property
     def has_rsample(self) -> bool:  # type: ignore[override]
         """Whether reparameterised sampling is available — inherited from the base distribution."""
@@ -1985,14 +2041,17 @@ class TransformedDistribution(Distribution):
             x = t(x)
         return x
 
+    @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Push a reparameterised base sample through the transform chain."""
         return self._push(self.base_dist.rsample(sample_shape))
 
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Push a (non-reparameterised) base sample through the transform chain."""
         return self._push(self.base_dist.sample(sample_shape))
 
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Evaluate the log-density of ``value`` under the transformed distribution.
 

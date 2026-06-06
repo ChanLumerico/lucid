@@ -19,7 +19,7 @@ The classifier / LM heads then sit on top of ``GPTModel``:
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -41,6 +41,7 @@ from lucid.models.text.gpt._config import GPTConfig
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _GPTSelfAttention(nn.Module):
     """Fused QKV projection + causal masking.
 
@@ -67,6 +68,7 @@ class _GPTSelfAttention(nn.Module):
         mask = lucid.tril(lucid.ones((T, T))).reshape(1, 1, T, T)
         self.register_buffer("causal_mask", mask, persistent=False)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -102,6 +104,7 @@ class _GPTSelfAttention(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _GPTMLP(nn.Module):
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
@@ -110,6 +113,7 @@ class _GPTMLP(nn.Module):
         self.dropout = nn.Dropout(p=config.hidden_dropout)
         self._act_name = config.hidden_act
 
+    @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         h = text_activation(self._act_name, cast(Tensor, self.c_fc(x)))
         h = cast(Tensor, self.c_proj(h))
@@ -121,6 +125,7 @@ class _GPTMLP(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@final
 class _GPTBlock(nn.Module):
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
@@ -129,6 +134,7 @@ class _GPTBlock(nn.Module):
         self.mlp = _GPTMLP(config)
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
@@ -229,9 +235,11 @@ class GPTModel(PretrainedModel):
         pos = lucid.arange(config.max_position_embeddings).long().unsqueeze(0)
         self.register_buffer("position_ids", pos, persistent=False)
 
+    @override
     def get_input_embeddings(self) -> nn.Module:
         return self.tokens_embed
 
+    @override
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
@@ -240,6 +248,7 @@ class GPTModel(PretrainedModel):
             )
         self.tokens_embed = value
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -335,6 +344,7 @@ class GPTLMHeadModel(PretrainedModel, GenerationMixin):
     def _tie_lm_head_to_input_embeddings(self) -> None:
         self.lm_head.weight = self.transformer.tokens_embed.weight
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -427,6 +437,7 @@ class GPTForSequenceClassification(PretrainedModel):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels, bias=False)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -467,7 +478,7 @@ class GPTForSequenceClassification(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass
+@dataclass(slots=True)
 class GPTDoubleHeadsOutput(ModelOutput):
     r"""Joint LM + multiple-choice output for :class:`GPTDoubleHeadsModel`.
 
@@ -519,6 +530,7 @@ class GPTDoubleHeadsOutput(ModelOutput):
     mc_loss: Tensor | None = None
 
 
+@final
 class _GPTMultipleChoiceHead(nn.Module):
     """Pool the hidden state at ``mc_token_ids`` per choice → 1-way Linear.
 
@@ -533,6 +545,7 @@ class _GPTMultipleChoiceHead(nn.Module):
         self.summary = nn.Linear(config.hidden_size, 1)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
+    @override
     def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:  # type: ignore[override]
         # hidden_states: (N, C, L, H); mc_token_ids: (N, C)
         N, C, L, H = hidden_states.shape
@@ -623,6 +636,7 @@ class GPTDoubleHeadsModel(PretrainedModel):
         if config.tie_word_embeddings:
             self.lm_head.weight = self.transformer.tokens_embed.weight
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,

@@ -3,7 +3,7 @@ L-BFGS optimizer (Limited-memory Broyden–Fletcher–Goldfarb–Shanno).
 """
 
 from collections.abc import Iterable
-from typing import Callable, cast
+from typing import Callable, cast, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -141,9 +141,11 @@ class LBFGS(Optimizer):
         }
 
     # LBFGS is a pure-Python optimizer; no C++ engine optim needed.
+    @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
         pass
 
+    @override
     def _sync_hyperparams(self) -> None:
         pass
 
@@ -154,6 +156,7 @@ class LBFGS(Optimizer):
     # are serialised as raw arrays (saving Tensors directly works too but raw
     # arrays are smaller and avoid pickling autograd plumbing).
 
+    @override
     def _save_state(self) -> dict[int, dict[str, object]]:
         snapshot: dict[str, object] = {}
         for k, v in self._lbfgs_state.items():
@@ -169,6 +172,7 @@ class LBFGS(Optimizer):
         # Single virtual param-id 0 — LBFGS treats all params as one flat vector.
         return {0: snapshot}
 
+    @override
     def _load_state(self, state: dict[int, dict[str, object]]) -> None:
         import numpy as np
 
@@ -283,6 +287,7 @@ class LBFGS(Optimizer):
 
         return alpha, f_k, g_k
 
+    @override
     def zero_grad(self, set_to_none: bool = True) -> None:
         """Set gradients of all parameters to ``None``.
 
@@ -310,6 +315,7 @@ class LBFGS(Optimizer):
             for p in cast(list[Tensor], group["params"]):
                 p.grad = None
 
+    @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single L-BFGS optimisation step.
 

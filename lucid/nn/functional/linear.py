@@ -14,6 +14,7 @@ autograd gradients remain correct.
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._types import GeluApproximate
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -228,7 +229,7 @@ def fused_linear_gelu(
     x: Tensor,
     weight: Tensor,
     bias: Tensor,
-    approximate: str = "tanh",
+    approximate: GeluApproximate = "tanh",
 ) -> Tensor:
     r"""Fused linear + GELU forward kernel.
 

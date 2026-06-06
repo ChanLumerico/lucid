@@ -22,7 +22,7 @@ local implementation.
 """
 
 import math
-from typing import ClassVar, cast
+from typing import ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -179,9 +179,11 @@ class TransformerModel(PretrainedModel):
             batch_first=True,
         )
 
+    @override
     def get_input_embeddings(self) -> nn.Module:
         return self.src_tok_emb
 
+    @override
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
@@ -243,6 +245,7 @@ class TransformerModel(PretrainedModel):
             ),
         )
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -351,6 +354,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
         if config.tie_word_embeddings:
             self.lm_head.weight = self.transformer.tgt_tok_emb.weight
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -530,6 +534,7 @@ class TransformerForSequenceClassification(PretrainedModel):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,
@@ -617,6 +622,7 @@ class TransformerForTokenClassification(PretrainedModel, MaskedLMMixin):
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
+    @override
     def forward(  # type: ignore[override]
         self,
         input_ids: Tensor,

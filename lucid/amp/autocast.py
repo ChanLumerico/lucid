@@ -3,11 +3,9 @@ autocast context manager for automatic mixed precision.
 """
 
 import functools
-from typing import Callable, TypeVar
+from typing import Callable
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype, float16, to_engine_dtype
-
-_F = TypeVar("_F", bound=Callable[..., object])
 
 
 class autocast:
@@ -129,7 +127,7 @@ class autocast:
             restore_guard = _C_engine.AutocastGuard(_C_engine.F32)
             restore_guard.__enter__()
 
-    def __call__(self, fn: _F) -> _F:
+    def __call__[F: Callable[..., object]](self, fn: F) -> F:
         """Use as a function decorator."""
 
         @functools.wraps(fn)

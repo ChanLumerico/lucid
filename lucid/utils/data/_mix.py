@@ -25,6 +25,7 @@ which accepts soft per-class probabilities as targets.
 """
 
 import math
+from typing import override
 
 import lucid
 import lucid.distributions as dist
@@ -127,6 +128,7 @@ class MixupCollator:
         mixed_targets = lam * targets + (1.0 - lam) * targets[perm]
         return mixed_images, mixed_targets
 
+    @override
     def __repr__(self) -> str:
         return (
             f"MixupCollator(alpha={self.alpha}, "
@@ -219,6 +221,7 @@ class CutMixCollator:
         mixed_targets = lam_eff * targets + (1.0 - lam_eff) * targets[perm]
         return mixed_images, mixed_targets
 
+    @override
     def __repr__(self) -> str:
         return (
             f"CutMixCollator(alpha={self.alpha}, "
@@ -281,6 +284,7 @@ class RandomMixupCutMixCollator:
             return self.cutmix(batch)
         return self.mixup(batch)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"RandomMixupCutMixCollator(mixup_alpha={self.mixup.alpha}, "

@@ -2,7 +2,7 @@
 Optimizer base class.
 """
 
-from typing import ClassVar, Iterable, cast
+from typing import ClassVar, Iterable, cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
@@ -88,6 +88,7 @@ class Optimizer:
     # subclass) only when you need step() to act as a synchronisation point.
     AUTO_EVAL_AFTER_STEP: ClassVar[bool] = False
 
+    @override
     def __init_subclass__(cls, **kwargs: object) -> None:
         """Wrap every concrete ``step()`` *only when* ``AUTO_EVAL_AFTER_STEP``
         is set on the subclass.

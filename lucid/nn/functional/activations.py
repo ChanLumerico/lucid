@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._types import GeluApproximate
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -215,7 +216,7 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
     return _wrap(_C_engine.selu(_unwrap(x)))
 
 
-def gelu(x: Tensor, approximate: str = "none") -> Tensor:
+def gelu(x: Tensor, approximate: GeluApproximate = "none") -> Tensor:
     r"""Gaussian Error Linear Unit activation.
 
     Smooth, non-monotonic activation that has largely replaced ReLU in
