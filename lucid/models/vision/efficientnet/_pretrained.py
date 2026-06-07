@@ -1,5 +1,8 @@
 """Registry factories for EfficientNet B0–B7."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientnet._config import EfficientNetConfig
@@ -33,14 +36,12 @@ _CFGS = {
 
 def _b(key: str, kw: dict[str, object]) -> EfficientNet:
     cfg = _CFGS[key]
-    return EfficientNet(EfficientNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return EfficientNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(key: str, kw: dict[str, object]) -> EfficientNetForImageClassification:
     cfg = _CFGS[key]
-    return EfficientNetForImageClassification(
-        EfficientNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return EfficientNetForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

@@ -1,5 +1,8 @@
 """Registry factories for MaxViT variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.maxvit._config import MaxViTConfig
@@ -55,13 +58,11 @@ _CFG_XL = MaxViTConfig(
 
 
 def _b(cfg: MaxViTConfig, kw: dict[str, object]) -> MaxViT:
-    return MaxViT(MaxViTConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return MaxViT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: MaxViTConfig, kw: dict[str, object]) -> MaxViTForImageClassification:
-    return MaxViTForImageClassification(
-        MaxViTConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return MaxViTForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

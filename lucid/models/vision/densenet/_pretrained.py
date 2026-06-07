@@ -1,5 +1,8 @@
 """Registry factories for DenseNet variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.densenet._config import DenseNetConfig
@@ -31,13 +34,11 @@ _CFG_264 = DenseNetConfig(
 
 
 def _b(cfg: DenseNetConfig, kw: dict[str, object]) -> DenseNet:
-    return DenseNet(DenseNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return DenseNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: DenseNetConfig, kw: dict[str, object]) -> DenseNetForImageClassification:
-    return DenseNetForImageClassification(
-        DenseNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return DenseNetForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

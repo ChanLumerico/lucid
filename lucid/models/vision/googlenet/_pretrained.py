@@ -1,5 +1,8 @@
 """Registry factories for GoogLeNet."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
@@ -64,7 +67,7 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     >>> out.logits.shape   # (B, 1024, 1, 1)
     (1, 1024, 1, 1)
     """
-    cfg = GoogLeNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return GoogLeNet(cfg)
 
 
@@ -136,7 +139,7 @@ def googlenet_cls(
     (2, 1000)
     """
     entry = weights_mod.resolve_weights(GoogLeNetWeights, pretrained, weights)
-    cfg = GoogLeNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     model = GoogLeNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="googlenet_cls")

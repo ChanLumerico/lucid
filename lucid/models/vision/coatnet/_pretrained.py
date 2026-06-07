@@ -1,5 +1,8 @@
 """Registry factories for CoAtNet variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.vision.coatnet._config import CoAtNetConfig
 from lucid.models.vision.coatnet._model import CoAtNet, CoAtNetForImageClassification
@@ -151,7 +154,7 @@ def coatnet_0(pretrained: bool = False, **overrides: object) -> CoAtNet:
     >>> feat.shape
     (1, 768, 7, 7)
     """
-    cfg = CoAtNetConfig(**{**_CFG_0.__dict__, **overrides}) if overrides else _CFG_0
+    cfg = replace(_CFG_0, **cast(dict[str, Any], overrides)) if overrides else _CFG_0
     return CoAtNet(cfg)
 
 
@@ -210,7 +213,7 @@ def coatnet_0_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = CoAtNetConfig(**{**_CFG_0.__dict__, **overrides}) if overrides else _CFG_0
+    cfg = replace(_CFG_0, **cast(dict[str, Any], overrides)) if overrides else _CFG_0
     return CoAtNetForImageClassification(cfg)
 
 
@@ -240,7 +243,7 @@ def coatnet_1(pretrained: bool = False, **overrides: object) -> CoAtNet:
     Reaches **83.3% ImageNet-1k top-1** at 224×224 (Table 5, NeurIPS
     2021).  See `arXiv:2106.04803 <https://arxiv.org/abs/2106.04803>`_.
     """
-    cfg = CoAtNetConfig(**{**_CFG_1.__dict__, **overrides}) if overrides else _CFG_1
+    cfg = replace(_CFG_1, **cast(dict[str, Any], overrides)) if overrides else _CFG_1
     return CoAtNet(cfg)
 
 
@@ -261,7 +264,7 @@ def coatnet_1_cls(
     classifier).  Approximately **42M parameters**, 83.3% ImageNet-1k
     top-1 at 224x224 (Table 5).
     """
-    cfg = CoAtNetConfig(**{**_CFG_1.__dict__, **overrides}) if overrides else _CFG_1
+    cfg = replace(_CFG_1, **cast(dict[str, Any], overrides)) if overrides else _CFG_1
     return CoAtNetForImageClassification(cfg)
 
 
@@ -286,7 +289,7 @@ def coatnet_2(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ``attn_heads=(16, 32)``.  Approximately **75M parameters**, **84.1%
     ImageNet-1k top-1** at 224×224 (Table 5).
     """
-    cfg = CoAtNetConfig(**{**_CFG_2.__dict__, **overrides}) if overrides else _CFG_2
+    cfg = replace(_CFG_2, **cast(dict[str, Any], overrides)) if overrides else _CFG_2
     return CoAtNet(cfg)
 
 
@@ -307,7 +310,7 @@ def coatnet_2_cls(
     CoAtNet head.  Approximately **75M parameters**, 84.1% ImageNet-1k
     top-1 at 224x224 (Table 5).
     """
-    cfg = CoAtNetConfig(**{**_CFG_2.__dict__, **overrides}) if overrides else _CFG_2
+    cfg = replace(_CFG_2, **cast(dict[str, Any], overrides)) if overrides else _CFG_2
     return CoAtNetForImageClassification(cfg)
 
 
@@ -333,7 +336,7 @@ def coatnet_3(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ImageNet-1k top-1** at 224×224 (Table 5).  With ImageNet-21k or
     JFT-3B pretraining the paper reports 86.5% / 87.8% at 384x384.
     """
-    cfg = CoAtNetConfig(**{**_CFG_3.__dict__, **overrides}) if overrides else _CFG_3
+    cfg = replace(_CFG_3, **cast(dict[str, Any], overrides)) if overrides else _CFG_3
     return CoAtNet(cfg)
 
 
@@ -354,7 +357,7 @@ def coatnet_3_cls(
     CoAtNet head.  Approximately **168M parameters**, 84.5% ImageNet-1k
     top-1 at 224x224 (Table 5).
     """
-    cfg = CoAtNetConfig(**{**_CFG_3.__dict__, **overrides}) if overrides else _CFG_3
+    cfg = replace(_CFG_3, **cast(dict[str, Any], overrides)) if overrides else _CFG_3
     return CoAtNetForImageClassification(cfg)
 
 
@@ -380,7 +383,7 @@ def coatnet_4(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ImageNet-1k top-1** at 224×224 (Table 5).  Paper headline with
     JFT-3B pretrain reaches 88.4% at 512x512.
     """
-    cfg = CoAtNetConfig(**{**_CFG_4.__dict__, **overrides}) if overrides else _CFG_4
+    cfg = replace(_CFG_4, **cast(dict[str, Any], overrides)) if overrides else _CFG_4
     return CoAtNet(cfg)
 
 
@@ -401,7 +404,7 @@ def coatnet_4_cls(
     ``blocks_per_stage=(2, 12, 28, 2)``.  Approximately **275M
     parameters**, 85.0% ImageNet-1k top-1 at 224x224 (Table 5).
     """
-    cfg = CoAtNetConfig(**{**_CFG_4.__dict__, **overrides}) if overrides else _CFG_4
+    cfg = replace(_CFG_4, **cast(dict[str, Any], overrides)) if overrides else _CFG_4
     return CoAtNetForImageClassification(cfg)
 
 
@@ -435,7 +438,7 @@ def coatnet_5(pretrained: bool = False, **overrides: object) -> CoAtNet:
     D=2048.  Instantiating + running this variant on a 16 GB host is
     near-the-edge; prefer measuring on a larger GPU.
     """
-    cfg = CoAtNetConfig(**{**_CFG_5.__dict__, **overrides}) if overrides else _CFG_5
+    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
     return CoAtNet(cfg)
 
 
@@ -456,7 +459,7 @@ def coatnet_5_cls(
     the standard CoAtNet head.  Approximately **688M parameters**,
     85.8% ImageNet-1k top-1 at 224x224 (Table 5).
     """
-    cfg = CoAtNetConfig(**{**_CFG_5.__dict__, **overrides}) if overrides else _CFG_5
+    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
     return CoAtNetForImageClassification(cfg)
 
 
@@ -497,7 +500,7 @@ def coatnet_6(pretrained: bool = False, **overrides: object) -> CoAtNet:
     activations); use a larger GPU.  Building this variant is
     reserved for inference on dedicated hardware.
     """
-    cfg = CoAtNetConfig(**{**_CFG_6.__dict__, **overrides}) if overrides else _CFG_6
+    cfg = replace(_CFG_6, **cast(dict[str, Any], overrides)) if overrides else _CFG_6
     return CoAtNet(cfg)
 
 
@@ -516,7 +519,7 @@ def coatnet_6_cls(
 
     Mixed-S3 variant.  Approximately **1.5B parameters**.
     """
-    cfg = CoAtNetConfig(**{**_CFG_6.__dict__, **overrides}) if overrides else _CFG_6
+    cfg = replace(_CFG_6, **cast(dict[str, Any], overrides)) if overrides else _CFG_6
     return CoAtNetForImageClassification(cfg)
 
 
@@ -548,7 +551,7 @@ def coatnet_7(pretrained: bool = False, **overrides: object) -> CoAtNet:
     CoAtNet, only usable with JFT-3B pretraining.  Not buildable on a
     16 GB host (param footprint alone is ≈ 9.7 GB before activations).
     """
-    cfg = CoAtNetConfig(**{**_CFG_7.__dict__, **overrides}) if overrides else _CFG_7
+    cfg = replace(_CFG_7, **cast(dict[str, Any], overrides)) if overrides else _CFG_7
     return CoAtNet(cfg)
 
 
@@ -567,5 +570,5 @@ def coatnet_7_cls(
 
     Widest mixed-S3 variant.  Approximately **2.4B parameters**.
     """
-    cfg = CoAtNetConfig(**{**_CFG_7.__dict__, **overrides}) if overrides else _CFG_7
+    cfg = replace(_CFG_7, **cast(dict[str, Any], overrides)) if overrides else _CFG_7
     return CoAtNetForImageClassification(cfg)

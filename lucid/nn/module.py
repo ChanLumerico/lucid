@@ -3,7 +3,16 @@ nn.Module: base class for all neural network layers.
 """
 
 from collections import OrderedDict
-from typing import Callable, ClassVar, Iterator, Self, TYPE_CHECKING, cast, final, override
+from typing import (
+    Callable,
+    ClassVar,
+    Iterator,
+    Self,
+    TYPE_CHECKING,
+    cast,
+    final,
+    override,
+)
 
 if TYPE_CHECKING:
     from lucid.autograd.function import FunctionCtx

@@ -11,6 +11,9 @@ following NCSNv2 §3.2 "Technique 1" (use ``σ_max`` ≈ max pairwise data
 distance).
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.generative.ncsn._config import NCSNConfig
 from lucid.models.generative.ncsn._model import NCSNForImageGeneration, NCSNModel
@@ -55,7 +58,7 @@ _CFG_CELEBA = NCSNConfig(
 
 
 def _apply(cfg: NCSNConfig, overrides: dict[str, object]) -> NCSNConfig:
-    return NCSNConfig(**{**cfg.__dict__, **overrides}) if overrides else cfg
+    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare score networks ───────────────────────────────────────────────────────

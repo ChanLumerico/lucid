@@ -33,8 +33,8 @@ Multi-part MSE loss matching the paper §2.2:
 """
 
 import math
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, cast, override
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -773,9 +773,7 @@ def _make_v1(
     cfg: YOLOV1Config, overrides: dict[str, object]
 ) -> YOLOV1ForObjectDetection:
     if overrides:
-        merged = {**cfg.__dict__, **overrides}
-        merged.pop("model_type", None)
-        cfg = YOLOV1Config(**merged)
+        cfg = replace(cfg, **cast(dict[str, Any], overrides))
     return YOLOV1ForObjectDetection(cfg)
 
 

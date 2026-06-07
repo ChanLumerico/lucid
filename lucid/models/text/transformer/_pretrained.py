@@ -1,5 +1,8 @@
 """Registry factories for the original Vaswani Transformer."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.text.transformer._config import TransformerConfig
 from lucid.models.text.transformer._model import (
@@ -22,7 +25,7 @@ _CFG_LARGE = TransformerConfig(
 
 
 def _apply(cfg: TransformerConfig, overrides: dict[str, object]) -> TransformerConfig:
-    return TransformerConfig(**{**cfg.__dict__, **overrides}) if overrides else cfg
+    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

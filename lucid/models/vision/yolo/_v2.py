@@ -52,8 +52,8 @@ where the responsible anchor is the one with highest IoU vs GT.
 """
 
 import math
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, cast, final, override
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Any, ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -864,9 +864,7 @@ def _make_v2(
     cfg: YOLOV2Config, overrides: dict[str, object]
 ) -> YOLOV2ForObjectDetection:
     if overrides:
-        merged = {**cfg.__dict__, **overrides}
-        merged.pop("model_type", None)
-        cfg = YOLOV2Config(**merged)
+        cfg = replace(cfg, **cast(dict[str, Any], overrides))
     return YOLOV2ForObjectDetection(cfg)
 
 

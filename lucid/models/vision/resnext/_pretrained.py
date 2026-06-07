@@ -1,5 +1,8 @@
 """Registry factories for all ResNeXt variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnext._config import ResNeXtConfig
@@ -74,11 +77,7 @@ def resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     >>> out.last_hidden_state.shape   # (B, 2048, 7, 7)
     (1, 2048, 7, 7)
     """
-    cfg = (
-        ResNeXtConfig(**{**_CFG_50_32x4d.__dict__, **overrides})
-        if overrides
-        else _CFG_50_32x4d
-    )
+    cfg = replace(_CFG_50_32x4d, **cast(dict[str, Any], overrides)) if overrides else _CFG_50_32x4d
     return ResNeXt(cfg)
 
 
@@ -127,11 +126,7 @@ def resnext_101_32x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     >>> out.last_hidden_state.shape   # (B, 2048, 7, 7)
     (1, 2048, 7, 7)
     """
-    cfg = (
-        ResNeXtConfig(**{**_CFG_101_32x4d.__dict__, **overrides})
-        if overrides
-        else _CFG_101_32x4d
-    )
+    cfg = replace(_CFG_101_32x4d, **cast(dict[str, Any], overrides)) if overrides else _CFG_101_32x4d
     return ResNeXt(cfg)
 
 
@@ -183,11 +178,7 @@ def resnext_101_32x8d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     >>> out.last_hidden_state.shape   # (B, 2048, 7, 7)
     (1, 2048, 7, 7)
     """
-    cfg = (
-        ResNeXtConfig(**{**_CFG_101_32x8d.__dict__, **overrides})
-        if overrides
-        else _CFG_101_32x8d
-    )
+    cfg = replace(_CFG_101_32x8d, **cast(dict[str, Any], overrides)) if overrides else _CFG_101_32x8d
     return ResNeXt(cfg)
 
 
@@ -266,11 +257,7 @@ def resnext_50_32x4d_cls(
     >>> model = resnext_50_32x4d_cls(weights=ResNeXt50_32x4dWeights.IMAGENET1K_V2)
     """
     entry = weights_mod.resolve_weights(ResNeXt50_32x4dWeights, pretrained, weights)
-    cfg = (
-        ResNeXtConfig(**{**_CFG_50_32x4d.__dict__, **overrides})
-        if overrides
-        else _CFG_50_32x4d
-    )
+    cfg = replace(_CFG_50_32x4d, **cast(dict[str, Any], overrides)) if overrides else _CFG_50_32x4d
     model = ResNeXtForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnext_50_32x4d_cls")
@@ -347,11 +334,7 @@ def resnext_101_32x4d_cls(
     >>> model = resnext_101_32x4d_cls(weights=ResNeXt101_32x4dWeights.GLUON_IN1K)
     """
     entry = weights_mod.resolve_weights(ResNeXt101_32x4dWeights, pretrained, weights)
-    cfg = (
-        ResNeXtConfig(**{**_CFG_101_32x4d.__dict__, **overrides})
-        if overrides
-        else _CFG_101_32x4d
-    )
+    cfg = replace(_CFG_101_32x4d, **cast(dict[str, Any], overrides)) if overrides else _CFG_101_32x4d
     model = ResNeXtForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnext_101_32x4d_cls")
@@ -429,11 +412,7 @@ def resnext_101_32x8d_cls(
     >>> model = resnext_101_32x8d_cls(weights=ResNeXt101_32x8dWeights.IMAGENET1K_V2)
     """
     entry = weights_mod.resolve_weights(ResNeXt101_32x8dWeights, pretrained, weights)
-    cfg = (
-        ResNeXtConfig(**{**_CFG_101_32x8d.__dict__, **overrides})
-        if overrides
-        else _CFG_101_32x8d
-    )
+    cfg = replace(_CFG_101_32x8d, **cast(dict[str, Any], overrides)) if overrides else _CFG_101_32x8d
     model = ResNeXtForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnext_101_32x8d_cls")

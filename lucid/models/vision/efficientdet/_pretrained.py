@@ -1,5 +1,8 @@
 """Registry factories for EfficientDet variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientdet._config import (
     EfficientDetConfig,
@@ -11,9 +14,7 @@ from lucid.models.vision.efficientdet._model import EfficientDetForObjectDetecti
 def _det(
     cfg: EfficientDetConfig, kw: dict[str, object]
 ) -> EfficientDetForObjectDetection:
-    return EfficientDetForObjectDetection(
-        EfficientDetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return EfficientDetForObjectDetection(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 @register_model(

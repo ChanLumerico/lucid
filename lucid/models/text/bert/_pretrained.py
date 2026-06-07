@@ -19,6 +19,9 @@ The downstream-task heads follow a "best available canonical weights" rule:
   fine-tuning start, mirroring ``AutoModelForX.from_pretrained(<encoder>)``).
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.bert._config import BERTConfig
@@ -84,7 +87,7 @@ _CFG_NER_CONLL = BERTConfig(
 def _apply(cfg: BERTConfig, overrides: dict[str, object]) -> BERTConfig:
     if not overrides:
         return cfg
-    return BERTConfig(**{**cfg.__dict__, **overrides})
+    return replace(cfg, **cast(dict[str, Any], overrides))
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

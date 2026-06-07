@@ -1,5 +1,8 @@
 """Registry factories for Attention U-Net variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 from lucid.models.vision.attention_unet._model import (
@@ -19,7 +22,7 @@ def _build(
     cfg: AttentionUNetConfig, kw: dict[str, object]
 ) -> AttentionUNetForSemanticSegmentation:
     return AttentionUNetForSemanticSegmentation(
-        AttentionUNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
     )
 
 

@@ -6,6 +6,9 @@ against ``timm.models.crossvit`` so the converted timm checkpoints
 load with a direct ``blocks → stages`` key rename.
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.crossvit._config import CrossViTConfig
@@ -79,13 +82,11 @@ _CFG_18 = CrossViTConfig(
 
 
 def _b(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViT:
-    return CrossViT(CrossViTConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return CrossViT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViTForImageClassification:
-    return CrossViTForImageClassification(
-        CrossViTConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return CrossViTForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ---------------------------------------------------------------------------

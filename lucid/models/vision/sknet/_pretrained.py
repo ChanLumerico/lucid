@@ -1,5 +1,8 @@
 """Registry factories for all SKNet variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.sknet._config import SKNetConfig
@@ -112,7 +115,7 @@ def sk_resnet_18(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
-    cfg = SKNetConfig(**{**_CFG_SK18.__dict__, **overrides}) if overrides else _CFG_SK18
+    cfg = replace(_CFG_SK18, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK18
     return SKNet(cfg)
 
 
@@ -161,7 +164,7 @@ def sk_resnet_34(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
-    cfg = SKNetConfig(**{**_CFG_SK34.__dict__, **overrides}) if overrides else _CFG_SK34
+    cfg = replace(_CFG_SK34, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK34
     return SKNet(cfg)
 
 
@@ -213,7 +216,7 @@ def sk_resnet_50(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = SKNetConfig(**{**_CFG_SK50.__dict__, **overrides}) if overrides else _CFG_SK50
+    cfg = replace(_CFG_SK50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK50
     return SKNet(cfg)
 
 
@@ -261,9 +264,7 @@ def sk_resnet_101(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = (
-        SKNetConfig(**{**_CFG_SK101.__dict__, **overrides}) if overrides else _CFG_SK101
-    )
+    cfg = replace(_CFG_SK101, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK101
     return SKNet(cfg)
 
 
@@ -323,11 +324,7 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = (
-        SKNetConfig(**{**_CFG_SK_RX50.__dict__, **overrides})
-        if overrides
-        else _CFG_SK_RX50
-    )
+    cfg = replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK_RX50
     return SKNet(cfg)
 
 
@@ -404,7 +401,7 @@ def sk_resnet_18_cls(
     >>> model = sk_resnet_18_cls(weights=SKResNet18Weights.RA_IN1K)
     """
     entry = weights_mod.resolve_weights(SKResNet18Weights, pretrained, weights)
-    cfg = SKNetConfig(**{**_CFG_SK18.__dict__, **overrides}) if overrides else _CFG_SK18
+    cfg = replace(_CFG_SK18, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK18
     model = SKNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="sk_resnet_18_cls")
@@ -470,7 +467,7 @@ def sk_resnet_34_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SKResNet34Weights, pretrained, weights)
-    cfg = SKNetConfig(**{**_CFG_SK34.__dict__, **overrides}) if overrides else _CFG_SK34
+    cfg = replace(_CFG_SK34, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK34
     model = SKNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="sk_resnet_34_cls")
@@ -524,7 +521,7 @@ def sk_resnet_50_cls(
     >>> out.logits.shape
     (2, 10)
     """
-    cfg = SKNetConfig(**{**_CFG_SK50.__dict__, **overrides}) if overrides else _CFG_SK50
+    cfg = replace(_CFG_SK50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK50
     return SKNetForImageClassification(cfg)
 
 
@@ -574,9 +571,7 @@ def sk_resnet_101_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = (
-        SKNetConfig(**{**_CFG_SK101.__dict__, **overrides}) if overrides else _CFG_SK101
-    )
+    cfg = replace(_CFG_SK101, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK101
     return SKNetForImageClassification(cfg)
 
 
@@ -628,9 +623,5 @@ def sk_resnext_50_32x4d_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = (
-        SKNetConfig(**{**_CFG_SK_RX50.__dict__, **overrides})
-        if overrides
-        else _CFG_SK_RX50
-    )
+    cfg = replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK_RX50
     return SKNetForImageClassification(cfg)

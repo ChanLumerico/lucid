@@ -1,5 +1,8 @@
 """Registry factories for ViT variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.vit._config import ViTConfig
@@ -19,11 +22,11 @@ _CFG_H14 = ViTConfig(patch_size=14, dim=1280, depth=32, num_heads=16)
 
 
 def _b(cfg: ViTConfig, kw: dict[str, object]) -> ViT:
-    return ViT(ViTConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return ViT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: ViTConfig, kw: dict[str, object]) -> ViTForImageClassification:
-    return ViTForImageClassification(ViTConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return ViTForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

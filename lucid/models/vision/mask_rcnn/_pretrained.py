@@ -1,5 +1,8 @@
 """Registry factories for Mask R-CNN variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mask_rcnn._config import MaskRCNNConfig
@@ -13,7 +16,7 @@ _CFG_R50_FPN = MaskRCNNConfig(num_classes=91)
 
 def _seg(cfg: MaskRCNNConfig, kw: dict[str, object]) -> MaskRCNNForObjectDetection:
     return MaskRCNNForObjectDetection(
-        MaskRCNNConfig(**{**cfg.__dict__, **kw}) if kw else cfg
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
     )
 
 

@@ -6,6 +6,9 @@ heads ship WebText pretrained weights through :mod:`lucid.weights` (per-factory
 ``*_cls`` fine-tune head carries no canonical pretrained checkpoint.
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.gpt2._config import GPT2Config
@@ -49,7 +52,7 @@ _CFG_XLARGE = GPT2Config(
 
 
 def _apply(cfg: GPT2Config, overrides: dict[str, object]) -> GPT2Config:
-    return GPT2Config(**{**cfg.__dict__, **overrides}) if overrides else cfg
+    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

@@ -1,5 +1,8 @@
 """Registry factories for Faster R-CNN variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
@@ -12,9 +15,7 @@ _CFG_R50_FPN = FasterRCNNConfig(num_classes=91)
 
 
 def _det(cfg: FasterRCNNConfig, kw: dict[str, object]) -> FasterRCNNForObjectDetection:
-    return FasterRCNNForObjectDetection(
-        FasterRCNNConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return FasterRCNNForObjectDetection(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 @register_model(  # type: ignore[arg-type]  # reason: faster_rcnn adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.

@@ -1,5 +1,8 @@
 """Registry factories for Swin Transformer variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.swin._config import SwinConfig
@@ -21,12 +24,12 @@ _CFG_L = SwinConfig(embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 4
 
 
 def _b(cfg: SwinConfig, kw: dict[str, object]) -> SwinTransformer:
-    return SwinTransformer(SwinConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return SwinTransformer(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: SwinConfig, kw: dict[str, object]) -> SwinTransformerForImageClassification:
     return SwinTransformerForImageClassification(
-        SwinConfig(**{**cfg.__dict__, **kw}) if kw else cfg
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
     )
 
 

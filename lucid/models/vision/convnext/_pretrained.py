@@ -1,5 +1,8 @@
 """Registry factories for ConvNeXt variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.convnext._config import ConvNeXtConfig
@@ -20,13 +23,11 @@ _CFG_XL = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(256, 512, 1024, 2048))
 
 
 def _b(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXt:
-    return ConvNeXt(ConvNeXtConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return ConvNeXt(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXtForImageClassification:
-    return ConvNeXtForImageClassification(
-        ConvNeXtConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return ConvNeXtForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

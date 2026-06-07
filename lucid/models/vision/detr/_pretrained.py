@@ -1,5 +1,8 @@
 """Registry factories for DETR variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.detr._config import DETRConfig
@@ -45,7 +48,7 @@ _CFG_R101 = DETRConfig(
 
 
 def _det(cfg: DETRConfig, kw: dict[str, object]) -> DETRForObjectDetection:
-    return DETRForObjectDetection(DETRConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return DETRForObjectDetection(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 @register_model(  # type: ignore[arg-type]  # reason: detr_resnet50 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.

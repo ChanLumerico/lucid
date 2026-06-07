@@ -1,5 +1,8 @@
 """Registry factories for Inception-ResNet v2."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.inception_resnet._config import InceptionResNetConfig
@@ -66,7 +69,7 @@ def inception_resnet_v2(
     >>> out.last_hidden_state.shape   # (B, 1536, 1, 1)
     (1, 1536, 1, 1)
     """
-    cfg = InceptionResNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return InceptionResNetV2(cfg)
 
 
@@ -145,7 +148,7 @@ def inception_resnet_v2_cls(
     >>> model = inception_resnet_v2_cls(weights=InceptionResNetV2Weights.TF_IN1K)
     """
     entry = weights_mod.resolve_weights(InceptionResNetV2Weights, pretrained, weights)
-    cfg = InceptionResNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     model = InceptionResNetV2ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="inception_resnet_v2_cls")

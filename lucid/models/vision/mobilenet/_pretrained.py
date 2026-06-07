@@ -1,5 +1,8 @@
 """Registry factories for MobileNet v1."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mobilenet._config import MobileNetV1Config
@@ -16,15 +19,13 @@ _CFG_025 = MobileNetV1Config(width_mult=0.25)
 
 
 def _b(cfg: MobileNetV1Config, kw: dict[str, object]) -> MobileNetV1:
-    return MobileNetV1(MobileNetV1Config(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return MobileNetV1(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(
     cfg: MobileNetV1Config, kw: dict[str, object]
 ) -> MobileNetV1ForImageClassification:
-    return MobileNetV1ForImageClassification(
-        MobileNetV1Config(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return MobileNetV1ForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

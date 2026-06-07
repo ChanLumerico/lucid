@@ -6,6 +6,9 @@ paper-defined variants — get them via ``create_model("lenet_5",
 activation="relu", pooling="max")`` instead.
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.vision.lenet._config import LeNetConfig
 from lucid.models.vision.lenet._model import LeNet, LeNetForImageClassification
@@ -71,7 +74,7 @@ def lenet_5(pretrained: bool = False, **overrides: object) -> LeNet:
     >>> out.last_hidden_state.shape   # (B, 120, 1, 1)
     (1, 120, 1, 1)
     """
-    cfg = LeNetConfig(**{**_CFG_5.__dict__, **overrides}) if overrides else _CFG_5
+    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
     return LeNet(cfg)
 
 
@@ -130,5 +133,5 @@ def lenet_5_cls(
     >>> out.logits.shape
     (2, 10)
     """
-    cfg = LeNetConfig(**{**_CFG_5.__dict__, **overrides}) if overrides else _CFG_5
+    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
     return LeNetForImageClassification(cfg)

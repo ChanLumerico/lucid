@@ -1,5 +1,8 @@
 """Registry factories for EfficientFormer variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientformer._config import EfficientFormerConfig
@@ -41,17 +44,13 @@ _CFG_L7 = EfficientFormerConfig(
 
 
 def _b(cfg: EfficientFormerConfig, kw: dict[str, object]) -> EfficientFormer:
-    return EfficientFormer(
-        EfficientFormerConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return EfficientFormer(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(
     cfg: EfficientFormerConfig, kw: dict[str, object]
 ) -> EfficientFormerForImageClassification:
-    return EfficientFormerForImageClassification(
-        EfficientFormerConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return EfficientFormerForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

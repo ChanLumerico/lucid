@@ -1,5 +1,8 @@
 """Registry factories for VGG variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.vgg._config import VGGConfig
@@ -27,7 +30,7 @@ _CFG_19_BN = VGGConfig(arch=(2, 2, 4, 4, 4), batch_norm=True)
 
 def _backbone(cfg: VGGConfig, overrides: dict[str, object]) -> VGG:
     if overrides:
-        cfg = VGGConfig(**{**cfg.__dict__, **overrides})
+        cfg = replace(cfg, **cast(dict[str, Any], overrides))
     return VGG(cfg)
 
 
@@ -35,7 +38,7 @@ def _classifier(
     cfg: VGGConfig, overrides: dict[str, object]
 ) -> VGGForImageClassification:
     if overrides:
-        cfg = VGGConfig(**{**cfg.__dict__, **overrides})
+        cfg = replace(cfg, **cast(dict[str, Any], overrides))
     return VGGForImageClassification(cfg)
 
 

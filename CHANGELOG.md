@@ -57,6 +57,7 @@ now a single component.
 ### Changed
 
 - adopt PEP 695 generics, @override/@final, slots, Literal across codebase
+- replace cfg.__dict__ override-merge with dataclasses.replace
 
 ---
 

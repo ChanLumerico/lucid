@@ -1,5 +1,8 @@
 """Registry factories for Mask2Former Swin variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mask2former._config import Mask2FormerConfig
@@ -49,7 +52,7 @@ def _build(
     cfg: Mask2FormerConfig, kw: dict[str, object]
 ) -> Mask2FormerForSemanticSegmentation:
     return Mask2FormerForSemanticSegmentation(
-        Mask2FormerConfig(**{**cfg.__dict__, **kw}) if kw else cfg
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
     )
 
 

@@ -1,5 +1,8 @@
 """Registry factories for AlexNet."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.alexnet._config import AlexNetConfig
@@ -68,7 +71,7 @@ def alexnet(pretrained: bool = False, **overrides: object) -> AlexNet:
     >>> out.last_hidden_state.shape   # (B, 256, 6, 6)
     (1, 256, 6, 6)
     """
-    cfg = AlexNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return AlexNet(cfg)
 
 
@@ -153,7 +156,7 @@ def alexnet_cls(
     >>> model = alexnet_cls(weights=AlexNetWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(AlexNetWeights, pretrained, weights)
-    cfg = AlexNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     model = AlexNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="alexnet_cls")

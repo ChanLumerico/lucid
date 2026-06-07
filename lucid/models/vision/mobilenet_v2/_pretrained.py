@@ -1,5 +1,8 @@
 """Registry factories for MobileNet v2."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mobilenet_v2._config import MobileNetV2Config
@@ -64,11 +67,7 @@ def mobilenet_v2(pretrained: bool = False, **overrides: object) -> MobileNetV2:
     >>> out.last_hidden_state.shape
     (1, 1280, 1, 1)
     """
-    cfg = (
-        MobileNetV2Config(**{**_CFG_100.__dict__, **overrides})
-        if overrides
-        else _CFG_100
-    )
+    cfg = replace(_CFG_100, **cast(dict[str, Any], overrides)) if overrides else _CFG_100
     return MobileNetV2(cfg)
 
 
@@ -120,11 +119,7 @@ def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNet
     >>> out.last_hidden_state.shape
     (1, 1280, 1, 1)
     """
-    cfg = (
-        MobileNetV2Config(**{**_CFG_075.__dict__, **overrides})
-        if overrides
-        else _CFG_075
-    )
+    cfg = replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
     return MobileNetV2(cfg)
 
 
@@ -204,11 +199,7 @@ def mobilenet_v2_cls(
     >>> model = mobilenet_v2_cls(weights=MobileNetV2Weights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(MobileNetV2Weights, pretrained, weights)
-    cfg = (
-        MobileNetV2Config(**{**_CFG_100.__dict__, **overrides})
-        if overrides
-        else _CFG_100
-    )
+    cfg = replace(_CFG_100, **cast(dict[str, Any], overrides)) if overrides else _CFG_100
     model = MobileNetV2ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v2_cls")
@@ -261,9 +252,5 @@ def mobilenet_v2_075_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = (
-        MobileNetV2Config(**{**_CFG_075.__dict__, **overrides})
-        if overrides
-        else _CFG_075
-    )
+    cfg = replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
     return MobileNetV2ForImageClassification(cfg)

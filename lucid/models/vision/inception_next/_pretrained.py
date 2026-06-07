@@ -1,5 +1,8 @@
 """Registry factories for InceptionNeXt variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.inception_next._config import InceptionNeXtConfig
@@ -31,15 +34,13 @@ _CFG_B = InceptionNeXtConfig(
 
 
 def _b(cfg: InceptionNeXtConfig, kw: dict[str, object]) -> InceptionNeXt:
-    return InceptionNeXt(InceptionNeXtConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return InceptionNeXt(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(
     cfg: InceptionNeXtConfig, kw: dict[str, object]
 ) -> InceptionNeXtForImageClassification:
-    return InceptionNeXtForImageClassification(
-        InceptionNeXtConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return InceptionNeXtForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

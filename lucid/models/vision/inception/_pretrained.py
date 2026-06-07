@@ -1,5 +1,8 @@
 """Registry factories for Inception v3."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.inception._config import InceptionConfig
@@ -61,7 +64,7 @@ def inception_v3(pretrained: bool = False, **overrides: object) -> InceptionV3:
     >>> out.last_hidden_state.shape   # (B, 2048, 1, 1)
     (1, 2048, 1, 1)
     """
-    cfg = InceptionConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return InceptionV3(cfg)
 
 
@@ -149,7 +152,7 @@ def inception_v3_cls(
     >>> model = inception_v3_cls(weights=InceptionV3Weights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(InceptionV3Weights, pretrained, weights)
-    cfg = InceptionConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
+    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     model = InceptionV3ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="inception_v3_cls")

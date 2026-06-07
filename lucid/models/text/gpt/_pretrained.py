@@ -7,6 +7,9 @@ that needs a small variant should override config fields via
 ``create_model("gpt", hidden_size=..., num_hidden_layers=..., ...)``.
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.gpt._config import GPTConfig
@@ -21,7 +24,7 @@ _CFG_BASE = GPTConfig()  # Radford et al. defaults — the paper's only size
 
 
 def _apply(cfg: GPTConfig, overrides: dict[str, object]) -> GPTConfig:
-    return GPTConfig(**{**cfg.__dict__, **overrides}) if overrides else cfg
+    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbone ──────────────────────────────────────────────────────────────────

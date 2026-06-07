@@ -7,6 +7,9 @@ in ``tools/convert_weights/cspnet.py`` is a single ``map_key`` for all
 three variants).
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.cspnet._config import CSPNetConfig
@@ -74,13 +77,11 @@ _CFG_CSPDARKNET_53 = CSPNetConfig(
 
 
 def _b(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNet:
-    return CSPNet(CSPNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return CSPNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNetForImageClassification:
-    return CSPNetForImageClassification(
-        CSPNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return CSPNetForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ---------------------------------------------------------------------------

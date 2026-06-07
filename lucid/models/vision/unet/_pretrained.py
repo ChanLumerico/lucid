@@ -1,5 +1,8 @@
 """Registry factories for U-Net variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.vision.unet._config import UNetConfig
 from lucid.models.vision.unet._model import UNetForSemanticSegmentation
@@ -49,7 +52,7 @@ _CFG_RES_3D = UNetConfig(
 
 def _build(cfg: UNetConfig, kw: dict[str, object]) -> UNetForSemanticSegmentation:
     return UNetForSemanticSegmentation(
-        UNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
     )
 
 

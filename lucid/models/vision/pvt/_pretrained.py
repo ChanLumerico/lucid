@@ -1,5 +1,8 @@
 """Registry factories for PVT v2 variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.pvt._config import PVTConfig
@@ -74,11 +77,11 @@ _CFG_TINY = _CFG_B1
 
 
 def _b(cfg: PVTConfig, kw: dict[str, object]) -> PVT:
-    return PVT(PVTConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return PVT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 def _c(cfg: PVTConfig, kw: dict[str, object]) -> PVTForImageClassification:
-    return PVTForImageClassification(PVTConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return PVTForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

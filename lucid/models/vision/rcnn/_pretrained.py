@@ -1,5 +1,8 @@
 """Registry factories for R-CNN variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.vision.rcnn._config import RCNNConfig
 from lucid.models.vision.rcnn._model import RCNNForObjectDetection
@@ -25,7 +28,7 @@ _CFG_ALEXNET = RCNNConfig(
 
 
 def _det(cfg: RCNNConfig, kw: dict[str, object]) -> RCNNForObjectDetection:
-    return RCNNForObjectDetection(RCNNConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+    return RCNNForObjectDetection(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
 # ---------------------------------------------------------------------------

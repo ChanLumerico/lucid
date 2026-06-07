@@ -1,5 +1,8 @@
 """Registry factories for Fast R-CNN variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 from lucid.models._registry import register_model
 from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
 from lucid.models.vision.fast_rcnn._model import FastRCNNForObjectDetection
@@ -19,7 +22,7 @@ _CFG_VGG16 = FastRCNNConfig(
 
 def _det(cfg: FastRCNNConfig, kw: dict[str, object]) -> FastRCNNForObjectDetection:
     return FastRCNNForObjectDetection(
-        FastRCNNConfig(**{**cfg.__dict__, **kw}) if kw else cfg
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
     )
 
 

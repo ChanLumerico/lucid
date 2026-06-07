@@ -1,5 +1,8 @@
 """Registry factories for all ResNet variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnet._config import ResNetConfig
@@ -100,7 +103,7 @@ def resnet_18(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)
     (1, 512, 7, 7)
     """
-    cfg = ResNetConfig(**{**_CFG_18.__dict__, **overrides}) if overrides else _CFG_18
+    cfg = replace(_CFG_18, **cast(dict[str, Any], overrides)) if overrides else _CFG_18
     return ResNet(cfg)
 
 
@@ -153,7 +156,7 @@ def resnet_34(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)
     (1, 512, 7, 7)
     """
-    cfg = ResNetConfig(**{**_CFG_34.__dict__, **overrides}) if overrides else _CFG_34
+    cfg = replace(_CFG_34, **cast(dict[str, Any], overrides)) if overrides else _CFG_34
     return ResNet(cfg)
 
 
@@ -215,7 +218,7 @@ def resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (2, 2048, 7, 7)
     """
-    cfg = ResNetConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
+    cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
     return ResNet(cfg)
 
 
@@ -268,7 +271,7 @@ def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = ResNetConfig(**{**_CFG_101.__dict__, **overrides}) if overrides else _CFG_101
+    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
     return ResNet(cfg)
 
 
@@ -321,7 +324,7 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = ResNetConfig(**{**_CFG_152.__dict__, **overrides}) if overrides else _CFG_152
+    cfg = replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
     return ResNet(cfg)
 
 
@@ -404,7 +407,7 @@ def resnet_18_cls(
     >>> model = resnet_18_cls(weights=ResNet18Weights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(ResNet18Weights, pretrained, weights)
-    cfg = ResNetConfig(**{**_CFG_18.__dict__, **overrides}) if overrides else _CFG_18
+    cfg = replace(_CFG_18, **cast(dict[str, Any], overrides)) if overrides else _CFG_18
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnet_18_cls")
@@ -471,7 +474,7 @@ def resnet_34_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNet34Weights, pretrained, weights)
-    cfg = ResNetConfig(**{**_CFG_34.__dict__, **overrides}) if overrides else _CFG_34
+    cfg = replace(_CFG_34, **cast(dict[str, Any], overrides)) if overrides else _CFG_34
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnet_34_cls")
@@ -552,7 +555,7 @@ def resnet_50_cls(
     10
     """
     entry = weights_mod.resolve_weights(ResNet50Weights, pretrained, weights)
-    cfg = ResNetConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
+    cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnet_50_cls")
@@ -619,7 +622,7 @@ def resnet_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNet101Weights, pretrained, weights)
-    cfg = ResNetConfig(**{**_CFG_101.__dict__, **overrides}) if overrides else _CFG_101
+    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnet_101_cls")
@@ -687,7 +690,7 @@ def resnet_152_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNet152Weights, pretrained, weights)
-    cfg = ResNetConfig(**{**_CFG_152.__dict__, **overrides}) if overrides else _CFG_152
+    cfg = replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnet_152_cls")
@@ -748,11 +751,7 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = (
-        ResNetConfig(**{**_CFG_WIDE50.__dict__, **overrides})
-        if overrides
-        else _CFG_WIDE50
-    )
+    cfg = replace(_CFG_WIDE50, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE50
     return ResNet(cfg)
 
 
@@ -815,11 +814,7 @@ def wide_resnet_50_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(WideResNet50Weights, pretrained, weights)
-    cfg = (
-        ResNetConfig(**{**_CFG_WIDE50.__dict__, **overrides})
-        if overrides
-        else _CFG_WIDE50
-    )
+    cfg = replace(_CFG_WIDE50, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE50
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="wide_resnet_50_cls")
@@ -872,11 +867,7 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = (
-        ResNetConfig(**{**_CFG_WIDE101.__dict__, **overrides})
-        if overrides
-        else _CFG_WIDE101
-    )
+    cfg = replace(_CFG_WIDE101, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE101
     return ResNet(cfg)
 
 
@@ -939,11 +930,7 @@ def wide_resnet_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(WideResNet101Weights, pretrained, weights)
-    cfg = (
-        ResNetConfig(**{**_CFG_WIDE101.__dict__, **overrides})
-        if overrides
-        else _CFG_WIDE101
-    )
+    cfg = replace(_CFG_WIDE101, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE101
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="wide_resnet_101_cls")
@@ -1002,7 +989,7 @@ def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = ResNetConfig(**{**_CFG_200.__dict__, **overrides}) if overrides else _CFG_200
+    cfg = replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
     return ResNet(cfg)
 
 
@@ -1047,7 +1034,7 @@ def resnet_200_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = ResNetConfig(**{**_CFG_200.__dict__, **overrides}) if overrides else _CFG_200
+    cfg = replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
     return ResNetForImageClassification(cfg)
 
 
@@ -1102,7 +1089,7 @@ def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = ResNetConfig(**{**_CFG_269.__dict__, **overrides}) if overrides else _CFG_269
+    cfg = replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
     return ResNet(cfg)
 
 
@@ -1147,5 +1134,5 @@ def resnet_269_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = ResNetConfig(**{**_CFG_269.__dict__, **overrides}) if overrides else _CFG_269
+    cfg = replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
     return ResNetForImageClassification(cfg)

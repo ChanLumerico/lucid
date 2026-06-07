@@ -1,5 +1,8 @@
 """Registry factories for CvT variants."""
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.cvt._config import CvTConfig
@@ -90,7 +93,7 @@ def cvt_13(pretrained: bool = False, **overrides: object) -> CvT:
     >>> feat.shape
     (1, 384)
     """
-    cfg = CvTConfig(**{**_CFG_13.__dict__, **overrides}) if overrides else _CFG_13
+    cfg = replace(_CFG_13, **cast(dict[str, Any], overrides)) if overrides else _CFG_13
     return CvT(cfg)
 
 
@@ -137,7 +140,7 @@ def cvt_21(pretrained: bool = False, **overrides: object) -> CvT:
     >>> model.forward_features(x).shape
     (1, 384)
     """
-    cfg = CvTConfig(**{**_CFG_21.__dict__, **overrides}) if overrides else _CFG_21
+    cfg = replace(_CFG_21, **cast(dict[str, Any], overrides)) if overrides else _CFG_21
     return CvT(cfg)
 
 
@@ -186,7 +189,7 @@ def cvt_w24(pretrained: bool = False, **overrides: object) -> CvT:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
-    cfg = CvTConfig(**{**_CFG_W24.__dict__, **overrides}) if overrides else _CFG_W24
+    cfg = replace(_CFG_W24, **cast(dict[str, Any], overrides)) if overrides else _CFG_W24
     return CvT(cfg)
 
 
@@ -245,7 +248,7 @@ def cvt_13_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CvT13Weights, pretrained, weights)
-    cfg = CvTConfig(**{**_CFG_13.__dict__, **overrides}) if overrides else _CFG_13
+    cfg = replace(_CFG_13, **cast(dict[str, Any], overrides)) if overrides else _CFG_13
     model = CvTForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="cvt_13_cls")
@@ -301,7 +304,7 @@ def cvt_21_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CvT21Weights, pretrained, weights)
-    cfg = CvTConfig(**{**_CFG_21.__dict__, **overrides}) if overrides else _CFG_21
+    cfg = replace(_CFG_21, **cast(dict[str, Any], overrides)) if overrides else _CFG_21
     model = CvTForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="cvt_21_cls")
@@ -360,7 +363,7 @@ def cvt_w24_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CvTW24Weights, pretrained, weights)
-    cfg = CvTConfig(**{**_CFG_W24.__dict__, **overrides}) if overrides else _CFG_W24
+    cfg = replace(_CFG_W24, **cast(dict[str, Any], overrides)) if overrides else _CFG_W24
     model = CvTForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="cvt_w24_cls")

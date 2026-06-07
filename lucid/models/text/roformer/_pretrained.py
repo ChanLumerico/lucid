@@ -7,6 +7,9 @@ small variant should override config fields via
 ``create_model("roformer", hidden_size=..., num_hidden_layers=..., ...)``.
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.roformer._config import RoFormerConfig
@@ -22,7 +25,7 @@ _CFG_BASE = RoFormerConfig()  # paper default — the only published size
 
 
 def _apply(cfg: RoFormerConfig, overrides: dict[str, object]) -> RoFormerConfig:
-    return RoFormerConfig(**{**cfg.__dict__, **overrides}) if overrides else cfg
+    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbone ──────────────────────────────────────────────────────────────────
