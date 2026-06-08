@@ -54,21 +54,50 @@ rules); compile-db deploy target aligned to 26.0; and dedicated padding /
 upsampling / transformer unit tests. The docs `SubsectionHeading` recipe is
 now a single component.
 
-### Changed
+### Added — Reference-style KV cache + compiled incremental decode
 
-- adopt PEP 695 generics, @override/@final, slots, Literal across codebase
-- replace cfg.__dict__ override-merge with dataclasses.replace
+Autoregressive generation gained a full key/value cache subsystem under
+`lucid.utils.cache`, mirroring the established reference-framework layout.
+`DynamicCache` grows its per-layer K/V by concatenation and ships the usual
+maintenance helpers (`crop` / `reset` / `batch_repeat_interleave` /
+`batch_select_indices` / `reorder_cache`); `StaticCache` pre-allocates a fixed
+`(B, H, max_cache_len, D)` buffer and writes each step in place at a dynamic
+`cache_position`, keeping the decode tensor shapes **constant** across steps; and
+`EncoderDecoderCache` pairs a growing self-attention cache with a fill-once,
+read-only cross-attention cache (tracked by an `is_updated` flag).
 
-- rename GenerationMixin to CausalLMMixin; vectorize sampling
+Because `StaticCache` holds the shape constant, the single-token decode forward
+now **compiles once** into a reused MPSGraph executable instead of recompiling
+every step. `generate(..., compile_decode=True)` drives this path for both the
+decoder-only models (GPT-1 / GPT-2) and the encoder-decoder
+`TransformerForSeq2SeqLM` (self-attention grows in a `StaticCache`,
+cross-attention is prefilled static), staying token-identical to the eager path.
+Measured ~1.83× on long-context decode. The decode drivers live in
+`lucid/models/_utils/_compiled_decode.py`; sampling was factored into a shared
+`lucid/models/_sampling.py` reused across every causal-LM head.
 
-### Added
+### Added — `scatter_set` engine primitive
 
-- add KV cache for incremental autoregressive generation
-- add DynamicCache crop/reset/batch helper methods
-- add StaticCache for compile-friendly incremental decoding
-- compiled StaticCache decode for generate (compile_decode)
-- encoder-decoder compiled static decode + shared sampling
-- add scatter_set primitive; index_copy is now a single op
+Added a set-mode member to the axis-scatter family (`scatter_add` / `amax` /
+`amin` / `prod` / **`set`**) across the CPU (Accelerate) and GPU (MLX
+`put_along_axis`) backends, the autograd VJP, and a `MPSGraphScatterModeSet`
+compile emitter. `index_copy` now lowers to a **single** `scatter_set` instead of
+a `scatter_add`-of-delta, so it is one op on every stream — including inside a
+compiled graph.
+
+### Changed — `GenerationMixin` renamed to `CausalLMMixin`; vectorized sampling
+
+The generation mixin was renamed `GenerationMixin` → `CausalLMMixin` to avoid
+implying diffusion / other generative families; it is causal-LM specific. The
+sampling helpers (repetition penalty, top-k, top-p, multinomial) were rewritten
+as fully vectorized on-device tensor ops, removing the per-row `.item()` CPU
+round-trips that previously dominated decode.
+
+### Fixed — `TransformerDecoder` forwards key-padding masks
+
+`TransformerDecoder.forward` silently dropped `tgt_key_padding_mask` /
+`memory_key_padding_mask` instead of threading them into each layer, so padded
+cross-attention attended to pad positions. Both masks are now passed through.
 
 ---
 

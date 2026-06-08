@@ -195,7 +195,9 @@ def index_copy(
     idx_impl = _to_i32(_unwrap(index))
     reshaped = [1] * ndim
     reshaped[dim] = m
-    idx_bc = _C_engine.broadcast_to(_C_engine.reshape(idx_impl, reshaped), list(source.shape))
+    idx_bc = _C_engine.broadcast_to(
+        _C_engine.reshape(idx_impl, reshaped), list(source.shape)
+    )
     return _wrap(_C_engine.scatter_set(_unwrap(input), idx_bc, _unwrap(source), dim))
 
 
