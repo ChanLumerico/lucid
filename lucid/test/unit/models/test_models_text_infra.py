@@ -2,7 +2,7 @@
 
 Covers:
 - LanguageModelConfig validation
-- GenerationMixin greedy + sampling
+- CausalLMMixin greedy + sampling
 
 (Positional-encoding tests — RoPE / sinusoidal PE — live in
 ``test/unit/nn/test_nn_positional.py`` since those primitives moved to
@@ -15,7 +15,7 @@ import lucid
 import lucid.nn as nn
 from lucid.models import (
     CausalLMOutput,
-    GenerationMixin,
+    CausalLMMixin,
     LanguageModelConfig,
 )
 
@@ -52,11 +52,11 @@ class TestLanguageModelConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GenerationMixin
+# CausalLMMixin
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _DeterministicLM(GenerationMixin, nn.Module):
+class _DeterministicLM(CausalLMMixin, nn.Module):
     """Test fixture: always predicts token (last_token + 1) % vocab."""
 
     def __init__(self, vocab: int = 7, eos: int | None = None) -> None:
@@ -82,7 +82,7 @@ class _DeterministicLM(GenerationMixin, nn.Module):
         return CausalLMOutput(logits=logits, loss=None)
 
 
-class TestGenerationMixin:
+class TestCausalLMMixin:
     def test_greedy_extends_correctly(self) -> None:
         m = _DeterministicLM(vocab=7)
         prompt = lucid.tensor([[1, 2]]).long()
@@ -119,3 +119,53 @@ class TestGenerationMixin:
         m = _DeterministicLM(vocab=7)
         with pytest.raises(ValueError, match="2-D"):
             m.generate(lucid.tensor([1, 2, 3]).long())
+
+
+class TestSamplingFilters:
+    """The vectorized on-device sampling primitives (no per-element CPU loops)."""
+
+    def test_top_k_keeps_exactly_k(self) -> None:
+        from lucid.models._mixins import _top_k_filter
+
+        logits = lucid.tensor([[1.0, 5.0, 2.0, 4.0, 3.0]])
+        out = _top_k_filter(logits, 2)  # keep 5.0, 4.0
+        kept = [v > -1e8 for v in out[0].numpy().tolist()]
+        assert kept == [False, True, False, True, False]
+
+    def test_top_k_ge_vocab_is_identity(self) -> None:
+        from lucid.models._mixins import _top_k_filter
+
+        logits = lucid.tensor([[1.0, 2.0, 3.0]])
+        out = _top_k_filter(logits, 5)
+        assert out[0].numpy().tolist() == [1.0, 2.0, 3.0]
+
+    def test_top_p_keeps_dominant_token(self) -> None:
+        from lucid.models._mixins import _top_p_filter
+
+        # softmax mass concentrates on index 1; a tight p keeps only it.
+        logits = lucid.tensor([[0.0, 10.0, 0.1, 0.2]])
+        out = _top_p_filter(logits, 0.5)
+        kept = [v > -1e8 for v in out[0].numpy().tolist()]
+        assert kept[1] is True  # argmax always kept
+        assert sum(kept) == 1  # nucleus is just the dominant token
+
+    def test_repetition_penalty_lowers_seen(self) -> None:
+        from lucid.models._mixins import _apply_repetition_penalty
+
+        logits = lucid.tensor([[2.0, 2.0, 2.0, 2.0]])
+        prefix = lucid.tensor([[1, 3]]).long()  # tokens 1, 3 already generated
+        out = _apply_repetition_penalty(logits, prefix, 2.0)
+        row = out[0].numpy().tolist()
+        assert row[0] == 2.0 and row[2] == 2.0  # unseen unchanged
+        assert row[1] == 1.0 and row[3] == 1.0  # seen positive logit halved
+
+    def test_multinomial_in_range_and_deterministic(self) -> None:
+        from lucid.models._mixins import _multinomial_one
+
+        probs = lucid.tensor([[0.1, 0.2, 0.3, 0.4]])
+        lucid.manual_seed(0)
+        a = _multinomial_one(probs, device="cpu")
+        lucid.manual_seed(0)
+        b = _multinomial_one(probs, device="cpu")
+        assert int(a[0].item()) == int(b[0].item())  # same RNG → same draw
+        assert 0 <= int(a[0].item()) < 4  # valid index

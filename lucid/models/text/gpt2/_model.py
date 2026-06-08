@@ -32,7 +32,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
-from lucid.models._mixins import GenerationMixin
+from lucid.models._mixins import CausalLMMixin
 from lucid.models._output import (
     BaseModelOutput,
     CausalLMOutput,
@@ -378,18 +378,18 @@ class GPT2Model(PretrainedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Causal-LM head — GenerationMixin host
+# Causal-LM head — CausalLMMixin host
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class GPT2LMHeadModel(PretrainedModel, GenerationMixin):
+class GPT2LMHeadModel(PretrainedModel, CausalLMMixin):
     r"""GPT-2 with a tied causal-language-modeling head.
 
     Wraps :class:`GPT2Model` with an output linear projection whose weight
     matrix is bound to the input ``wte`` embedding table when
     ``config.tie_word_embeddings`` is ``True`` — halving the parameter cost
     of the softmax layer.  This is the entry point for
-    :meth:`lucid.models.GenerationMixin.generate` and is the
+    :meth:`lucid.models.CausalLMMixin.generate` and is the
     standard recipe for both pre-training and downstream generative use.
 
     Parameters

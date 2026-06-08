@@ -105,7 +105,7 @@ def gpt(
     return model
 
 
-# ── Causal-LM head (GenerationMixin host) ─────────────────────────────────────
+# ── Causal-LM head (CausalLMMixin host) ─────────────────────────────────────
 
 
 # reason: gpt_lm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
@@ -128,7 +128,7 @@ def gpt_lm(
     Same trunk as :func:`gpt` (L=12, H=768, A=12, ~117M parameters), wrapped
     with a tied LM head that reuses the input token-embedding matrix as the
     output projection.  This is the pre-training entry point and the host
-    of :meth:`lucid.models.GenerationMixin.generate` for free-form
+    of :meth:`lucid.models.CausalLMMixin.generate` for free-form
     autoregressive sampling.
 
     Parameters

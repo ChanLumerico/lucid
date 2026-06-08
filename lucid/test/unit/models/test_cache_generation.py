@@ -209,14 +209,14 @@ class TestCompiledStaticDecode:
     ``from_buffers`` view constructor, and the single-executable property."""
 
     def test_capability_flag_defaults_false(self) -> None:
-        from lucid.models._mixins import GenerationMixin
+        from lucid.models._mixins import CausalLMMixin
 
-        assert GenerationMixin.supports_compiled_static_decode is False
+        assert CausalLMMixin.supports_compiled_static_decode is False
         assert GPT2LMHeadModel.supports_compiled_static_decode is True
         assert GPTLMHeadModel.supports_compiled_static_decode is True
 
     def test_unsupported_host_falls_back_to_eager(self) -> None:
-        # A GenerationMixin host that does NOT declare static-decode support
+        # A CausalLMMixin host that does NOT declare static-decode support
         # must silently ignore compile_decode and stay token-identical to eager.
         class _Unsupported(GPT2LMHeadModel):
             supports_compiled_static_decode = False

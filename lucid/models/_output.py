@@ -380,7 +380,7 @@ class CausalLMOutput(ModelOutput):
     Notes
     -----
     Produced by GPT-1, GPT-2 (``GPT2LMHeadModel``), and any future
-    decoder-only LM head.  :class:`GenerationMixin` consumes the
+    decoder-only LM head.  :class:`CausalLMMixin` consumes the
     ``logits`` field; future cache-aware sampling will plumb through
     ``past_key_values``.
 
@@ -593,7 +593,7 @@ class GenerationOutput(ModelOutput):
     -----
     Returned by :meth:`DiffusionMixin.generate` and
     :class:`VAEForImageGeneration.generate`.  Text generation through
-    :meth:`GenerationMixin.generate` currently returns a bare
+    :meth:`CausalLMMixin.generate` currently returns a bare
     :class:`Tensor` rather than this wrapper — that may change.
 
     Examples

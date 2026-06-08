@@ -331,7 +331,7 @@ def gpt2_small_lm(
 
     Same trunk as :func:`gpt2_small` (L=12, H=768, A=12, ~124M parameters),
     wrapped with the tied LM head used for pre-training and free-form
-    generation via :meth:`lucid.models.GenerationMixin.generate`.
+    generation via :meth:`lucid.models.CausalLMMixin.generate`.
 
     Parameters
     ----------

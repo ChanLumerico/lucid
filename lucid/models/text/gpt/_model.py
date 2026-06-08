@@ -13,7 +13,7 @@ dict portability.  Layout:
 
 The classifier / LM heads then sit on top of ``GPTModel``:
 
-    GPTLMHeadModel             — tied LM head (GenerationMixin host)
+    GPTLMHeadModel             — tied LM head (CausalLMMixin host)
     GPTForSequenceClassification — last-token classifier
 """
 
@@ -26,7 +26,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
-from lucid.models._mixins import GenerationMixin
+from lucid.models._mixins import CausalLMMixin
 from lucid.models._output import (
     BaseModelOutput,
     CausalLMOutput,
@@ -342,18 +342,18 @@ class GPTModel(PretrainedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Causal-LM head — host for GenerationMixin
+# Causal-LM head — host for CausalLMMixin
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class GPTLMHeadModel(PretrainedModel, GenerationMixin):
+class GPTLMHeadModel(PretrainedModel, CausalLMMixin):
     r"""GPT-1 with a tied causal-language-modeling head.
 
     Wraps :class:`GPTModel` with an output linear whose weight matrix is
     bound to the input ``tokens_embed`` table when
     ``config.tie_word_embeddings`` is ``True`` — halving the parameter
     cost of the softmax layer.  This is both the pre-training entry point
-    and the host of :meth:`lucid.models.GenerationMixin.generate` for
+    and the host of :meth:`lucid.models.CausalLMMixin.generate` for
     free-form autoregressive sampling.
 
     Parameters

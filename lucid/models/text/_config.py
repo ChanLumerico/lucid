@@ -44,7 +44,7 @@ class LanguageModelConfig(ModelConfig):
             does not pad (typical for GPT-style decoders).  ``forward``
             implementations should mask attention away from pad positions.
         bos_token_id / eos_token_id: Sentinel tokens for autoregressive
-            generation (used by :class:`GenerationMixin`).  ``None`` when
+            generation (used by :class:`CausalLMMixin`).  ``None`` when
             the tokenizer does not define them.
         hidden_dropout: Dropout applied after embeddings and inside each
             transformer block's residual path.

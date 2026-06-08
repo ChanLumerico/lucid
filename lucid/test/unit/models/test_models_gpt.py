@@ -1,7 +1,7 @@
 """Unit tests for GPT-1 (text family, Phase 4 second concrete model).
 
 Validates the decoder-only stack + the first real consumer of
-``GenerationMixin.generate`` (greedy + sampling end-to-end through a tiny
+``CausalLMMixin.generate`` (greedy + sampling end-to-end through a tiny
 randomly-initialised model).
 """
 
@@ -106,7 +106,7 @@ class TestGPTLMHeadModel:
         assert m.lm_head.weight is not m.transformer.tokens_embed.weight
 
 
-class TestGPTGenerationMixin:
+class TestGPTCausalLMMixin:
     def test_greedy_generate(self) -> None:
         m = GPTLMHeadModel(_tiny_config()).eval()
         prompt = lucid.tensor([[1, 2, 3]]).long()

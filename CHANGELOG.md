@@ -59,6 +59,8 @@ now a single component.
 - adopt PEP 695 generics, @override/@final, slots, Literal across codebase
 - replace cfg.__dict__ override-merge with dataclasses.replace
 
+- rename GenerationMixin to CausalLMMixin; vectorize sampling
+
 ### Added
 
 - add KV cache for incremental autoregressive generation

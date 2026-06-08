@@ -311,12 +311,17 @@ class MaskedLMMixin:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GenerationMixin — autoregressive text sampling
+# CausalLMMixin — autoregressive text sampling
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class GenerationMixin:
+class CausalLMMixin:
     r"""Decoder-only autoregressive sampling for causal LM heads.
+
+    The generation counterpart of :class:`MaskedLMMixin` (the two canonical LM
+    objectives: causal vs masked).  This drives **autoregressive token-by-token**
+    text generation — distinct from :class:`DiffusionMixin`, which runs an
+    iterative denoising loop for image-generation models.
 
     Provides :meth:`generate` — greedy or stochastic next-token sampling
     with temperature, top-k, top-p (nucleus), and repetition-penalty
@@ -714,22 +719,23 @@ def _apply_repetition_penalty(logits: Tensor, prefix: Tensor, penalty: float) ->
     Convention popularised by the wider ML ecosystem: positive logits
     shrink toward 0, negative logits grow more negative — both directions
     push the affected token's probability down.
+
+    Fully vectorised (no per-element CPU round-trip): the seen-token mask is
+    built by scattering the prefix ids into a ``(B, vocab)`` indicator, then the
+    penalty is applied with two element-wise ``where``s.
     """
     B = int(logits.shape[0])
     vocab = int(logits.shape[1])
-    # Cheap row-by-row materialisation; vocab is large but T is bounded by
-    # max_length so this loop is small.
-    rows: list[list[float]] = [
-        [float(logits[b, v].item()) for v in range(vocab)] for b in range(B)
-    ]
-    T = int(prefix.shape[1])
-    for b in range(B):
-        seen: set[int] = {int(prefix[b, t].item()) for t in range(T)}
-        for tok in seen:
-            if 0 <= tok < vocab:
-                v = rows[b][tok]
-                rows[b][tok] = v / penalty if v > 0 else v * penalty
-    return lucid.tensor(rows, device=logits.device.type)
+    dev = logits.device.type
+    # (B, vocab) indicator of tokens already present in the prefix.
+    seen = lucid.scatter(
+        lucid.zeros((B, vocab), device=dev),
+        -1,
+        prefix,
+        lucid.ones_like(prefix).float(),
+    )
+    penalized = lucid.where(logits > 0, logits / penalty, logits * penalty)
+    return lucid.where(seen > 0, penalized, logits)
 
 
 def _top_k_filter(logits: Tensor, k: int) -> Tensor:
@@ -753,15 +759,11 @@ def _top_k_filter(logits: Tensor, k: int) -> Tensor:
     vocab = int(logits.shape[1])
     if k >= vocab:
         return logits
-    NEG_INF = -1e9
-    out_rows: list[list[float]] = []
-    for b in range(B):
-        row = [float(logits[b, v].item()) for v in range(vocab)]
-        # k-th largest — partial sort via Python's heapq is fine for typical
-        # vocab sizes (~50k) since this only runs once per generation step.
-        threshold = sorted(row, reverse=True)[k - 1]
-        out_rows.append([v if v >= threshold else NEG_INF for v in row])
-    return lucid.tensor(out_rows, device=logits.device.type)
+    # The k-th largest logit per row is the keep threshold; mask everything
+    # strictly below it.  Vectorised — one ``topk`` + one ``where``.
+    values, _ = lucid.topk(logits, k, dim=-1)
+    threshold = values[:, k - 1 : k].broadcast_to((B, vocab))
+    return lucid.where(logits >= threshold, logits, lucid.full_like(logits, -1e9))
 
 
 def _top_p_filter(logits: Tensor, p: float) -> Tensor:
@@ -780,29 +782,24 @@ def _top_p_filter(logits: Tensor, p: float) -> Tensor:
     Tensor
         Masked logits where tokens outside the nucleus are set to
         ``-1e9``.
+
+    Notes
+    -----
+    Vectorised: sort descending, take the cumulative softmax, keep every token
+    whose *exclusive-prefix* cumulative probability is ``< p`` (so the token
+    that crosses the threshold is itself kept, and the highest-probability token
+    is always kept), then scatter the mask back to the original token order via
+    the inverse permutation.
     """
-    B = int(logits.shape[0])
-    vocab = int(logits.shape[1])
-    NEG_INF = -1e9
-    out_rows: list[list[float]] = []
-    for b in range(B):
-        row = [float(logits[b, v].item()) for v in range(vocab)]
-        # softmax on this row
-        max_v = max(row)
-        exps = [pow(2.71828182845904523536, v - max_v) for v in row]
-        Z = sum(exps)
-        probs = [e / Z for e in exps]
-        # sort indices by descending prob
-        order = sorted(range(vocab), key=lambda i: probs[i], reverse=True)
-        cum = 0.0
-        keep_mask = [False] * vocab
-        for idx in order:
-            cum += probs[idx]
-            keep_mask[idx] = True
-            if cum >= p:
-                break
-        out_rows.append([row[i] if keep_mask[i] else NEG_INF for i in range(vocab)])
-    return lucid.tensor(out_rows, device=logits.device.type)
+    sorted_vals = lucid.flip(lucid.sort(logits, dim=-1), -1)
+    sorted_idx = lucid.flip(lucid.argsort(logits, dim=-1), -1)
+    sorted_probs = F.softmax(sorted_vals, dim=-1)
+    exclusive_cdf = lucid.cumsum(sorted_probs, dim=-1) - sorted_probs
+    keep = exclusive_cdf < p
+    masked = lucid.where(keep, sorted_vals, lucid.full_like(sorted_vals, -1e9))
+    # Undo the sort: gather by the inverse permutation back to token order.
+    inverse = lucid.argsort(sorted_idx, dim=-1)
+    return lucid.gather(masked, inverse, dim=-1)
 
 
 def _multinomial_one(probs: Tensor, *, device: str) -> Tensor:
@@ -823,25 +820,19 @@ def _multinomial_one(probs: Tensor, *, device: str) -> Tensor:
 
     Notes
     -----
-    Lucid does not (yet) ship ``lucid.multinomial`` so this routine uses
-    a Python inverse-CDF loop on a single uniform draw per row.
-    Acceptable because it only runs once per generation step.
+    Vectorised inverse-CDF on a single uniform draw per row: the sampled index
+    is the count of CDF entries below the draw — ``(cumsum(probs) < u).sum()`` —
+    computed entirely on device.  Same one-draw-per-row distribution as the
+    scalar loop (bit-identical given the same RNG state), without the
+    per-element CPU round-trip.
     """
     B = int(probs.shape[0])
     vocab = int(probs.shape[1])
-    u = lucid.rand((B,), device=device)
-    out: list[int] = []
-    for b in range(B):
-        target = float(u[b].item())
-        cum = 0.0
-        chosen = vocab - 1
-        for v in range(vocab):
-            cum += float(probs[b, v].item())
-            if cum >= target:
-                chosen = v
-                break
-        out.append(chosen)
-    return lucid.tensor(out, device=device).long()
+    u = lucid.rand((B,), device=device).reshape(B, 1).broadcast_to((B, vocab))
+    cdf = lucid.cumsum(probs, dim=-1)
+    idx = (cdf < u).long().sum(dim=-1)
+    # Guard the float edge case where u just exceeds cdf[-1] (≈1) → idx == vocab.
+    return lucid.minimum(idx, lucid.full_like(idx, vocab - 1))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

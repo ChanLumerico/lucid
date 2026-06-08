@@ -533,7 +533,7 @@ class AutoModelForCausalLM(_BaseAutoClass):
     Resolves names like ``"gpt"`` / ``"gpt2_small"`` to their concrete
     ``{Family}LMHeadModel`` subclass.  The model is suitable for
     next-token prediction and autoregressive generation via
-    :meth:`GenerationMixin.generate`.
+    :meth:`CausalLMMixin.generate`.
 
     Notes
     -----
