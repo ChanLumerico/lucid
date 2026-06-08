@@ -125,6 +125,54 @@ class DynamicCache(Cache):
                 0, beam_idx
             )
 
+    def reset(self) -> None:
+        """Empty the cache in place so the same object can be reused for a
+        fresh sequence (clears every layer and the token counter)."""
+        self._seen_tokens = 0
+        self.key_cache = []
+        self.value_cache = []
+
+    def crop(self, max_length: int) -> None:
+        """Truncate the cache to at most ``max_length`` tokens along the
+        sequence dimension (in place).
+
+        A negative ``max_length`` drops that many tokens off the end.  Useful
+        for rolling the cache back (e.g. rejecting speculative tokens).  A
+        ``max_length`` at or above the current length is a no-op.
+        """
+        if max_length < 0:
+            max_length = self.get_seq_length() - abs(max_length)
+        if self.get_seq_length() <= max_length:
+            return
+        self._seen_tokens = max_length
+        for layer_idx in range(len(self.key_cache)):
+            self.key_cache[layer_idx] = self.key_cache[layer_idx][:, :, :max_length, :]
+            self.value_cache[layer_idx] = self.value_cache[layer_idx][
+                :, :, :max_length, :
+            ]
+
+    def batch_repeat_interleave(self, repeats: int) -> None:
+        """Repeat every batch row ``repeats`` times along the batch dimension
+        (in place) — e.g. to fan one prompt out into ``repeats`` samples."""
+        for layer_idx in range(len(self.key_cache)):
+            self.key_cache[layer_idx] = self.key_cache[layer_idx].repeat_interleave(
+                repeats, dim=0
+            )
+            self.value_cache[layer_idx] = self.value_cache[layer_idx].repeat_interleave(
+                repeats, dim=0
+            )
+
+    def batch_select_indices(self, indices: Tensor) -> None:
+        """Keep only the batch rows named by ``indices`` along the batch
+        dimension (in place)."""
+        for layer_idx in range(len(self.key_cache)):
+            self.key_cache[layer_idx] = self.key_cache[layer_idx].index_select(
+                0, indices
+            )
+            self.value_cache[layer_idx] = self.value_cache[layer_idx].index_select(
+                0, indices
+            )
+
     def to_legacy_cache(self) -> tuple[tuple[Tensor, Tensor], ...]:
         """Convert to the legacy ``tuple(tuple(key, value), ...)`` format.
 

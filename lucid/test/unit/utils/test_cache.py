@@ -102,6 +102,49 @@ class TestDynamicCache:
         assert_close(cache.key_cache[0][0], k[1])
         assert_close(cache.key_cache[0][1], k[0])
 
+    def test_crop(self) -> None:
+        cache = DynamicCache()
+        cache.update(*_kv(5), layer_idx=0)
+        cache.update(*_kv(5), layer_idx=1)
+        cache.crop(3)
+        assert cache.get_seq_length(0) == 3
+        assert cache.get_seq_length(1) == 3
+        assert cache.seen_tokens == 3
+        assert tuple(cache.key_cache[0].shape) == (1, 2, 3, 4)
+        cache.crop(10)  # at/above current length is a no-op
+        assert cache.get_seq_length() == 3
+
+    def test_crop_negative(self) -> None:
+        cache = DynamicCache()
+        cache.update(*_kv(5), layer_idx=0)
+        cache.crop(-2)  # drop 2 off the end
+        assert cache.get_seq_length() == 3
+
+    def test_reset(self) -> None:
+        cache = DynamicCache()
+        cache.update(*_kv(4), layer_idx=0)
+        cache.reset()
+        assert len(cache) == 0
+        assert cache.get_seq_length() == 0
+        assert cache.seen_tokens == 0
+        cache.update(*_kv(2), layer_idx=0)  # reusable
+        assert cache.get_seq_length() == 2
+
+    def test_batch_repeat_interleave(self) -> None:
+        cache = DynamicCache()
+        cache.update(*_kv(3), layer_idx=0)  # batch=1
+        cache.batch_repeat_interleave(4)
+        assert tuple(cache.key_cache[0].shape) == (4, 2, 3, 4)
+
+    def test_batch_select_indices(self) -> None:
+        cache = DynamicCache()
+        k = lucid.randn(2, 2, 3, 4)
+        v = lucid.randn(2, 2, 3, 4)
+        cache.update(k, v, 0)
+        cache.batch_select_indices(lucid.tensor([1, 0]).long())
+        assert_close(cache.key_cache[0][0], k[1])
+        assert_close(cache.key_cache[0][1], k[0])
+
 
 class TestEncoderDecoderCache:
     def test_is_a_cache(self) -> None:
@@ -138,6 +181,30 @@ class TestEncoderDecoderCache:
         rebuilt = EncoderDecoderCache.from_legacy_cache(legacy)
         assert rebuilt.get_seq_length(0) == 2
         assert rebuilt.cross_attention_cache.get_seq_length(0) == 5
+
+    def test_crop_self_only(self) -> None:
+        edc = EncoderDecoderCache(DynamicCache(), DynamicCache())
+        edc.self_attention_cache.update(*_kv(4), layer_idx=0)
+        edc.cross_attention_cache.update(*_kv(7), layer_idx=0)
+        edc.crop(2)
+        assert edc.get_seq_length() == 2  # self-attn truncated
+        assert edc.cross_attention_cache.get_seq_length() == 7  # cross untouched
+
+    def test_batch_ops_and_iter(self) -> None:
+        edc = EncoderDecoderCache(DynamicCache(), DynamicCache())
+        edc.self_attention_cache.update(
+            lucid.randn(1, 2, 3, 4), lucid.randn(1, 2, 3, 4), 0
+        )
+        edc.cross_attention_cache.update(
+            lucid.randn(1, 2, 5, 4), lucid.randn(1, 2, 5, 4), 0
+        )
+        edc.batch_repeat_interleave(2)
+        assert tuple(edc.self_attention_cache.key_cache[0].shape)[0] == 2
+        assert tuple(edc.cross_attention_cache.key_cache[0].shape)[0] == 2
+        assert len(list(edc)) == 1  # one layer
+        edc.reset()
+        assert len(edc.self_attention_cache) == 0
+        assert edc.is_updated == {}
 
 
 class TestMultiheadAttentionCache:

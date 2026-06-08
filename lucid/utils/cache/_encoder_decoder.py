@@ -8,7 +8,7 @@ key/value (derived only from the constant encoder ``memory``) is computed
 once and reused.
 """
 
-from typing import TYPE_CHECKING, Self, final, override
+from typing import TYPE_CHECKING, Iterator, Self, final, override
 
 from lucid.utils.cache._base import Cache
 from lucid.utils.cache._dynamic import DynamicCache
@@ -62,6 +62,11 @@ class EncoderDecoderCache(Cache):
         cross_k, cross_v = self.cross_attention_cache[layer_idx]
         return self_k, self_v, cross_k, cross_v
 
+    def __iter__(self) -> Iterator[tuple[Tensor, Tensor, Tensor, Tensor]]:
+        """Iterate ``(self_k, self_v, cross_k, cross_v)`` tuples in layer order."""
+        for layer_idx in range(len(self.self_attention_cache)):
+            yield self[layer_idx]
+
     @override
     def update(
         self,
@@ -92,6 +97,30 @@ class EncoderDecoderCache(Cache):
     def reorder_cache(self, beam_idx: Tensor) -> None:
         self.self_attention_cache.reorder_cache(beam_idx)
         self.cross_attention_cache.reorder_cache(beam_idx)
+
+    def reset(self) -> None:
+        """Empty both sub-caches and clear the cross-attention 'updated' flags."""
+        self.self_attention_cache.reset()
+        self.cross_attention_cache.reset()
+        self.is_updated = {}
+
+    def crop(self, max_length: int) -> None:
+        """Truncate the decoder self-attention cache to ``max_length`` tokens.
+
+        The cross-attention cache is the fixed-length encoder memory and is
+        left untouched.
+        """
+        self.self_attention_cache.crop(max_length)
+
+    def batch_repeat_interleave(self, repeats: int) -> None:
+        """Repeat every batch row ``repeats`` times in both sub-caches."""
+        self.self_attention_cache.batch_repeat_interleave(repeats)
+        self.cross_attention_cache.batch_repeat_interleave(repeats)
+
+    def batch_select_indices(self, indices: Tensor) -> None:
+        """Keep only the batch rows named by ``indices`` in both sub-caches."""
+        self.self_attention_cache.batch_select_indices(indices)
+        self.cross_attention_cache.batch_select_indices(indices)
 
     def to_legacy_cache(
         self,

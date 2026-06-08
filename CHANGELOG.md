@@ -62,6 +62,7 @@ now a single component.
 ### Added
 
 - add KV cache for incremental autoregressive generation
+- add DynamicCache crop/reset/batch helper methods
 
 ---
 
