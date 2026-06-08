@@ -20,7 +20,7 @@
       "kind": "function",
       "labels": [],
       "signature": "absolute(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5455",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5478",
       "subcategory": null,
       "summary": "Element-wise absolute value.",
       "extended": "Verbose alias of `lucid.abs`, exposed for parity with reference\nframeworks that publish both `abs` and `absolute` spellings of the\nsame operation.",
@@ -53,7 +53,7 @@
       "kind": "function",
       "labels": [],
       "signature": "acosh(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5456",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5479",
       "subcategory": null,
       "summary": "Inverse hyperbolic cosine.",
       "extended": "Short-name alias of `arccosh`. Computes the principal branch of\n$\\operatorname{arccosh}(x)$ for real inputs.",
@@ -85,8 +85,8 @@
       "path": "lucid.addbmm",
       "kind": "function",
       "labels": [],
-      "signature": "addbmm(input: Tensor, batch1: Tensor, batch2: Tensor, beta: float = ..., alpha: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5457",
+      "signature": "addbmm(input: Tensor, batch1: Tensor, batch2: Tensor, beta: _float = ..., alpha: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5480",
       "subcategory": null,
       "summary": "Batched matmul with reduction over the batch axis.",
       "extended": "Computes\n$\\beta \\cdot \\text{input} + \\alpha \\cdot \\sum_{k} (\\text{batch1}[k] \\cdot \\text{batch2}[k])$.\nUseful for accumulating multiple parallel matrix products into a\nsingle output matrix (e.g. summing per-head attention contributions).",
@@ -142,8 +142,8 @@
       "path": "lucid.addcdiv",
       "kind": "function",
       "labels": [],
-      "signature": "addcdiv(input: Tensor, t1: Tensor, t2: Tensor, value: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5458",
+      "signature": "addcdiv(input: Tensor, t1: Tensor, t2: Tensor, value: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5481",
       "subcategory": null,
       "summary": "Element-wise fused divide-add.",
       "extended": "Computes $\\text{input} + \\text{value} \\cdot (t_1 / t_2)$ in\none expression. Common in optimiser updates (e.g. Adam's\nparameter step uses the form `param -= lr * m / sqrt(v)`).",
@@ -193,8 +193,8 @@
       "path": "lucid.addcmul",
       "kind": "function",
       "labels": [],
-      "signature": "addcmul(input: Tensor, t1: Tensor, t2: Tensor, value: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5459",
+      "signature": "addcmul(input: Tensor, t1: Tensor, t2: Tensor, value: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5482",
       "subcategory": null,
       "summary": "Element-wise fused multiply-add with a scalar weight.",
       "extended": "Computes $\\text{input} + \\text{value} \\cdot (t_1 \\odot t_2)$\nelement-wise, where $\\odot$ denotes the Hadamard (element-wise)\nproduct.  Provided as a single named op for readability and to give\nthe dispatcher the chance to fuse the three steps into one kernel on\nbackends that support it.",
@@ -244,8 +244,8 @@
       "path": "lucid.addmm",
       "kind": "function",
       "labels": [],
-      "signature": "addmm(input: Tensor, mat1: Tensor, mat2: Tensor, beta: float = ..., alpha: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5460",
+      "signature": "addmm(input: Tensor, mat1: Tensor, mat2: Tensor, beta: _float = ..., alpha: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5483",
       "subcategory": null,
       "summary": "General matrix multiply with a scaled accumulator (GEMM).",
       "extended": "Computes $\\beta \\cdot \\text{input} + \\alpha \\cdot (\\text{mat1} \\times \\text{mat2})$,\nthe canonical BLAS-3 `gemm` operation. Useful for fused linear\nlayers: an output bias plus a weight multiplication in one call.",
@@ -301,8 +301,8 @@
       "path": "lucid.addmv",
       "kind": "function",
       "labels": [],
-      "signature": "addmv(input: Tensor, mat: Tensor, vec: Tensor, beta: float = ..., alpha: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5461",
+      "signature": "addmv(input: Tensor, mat: Tensor, vec: Tensor, beta: _float = ..., alpha: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5484",
       "subcategory": null,
       "summary": "Matrix-vector multiply with a scaled accumulator (BLAS-2 gemv).",
       "extended": "Computes\n$\\beta \\cdot \\text{input} + \\alpha \\cdot (\\text{mat} \\cdot \\text{vec})$,\nthe canonical BLAS-2 `gemv` operation.",
@@ -358,8 +358,8 @@
       "path": "lucid.addr",
       "kind": "function",
       "labels": [],
-      "signature": "addr(input: Tensor, vec1: Tensor, vec2: Tensor, beta: float = ..., alpha: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5462",
+      "signature": "addr(input: Tensor, vec1: Tensor, vec2: Tensor, beta: _float = ..., alpha: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5485",
       "subcategory": null,
       "summary": "Rank-1 update of a matrix by an outer product (BLAS-2 ger).",
       "extended": "Computes\n$\\beta \\cdot \\text{input} + \\alpha \\cdot (\\text{vec1} \\otimes \\text{vec2})$,\ni.e. updates the matrix `input` by adding the (scaled) outer product\nof two vectors. The classical BLAS `ger` routine.",
@@ -416,7 +416,7 @@
       "kind": "function",
       "labels": [],
       "signature": "adjoint(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5463",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5486",
       "subcategory": null,
       "summary": "Conjugate (Hermitian) transpose of the trailing two dimensions.",
       "extended": "For real-valued tensors this is identical to a plain transpose of the\nlast two axes. For complex tensors (when supported), the entries are\nadditionally conjugated, yielding the Hermitian transpose\n$A^{*} = \\overline{A^{T}}$.",
@@ -454,7 +454,7 @@
       "kind": "function",
       "labels": [],
       "signature": "angle(input: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5467",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5490",
       "subcategory": null,
       "summary": "Phase angle (argument) of a complex tensor.",
       "extended": "Computes the polar-coordinate angle of each complex element:\n$\\arg(z) = \\arctan2(\\Im(z), \\Re(z))$.  The output is a real\nF32 tensor in radians on the interval $[-\\pi, \\pi]$.",
@@ -487,7 +487,7 @@
       "kind": "function",
       "labels": [],
       "signature": "arccosh(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5468",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5491",
       "subcategory": null,
       "summary": "Inverse hyperbolic cosine.",
       "extended": "Verbose alias of `acosh`.  Computes the principal branch\n$\\operatorname{arccosh}(x) = \\log\\!\\bigl(x + \\sqrt{x^{2} - 1}\\bigr)$,\ndefined for real $x \\geq 1$.",
@@ -520,7 +520,7 @@
       "kind": "function",
       "labels": [],
       "signature": "arcsinh(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5469",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5492",
       "subcategory": null,
       "summary": "Inverse hyperbolic sine.",
       "extended": "Verbose alias of `asinh`.  Computes\n$\\operatorname{arcsinh}(x) = \\log\\!\\bigl(x + \\sqrt{x^{2} + 1}\\bigr)$,\ndefined for all real `x`.",
@@ -553,7 +553,7 @@
       "kind": "function",
       "labels": [],
       "signature": "arctan2(y: Tensor, x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5470",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5493",
       "subcategory": null,
       "summary": "Quadrant-correct two-argument arctangent.",
       "extended": "Verbose alias of `lucid.atan2`.  Returns the polar angle\n$\\theta$ of the point $(x, y)$ in the Cartesian plane,\nresolving the correct quadrant from the signs of both arguments.",
@@ -592,7 +592,7 @@
       "kind": "function",
       "labels": [],
       "signature": "arctanh(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5471",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5494",
       "subcategory": null,
       "summary": "Inverse hyperbolic tangent.",
       "extended": "Verbose alias of `atanh`.  Computes\n$\\operatorname{arctanh}(x) = \\tfrac{1}{2}\\log\\!\\bigl((1+x)/(1-x)\\bigr)$, defined for\n$|x| < 1$.",
@@ -625,7 +625,7 @@
       "kind": "function",
       "labels": [],
       "signature": "asinh(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5473",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5496",
       "subcategory": null,
       "summary": "Inverse hyperbolic sine.",
       "extended": "Short-name alias of `arcsinh`. Defined for all real inputs.",
@@ -658,7 +658,7 @@
       "kind": "function",
       "labels": [],
       "signature": "atanh(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5474",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5497",
       "subcategory": null,
       "summary": "Inverse hyperbolic tangent.",
       "extended": "Short-name alias of `arctanh`. Domain is the open interval\n$(-1, 1)$; values at the boundary diverge to $\\pm\\infty$.",
@@ -691,7 +691,7 @@
       "kind": "function",
       "labels": [],
       "signature": "atleast_1d(tensors: Tensor = ())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5475",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5498",
       "subcategory": null,
       "summary": "Promote each input to at least 1 dimension.",
       "extended": "Scalars (0-D tensors) are reshaped to length-1 vectors; tensors that\nalready have rank $\\geq 1$ pass through unchanged.  Commonly\nused as a defensive guard at the top of routines that vectorise over\na leading axis.",
@@ -724,7 +724,7 @@
       "kind": "function",
       "labels": [],
       "signature": "atleast_2d(tensors: Tensor = ())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5476",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5499",
       "subcategory": null,
       "summary": "Promote each input to at least 2 dimensions.",
       "extended": "Scalars become shape `(1, 1)`, 1-D tensors gain a leading unit axis\nto become `(1, N)`; tensors that already have rank $\\geq 2$\npass through unchanged.",
@@ -757,7 +757,7 @@
       "kind": "function",
       "labels": [],
       "signature": "atleast_3d(tensors: Tensor = ())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5477",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5500",
       "subcategory": null,
       "summary": "Promote each input to at least 3 dimensions.",
       "extended": "Scalars become shape `(1, 1, 1)`, 1-D tensors become `(1, N, 1)`,\n2-D tensors gain a trailing unit axis to become `(M, N, 1)`;\ntensors with rank $\\geq 3$ pass through unchanged.",
@@ -789,8 +789,8 @@
       "path": "lucid.baddbmm",
       "kind": "function",
       "labels": [],
-      "signature": "baddbmm(input: Tensor, batch1: Tensor, batch2: Tensor, beta: float = ..., alpha: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5478",
+      "signature": "baddbmm(input: Tensor, batch1: Tensor, batch2: Tensor, beta: _float = ..., alpha: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5501",
       "subcategory": null,
       "summary": "Batched GEMM with a batched accumulator.",
       "extended": "Computes\n$\\beta \\cdot \\text{input} + \\alpha \\cdot \\operatorname{bmm}(\\text{batch1}, \\text{batch2})$\nwhere the batch axis is preserved (unlike `addbmm` which reduces\nit).",
@@ -847,7 +847,7 @@
       "kind": "function",
       "labels": [],
       "signature": "block_diag(tensors: Tensor = ())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5480",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5503",
       "subcategory": null,
       "summary": "Construct a block-diagonal matrix from a sequence of blocks.",
       "extended": "Each input is placed on the diagonal of a larger matrix, with zeros\neverywhere off-block. Scalars (0-D) become $1 \\times 1$ blocks\nand 1-D inputs become $1 \\times n$ blocks before stacking.",
@@ -880,7 +880,7 @@
       "kind": "function",
       "labels": [],
       "signature": "can_cast(from_dtype: dtype, to_dtype: dtype)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5481",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5504",
       "subcategory": null,
       "summary": "Predicate: can `from_dtype` be safely cast to `to_dtype`?",
       "extended": "Returns `True` iff every value representable in `from_dtype` is\nalso representable in `to_dtype` without loss of range or\nprecision.  This is the \"safe\" casting policy of NumPy: it admits\nwidening conversions (e.g. `int8 → int32`, `float32 → float64`)\nand rejects narrowing or sign-changing conversions.",
@@ -919,7 +919,7 @@
       "kind": "function",
       "labels": [],
       "signature": "column_stack(tensors: Sequence[Tensor])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5483",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5506",
       "subcategory": null,
       "summary": "Stack tensors as columns of a 2-D matrix.",
       "extended": "Each 1-D tensor is first promoted to a column vector of shape\n`(N, 1)`; tensors with rank `>= 2` are passed through unchanged.\nThe results are then concatenated along axis 1.",
@@ -952,7 +952,7 @@
       "kind": "function",
       "labels": [],
       "signature": "conj_physical(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5485",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5508",
       "subcategory": null,
       "summary": "Eagerly materialised complex conjugate.",
       "extended": "Some reference frameworks distinguish `conj` (which may set a lazy\n\"conjugated\" flag on the tensor's view) from `conj_physical` (which\nalways writes a new buffer with the conjugated values).  Lucid does\nnot carry any lazy conjugation metadata, so both call into the same\nengine op — `conj_physical` is provided for API parity and as a\nclear signal to readers that the conjugation is materialised.",
@@ -985,7 +985,7 @@
       "kind": "function",
       "labels": [],
       "signature": "divide(a: Tensor, b: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5492",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5515",
       "subcategory": null,
       "summary": "Element-wise true division.",
       "extended": "Verbose alias of the `/` operator. Always performs floating-point\ndivision — integer operands are promoted to a floating dtype before\nthe division so that the result preserves fractional parts.",
@@ -1023,8 +1023,8 @@
       "path": "lucid.dsplit",
       "kind": "function",
       "labels": [],
-      "signature": "dsplit(x: Tensor, indices_or_sections: int | Sequence[int])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5493",
+      "signature": "dsplit(x: Tensor, indices_or_sections: _int | Sequence[_int])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5516",
       "subcategory": null,
       "summary": "Split a tensor along its third (depth) axis.",
       "extended": "NumPy-style depth-wise split: cuts the input into pieces along axis 2.\nMirrors `vsplit` (axis 0) and `hsplit` (axis 1).",
@@ -1068,7 +1068,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dstack(tensors: Sequence[Tensor])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5494",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5517",
       "subcategory": null,
       "summary": "Stack tensors along the third (depth) axis.",
       "extended": "Reshapes lower-rank inputs to give them a depth dimension, then\nconcatenates along axis 2. 0-D scalars become `(1, 1, 1)`, 1-D\nvectors of length `N` become `(1, N, 1)`, and 2-D matrices of\nshape `(H, W)` become `(H, W, 1)`.",
@@ -1101,7 +1101,7 @@
       "kind": "function",
       "labels": [],
       "signature": "expm1(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5496",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5519",
       "subcategory": null,
       "summary": "Element-wise $e^{x} - 1$.",
       "extended": "Computes the exponential-minus-one function. The current composite\nimplementation evaluates the naive form `exp(x) - 1`; a dedicated\nengine primitive would additionally preserve relative accuracy for\n$|x| \\ll 1$, but the algebraic result is identical.",
@@ -1134,7 +1134,7 @@
       "kind": "function",
       "labels": [],
       "signature": "float_power(x: Tensor | Scalar, y: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5497",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5520",
       "subcategory": null,
       "summary": "Element-wise power that always promotes operands to `float64`.",
       "extended": "Unlike the regular `lucid.pow`, `float_power` upcasts both\noperands to `float64` before exponentiation, so that negative bases\nraised to non-integer powers and very large exponents behave\nconsistently without integer overflow or domain errors.",
@@ -1173,7 +1173,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fmax(a: Tensor, b: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5499",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5522",
       "subcategory": null,
       "summary": "Element-wise NaN-quiet maximum.",
       "extended": "Like `lucid.maximum`, but treats NaN as missing data: if exactly\none operand is NaN at a given position, the non-NaN value is returned.\nOnly when both are NaN does the result remain NaN.",
@@ -1212,7 +1212,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fmin(a: Tensor, b: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5500",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5523",
       "subcategory": null,
       "summary": "Element-wise NaN-quiet minimum.",
       "extended": "Like `lucid.minimum`, but treats NaN as missing data: if exactly\none operand is NaN at a given position, the non-NaN value is returned.\nOnly when both are NaN does the result remain NaN.",
@@ -1251,7 +1251,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ger(vec1: Tensor, vec2: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5503",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5526",
       "subcategory": null,
       "summary": "Outer product of two 1-D tensors.",
       "extended": "Forwards to `lucid.linalg.outer`. Provided under the legacy BLAS\nname (`ger` = \"general rank-one update\") for API parity.",
@@ -1290,7 +1290,7 @@
       "kind": "function",
       "labels": [],
       "signature": "heaviside(x: Tensor, values: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5504",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5527",
       "subcategory": null,
       "summary": "Heaviside step function with a user-selectable value at $x = 0$.",
       "extended": "Produces `0` for negative inputs and `1` for positive inputs; the\nvalue at exactly zero is taken from `values` (typically `0`,\n`0.5`, or `1` depending on convention).",
@@ -1328,8 +1328,8 @@
       "path": "lucid.hsplit",
       "kind": "function",
       "labels": [],
-      "signature": "hsplit(x: Tensor, indices_or_sections: int | Sequence[int])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5508",
+      "signature": "hsplit(x: Tensor, indices_or_sections: _int | Sequence[_int])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5531",
       "subcategory": null,
       "summary": "Split a tensor horizontally (along axis 1 for rank $\\geq 2$).",
       "extended": "NumPy-style horizontal split: cuts the input column-wise along axis 1\nfor tensors of rank $\\geq 2$.  For 1-D inputs the axis collapses\nto 0, since there is only one dimension available.",
@@ -1368,7 +1368,7 @@
       "kind": "function",
       "labels": [],
       "signature": "is_conj(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5515",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5538",
       "subcategory": null,
       "summary": "Predicate: does the tensor carry a lazy \"conjugated\" flag?",
       "extended": "Some reference frameworks track complex conjugation as a lazy view\nflag. Lucid materialises every operation eagerly, so this predicate\nis always `False`.",
@@ -1401,7 +1401,7 @@
       "kind": "function",
       "labels": [],
       "signature": "is_neg(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5516",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5539",
       "subcategory": null,
       "summary": "Predicate: does the tensor carry a lazy \"negated\" flag?",
       "extended": "Some reference frameworks track negation as a lazy view flag that is\nmaterialised on access. Lucid eagerly materialises every operation,\nso this predicate is always `False`.",
@@ -1434,7 +1434,7 @@
       "kind": "function",
       "labels": [],
       "signature": "is_nonzero(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5517",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5540",
       "subcategory": null,
       "summary": "Predicate: is a single-element tensor non-zero?",
       "extended": "Reduces a scalar (one-element) tensor to a Python `bool`. Raises if\nthe tensor has more than one element so that the caller is forced to\npick an explicit reduction (e.g. `.any()` / `.all()`) for\nmulti-element inputs.",
@@ -1472,7 +1472,7 @@
       "kind": "function",
       "labels": [],
       "signature": "is_same_size(a: Tensor, b: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5518",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5541",
       "subcategory": null,
       "summary": "Predicate: do two tensors have identical shapes?",
       "extended": "Compares the shape tuples exactly — no broadcasting compatibility is\nimplied. Use `lucid.broadcast_to` if broadcastability is the\nquestion.",
@@ -1511,7 +1511,7 @@
       "kind": "function",
       "labels": [],
       "signature": "is_storage(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5519",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5542",
       "subcategory": null,
       "summary": "Predicate: is the object a separate Storage container?",
       "extended": "Lucid does not expose a distinct Storage type — tensor data ownership\nis folded into the `Tensor` class itself — so this predicate\nalways returns `False`. Provided for API parity with reference\nframeworks that maintain a Tensor/Storage split.",
@@ -1543,8 +1543,8 @@
       "path": "lucid.isin",
       "kind": "function",
       "labels": [],
-      "signature": "isin(elements: Tensor | TensorLike, test_elements: Tensor | TensorLike, invert: bool = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5520",
+      "signature": "isin(elements: Tensor | TensorLike, test_elements: Tensor | TensorLike, invert: _bool = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5543",
       "subcategory": null,
       "summary": "Per-element set-membership test.",
       "extended": "For each entry of `elements`, checks whether the value appears\nanywhere in `test_elements`. Implemented as a broadcasted\nequality compare followed by an OR reduction.",
@@ -1589,7 +1589,7 @@
       "kind": "function",
       "labels": [],
       "signature": "isneginf(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5521",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5544",
       "subcategory": null,
       "summary": "Element-wise test for negative infinity.",
       "extended": "Identifies entries that are exactly $-\\infty$ in the IEEE 754\nfloating-point sense. Finite values and $+\\infty$ both report\n`False`.",
@@ -1622,7 +1622,7 @@
       "kind": "function",
       "labels": [],
       "signature": "isposinf(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5522",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5545",
       "subcategory": null,
       "summary": "Element-wise test for positive infinity.",
       "extended": "Identifies entries that are exactly $+\\infty$ in the IEEE 754\nfloating-point sense. Finite values and $-\\infty$ both report\n`False`.",
@@ -1655,7 +1655,7 @@
       "kind": "function",
       "labels": [],
       "signature": "isreal(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5523",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5546",
       "subcategory": null,
       "summary": "Element-wise test for real-valued entries.",
       "extended": "Lucid currently supports only real-valued floating dtypes (and\ncomplex tensors via the dedicated `complex64` dtype), so for real\ninputs this predicate is uniformly `True`. Provided for API parity\nwith reference frameworks that include both real and complex dtypes.",
@@ -1687,8 +1687,8 @@
       "path": "lucid.logit",
       "kind": "function",
       "labels": [],
-      "signature": "logit(x: Tensor, eps: float | None = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5528",
+      "signature": "logit(x: Tensor, eps: _float | None = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5551",
       "subcategory": null,
       "summary": "Logit function — inverse of the logistic sigmoid.",
       "extended": "Maps a probability in $(0, 1)$ to a log-odds value in\n$\\mathbb{R}$. Optionally clamps the input to\n$[\\epsilon, 1 - \\epsilon]$ first to avoid divergence at the\nboundaries.",
@@ -1726,8 +1726,8 @@
       "path": "lucid.moveaxis",
       "kind": "function",
       "labels": [],
-      "signature": "moveaxis(x: Tensor, source: int | Sequence[int], destination: int | Sequence[int])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5530",
+      "signature": "moveaxis(x: Tensor, source: _int | Sequence[_int], destination: _int | Sequence[_int])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5553",
       "subcategory": null,
       "summary": "Move one or more axes to new positions.",
       "extended": "More flexible than `swapaxes` — instead of pairwise swapping,\n`moveaxis` re-positions a whole set of axes while preserving the\nrelative order of the remaining axes.  Thin wrapper around\n`lucid.movedim` that accepts either a single `int` or a\nsequence on both endpoints.",
@@ -1772,7 +1772,7 @@
       "kind": "function",
       "labels": [],
       "signature": "multiply(a: Tensor, b: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5532",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5555",
       "subcategory": null,
       "summary": "Element-wise product.",
       "extended": "Verbose alias of the `*` operator. Broadcasts `a` and `b` and\napplies the standard dtype-promotion rules.",
@@ -1811,7 +1811,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mv(mat: Tensor, vec: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5533",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5556",
       "subcategory": null,
       "summary": "Matrix-vector product.",
       "extended": "Computes the standard matrix-vector product\n$y = M v$. Equivalent to `M @ v` for 2-D / 1-D inputs.",
@@ -1849,8 +1849,8 @@
       "path": "lucid.nanmean",
       "kind": "function",
       "labels": [],
-      "signature": "nanmean(x: Tensor, dim: int | Sequence[int] | None = ..., keepdim: bool = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5534",
+      "signature": "nanmean(x: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5557",
       "subcategory": null,
       "summary": "Mean of the tensor, ignoring NaN entries.",
       "extended": "A NaN-safe variant of `lucid.mean`. Both the numerator (sum)\nand the denominator (element count) are computed only over the\nnon-NaN entries.",
@@ -1894,8 +1894,8 @@
       "path": "lucid.nanmedian",
       "kind": "function",
       "labels": [],
-      "signature": "nanmedian(x: Tensor, dim: int | None = ..., keepdim: bool = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5535",
+      "signature": "nanmedian(x: Tensor, dim: _int | None = ..., keepdim: _bool = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5558",
       "subcategory": null,
       "summary": "Median of a tensor, ignoring NaN entries.",
       "extended": "Computes the median over the requested axis (or the entire tensor\nwhen `dim` is `None`), treating NaN entries as missing data\nrather than propagating them.  This is the NaN-safe counterpart of\na regular `median` reduction.",
@@ -1939,8 +1939,8 @@
       "path": "lucid.nansum",
       "kind": "function",
       "labels": [],
-      "signature": "nansum(x: Tensor, dim: int | Sequence[int] | None = ..., keepdim: bool = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5537",
+      "signature": "nansum(x: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5560",
       "subcategory": null,
       "summary": "Sum the tensor, treating NaN entries as zero.",
       "extended": "A NaN-safe variant of `lucid.sum`. NaN values are replaced by\n`0` before the reduction, so they neither contaminate the result\nnor contribute to it.",
@@ -1985,7 +1985,7 @@
       "kind": "function",
       "labels": [],
       "signature": "negative(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5538",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5561",
       "subcategory": null,
       "summary": "Element-wise negation.",
       "extended": "Verbose alias of `lucid.neg`. Equivalent to the unary `-` operator\non a tensor.",
@@ -2018,7 +2018,7 @@
       "kind": "function",
       "labels": [],
       "signature": "numel(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5539",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5562",
       "subcategory": null,
       "summary": "Return the total number of elements in a tensor.",
       "extended": "Equivalent to the product of the shape dimensions, returned as a\nplain Python `int` so it can be used in pure-Python control flow\n(loops, conditionals) without triggering autograd tracing.",
@@ -2051,7 +2051,7 @@
       "kind": "function",
       "labels": [],
       "signature": "polar(abs: Tensor, angle: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5541",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5564",
       "subcategory": null,
       "summary": "Build a complex tensor from polar coordinates (magnitude, phase).",
       "extended": "Constructs each complex output entry as\n$z = r e^{i\\theta} = r\\cos\\theta + i\\,r\\sin\\theta$, where `r`\ncomes from `abs` and $\\theta$ from `angle`.  Both inputs are\nreal-valued and follow standard broadcasting rules.",
@@ -2090,7 +2090,7 @@
       "kind": "function",
       "labels": [],
       "signature": "positive(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5542",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5565",
       "subcategory": null,
       "summary": "Element-wise identity — returns the input unchanged.",
       "extended": "Provided as the unary-`+` counterpart of `negative`, matching\nthe convention that `+x` is a no-op on numeric data.",
@@ -2123,7 +2123,7 @@
       "kind": "function",
       "labels": [],
       "signature": "promote_types(a_dtype: dtype, b_dtype: dtype)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5543",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5566",
       "subcategory": null,
       "summary": "Compute the joint promotion of two dtypes.",
       "extended": "Operates on dtype objects directly (no tensor required). Combines\nthe two dtypes according to the standard kind/width ordering:\nhigher kind (bool $<$ int $<$ float $<$ complex)\nwins outright, and ties in kind are broken by the wider bit-width.",
@@ -2162,7 +2162,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resolve_conj(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5546",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5569",
       "subcategory": null,
       "summary": "Materialise any pending lazy conjugation — no-op in Lucid.",
       "extended": "Reference frameworks that maintain a lazy \"is_conj\" flag on complex\ntensors use `resolve_conj` to force the flag to be applied to the\nunderlying buffer.  Lucid has no such flag (see\n`conj_physical`), so this routine simply returns the input\nunchanged.  It is provided for API parity so that ported code keeps\nworking without behavioural drift.",
@@ -2195,7 +2195,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resolve_neg(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5547",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5570",
       "subcategory": null,
       "summary": "Materialise any pending lazy negation — no-op in Lucid.",
       "extended": "Reference frameworks that maintain a lazy-negation flag use this op\nto force the flag to be applied to the underlying buffer. Lucid has\nno such flag (see `is_neg`), so this returns the input\nunchanged.",
@@ -2228,7 +2228,7 @@
       "kind": "function",
       "labels": [],
       "signature": "result_type(a: Tensor | Scalar, b: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5548",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5571",
       "subcategory": null,
       "summary": "Compute the dtype that a binary operation on the inputs would produce.",
       "extended": "Implements NumPy-style type promotion: tensors contribute their\ndeclared dtype, while Python scalars are treated as having no dtype\nof their own and follow whichever tensor operand they appear with.",
@@ -2266,8 +2266,8 @@
       "path": "lucid.rot90",
       "kind": "function",
       "labels": [],
-      "signature": "rot90(x: Tensor, k: int = ..., dims: Sequence[int] = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5549",
+      "signature": "rot90(x: Tensor, k: _int = ..., dims: Sequence[_int] = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5572",
       "subcategory": null,
       "summary": "Rotate a tensor by 90° in a chosen plane.",
       "extended": "Applies `k` successive 90° rotations in the plane spanned by the\ntwo axes `dims = (d_0, d_1)`. The rotation direction is from\n`d_0` toward `d_1` (counter-clockwise when those axes are\ndisplayed as the usual `(row, column)` pair).",
@@ -2312,7 +2312,7 @@
       "kind": "function",
       "labels": [],
       "signature": "row_stack(tensors: Sequence[Tensor])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5550",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5573",
       "subcategory": null,
       "summary": "Stack tensors as rows — alias of `lucid.vstack`.",
       "extended": "Verbose name provided for API parity. Each 1-D input is treated as a\nrow and concatenated along axis 0.",
@@ -2344,8 +2344,8 @@
       "path": "lucid.rsub",
       "kind": "function",
       "labels": [],
-      "signature": "rsub(a: Tensor, b: Tensor | Scalar, alpha: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5551",
+      "signature": "rsub(a: Tensor, b: Tensor | Scalar, alpha: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5574",
       "subcategory": null,
       "summary": "Reverse subtraction: $b - \\alpha \\cdot a$.",
       "extended": "Useful when `b` is a Python scalar that cannot left-bind the `-`\noperator against a tensor in a particular calling convention.",
@@ -2390,7 +2390,7 @@
       "kind": "function",
       "labels": [],
       "signature": "signbit(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5553",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5576",
       "subcategory": null,
       "summary": "Element-wise sign-bit predicate.",
       "extended": "Returns a boolean tensor that is `True` wherever `x` is strictly\nnegative. The current implementation uses the strict inequality\n`x < 0`, so `-0.0` reports `False` (i.e. the value is treated\nas zero rather than tested via IEEE 754 sign-bit inspection).",
@@ -2423,7 +2423,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sinc(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5554",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5577",
       "subcategory": null,
       "summary": "Normalised sinc function with the standard removable singularity at 0.",
       "extended": "The \"normalised\" sinc carries a factor of $\\pi$ inside the sine,\nso its zeros coincide with the non-zero integers — the convention used\nin signal processing.",
@@ -2455,8 +2455,8 @@
       "path": "lucid.subtract",
       "kind": "function",
       "labels": [],
-      "signature": "subtract(a: Tensor, b: Tensor | Scalar, alpha: float = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5556",
+      "signature": "subtract(a: Tensor, b: Tensor | Scalar, alpha: _float = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5579",
       "subcategory": null,
       "summary": "Element-wise subtraction with an optional scalar multiplier.",
       "extended": "Computes $a - \\alpha \\cdot b$ element-wise, broadcasting `a`\nand `b` to a common shape and following the standard dtype-promotion\nrules.",
@@ -2500,8 +2500,8 @@
       "path": "lucid.swapaxes",
       "kind": "function",
       "labels": [],
-      "signature": "swapaxes(x: Tensor, axis0: int, axis1: int)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5557",
+      "signature": "swapaxes(x: Tensor, axis0: _int, axis1: _int)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5580",
       "subcategory": null,
       "summary": "Return `x` with axes `axis0` and `axis1` exchanged.",
       "extended": "NumPy-style spelling of pairwise axis transposition.  Verbose alias of\n`swapdims`; both names refer to the same composite.",
@@ -2545,8 +2545,8 @@
       "path": "lucid.swapdims",
       "kind": "function",
       "labels": [],
-      "signature": "swapdims(x: Tensor, dim0: int, dim1: int)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5558",
+      "signature": "swapdims(x: Tensor, dim0: _int, dim1: _int)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5581",
       "subcategory": null,
       "summary": "Swap two named dimensions of a tensor.",
       "extended": "Returns a view (or, if not contiguous, a freshly materialised tensor)\nwhose dimensions `dim0` and `dim1` have been exchanged. All other\ndimensions retain their position.",
@@ -2591,7 +2591,7 @@
       "kind": "function",
       "labels": [],
       "signature": "t(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5559",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5582",
       "subcategory": null,
       "summary": "Short-form transpose for tensors of rank at most 2.",
       "extended": "A convenience analogue of MATLAB's `A'` or the reference\nframework's `Tensor.t()`: returns the transpose of a 2-D matrix,\nor the input unchanged for 0-D and 1-D tensors.",
@@ -2628,8 +2628,8 @@
       "path": "lucid.take_along_dim",
       "kind": "function",
       "labels": [],
-      "signature": "take_along_dim(x: Tensor, indices: Tensor, dim: int)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5560",
+      "signature": "take_along_dim(x: Tensor, indices: Tensor, dim: _int)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5583",
       "subcategory": null,
       "summary": "Gather elements from `x` at positions `indices` along `dim`.",
       "extended": "Advanced indexing primitive analogous to `np.take_along_axis`:\nselects one element from `x` for every entry in `indices`,\nbroadcasting the remaining (non-`dim`) axes between the two\ntensors.  Thin wrapper around `lucid.gather` to align with\nthe reference-framework spelling.",
@@ -2673,8 +2673,8 @@
       "path": "lucid.tensor_split",
       "kind": "function",
       "labels": [],
-      "signature": "tensor_split(x: Tensor, indices_or_sections: int | Sequence[int], dim: int = ...)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5561",
+      "signature": "tensor_split(x: Tensor, indices_or_sections: _int | Sequence[_int], dim: _int = ...)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5584",
       "subcategory": null,
       "summary": "Split a tensor along `dim`, permitting unequal final-piece sizes.",
       "extended": "More permissive than `lucid.split`: when `indices_or_sections`\nis an integer `k` and `x.shape[dim]` is not divisible by `k`,\nthe first `x.shape[dim] % k` pieces receive one extra element each\nwhile the remaining pieces take the smaller floor size.  This mirrors\nNumPy's `np.array_split` semantics, where `split` raises on\nnon-divisible counts but `tensor_split` quietly returns ragged\npieces.",
@@ -2719,7 +2719,7 @@
       "kind": "function",
       "labels": [],
       "signature": "true_divide(a: Tensor, b: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5564",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5587",
       "subcategory": null,
       "summary": "Element-wise true (floating-point) division.",
       "extended": "Equivalent to `divide`; named `true_divide` for parity with\nNumPy / reference-framework spellings that distinguish it from\ninteger-flavored `floor_divide`.",
@@ -2758,7 +2758,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vdot(a: Tensor, b: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5566",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5589",
       "subcategory": null,
       "summary": "Vector dot product (complex-conjugating on the first argument).",
       "extended": "Forwards to `lucid.linalg.dot`. For real tensors this is the\nusual inner product; for complex tensors (when supported) the first\nargument is conjugated, matching NumPy's `vdot` convention.",
@@ -2797,7 +2797,7 @@
       "kind": "function",
       "labels": [],
       "signature": "view_as_complex(input: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5567",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5590",
       "subcategory": null,
       "summary": "Reinterpret a real tensor with a trailing pair axis as a complex tensor.",
       "extended": "Inverse of `view_as_real`.  Given an F32 input of shape\n$(\\dots, 2)$, returns a `complex64` tensor of shape\n$(\\dots)$ whose last axis is consumed.",
@@ -2835,7 +2835,7 @@
       "kind": "function",
       "labels": [],
       "signature": "view_as_real(input: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5568",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5591",
       "subcategory": null,
       "summary": "Reinterpret a complex tensor as a real tensor with a trailing pair axis.",
       "extended": "Given an input of shape $(\\dots)$ and dtype `complex64`,\nreturns an F32 tensor of shape $(\\dots, 2)$ where the trailing\naxis carries `[real, imag]` pairs.",
@@ -2867,8 +2867,8 @@
       "path": "lucid.vsplit",
       "kind": "function",
       "labels": [],
-      "signature": "vsplit(x: Tensor, indices_or_sections: int | Sequence[int])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5569",
+      "signature": "vsplit(x: Tensor, indices_or_sections: _int | Sequence[_int])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5592",
       "subcategory": null,
       "summary": "Split a tensor along its first (vertical) axis.",
       "extended": "NumPy-style vertical split: cuts the input into pieces along axis 0.\nWith an integer `k`, the tensor is divided into `k` near-equal\npieces; with a sequence of indices, the cuts occur at those positions.",
@@ -2912,7 +2912,7 @@
       "kind": "function",
       "labels": [],
       "signature": "xlogy(x: Tensor | Scalar, y: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/__init__.py#L5570",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/__init__.py#L5593",
       "subcategory": null,
       "summary": "Compute $x \\log y$ with the convention $0 \\cdot \\log 0 = 0$.",
       "extended": "Frequently used to compute cross-entropy losses where the limit\n$\\lim_{x \\to 0^{+}} x \\log x = 0$ must be honored to avoid NaN\ncontamination from probability values that are exactly zero.",
@@ -2951,7 +2951,7 @@
       "kind": "function",
       "labels": [],
       "signature": "allclose(a: Tensor, b: Tensor, rtol: float = 1e-05, atol: float = 1e-08, equal_nan: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/predicates.py#L551",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/predicates.py#L551",
       "subcategory": null,
       "summary": "Return `True` iff every element pair is close within tolerance.",
       "extended": "Closeness predicate:\n\n$$\n|a_i - b_i| \\le \\text{atol} + \\text{rtol} \\cdot |b_i|.\n$$\n\nNote the asymmetry — the relative term uses `|b|`, so swapping\narguments can change the answer for marginal cases.  This matches\nthe NumPy / reference-framework convention.",
@@ -3004,12 +3004,271 @@
       ]
     },
     {
+      "name": "frexp",
+      "path": "lucid.frexp",
+      "kind": "function",
+      "labels": [],
+      "signature": "frexp(input: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1165",
+      "subcategory": null,
+      "summary": "Decompose `input` into mantissa `m` and exponent `e` such that\n`input = m * 2**e` with `|m|` in `[0.5, 1)` (or `m == 0`).",
+      "extended": "Returns a `(mantissa, exponent)` tuple.  Exponent dtype is int32.\nNon-finite inputs propagate: NaN → (NaN, 0); ±inf → (±inf, 0); 0 → (0, 0).",
+      "parameters": [],
+      "returns": {
+        "annotation": "tuple[Tensor, Tensor]",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "erfc",
+      "path": "lucid.erfc",
+      "kind": "function",
+      "labels": [],
+      "signature": "erfc(x: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1091",
+      "subcategory": null,
+      "summary": "Complementary error function $\\text{erfc}(x) = 1 - \\text{erf}(x)$.",
+      "extended": "Preserves more precision than `1 - erf(x)` would for very large\npositive `x` only if the engine offers a native `erfc` kernel;\nin Lucid this is a composite that *does* subtract `erf(x)` from\none, so accuracy is bounded by `erf` near the tails.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Real-valued input.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Same shape as `x`, values in $[0, 2]$."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "lcm",
+      "path": "lucid.lcm",
+      "kind": "function",
+      "labels": [],
+      "signature": "lcm(x: Tensor, y: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1222",
+      "subcategory": null,
+      "summary": "Element-wise least common multiple for integer tensors.",
+      "extended": "Same implementation strategy as `gcd` — pure-Python per\nelement via `math.lcm`, intended for utility use only.\nNon-differentiable.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Same-shape integer tensors.",
+          "default": null
+        },
+        {
+          "name": "y",
+          "annotation": "Tensor",
+          "description": "Same-shape integer tensors.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Same shape and dtype as `x`.  Each element is\n`math.lcm(x_i, y_i)`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "floor_divide",
+      "path": "lucid.floor_divide",
+      "kind": "function",
+      "labels": [],
+      "signature": "floor_divide(a: Tensor, b: Tensor | Scalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1479",
+      "subcategory": null,
+      "summary": "Element-wise floor division — $\\lfloor a / b \\rfloor$.",
+      "extended": "Equivalent to Python's `//` operator but follows the framework's\nbroadcasting rules and supports `b` as either a tensor or a\nscalar.  Implemented as composite `(a / b).floor()` — gradients\nare zero almost everywhere (the floor is piecewise constant).",
+      "parameters": [
+        {
+          "name": "a",
+          "annotation": "Tensor",
+          "description": "Numerator.",
+          "default": null
+        },
+        {
+          "name": "b",
+          "annotation": "Tensor or Scalar",
+          "description": "Denominator, broadcastable to the shape of `a`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Broadcast shape of `a` and `b`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "digamma",
+      "path": "lucid.digamma",
+      "kind": "function",
+      "labels": [],
+      "signature": "digamma(x: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1307",
+      "subcategory": null,
+      "summary": "Digamma function $\\psi(x) = \\frac{d}{dx} \\ln \\Gamma(x)$.",
+      "extended": "Implemented as a composite of engine primitives so autograd flows\nthrough naturally.  Uses the standard recurrence-plus-asymptotic\nstrategy: shift the argument by 8 via\n$\\psi(x) = \\psi(x + 8) - \\sum_{k=0}^{7} 1/(x + k)$, then\nevaluate the asymptotic Bernoulli series on the shifted argument\nwhere the series converges quickly.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Real input.  Defined for `x > 0`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Same shape as `x`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lgamma",
+          "description": "$\\ln \\Gamma(x)$ itself."
+        }
+      ]
+    },
+    {
+      "name": "i0",
+      "path": "lucid.i0",
+      "kind": "function",
+      "labels": [],
+      "signature": "i0(x: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1373",
+      "subcategory": null,
+      "summary": "Modified Bessel function of the first kind, order 0: $I_0(x)$.",
+      "extended": "Composite implementation via the Abramowitz & Stegun polynomial\napproximation (Table 9.8.1):\n\n* `|x| <= 3.75` — polynomial series in $(x / 3.75)^2$.\n* `|x| >  3.75` — polynomial series in $3.75 / |x|$, multiplied\n  by $e^{|x|} / \\sqrt{|x|}$ to recover the exponential growth.\n\nDifferentiable through both branches (engine primitives only).",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Real input.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "$I_0(x)$ element-wise; always positive."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ldexp",
+      "path": "lucid.ldexp",
+      "kind": "function",
+      "labels": [],
+      "signature": "ldexp(input: Tensor, exponent: Tensor | Scalar)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1134",
+      "subcategory": null,
+      "summary": "Element-wise $\\text{input} \\cdot 2^{\\text{exponent}}$.",
+      "extended": "Differentiable through both arguments (uses `exp * log(2)`\ninternally rather than integer bit twiddling), so safe to chain\ninside autograd graphs.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Mantissa.",
+          "default": null
+        },
+        {
+          "name": "exponent",
+          "annotation": "Tensor or Scalar",
+          "description": "Power-of-two exponent; broadcastable to the shape of `input`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Broadcast shape of `input` and `exponent`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "frexp",
+          "description": "inverse decomposition into mantissa / exponent."
+        }
+      ]
+    },
+    {
+      "name": "gcd",
+      "path": "lucid.gcd",
+      "kind": "function",
+      "labels": [],
+      "signature": "gcd(x: Tensor, y: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1197",
+      "subcategory": null,
+      "summary": "Element-wise greatest common divisor for integer tensors.",
+      "extended": "Falls through to Python's `math.gcd` per element — the engine\nhas no native GCD kernel and this path is for low-rate utility use\n(e.g. shape arithmetic), not hot-loop computation.  Non-differentiable.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Same-shape integer tensors.",
+          "default": null
+        },
+        {
+          "name": "y",
+          "annotation": "Tensor",
+          "description": "Same-shape integer tensors.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Same shape and dtype as `x`.  Each element is\n`math.gcd(x_i, y_i)`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "softmax",
       "path": "lucid.softmax",
       "kind": "function",
       "labels": [],
       "signature": "softmax(x: Tensor, dim: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1419",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1419",
       "subcategory": null,
       "summary": "Softmax along `dim` — $\\sigma(x)_i = e^{x_i} / \\sum_j e^{x_j}$.",
       "extended": "Dispatches to the engine's numerically stable softmax kernel\n(max-subtraction baked in), so no caller-side stabilisation\nis needed.  Equivalent to `lucid.nn.functional.softmax` but\nlives in the top-level `lucid` namespace for parity with\nNumPy / SciPy-style usage.",
@@ -3048,32 +3307,66 @@
       ]
     },
     {
-      "name": "lcm",
-      "path": "lucid.lcm",
+      "name": "lgamma",
+      "path": "lucid.lgamma",
       "kind": "function",
       "labels": [],
-      "signature": "lcm(x: Tensor, y: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1222",
+      "signature": "lgamma(x: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1273",
       "subcategory": null,
-      "summary": "Element-wise least common multiple for integer tensors.",
-      "extended": "Same implementation strategy as `gcd` — pure-Python per\nelement via `math.lcm`, intended for utility use only.\nNon-differentiable.",
+      "summary": "Natural log of the gamma function $\\ln \\Gamma(x)$.",
+      "extended": "Implemented as a pure composite over engine primitives — uses the\nLanczos approximation (Numerical Recipes, $g = 7$, 9 series\ncoefficients).  Relative error stays below `1.5e-15` for real\n`x > 0` in float64.  Autograd flows through automatically because\nevery step is an engine op.",
       "parameters": [
         {
           "name": "x",
           "annotation": "Tensor",
-          "description": "Same-shape integer tensors.",
-          "default": null
-        },
-        {
-          "name": "y",
-          "annotation": "Tensor",
-          "description": "Same-shape integer tensors.",
+          "description": "Real input.  Defined for `x > 0`; behaviour on non-positive\nreals is implementation-defined (the series diverges).",
           "default": null
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Same shape and dtype as `x`.  Each element is\n`math.lcm(x_i, y_i)`."
+        "description": "Same shape as `x`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "digamma",
+          "description": "derivative $\\psi(x) = \\frac{d}{dx} \\ln \\Gamma(x)$."
+        }
+      ]
+    },
+    {
+      "name": "copysign",
+      "path": "lucid.copysign",
+      "kind": "function",
+      "labels": [],
+      "signature": "copysign(x: Tensor, y: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1112",
+      "subcategory": null,
+      "summary": "Element-wise sign transplant: magnitudes from `x`, signs from `y`.",
+      "extended": "Useful for sign-preserving operations that need to preserve a sign\nbit independent of an arbitrary magnitude computation.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Magnitude source; result has `|x|` element-wise.",
+          "default": null
+        },
+        {
+          "name": "y",
+          "annotation": "Tensor",
+          "description": "Sign source; result is positive where `y >= 0`, negative\nwhere `y < 0` (broadcastable to the shape of `x`).",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Broadcast shape of `x` and `y`."
       },
       "raises": [],
       "examples": [],
@@ -3088,7 +3381,7 @@
       "kind": "function",
       "labels": [],
       "signature": "log_softmax(x: Tensor, dim: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1450",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1450",
       "subcategory": null,
       "summary": "Logarithm of softmax along `dim`: $\\log \\sigma(x)$.",
       "extended": "Computed as `log(softmax(x))` — Lucid's softmax kernel is\nmax-stabilised, so this composite avoids most underflow you'd hit\nfrom naive `log(exp(x) / sum(exp(x)))`.  Pair with\n`F.nll_loss` for a numerically stable cross-entropy.",
@@ -3123,47 +3416,12 @@
       ]
     },
     {
-      "name": "floor_divide",
-      "path": "lucid.floor_divide",
-      "kind": "function",
-      "labels": [],
-      "signature": "floor_divide(a: Tensor, b: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1479",
-      "subcategory": null,
-      "summary": "Element-wise floor division — $\\lfloor a / b \\rfloor$.",
-      "extended": "Equivalent to Python's `//` operator but follows the framework's\nbroadcasting rules and supports `b` as either a tensor or a\nscalar.  Implemented as composite `(a / b).floor()` — gradients\nare zero almost everywhere (the floor is piecewise constant).",
-      "parameters": [
-        {
-          "name": "a",
-          "annotation": "Tensor",
-          "description": "Numerator.",
-          "default": null
-        },
-        {
-          "name": "b",
-          "annotation": "Tensor or Scalar",
-          "description": "Denominator, broadcastable to the shape of `a`.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Broadcast shape of `a` and `b`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
       "name": "diag_embed",
       "path": "lucid.diag_embed",
       "kind": "function",
       "labels": [],
       "signature": "diag_embed(x: Tensor, offset: int = 0, dim1: int = -2, dim2: int = -1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1502",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/elementwise.py#L1502",
       "subcategory": null,
       "summary": "Embed the last dimension of `x` as the diagonal of a new matrix.",
       "extended": "Inverse of `lucid.diagonal`.  For a 1-D input of length `n`\nthe result is shape `(n+|offset|, n+|offset|)`.  For batch\ninputs the last axis is treated as the diagonal vector and\n`dim1` / `dim2` pick which two axes of the *output* carry the\nmatrix.",
@@ -3205,270 +3463,12 @@
       "see_also": []
     },
     {
-      "name": "i0",
-      "path": "lucid.i0",
-      "kind": "function",
-      "labels": [],
-      "signature": "i0(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1373",
-      "subcategory": null,
-      "summary": "Modified Bessel function of the first kind, order 0: $I_0(x)$.",
-      "extended": "Composite implementation via the Abramowitz & Stegun polynomial\napproximation (Table 9.8.1):\n\n* `|x| <= 3.75` — polynomial series in $(x / 3.75)^2$.\n* `|x| >  3.75` — polynomial series in $3.75 / |x|$, multiplied\n  by $e^{|x|} / \\sqrt{|x|}$ to recover the exponential growth.\n\nDifferentiable through both branches (engine primitives only).",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Real input.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "$I_0(x)$ element-wise; always positive."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "frexp",
-      "path": "lucid.frexp",
-      "kind": "function",
-      "labels": [],
-      "signature": "frexp(input: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1165",
-      "subcategory": null,
-      "summary": "Decompose `input` into mantissa `m` and exponent `e` such that\n`input = m * 2**e` with `|m|` in `[0.5, 1)` (or `m == 0`).",
-      "extended": "Returns a `(mantissa, exponent)` tuple.  Exponent dtype is int32.\nNon-finite inputs propagate: NaN → (NaN, 0); ±inf → (±inf, 0); 0 → (0, 0).",
-      "parameters": [],
-      "returns": {
-        "annotation": "tuple[Tensor, Tensor]",
-        "description": ""
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "gcd",
-      "path": "lucid.gcd",
-      "kind": "function",
-      "labels": [],
-      "signature": "gcd(x: Tensor, y: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1197",
-      "subcategory": null,
-      "summary": "Element-wise greatest common divisor for integer tensors.",
-      "extended": "Falls through to Python's `math.gcd` per element — the engine\nhas no native GCD kernel and this path is for low-rate utility use\n(e.g. shape arithmetic), not hot-loop computation.  Non-differentiable.",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Same-shape integer tensors.",
-          "default": null
-        },
-        {
-          "name": "y",
-          "annotation": "Tensor",
-          "description": "Same-shape integer tensors.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Same shape and dtype as `x`.  Each element is\n`math.gcd(x_i, y_i)`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "lgamma",
-      "path": "lucid.lgamma",
-      "kind": "function",
-      "labels": [],
-      "signature": "lgamma(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1273",
-      "subcategory": null,
-      "summary": "Natural log of the gamma function $\\ln \\Gamma(x)$.",
-      "extended": "Implemented as a pure composite over engine primitives — uses the\nLanczos approximation (Numerical Recipes, $g = 7$, 9 series\ncoefficients).  Relative error stays below `1.5e-15` for real\n`x > 0` in float64.  Autograd flows through automatically because\nevery step is an engine op.",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Real input.  Defined for `x > 0`; behaviour on non-positive\nreals is implementation-defined (the series diverges).",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Same shape as `x`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": [
-        {
-          "name": "digamma",
-          "description": "derivative $\\psi(x) = \\frac{d}{dx} \\ln \\Gamma(x)$."
-        }
-      ]
-    },
-    {
-      "name": "erfc",
-      "path": "lucid.erfc",
-      "kind": "function",
-      "labels": [],
-      "signature": "erfc(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1091",
-      "subcategory": null,
-      "summary": "Complementary error function $\\text{erfc}(x) = 1 - \\text{erf}(x)$.",
-      "extended": "Preserves more precision than `1 - erf(x)` would for very large\npositive `x` only if the engine offers a native `erfc` kernel;\nin Lucid this is a composite that *does* subtract `erf(x)` from\none, so accuracy is bounded by `erf` near the tails.",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Real-valued input.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Same shape as `x`, values in $[0, 2]$."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "digamma",
-      "path": "lucid.digamma",
-      "kind": "function",
-      "labels": [],
-      "signature": "digamma(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1307",
-      "subcategory": null,
-      "summary": "Digamma function $\\psi(x) = \\frac{d}{dx} \\ln \\Gamma(x)$.",
-      "extended": "Implemented as a composite of engine primitives so autograd flows\nthrough naturally.  Uses the standard recurrence-plus-asymptotic\nstrategy: shift the argument by 8 via\n$\\psi(x) = \\psi(x + 8) - \\sum_{k=0}^{7} 1/(x + k)$, then\nevaluate the asymptotic Bernoulli series on the shifted argument\nwhere the series converges quickly.",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Real input.  Defined for `x > 0`.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Same shape as `x`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": [
-        {
-          "name": "lgamma",
-          "description": "$\\ln \\Gamma(x)$ itself."
-        }
-      ]
-    },
-    {
-      "name": "copysign",
-      "path": "lucid.copysign",
-      "kind": "function",
-      "labels": [],
-      "signature": "copysign(x: Tensor, y: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1112",
-      "subcategory": null,
-      "summary": "Element-wise sign transplant: magnitudes from `x`, signs from `y`.",
-      "extended": "Useful for sign-preserving operations that need to preserve a sign\nbit independent of an arbitrary magnitude computation.",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Magnitude source; result has `|x|` element-wise.",
-          "default": null
-        },
-        {
-          "name": "y",
-          "annotation": "Tensor",
-          "description": "Sign source; result is positive where `y >= 0`, negative\nwhere `y < 0` (broadcastable to the shape of `x`).",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Broadcast shape of `x` and `y`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "ldexp",
-      "path": "lucid.ldexp",
-      "kind": "function",
-      "labels": [],
-      "signature": "ldexp(input: Tensor, exponent: Tensor | Scalar)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/elementwise.py#L1134",
-      "subcategory": null,
-      "summary": "Element-wise $\\text{input} \\cdot 2^{\\text{exponent}}$.",
-      "extended": "Differentiable through both arguments (uses `exp * log(2)`\ninternally rather than integer bit twiddling), so safe to chain\ninside autograd graphs.",
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "Mantissa.",
-          "default": null
-        },
-        {
-          "name": "exponent",
-          "annotation": "Tensor or Scalar",
-          "description": "Power-of-two exponent; broadcastable to the shape of `input`.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Broadcast shape of `input` and `exponent`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": [
-        {
-          "name": "frexp",
-          "description": "inverse decomposition into mantissa / exponent."
-        }
-      ]
-    },
-    {
       "name": "logdet",
       "path": "lucid.logdet",
       "kind": "function",
       "labels": [],
       "signature": "logdet(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/blas.py#L614",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/blas.py#L614",
       "subcategory": null,
       "summary": "Log-determinant of a square matrix (or batch).",
       "extended": "Returns `log(det(A))`.  Defined only for matrices with `det > 0`;\nreturns NaN otherwise.  Uses `linalg.slogdet` internally.",
@@ -3485,65 +3485,12 @@
       "see_also": []
     },
     {
-      "name": "tril_indices",
-      "path": "lucid.tril_indices",
-      "kind": "function",
-      "labels": [],
-      "signature": "tril_indices(row: int, col: int | None = None, offset: int = 0, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/shape.py#L844",
-      "subcategory": null,
-      "summary": "Indices of the lower-triangular part of an `(row, col)` matrix.",
-      "extended": null,
-      "parameters": [
-        {
-          "name": "row",
-          "annotation": "int",
-          "description": "Number of rows in the matrix being indexed.",
-          "default": null
-        },
-        {
-          "name": "col",
-          "annotation": "int",
-          "description": "Number of columns.  `None` (default) → `col = row`\n(square matrix).",
-          "default": "None"
-        },
-        {
-          "name": "offset",
-          "annotation": "int",
-          "description": "Diagonal offset.  `0` (default) = main diagonal,\npositive = include diagonals above it, negative = exclude\ndiagonals below it.  Indexing keeps positions where\n`j - i <= offset`.",
-          "default": "0"
-        },
-        {
-          "name": "dtype",
-          "annotation": "DTypeLike",
-          "description": "Output dtype (default: int64).",
-          "default": "None"
-        },
-        {
-          "name": "device",
-          "annotation": "DeviceLike",
-          "description": "Placement of the result.",
-          "default": "None"
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Shape `(2, N)`.  Row `0` holds row indices, row `1` holds\ncolumn indices, in row-major order."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
       "name": "triu_indices",
       "path": "lucid.triu_indices",
       "kind": "function",
       "labels": [],
       "signature": "triu_indices(row: int, col: int | None = None, offset: int = 0, dtype: DTypeLike = None, device: DeviceLike = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/shape.py#L890",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/shape.py#L890",
       "subcategory": null,
       "summary": "Indices of the upper-triangular part of an `(row, col)` matrix.",
       "extended": "Mirrors `tril_indices` with the inequality flipped — keeps\nentries where `j - i >= offset`.",
@@ -3591,12 +3538,65 @@
       "see_also": []
     },
     {
+      "name": "tril_indices",
+      "path": "lucid.tril_indices",
+      "kind": "function",
+      "labels": [],
+      "signature": "tril_indices(row: int, col: int | None = None, offset: int = 0, dtype: DTypeLike = None, device: DeviceLike = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/shape.py#L844",
+      "subcategory": null,
+      "summary": "Indices of the lower-triangular part of an `(row, col)` matrix.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "row",
+          "annotation": "int",
+          "description": "Number of rows in the matrix being indexed.",
+          "default": null
+        },
+        {
+          "name": "col",
+          "annotation": "int",
+          "description": "Number of columns.  `None` (default) → `col = row`\n(square matrix).",
+          "default": "None"
+        },
+        {
+          "name": "offset",
+          "annotation": "int",
+          "description": "Diagonal offset.  `0` (default) = main diagonal,\npositive = include diagonals above it, negative = exclude\ndiagonals below it.  Indexing keeps positions where\n`j - i <= offset`.",
+          "default": "0"
+        },
+        {
+          "name": "dtype",
+          "annotation": "DTypeLike",
+          "description": "Output dtype (default: int64).",
+          "default": "None"
+        },
+        {
+          "name": "device",
+          "annotation": "DeviceLike",
+          "description": "Placement of the result.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Shape `(2, N)`.  Row `0` holds row indices, row `1` holds\ncolumn indices, in row-major order."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "combinations",
       "path": "lucid.combinations",
       "kind": "function",
       "labels": [],
       "signature": "combinations(input: Tensor, r: int = 2, with_replacement: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/shape.py#L937",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/shape.py#L937",
       "subcategory": null,
       "summary": "All `r`-length combinations of the elements of a 1-D `input`.",
       "extended": "Composite over Python `itertools` — non-differentiable (treats\nthe values as opaque scalars).  Use only for low-rate utility code;\ndon't put on a hot path.",
@@ -3632,64 +3632,12 @@
       "see_also": []
     },
     {
-      "name": "var_mean",
-      "path": "lucid.var_mean",
-      "kind": "function",
-      "labels": [],
-      "signature": "var_mean(x: Tensor, dim: int | Sequence[int] | None = None, correction: int = 1, keepdim: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L882",
-      "subcategory": null,
-      "summary": "Return `(var, mean)` along `dim` in a single call.",
-      "extended": "Variance counterpart to `std_mean`.  Useful inside\nnormalisation layers where the squared deviation is the quantity\nactually wanted (e.g. BatchNorm / LayerNorm forward computes\n`(x - mean) / sqrt(var + eps)`).",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Input.",
-          "default": null
-        },
-        {
-          "name": "dim",
-          "annotation": "int, sequence of int, or None",
-          "description": "Axis or axes to reduce.  `None` (default) → full-tensor\nreduction.",
-          "default": "None"
-        },
-        {
-          "name": "correction",
-          "annotation": "int",
-          "description": "Bessel correction passed to `lucid.var`.  Default `1`\n(unbiased sample variance).",
-          "default": "1"
-        },
-        {
-          "name": "keepdim",
-          "annotation": "bool",
-          "description": "Retain the reduced axes as size-1 dimensions.  Default\n`False`.",
-          "default": "False"
-        }
-      ],
-      "returns": {
-        "annotation": "tuple of Tensor",
-        "description": "`(var, mean)`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": [
-        {
-          "name": "std_mean",
-          "description": "standard-deviation + mean variant."
-        }
-      ]
-    },
-    {
       "name": "histogram",
       "path": "lucid.histogram",
       "kind": "function",
       "labels": [],
       "signature": "histogram(input: Tensor, bins: int | Sequence[float] = 10, range: tuple[float, float] | None = None, density: bool = False, weight: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L743",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L743",
       "subcategory": null,
       "summary": "Compute a 1-D histogram of `input` values.",
       "extended": null,
@@ -3737,12 +3685,52 @@
       "see_also": []
     },
     {
+      "name": "cov",
+      "path": "lucid.cov",
+      "kind": "function",
+      "labels": [],
+      "signature": "cov(input: Tensor, correction: int = 1)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L228",
+      "subcategory": null,
+      "summary": "Covariance matrix of `input`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Shape `(N,)` (single-variable degenerate case) or `(N, M)`\n— *N* variables observed at *M* time points.",
+          "default": null
+        },
+        {
+          "name": "correction",
+          "annotation": "int",
+          "description": "Bessel correction; the divisor is `max(1, M - correction)`.\nDefault `1` (unbiased sample covariance); pass `0` for the\nbiased population covariance.",
+          "default": "1"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Shape `(N, N)`.  Entry $(i, j)$ =\n$\\frac{1}{M - \\text{correction}}\\sum_k (x_{i,k} - \\bar x_i)(x_{j,k} - \\bar x_j)$."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "corrcoef",
+          "description": "normalised counterpart (Pearson correlation)."
+        }
+      ]
+    },
+    {
       "name": "histogramdd",
       "path": "lucid.histogramdd",
       "kind": "function",
       "labels": [],
       "signature": "histogramdd(input: Tensor, bins: int | Sequence[int] = 10, range: Sequence[tuple[float, float]] | None = None, density: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L656",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L656",
       "subcategory": null,
       "summary": "N-dimensional histogram for arbitrary sample dimension.",
       "extended": null,
@@ -3784,58 +3772,12 @@
       "see_also": []
     },
     {
-      "name": "bincount",
-      "path": "lucid.bincount",
-      "kind": "function",
-      "labels": [],
-      "signature": "bincount(input: Tensor, weights: Tensor | None = None, minlength: int = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L364",
-      "subcategory": null,
-      "summary": "Count occurrences of each integer value in `input`.",
-      "extended": null,
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "1-D non-negative integer tensor.  Negative values raise.",
-          "default": null
-        },
-        {
-          "name": "weights",
-          "annotation": "Tensor",
-          "description": "Same length as `input`.  When supplied, `output[i]` is the\n*sum of weights* for entries with value `i` (rather than the\nplain count).  Default `None`.",
-          "default": "None"
-        },
-        {
-          "name": "minlength",
-          "annotation": "int",
-          "description": "Floor for the output length.  The output has length\n`max(input.max() + 1, minlength)`.  Default `0`.",
-          "default": "0"
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "1-D tensor; dtype is float when `weights` is given, otherwise\nint64."
-      },
-      "raises": [
-        {
-          "annotation": "ValueError",
-          "description": "If `input` contains negative values."
-        }
-      ],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
       "name": "poisson",
       "path": "lucid.poisson",
       "kind": "function",
       "labels": [],
       "signature": "poisson(input: Tensor, generator: _C_engine.Generator | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L493",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L493",
       "subcategory": null,
       "summary": "Sample element-wise from $\\mathrm{Poisson}(\\text{rate} = \\text{input}[i])$.",
       "extended": null,
@@ -3872,26 +3814,44 @@
       "see_also": []
     },
     {
-      "name": "corrcoef",
-      "path": "lucid.corrcoef",
+      "name": "var_mean",
+      "path": "lucid.var_mean",
       "kind": "function",
       "labels": [],
-      "signature": "corrcoef(input: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L263",
+      "signature": "var_mean(x: Tensor, dim: int | Sequence[int] | None = None, correction: int = 1, keepdim: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L882",
       "subcategory": null,
-      "summary": "Pearson correlation-coefficient matrix.",
-      "extended": "Composite of `cov` divided by the outer product of the\nper-variable standard deviations:\n\n$$\nR_{ij} = \\frac{C_{ij}}{\\sqrt{C_{ii}} \\sqrt{C_{jj}}}.\n$$\n\nDiagonal entries are `1.0` (up to floating-point); off-diagonal\nentries fall in $[-1, 1]$.",
+      "summary": "Return `(var, mean)` along `dim` in a single call.",
+      "extended": "Variance counterpart to `std_mean`.  Useful inside\nnormalisation layers where the squared deviation is the quantity\nactually wanted (e.g. BatchNorm / LayerNorm forward computes\n`(x - mean) / sqrt(var + eps)`).",
       "parameters": [
         {
-          "name": "input",
+          "name": "x",
           "annotation": "Tensor",
-          "description": "Shape `(N,)` for a single-variable degenerate case, or\n`(N, M)` for `N` variables observed at `M` time points.",
+          "description": "Input.",
           "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int, sequence of int, or None",
+          "description": "Axis or axes to reduce.  `None` (default) → full-tensor\nreduction.",
+          "default": "None"
+        },
+        {
+          "name": "correction",
+          "annotation": "int",
+          "description": "Bessel correction passed to `lucid.var`.  Default `1`\n(unbiased sample variance).",
+          "default": "1"
+        },
+        {
+          "name": "keepdim",
+          "annotation": "bool",
+          "description": "Retain the reduced axes as size-1 dimensions.  Default\n`False`.",
+          "default": "False"
         }
       ],
       "returns": {
-        "annotation": "Tensor",
-        "description": "Shape `(N, N)` Pearson correlation matrix."
+        "annotation": "tuple of Tensor",
+        "description": "`(var, mean)`."
       },
       "raises": [],
       "examples": [],
@@ -3900,44 +3860,50 @@
       "warns": [],
       "see_also": [
         {
-          "name": "cov",
-          "description": "raw covariance matrix without the std-normalisation."
+          "name": "std_mean",
+          "description": "standard-deviation + mean variant."
         }
       ]
     },
     {
-      "name": "cdist",
-      "path": "lucid.cdist",
+      "name": "multinomial",
+      "path": "lucid.multinomial",
       "kind": "function",
       "labels": [],
-      "signature": "cdist(x1: Tensor, x2: Tensor, p: float = 2.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L302",
+      "signature": "multinomial(input: Tensor, num_samples: int, replacement: bool = False, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L413",
       "subcategory": null,
-      "summary": "Pairwise $L_p$ distance matrix between rows of `x1` and `x2`.",
-      "extended": "Specialised paths exist for `p` in $\\{1, 2, \\infty, 0\\}$;\nother `p` values fall back to the general\n$(\\sum_k |a_k - b_k|^p)^{1/p}$ formula.  For `p=2` the\nnumerically stable expansion\n$\\|a-b\\|^2 = \\|a\\|^2 + \\|b\\|^2 - 2 a \\cdot b^\\top$ is used\nso large coordinates don't lose precision.",
+      "summary": "Draw `num_samples` indices from the categorical distribution defined by `input`.",
+      "extended": "Non-differentiable — gradients of `input` are not propagated\nthrough the sampling step.  Pass an explicit `generator` for an\nisolated PRNG stream; without one, draws come from Lucid's\n`manual_seed`-controlled default Philox generator.",
       "parameters": [
         {
-          "name": "x1",
+          "name": "input",
           "annotation": "Tensor",
-          "description": "Shape `(..., P, M)`.",
+          "description": "Probability weights.  1-D `(K,)` for a single categorical\ndistribution, or 2-D `(B, K)` for a batch of `B`\ndistributions.  Weights are renormalised internally; they need\nnot sum to 1.",
           "default": null
         },
         {
-          "name": "x2",
-          "annotation": "Tensor",
-          "description": "Shape `(..., R, M)`.  Leading batch dimensions are\nbroadcast-compatible with `x1`.",
+          "name": "num_samples",
+          "annotation": "int",
+          "description": "Number of draws per distribution.",
           "default": null
         },
         {
-          "name": "p",
-          "annotation": "float",
-          "description": "$L_p$ exponent.  Default `2.0` (Euclidean).  Use\n`float(\"inf\")` for Chebyshev, `0.0` for the Hamming-style\nnon-zero count.",
-          "default": "2.0"
+          "name": "replacement",
+          "annotation": "bool",
+          "description": "When `True` each draw is independent.  When `False`\n(default) each chosen index is removed before the next draw\nwithin the same row.",
+          "default": "False"
+        },
+        {
+          "name": "generator",
+          "annotation": "engine.Generator",
+          "description": "Override Lucid's default Philox generator with an isolated\nstream.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Shape `(..., P, R)`.  Entry $(\\ldots, i, j)$ =\n$\\|x_1[\\ldots, i, :] - x_2[\\ldots, j, :]\\|_p$."
+        "description": "Integer tensor.  Shape `(num_samples,)` for 1-D input,\n`(B, num_samples)` for 2-D input."
       },
       "raises": [],
       "examples": [],
@@ -3952,7 +3918,7 @@
       "kind": "function",
       "labels": [],
       "signature": "histogram2d(x: Tensor, y: Tensor, bins: int | tuple[int, int] = 10, range: tuple[tuple[float, float], tuple[float, float]] | None = None, density: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L584",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L584",
       "subcategory": null,
       "summary": "Joint 2-D histogram of paired observations `(x[i], y[i])`.",
       "extended": null,
@@ -4000,169 +3966,12 @@
       "see_also": []
     },
     {
-      "name": "multinomial",
-      "path": "lucid.multinomial",
-      "kind": "function",
-      "labels": [],
-      "signature": "multinomial(input: Tensor, num_samples: int, replacement: bool = False, generator: _C_engine.Generator | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L413",
-      "subcategory": null,
-      "summary": "Draw `num_samples` indices from the categorical distribution defined by `input`.",
-      "extended": "Non-differentiable — gradients of `input` are not propagated\nthrough the sampling step.  Pass an explicit `generator` for an\nisolated PRNG stream; without one, draws come from Lucid's\n`manual_seed`-controlled default Philox generator.",
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "Probability weights.  1-D `(K,)` for a single categorical\ndistribution, or 2-D `(B, K)` for a batch of `B`\ndistributions.  Weights are renormalised internally; they need\nnot sum to 1.",
-          "default": null
-        },
-        {
-          "name": "num_samples",
-          "annotation": "int",
-          "description": "Number of draws per distribution.",
-          "default": null
-        },
-        {
-          "name": "replacement",
-          "annotation": "bool",
-          "description": "When `True` each draw is independent.  When `False`\n(default) each chosen index is removed before the next draw\nwithin the same row.",
-          "default": "False"
-        },
-        {
-          "name": "generator",
-          "annotation": "engine.Generator",
-          "description": "Override Lucid's default Philox generator with an isolated\nstream.",
-          "default": "None"
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Integer tensor.  Shape `(num_samples,)` for 1-D input,\n`(B, num_samples)` for 2-D input."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "std_mean",
-      "path": "lucid.std_mean",
-      "kind": "function",
-      "labels": [],
-      "signature": "std_mean(x: Tensor, dim: int | Sequence[int] | None = None, correction: int = 1, keepdim: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L833",
-      "subcategory": null,
-      "summary": "Return `(std, mean)` along `dim` in a single call.",
-      "extended": "Fused convenience over `lucid.std` + `lucid.mean` — the\nengine reduction still scans `x` twice, but the call site is\nshorter and the two outputs share an explicit `correction` /\n`keepdim` contract.",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Input.",
-          "default": null
-        },
-        {
-          "name": "dim",
-          "annotation": "int, sequence of int, or None",
-          "description": "Axis or axes to reduce.  `None` (default) reduces over every\naxis to a scalar pair.",
-          "default": "None"
-        },
-        {
-          "name": "correction",
-          "annotation": "int",
-          "description": "Bessel correction passed to `lucid.std`.  `1` is the\nunbiased sample std (default); `0` gives the biased\npopulation std.",
-          "default": "1"
-        },
-        {
-          "name": "keepdim",
-          "annotation": "bool",
-          "description": "Retain the reduced axes as size-1 dimensions.  Default\n`False`.",
-          "default": "False"
-        }
-      ],
-      "returns": {
-        "annotation": "tuple of Tensor",
-        "description": "`(std, mean)` — same shape relationship as\n`lucid.std` / `lucid.mean` would produce\nindividually."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": [
-        {
-          "name": "var_mean",
-          "description": "variance + mean variant."
-        }
-      ]
-    },
-    {
-      "name": "quantile",
-      "path": "lucid.quantile",
-      "kind": "function",
-      "labels": [],
-      "signature": "quantile(input: Tensor, q: float | Sequence[float] | Tensor, dim: int | None = None, keepdim: bool = False, interpolation: str = 'linear')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L84",
-      "subcategory": null,
-      "summary": "Compute the *q*-th quantile of `input`.",
-      "extended": null,
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "Real-valued input.",
-          "default": null
-        },
-        {
-          "name": "q",
-          "annotation": "float, sequence of float, or Tensor",
-          "description": "Quantile(s) in $[0, 1]$.  A single `q` returns a tensor\nwithout the leading quantile axis; a sequence/tensor adds a\nleading axis of length `len(q)`.",
-          "default": null
-        },
-        {
-          "name": "dim",
-          "annotation": "int",
-          "description": "Axis along which to reduce.  `None` (default) reduces over\nthe flattened input.",
-          "default": "None"
-        },
-        {
-          "name": "keepdim",
-          "annotation": "bool",
-          "description": "Retain the reduced axis as a size-1 dimension.  Default\n`False`.",
-          "default": "False"
-        },
-        {
-          "name": "interpolation",
-          "annotation": "str",
-          "description": "Rule for interpolating between the two samples bracketing the\nquantile.  One of `'linear'` (default), `'lower'`,\n`'higher'`, `'midpoint'`, `'nearest'`.",
-          "default": "'linear'"
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Same dtype as `input`.  Shape depends on `q` / `dim` /\n`keepdim`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": [
-        {
-          "name": "nanquantile",
-          "description": "NaN-aware sibling."
-        }
-      ]
-    },
-    {
       "name": "nanquantile",
       "path": "lucid.nanquantile",
       "kind": "function",
       "labels": [],
       "signature": "nanquantile(input: Tensor, q: float | Sequence[float] | Tensor, dim: int | None = None, keepdim: bool = False, interpolation: str = 'linear')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L139",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L139",
       "subcategory": null,
       "summary": "NaN-aware quantile — same interface as `quantile`, but\nevery `NaN` is excluded from the sort and the per-axis quantile\nis computed over the remaining values.",
       "extended": null,
@@ -4215,32 +4024,26 @@
       ]
     },
     {
-      "name": "cov",
-      "path": "lucid.cov",
+      "name": "corrcoef",
+      "path": "lucid.corrcoef",
       "kind": "function",
       "labels": [],
-      "signature": "cov(input: Tensor, correction: int = 1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/statistics.py#L228",
+      "signature": "corrcoef(input: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L263",
       "subcategory": null,
-      "summary": "Covariance matrix of `input`.",
-      "extended": null,
+      "summary": "Pearson correlation-coefficient matrix.",
+      "extended": "Composite of `cov` divided by the outer product of the\nper-variable standard deviations:\n\n$$\nR_{ij} = \\frac{C_{ij}}{\\sqrt{C_{ii}} \\sqrt{C_{jj}}}.\n$$\n\nDiagonal entries are `1.0` (up to floating-point); off-diagonal\nentries fall in $[-1, 1]$.",
       "parameters": [
         {
           "name": "input",
           "annotation": "Tensor",
-          "description": "Shape `(N,)` (single-variable degenerate case) or `(N, M)`\n— *N* variables observed at *M* time points.",
+          "description": "Shape `(N,)` for a single-variable degenerate case, or\n`(N, M)` for `N` variables observed at `M` time points.",
           "default": null
-        },
-        {
-          "name": "correction",
-          "annotation": "int",
-          "description": "Bessel correction; the divisor is `max(1, M - correction)`.\nDefault `1` (unbiased sample covariance); pass `0` for the\nbiased population covariance.",
-          "default": "1"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Shape `(N, N)`.  Entry $(i, j)$ =\n$\\frac{1}{M - \\text{correction}}\\sum_k (x_{i,k} - \\bar x_i)(x_{j,k} - \\bar x_j)$."
+        "description": "Shape `(N, N)` Pearson correlation matrix."
       },
       "raises": [],
       "examples": [],
@@ -4249,8 +4052,255 @@
       "warns": [],
       "see_also": [
         {
-          "name": "corrcoef",
-          "description": "normalised counterpart (Pearson correlation)."
+          "name": "cov",
+          "description": "raw covariance matrix without the std-normalisation."
+        }
+      ]
+    },
+    {
+      "name": "bincount",
+      "path": "lucid.bincount",
+      "kind": "function",
+      "labels": [],
+      "signature": "bincount(input: Tensor, weights: Tensor | None = None, minlength: int = 0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L364",
+      "subcategory": null,
+      "summary": "Count occurrences of each integer value in `input`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "1-D non-negative integer tensor.  Negative values raise.",
+          "default": null
+        },
+        {
+          "name": "weights",
+          "annotation": "Tensor",
+          "description": "Same length as `input`.  When supplied, `output[i]` is the\n*sum of weights* for entries with value `i` (rather than the\nplain count).  Default `None`.",
+          "default": "None"
+        },
+        {
+          "name": "minlength",
+          "annotation": "int",
+          "description": "Floor for the output length.  The output has length\n`max(input.max() + 1, minlength)`.  Default `0`.",
+          "default": "0"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "1-D tensor; dtype is float when `weights` is given, otherwise\nint64."
+      },
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `input` contains negative values."
+        }
+      ],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "std_mean",
+      "path": "lucid.std_mean",
+      "kind": "function",
+      "labels": [],
+      "signature": "std_mean(x: Tensor, dim: int | Sequence[int] | None = None, correction: int = 1, keepdim: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L833",
+      "subcategory": null,
+      "summary": "Return `(std, mean)` along `dim` in a single call.",
+      "extended": "Fused convenience over `lucid.std` + `lucid.mean` — the\nengine reduction still scans `x` twice, but the call site is\nshorter and the two outputs share an explicit `correction` /\n`keepdim` contract.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Input.",
+          "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int, sequence of int, or None",
+          "description": "Axis or axes to reduce.  `None` (default) reduces over every\naxis to a scalar pair.",
+          "default": "None"
+        },
+        {
+          "name": "correction",
+          "annotation": "int",
+          "description": "Bessel correction passed to `lucid.std`.  `1` is the\nunbiased sample std (default); `0` gives the biased\npopulation std.",
+          "default": "1"
+        },
+        {
+          "name": "keepdim",
+          "annotation": "bool",
+          "description": "Retain the reduced axes as size-1 dimensions.  Default\n`False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "tuple of Tensor",
+        "description": "`(std, mean)` — same shape relationship as\n`lucid.std` / `lucid.mean` would produce\nindividually."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "var_mean",
+          "description": "variance + mean variant."
+        }
+      ]
+    },
+    {
+      "name": "quantile",
+      "path": "lucid.quantile",
+      "kind": "function",
+      "labels": [],
+      "signature": "quantile(input: Tensor, q: float | Sequence[float] | Tensor, dim: int | None = None, keepdim: bool = False, interpolation: str = 'linear')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L84",
+      "subcategory": null,
+      "summary": "Compute the *q*-th quantile of `input`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Real-valued input.",
+          "default": null
+        },
+        {
+          "name": "q",
+          "annotation": "float, sequence of float, or Tensor",
+          "description": "Quantile(s) in $[0, 1]$.  A single `q` returns a tensor\nwithout the leading quantile axis; a sequence/tensor adds a\nleading axis of length `len(q)`.",
+          "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis along which to reduce.  `None` (default) reduces over\nthe flattened input.",
+          "default": "None"
+        },
+        {
+          "name": "keepdim",
+          "annotation": "bool",
+          "description": "Retain the reduced axis as a size-1 dimension.  Default\n`False`.",
+          "default": "False"
+        },
+        {
+          "name": "interpolation",
+          "annotation": "str",
+          "description": "Rule for interpolating between the two samples bracketing the\nquantile.  One of `'linear'` (default), `'lower'`,\n`'higher'`, `'midpoint'`, `'nearest'`.",
+          "default": "'linear'"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Same dtype as `input`.  Shape depends on `q` / `dim` /\n`keepdim`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "nanquantile",
+          "description": "NaN-aware sibling."
+        }
+      ]
+    },
+    {
+      "name": "cdist",
+      "path": "lucid.cdist",
+      "kind": "function",
+      "labels": [],
+      "signature": "cdist(x1: Tensor, x2: Tensor, p: float = 2.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/statistics.py#L302",
+      "subcategory": null,
+      "summary": "Pairwise $L_p$ distance matrix between rows of `x1` and `x2`.",
+      "extended": "Specialised paths exist for `p` in $\\{1, 2, \\infty, 0\\}$;\nother `p` values fall back to the general\n$(\\sum_k |a_k - b_k|^p)^{1/p}$ formula.  For `p=2` the\nnumerically stable expansion\n$\\|a-b\\|^2 = \\|a\\|^2 + \\|b\\|^2 - 2 a \\cdot b^\\top$ is used\nso large coordinates don't lose precision.",
+      "parameters": [
+        {
+          "name": "x1",
+          "annotation": "Tensor",
+          "description": "Shape `(..., P, M)`.",
+          "default": null
+        },
+        {
+          "name": "x2",
+          "annotation": "Tensor",
+          "description": "Shape `(..., R, M)`.  Leading batch dimensions are\nbroadcast-compatible with `x1`.",
+          "default": null
+        },
+        {
+          "name": "p",
+          "annotation": "float",
+          "description": "$L_p$ exponent.  Default `2.0` (Euclidean).  Use\n`float(\"inf\")` for Chebyshev, `0.0` for the Hamming-style\nnon-zero count.",
+          "default": "2.0"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Shape `(..., P, R)`.  Entry $(\\ldots, i, j)$ =\n$\\|x_1[\\ldots, i, :] - x_2[\\ldots, j, :]\\|_p$."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "amax",
+      "path": "lucid.amax",
+      "kind": "function",
+      "labels": [],
+      "signature": "amax(x: Tensor, dim: int | Sequence[int] | None = None, keepdim: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/reductions.py#L239",
+      "subcategory": null,
+      "summary": "Reduce `x` to per-slice maxima along `dim` — values only.",
+      "extended": "Multi-axis sibling of `lucid.max` that returns *only* the\nreduced values (never the indices) and accepts a tuple of axes\nfor a single fused reduction.  Use when you don't need the\n`(values, indices)` tuple `lucid.max` returns.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Input tensor.",
+          "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int, sequence of int, or None",
+          "description": "Axis or axes to reduce.  `None` (default) reduces over every\naxis and returns a 0-D scalar tensor.",
+          "default": "None"
+        },
+        {
+          "name": "keepdim",
+          "annotation": "bool",
+          "description": "Retain the reduced axes as size-1 dimensions.  Default\n`False`.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Maxima along `dim`; shape depends on `dim` and `keepdim`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "amin",
+          "description": "analogous minimum reduction."
+        },
+        {
+          "name": "lucid.max",
+          "description": "returns `(values, indices)` for a single axis."
         }
       ]
     },
@@ -4260,7 +4310,7 @@
       "kind": "function",
       "labels": [],
       "signature": "amin(x: Tensor, dim: int | Sequence[int] | None = None, keepdim: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/reductions.py#L278",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/reductions.py#L278",
       "subcategory": null,
       "summary": "Reduce `x` to per-slice minima along `dim` — values only.",
       "extended": "Mirror image of `amax`.  Accepts a tuple of axes for a fused\nmulti-axis reduction; returns just the minimum values (never the\nindices).",
@@ -4310,7 +4360,7 @@
       "kind": "function",
       "labels": [],
       "signature": "count_nonzero(x: Tensor, dim: int | Sequence[int] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/reductions.py#L201",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/reductions.py#L201",
       "subcategory": null,
       "summary": "Count non-zero elements along `dim` (or whole tensor when `None`).",
       "extended": null,
@@ -4342,38 +4392,26 @@
       "see_also": []
     },
     {
-      "name": "amax",
-      "path": "lucid.amax",
+      "name": "argwhere",
+      "path": "lucid.argwhere",
       "kind": "function",
       "labels": [],
-      "signature": "amax(x: Tensor, dim: int | Sequence[int] | None = None, keepdim: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/reductions.py#L239",
+      "signature": "argwhere(x: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L478",
       "subcategory": null,
-      "summary": "Reduce `x` to per-slice maxima along `dim` — values only.",
-      "extended": "Multi-axis sibling of `lucid.max` that returns *only* the\nreduced values (never the indices) and accepts a tuple of axes\nfor a single fused reduction.  Use when you don't need the\n`(values, indices)` tuple `lucid.max` returns.",
+      "summary": "Return the coordinates of every non-zero element in `x`.",
+      "extended": "Thin alias for `lucid.nonzero` named to match the NumPy /\nreference-framework convention.  The output is a synchronisation\npoint on GPU streams — the kernel can't know how many non-zeros\nthere are without a device→host count.",
       "parameters": [
         {
           "name": "x",
           "annotation": "Tensor",
-          "description": "Input tensor.",
+          "description": "Input tensor of any shape and dtype; zero is determined by the\nusual truthiness rules (`0` for numeric dtypes, `False` for\nbool).",
           "default": null
-        },
-        {
-          "name": "dim",
-          "annotation": "int, sequence of int, or None",
-          "description": "Axis or axes to reduce.  `None` (default) reduces over every\naxis and returns a 0-D scalar tensor.",
-          "default": "None"
-        },
-        {
-          "name": "keepdim",
-          "annotation": "bool",
-          "description": "Retain the reduced axes as size-1 dimensions.  Default\n`False`.",
-          "default": "False"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Maxima along `dim`; shape depends on `dim` and `keepdim`."
+        "description": "Shape `(N, x.ndim)` `int64` tensor; row `i` lists the\nmulti-dimensional index of the `i`-th non-zero element in\nrow-major order."
       },
       "raises": [],
       "examples": [],
@@ -4382,130 +4420,10 @@
       "warns": [],
       "see_also": [
         {
-          "name": "amin",
-          "description": "analogous minimum reduction."
-        },
-        {
-          "name": "lucid.max",
-          "description": "returns `(values, indices)` for a single axis."
+          "name": "lucid.nonzero",
+          "description": "the underlying engine call."
         }
       ]
-    },
-    {
-      "name": "index_copy",
-      "path": "lucid.index_copy",
-      "kind": "function",
-      "labels": [],
-      "signature": "index_copy(input: Tensor, dim: int, index: Tensor, source: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L157",
-      "subcategory": null,
-      "summary": "Return a copy of `input` with slices at `index` replaced by `source`.",
-      "extended": "Composite implementation: first zeroes the indexed slices via\n`index_fill`, then adds `source` via `index_add`.\nDifferentiable through both `input` and `source`.",
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "Destination tensor; not mutated (a fresh copy is returned).",
-          "default": null
-        },
-        {
-          "name": "dim",
-          "annotation": "int",
-          "description": "Axis along which slices are addressed.",
-          "default": null
-        },
-        {
-          "name": "index",
-          "annotation": "Tensor",
-          "description": "1-D `int32` / `int64` tensor of positions along `dim`.\nLength must equal `source.shape[dim]`.",
-          "default": null
-        },
-        {
-          "name": "source",
-          "annotation": "Tensor",
-          "description": "Replacement slices.  All non-`dim` dimensions must match\n`input`; `source.shape[dim]` must equal `index.shape[0]`.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Same shape and dtype as `input`; values at the indexed\npositions are taken from `source`, others from `input`."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "index_fill",
-      "path": "lucid.index_fill",
-      "kind": "function",
-      "labels": [],
-      "signature": "index_fill(input: Tensor, dim: int, index: Tensor, value: float)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L57",
-      "subcategory": null,
-      "summary": "Return a copy of `input` with positions `index` along `dim` set to `value`.",
-      "extended": "Autograd flows through the *unmasked* positions; filled positions\nreceive zero gradient (they're overwritten by a constant).",
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "Source tensor; not mutated.",
-          "default": null
-        },
-        {
-          "name": "dim",
-          "annotation": "int",
-          "description": "Axis along which `index` addresses slices.",
-          "default": null
-        },
-        {
-          "name": "index",
-          "annotation": "Tensor",
-          "description": "1-D integer tensor of positions along `dim`.",
-          "default": null
-        },
-        {
-          "name": "value",
-          "annotation": "float",
-          "description": "Scalar to write into every indexed position.",
-          "default": null
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "Same shape and dtype as `input`; indexed slices replaced by\n`value`, others unchanged."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "masked_scatter",
-      "path": "lucid.masked_scatter",
-      "kind": "function",
-      "labels": [],
-      "signature": "masked_scatter(input: Tensor, mask: Tensor, source: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L288",
-      "subcategory": null,
-      "summary": "Copy elements from `source` into `input` at positions where `mask` is True.",
-      "extended": null,
-      "parameters": [],
-      "returns": {
-        "annotation": "Tensor",
-        "description": ""
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
     },
     {
       "name": "index_add",
@@ -4513,7 +4431,7 @@
       "kind": "function",
       "labels": [],
       "signature": "index_add(input: Tensor, dim: int, index: Tensor, source: Tensor, alpha: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L105",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L105",
       "subcategory": null,
       "summary": "Return `input` with `alpha * source` accumulated at `index` positions along `dim`.",
       "extended": "Differentiable through both `input` and `source`.  `alpha` is\naccumulated as a Python constant — gradients pass through cleanly\nas if the multiplication were inlined.",
@@ -4561,106 +4479,12 @@
       "see_also": []
     },
     {
-      "name": "index_put_",
-      "path": "lucid.index_put_",
-      "kind": "function",
-      "labels": [],
-      "signature": "index_put_(input: Tensor, indices: list[Tensor] | tuple[Tensor, ...], values: Tensor, accumulate: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L427",
-      "subcategory": null,
-      "summary": "In-place variant of `index_put` — mutates `input` so the\nwrite is visible through the same Tensor reference.",
-      "extended": "Internally this rebinds `input._impl` to the freshly-built result,\nmatching the convention Lucid already uses for engine-level in-place\nops (`add_`, `mul_`).  Storage-level mutation is not currently\navailable for composite indexing — autograd consumers should treat\nthe returned tensor as a new node.",
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "Destination; mutated in place via `_impl` rebind.",
-          "default": null
-        },
-        {
-          "name": "indices",
-          "annotation": "list of Tensor or tuple of Tensor",
-          "description": "Per-axis index tensors (one per dimension of `input`); same\ncontract as `index_put`.",
-          "default": null
-        },
-        {
-          "name": "values",
-          "annotation": "Tensor",
-          "description": "Values to write at the addressed positions.",
-          "default": null
-        },
-        {
-          "name": "accumulate",
-          "annotation": "bool",
-          "description": "When `True` add to existing values (duplicate indices sum);\nwhen `False` (default) overwrite (duplicate indices resolve\nto the last write).",
-          "default": "False"
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": "The same `input` tensor, now holding the updated values."
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "put",
-      "path": "lucid.put",
-      "kind": "function",
-      "labels": [],
-      "signature": "put(input: Tensor, index: Tensor, source: Tensor, accumulate: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L386",
-      "subcategory": null,
-      "summary": "Write `source` into `input` at the *flat* positions in `index`.",
-      "extended": "Mirrors the reference framework's `Tensor.put` semantics: indices\nrefer to the row-major linearisation of `input`, regardless of its\nshape.  `accumulate=True` performs additive scatter (duplicates\nadd), otherwise duplicates resolve to the last write (`scatter`\nsemantics).",
-      "parameters": [
-        {
-          "name": "input",
-          "annotation": "Tensor",
-          "description": "Destination — its shape is preserved in the output.",
-          "default": null
-        },
-        {
-          "name": "index",
-          "annotation": "Tensor",
-          "description": "1-D (or flattenable) integer tensor of flat positions in\n`[0, input.numel())`.",
-          "default": null
-        },
-        {
-          "name": "source",
-          "annotation": "Tensor",
-          "description": "Values to scatter; must be flattenable to the same length as\n`index`.",
-          "default": null
-        },
-        {
-          "name": "accumulate",
-          "annotation": "bool",
-          "description": "If True, add to the existing value at each position; otherwise\noverwrite.",
-          "default": "False"
-        }
-      ],
-      "returns": {
-        "annotation": "Tensor",
-        "description": ""
-      },
-      "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
       "name": "index_put",
       "path": "lucid.index_put",
       "kind": "function",
       "labels": [],
       "signature": "index_put(input: Tensor, indices: list[Tensor] | tuple[Tensor, ...], values: Tensor, accumulate: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L305",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L317",
       "subcategory": null,
       "summary": "Out-of-place advanced-indexing write.",
       "extended": "Equivalent to `out = input.clone(); out[indices] = values` (or\n`out[indices] += values` when `accumulate=True`) under reference\nframework semantics.  `indices` is a sequence of integer tensors,\none per leading dimension; broadcasting between them follows the\nstandard rules.\n\nCurrently restricted to the case where `len(indices) ==\ninput.ndim` and every index tensor broadcasts to a common shape —\npartial advanced indexing (where trailing dims are implicitly\nsliced) is filed as a follow-up.",
@@ -4702,38 +4526,26 @@
       "see_also": []
     },
     {
-      "name": "argwhere",
-      "path": "lucid.argwhere",
+      "name": "masked_scatter",
+      "path": "lucid.masked_scatter",
       "kind": "function",
       "labels": [],
-      "signature": "argwhere(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L466",
+      "signature": "masked_scatter(input: Tensor, mask: Tensor, source: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L300",
       "subcategory": null,
-      "summary": "Return the coordinates of every non-zero element in `x`.",
-      "extended": "Thin alias for `lucid.nonzero` named to match the NumPy /\nreference-framework convention.  The output is a synchronisation\npoint on GPU streams — the kernel can't know how many non-zeros\nthere are without a device→host count.",
-      "parameters": [
-        {
-          "name": "x",
-          "annotation": "Tensor",
-          "description": "Input tensor of any shape and dtype; zero is determined by the\nusual truthiness rules (`0` for numeric dtypes, `False` for\nbool).",
-          "default": null
-        }
-      ],
+      "summary": "Copy elements from `source` into `input` at positions where `mask` is True.",
+      "extended": null,
+      "parameters": [],
       "returns": {
         "annotation": "Tensor",
-        "description": "Shape `(N, x.ndim)` `int64` tensor; row `i` lists the\nmulti-dimensional index of the `i`-th non-zero element in\nrow-major order."
+        "description": ""
       },
       "raises": [],
       "examples": [],
       "notes": [],
       "attributes": [],
       "warns": [],
-      "see_also": [
-        {
-          "name": "lucid.nonzero",
-          "description": "the underlying engine call."
-        }
-      ]
+      "see_also": []
     },
     {
       "name": "scatter_reduce",
@@ -4741,7 +4553,7 @@
       "kind": "function",
       "labels": [],
       "signature": "scatter_reduce(input: Tensor, dim: int, index: Tensor, src: Tensor, reduce: str = 'sum', include_self: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/fedce9a17/lucid/_ops/composite/indexing.py#L192",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L204",
       "subcategory": null,
       "summary": "Reduce `src` into `input` along `dim` at positions given by `index`.",
       "extended": "Multi-reduction sibling of `scatter_add`.  When several entries\nof `src` target the same position the chosen `reduce` op decides\nhow they combine.  `include_self` controls whether the existing\nvalue in `input` participates in the reduction or is replaced.",
@@ -4786,6 +4598,194 @@
       "returns": {
         "annotation": "Tensor",
         "description": "Same shape and dtype as `input`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "index_fill",
+      "path": "lucid.index_fill",
+      "kind": "function",
+      "labels": [],
+      "signature": "index_fill(input: Tensor, dim: int, index: Tensor, value: float)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L57",
+      "subcategory": null,
+      "summary": "Return a copy of `input` with positions `index` along `dim` set to `value`.",
+      "extended": "Autograd flows through the *unmasked* positions; filled positions\nreceive zero gradient (they're overwritten by a constant).",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Source tensor; not mutated.",
+          "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis along which `index` addresses slices.",
+          "default": null
+        },
+        {
+          "name": "index",
+          "annotation": "Tensor",
+          "description": "1-D integer tensor of positions along `dim`.",
+          "default": null
+        },
+        {
+          "name": "value",
+          "annotation": "float",
+          "description": "Scalar to write into every indexed position.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Same shape and dtype as `input`; indexed slices replaced by\n`value`, others unchanged."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "put",
+      "path": "lucid.put",
+      "kind": "function",
+      "labels": [],
+      "signature": "put(input: Tensor, index: Tensor, source: Tensor, accumulate: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L398",
+      "subcategory": null,
+      "summary": "Write `source` into `input` at the *flat* positions in `index`.",
+      "extended": "Mirrors the reference framework's `Tensor.put` semantics: indices\nrefer to the row-major linearisation of `input`, regardless of its\nshape.  `accumulate=True` performs additive scatter (duplicates\nadd), otherwise duplicates resolve to the last write (`scatter`\nsemantics).",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Destination — its shape is preserved in the output.",
+          "default": null
+        },
+        {
+          "name": "index",
+          "annotation": "Tensor",
+          "description": "1-D (or flattenable) integer tensor of flat positions in\n`[0, input.numel())`.",
+          "default": null
+        },
+        {
+          "name": "source",
+          "annotation": "Tensor",
+          "description": "Values to scatter; must be flattenable to the same length as\n`index`.",
+          "default": null
+        },
+        {
+          "name": "accumulate",
+          "annotation": "bool",
+          "description": "If True, add to the existing value at each position; otherwise\noverwrite.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "index_copy",
+      "path": "lucid.index_copy",
+      "kind": "function",
+      "labels": [],
+      "signature": "index_copy(input: Tensor, dim: int, index: Tensor, source: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L157",
+      "subcategory": null,
+      "summary": "Return a copy of `input` with slices at `index` replaced by `source`.",
+      "extended": "Single set-scatter: the 1-D `index` is broadcast along `dim` to\n`source`'s shape and applied through the engine `scatter_set` primitive\n— one MPSGraph `scatterAlongAxis` (Set mode) op when compiled, or\n`mlx.put_along_axis` eager on GPU.  Differentiable through both `input`\nand `source`.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Destination tensor; not mutated (a fresh copy is returned).",
+          "default": null
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Axis along which slices are addressed.",
+          "default": null
+        },
+        {
+          "name": "index",
+          "annotation": "Tensor",
+          "description": "1-D `int32` / `int64` tensor of positions along `dim`.\nLength must equal `source.shape[dim]`.",
+          "default": null
+        },
+        {
+          "name": "source",
+          "annotation": "Tensor",
+          "description": "Replacement slices.  All non-`dim` dimensions must match\n`input`; `source.shape[dim]` must equal `index.shape[0]`.",
+          "default": null
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Same shape and dtype as `input`; values at the indexed\npositions are taken from `source`, others from `input`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "index_put_",
+      "path": "lucid.index_put_",
+      "kind": "function",
+      "labels": [],
+      "signature": "index_put_(input: Tensor, indices: list[Tensor] | tuple[Tensor, ...], values: Tensor, accumulate: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/aef442cdf/lucid/_ops/composite/indexing.py#L439",
+      "subcategory": null,
+      "summary": "In-place variant of `index_put` — mutates `input` so the\nwrite is visible through the same Tensor reference.",
+      "extended": "Internally this rebinds `input._impl` to the freshly-built result,\nmatching the convention Lucid already uses for engine-level in-place\nops (`add_`, `mul_`).  Storage-level mutation is not currently\navailable for composite indexing — autograd consumers should treat\nthe returned tensor as a new node.",
+      "parameters": [
+        {
+          "name": "input",
+          "annotation": "Tensor",
+          "description": "Destination; mutated in place via `_impl` rebind.",
+          "default": null
+        },
+        {
+          "name": "indices",
+          "annotation": "list of Tensor or tuple of Tensor",
+          "description": "Per-axis index tensors (one per dimension of `input`); same\ncontract as `index_put`.",
+          "default": null
+        },
+        {
+          "name": "values",
+          "annotation": "Tensor",
+          "description": "Values to write at the addressed positions.",
+          "default": null
+        },
+        {
+          "name": "accumulate",
+          "annotation": "bool",
+          "description": "When `True` add to existing values (duplicate indices sum);\nwhen `False` (default) overwrite (duplicate indices resolve\nto the last write).",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "The same `input` tensor, now holding the updated values."
       },
       "raises": [],
       "examples": [],

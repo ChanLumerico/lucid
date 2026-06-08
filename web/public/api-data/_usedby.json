@@ -1837,6 +1837,20 @@
       "module": "lucid.models.vision.zfnet._model"
     }
   ],
+  "lucid.models._mixins.CausalLMMixin": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._model"
+    }
+  ],
   "lucid.models._mixins.ClassificationHeadMixin": [
     {
       "kind": "module",
@@ -2081,20 +2095,6 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.zfnet._model"
-    }
-  ],
-  "lucid.models._mixins.GenerationMixin": [
-    {
-      "kind": "module",
-      "module": "lucid.models"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._model"
     }
   ],
   "lucid.models._mixins.MaskedLMMixin": [
@@ -3618,6 +3618,10 @@
     }
   ],
   "lucid.models.text.transformer._model.TransformerForSeq2SeqLM": [
+    {
+      "kind": "module",
+      "module": "lucid.models._utils._compiled_decode"
+    },
     {
       "kind": "module",
       "module": "lucid.models.text.transformer"
@@ -8344,6 +8348,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models._utils._compiled_decode"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models._utils._detection"
     },
     {
@@ -8563,6 +8571,10 @@
     {
       "kind": "module",
       "module": "lucid.models._mixins"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models._sampling"
     },
     {
       "kind": "module",
@@ -11779,6 +11791,88 @@
     {
       "kind": "module",
       "module": "lucid.utils.data.dataloader"
+    }
+  ],
+  "lucid.utils.cache": [
+    {
+      "kind": "module",
+      "module": "lucid.models._mixins"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models._output"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models._utils._compiled_decode"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.transformer._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.attention"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.transformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils"
+    }
+  ],
+  "lucid.utils.cache._base.Cache": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache._dynamic"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache._encoder_decoder"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache._static"
+    }
+  ],
+  "lucid.utils.cache._dynamic.DynamicCache": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache._encoder_decoder"
+    }
+  ],
+  "lucid.utils.cache._encoder_decoder.EncoderDecoderCache": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache"
+    }
+  ],
+  "lucid.utils.cache._static.StaticCache": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.cache._encoder_decoder"
     }
   ],
   "lucid.utils.checkpoint.checkpoint": [
