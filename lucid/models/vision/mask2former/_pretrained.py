@@ -56,7 +56,10 @@ def _build(
     )
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mask2former_swin_tiny adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mask2former_swin_tiny adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",
@@ -113,7 +116,10 @@ def mask2former_swin_tiny(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mask2former_swin_small adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mask2former_swin_small adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",
@@ -168,7 +174,10 @@ def mask2former_swin_small(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mask2former_swin_base adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mask2former_swin_base adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",
@@ -220,7 +229,10 @@ def mask2former_swin_base(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mask2former_swin_large adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mask2former_swin_large adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",

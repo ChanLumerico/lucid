@@ -28,7 +28,9 @@ _CFG_ALEXNET = RCNNConfig(
 
 
 def _det(cfg: RCNNConfig, kw: dict[str, object]) -> RCNNForObjectDetection:
-    return RCNNForObjectDetection(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return RCNNForObjectDetection(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ---------------------------------------------------------------------------

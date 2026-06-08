@@ -81,7 +81,9 @@ def _b(cfg: PVTConfig, kw: dict[str, object]) -> PVT:
 
 
 def _c(cfg: PVTConfig, kw: dict[str, object]) -> PVTForImageClassification:
-    return PVTForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return PVTForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -412,7 +414,9 @@ def pvt_tiny(pretrained: bool = False, **overrides: object) -> PVT:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b0_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: pvt_v2_b0_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -472,7 +476,9 @@ def pvt_v2_b0_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: pvt_v2_b1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -530,7 +536,9 @@ def pvt_v2_b1_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: pvt_v2_b2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -588,7 +596,9 @@ def pvt_v2_b2_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b3_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: pvt_v2_b3_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -646,7 +656,9 @@ def pvt_v2_b3_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b4_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: pvt_v2_b4_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -704,7 +716,9 @@ def pvt_v2_b4_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b5_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: pvt_v2_b5_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="pvt",
     model_type="pvt",

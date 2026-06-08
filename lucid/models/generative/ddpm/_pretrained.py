@@ -79,7 +79,9 @@ def _apply(cfg: DDPMConfig, overrides: dict[str, object]) -> DDPMConfig:
 # ── Bare U-Net trunks ─────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: ddpm_cifar adds a typed weights= kwarg (DDPMCifarWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: ddpm_cifar adds a typed weights= kwarg (DDPMCifarWeights); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="ddpm",
     model_type="ddpm",
@@ -145,7 +147,9 @@ def ddpm_cifar(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: ddpm_lsun adds a typed weights= kwarg (DDPMChurchWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: ddpm_lsun adds a typed weights= kwarg (DDPMChurchWeights); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="ddpm",
     model_type="ddpm",
@@ -263,7 +267,9 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
 # ── Image-generation heads ───────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: ddpm_cifar_gen adds a typed weights= kwarg (DDPMCifarWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: ddpm_cifar_gen adds a typed weights= kwarg (DDPMCifarWeights); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-generation",
     family="ddpm",
     model_type="ddpm",
@@ -324,7 +330,9 @@ def ddpm_cifar_gen(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: ddpm_lsun_gen adds a typed weights= kwarg (DDPMChurchWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: ddpm_lsun_gen adds a typed weights= kwarg (DDPMChurchWeights); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-generation",
     family="ddpm",
     model_type="ddpm",

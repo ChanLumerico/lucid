@@ -93,7 +93,9 @@ def _apply(cfg: BERTConfig, overrides: dict[str, object]) -> BERTConfig:
 # ── Backbones ─────────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_tiny adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_tiny adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="bert",
     model_type="bert",
@@ -154,7 +156,9 @@ def bert_tiny(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_mini adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_mini adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="bert",
     model_type="bert",
@@ -209,7 +213,9 @@ def bert_mini(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_small adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_small adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="bert",
     model_type="bert",
@@ -264,7 +270,10 @@ def bert_small(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_medium adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_medium adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="bert",
     model_type="bert",
@@ -320,7 +329,9 @@ def bert_medium(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_base adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_base adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="bert",
     model_type="bert",
@@ -382,7 +393,9 @@ def bert_base(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_large adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_large adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="bert",
     model_type="bert",
@@ -445,7 +458,10 @@ def bert_large(
 # ── Masked-LM heads ───────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_base_mlm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_base_mlm adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="masked-lm",
     family="bert",
     model_type="bert",
@@ -504,7 +520,10 @@ def bert_base_mlm(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_large_mlm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_large_mlm adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="masked-lm",
     family="bert",
     model_type="bert",
@@ -564,7 +583,10 @@ def bert_large_mlm(
 # ── Sequence / token / QA classification heads ────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_base_cls adds a typed weights= kwarg (the encoder BERTBaseWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_base_cls adds a typed weights= kwarg (the encoder BERTBaseWeights); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="sequence-classification",
     family="bert",
     model_type="bert",
@@ -632,7 +654,10 @@ def bert_base_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_large_cls adds a typed weights= kwarg (the encoder BERTLargeWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_large_cls adds a typed weights= kwarg (the encoder BERTLargeWeights); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="sequence-classification",
     family="bert",
     model_type="bert",
@@ -698,7 +723,10 @@ def bert_large_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_base_token_cls adds a typed weights= kwarg (the encoder BERTBaseWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_base_token_cls adds a typed weights= kwarg (the encoder BERTBaseWeights);
+# the ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="token-classification",
     family="bert",
     model_type="bert",
@@ -770,7 +798,10 @@ def bert_base_token_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_base_qa adds a typed weights= kwarg (the encoder BERTBaseWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_base_qa adds a typed weights= kwarg (the encoder BERTBaseWeights); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="question-answering",
     family="bert",
     model_type="bert",
@@ -835,7 +866,9 @@ def bert_base_qa(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: bert_large_qa adds a typed weights= kwarg (BERTLargeQAWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: bert_large_qa adds a typed weights= kwarg (BERTLargeQAWeights); the ModelFactory
+# protocol predates the weights system and names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="question-answering",
     family="bert",
     model_type="bert",

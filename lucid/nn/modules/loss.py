@@ -1002,7 +1002,9 @@ class KLDivLoss(Module):
     >>> loss = criterion(log_p, log_q)
     """
 
-    def __init__(self, reduction: ReductionKL = "mean", log_target: bool = False) -> None:
+    def __init__(
+        self, reduction: ReductionKL = "mean", log_target: bool = False
+    ) -> None:
         """Initialise the KLDivLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.reduction = reduction
@@ -2310,7 +2312,9 @@ class MultiLabelSoftMarginLoss(Module):
     >>> loss = criterion(logits, targets)
     """
 
-    def __init__(self, weight: Tensor | None = None, reduction: Reduction = "mean") -> None:
+    def __init__(
+        self, weight: Tensor | None = None, reduction: Reduction = "mean"
+    ) -> None:
         """Initialise the MultiLabelSoftMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
         self.weight = weight

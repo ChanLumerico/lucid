@@ -72,7 +72,9 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     return Xception(cfg)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: xception_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: xception_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="xception",
     model_type="xception",

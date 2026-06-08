@@ -25,7 +25,9 @@ def _b(cfg: MobileNetV1Config, kw: dict[str, object]) -> MobileNetV1:
 def _c(
     cfg: MobileNetV1Config, kw: dict[str, object]
 ) -> MobileNetV1ForImageClassification:
-    return MobileNetV1ForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return MobileNetV1ForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -235,7 +237,10 @@ def mobilenet_v1_025(pretrained: bool = False, **overrides: object) -> MobileNet
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mobilenet_v1_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="mobilenet",
     model_type="mobilenet_v1",

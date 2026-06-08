@@ -81,7 +81,9 @@ def _b(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNet:
 
 
 def _c(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNetForImageClassification:
-    return CSPNetForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return CSPNetForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ---------------------------------------------------------------------------

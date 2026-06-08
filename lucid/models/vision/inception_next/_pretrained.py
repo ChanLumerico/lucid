@@ -40,7 +40,9 @@ def _b(cfg: InceptionNeXtConfig, kw: dict[str, object]) -> InceptionNeXt:
 def _c(
     cfg: InceptionNeXtConfig, kw: dict[str, object]
 ) -> InceptionNeXtForImageClassification:
-    return InceptionNeXtForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return InceptionNeXtForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -101,7 +103,10 @@ def inception_next_tiny(pretrained: bool = False, **overrides: object) -> Incept
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: inception_next_tiny_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: inception_next_tiny_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="inception_next",
     model_type="inception_next",
@@ -214,7 +219,10 @@ def inception_next_small(
     return _b(_CFG_S, overrides)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: inception_next_small_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: inception_next_small_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="inception_next",
     model_type="inception_next",
@@ -325,7 +333,10 @@ def inception_next_base(pretrained: bool = False, **overrides: object) -> Incept
     return _b(_CFG_B, overrides)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: inception_next_base_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: inception_next_base_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="inception_next",
     model_type="inception_next",

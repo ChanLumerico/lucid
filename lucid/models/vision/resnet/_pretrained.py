@@ -271,7 +271,9 @@ def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    cfg = (
+        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    )
     return ResNet(cfg)
 
 
@@ -324,7 +326,9 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    cfg = (
+        replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    )
     return ResNet(cfg)
 
 
@@ -333,7 +337,9 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
 # ---------------------------------------------------------------------------
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -414,7 +420,9 @@ def resnet_18_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -481,7 +489,9 @@ def resnet_34_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -562,7 +572,9 @@ def resnet_50_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -622,14 +634,18 @@ def resnet_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNet101Weights, pretrained, weights)
-    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    cfg = (
+        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    )
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnet_101_cls")
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnet_152_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnet_152_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -690,7 +706,9 @@ def resnet_152_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNet152Weights, pretrained, weights)
-    cfg = replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    cfg = (
+        replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    )
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnet_152_cls")
@@ -751,11 +769,18 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_WIDE50, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE50
+    cfg = (
+        replace(_CFG_WIDE50, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_WIDE50
+    )
     return ResNet(cfg)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: wide_resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: wide_resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -814,7 +839,11 @@ def wide_resnet_50_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(WideResNet50Weights, pretrained, weights)
-    cfg = replace(_CFG_WIDE50, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE50
+    cfg = (
+        replace(_CFG_WIDE50, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_WIDE50
+    )
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="wide_resnet_50_cls")
@@ -867,11 +896,18 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_WIDE101, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE101
+    cfg = (
+        replace(_CFG_WIDE101, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_WIDE101
+    )
     return ResNet(cfg)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: wide_resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: wide_resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -930,7 +966,11 @@ def wide_resnet_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(WideResNet101Weights, pretrained, weights)
-    cfg = replace(_CFG_WIDE101, **cast(dict[str, Any], overrides)) if overrides else _CFG_WIDE101
+    cfg = (
+        replace(_CFG_WIDE101, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_WIDE101
+    )
     model = ResNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="wide_resnet_101_cls")
@@ -989,7 +1029,9 @@ def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    cfg = (
+        replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    )
     return ResNet(cfg)
 
 
@@ -1034,7 +1076,9 @@ def resnet_200_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    cfg = (
+        replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    )
     return ResNetForImageClassification(cfg)
 
 
@@ -1089,7 +1133,9 @@ def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    cfg = (
+        replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    )
     return ResNet(cfg)
 
 
@@ -1134,5 +1180,7 @@ def resnet_269_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    cfg = (
+        replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    )
     return ResNetForImageClassification(cfg)

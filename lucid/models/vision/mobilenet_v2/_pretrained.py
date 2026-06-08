@@ -67,7 +67,9 @@ def mobilenet_v2(pretrained: bool = False, **overrides: object) -> MobileNetV2:
     >>> out.last_hidden_state.shape
     (1, 1280, 1, 1)
     """
-    cfg = replace(_CFG_100, **cast(dict[str, Any], overrides)) if overrides else _CFG_100
+    cfg = (
+        replace(_CFG_100, **cast(dict[str, Any], overrides)) if overrides else _CFG_100
+    )
     return MobileNetV2(cfg)
 
 
@@ -119,14 +121,19 @@ def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNet
     >>> out.last_hidden_state.shape
     (1, 1280, 1, 1)
     """
-    cfg = replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
+    cfg = (
+        replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
+    )
     return MobileNetV2(cfg)
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mobilenet_v2_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="mobilenet_v2",
     model_type="mobilenet_v2",
@@ -199,7 +206,9 @@ def mobilenet_v2_cls(
     >>> model = mobilenet_v2_cls(weights=MobileNetV2Weights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(MobileNetV2Weights, pretrained, weights)
-    cfg = replace(_CFG_100, **cast(dict[str, Any], overrides)) if overrides else _CFG_100
+    cfg = (
+        replace(_CFG_100, **cast(dict[str, Any], overrides)) if overrides else _CFG_100
+    )
     model = MobileNetV2ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v2_cls")
@@ -252,5 +261,7 @@ def mobilenet_v2_075_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
+    cfg = (
+        replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
+    )
     return MobileNetV2ForImageClassification(cfg)

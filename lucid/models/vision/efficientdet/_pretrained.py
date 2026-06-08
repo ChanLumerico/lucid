@@ -14,7 +14,9 @@ from lucid.models.vision.efficientdet._model import EfficientDetForObjectDetecti
 def _det(
     cfg: EfficientDetConfig, kw: dict[str, object]
 ) -> EfficientDetForObjectDetection:
-    return EfficientDetForObjectDetection(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return EfficientDetForObjectDetection(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 @register_model(

@@ -49,7 +49,10 @@ def _build(
     )
 
 
-@register_model(  # type: ignore[arg-type]  # reason: maskformer_resnet50 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: maskformer_resnet50 adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="semantic-segmentation",
     family="maskformer",
     model_type="maskformer",
@@ -119,7 +122,10 @@ def maskformer_resnet50(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: maskformer_resnet101 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: maskformer_resnet101 adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="semantic-segmentation",
     family="maskformer",
     model_type="maskformer",

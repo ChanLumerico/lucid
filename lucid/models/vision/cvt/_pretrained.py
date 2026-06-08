@@ -189,7 +189,9 @@ def cvt_w24(pretrained: bool = False, **overrides: object) -> CvT:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
-    cfg = replace(_CFG_W24, **cast(dict[str, Any], overrides)) if overrides else _CFG_W24
+    cfg = (
+        replace(_CFG_W24, **cast(dict[str, Any], overrides)) if overrides else _CFG_W24
+    )
     return CvT(cfg)
 
 
@@ -363,7 +365,9 @@ def cvt_w24_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CvTW24Weights, pretrained, weights)
-    cfg = replace(_CFG_W24, **cast(dict[str, Any], overrides)) if overrides else _CFG_W24
+    cfg = (
+        replace(_CFG_W24, **cast(dict[str, Any], overrides)) if overrides else _CFG_W24
+    )
     model = CvTForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="cvt_w24_cls")

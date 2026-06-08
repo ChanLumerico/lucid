@@ -27,7 +27,9 @@ def _b(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXt:
 
 
 def _c(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXtForImageClassification:
-    return ConvNeXtForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return ConvNeXtForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -271,7 +273,9 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: convnext_tiny_cls adds typed weights= kwarg; ModelFactory protocol predates v3.1 weights system.
+# reason: convnext_tiny_cls adds typed weights= kwarg; ModelFactory protocol
+# predates v3.1 weights system.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="convnext",
     model_type="convnext",

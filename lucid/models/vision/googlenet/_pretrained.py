@@ -71,7 +71,9 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     return GoogLeNet(cfg)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: googlenet_cls adds a typed weights= kwarg (GoogLeNetWeights); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: googlenet_cls adds a typed weights= kwarg (GoogLeNetWeights); the ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="googlenet",
     model_type="googlenet",

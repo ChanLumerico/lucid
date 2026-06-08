@@ -115,7 +115,11 @@ def sk_resnet_18(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
-    cfg = replace(_CFG_SK18, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK18
+    cfg = (
+        replace(_CFG_SK18, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK18
+    )
     return SKNet(cfg)
 
 
@@ -164,7 +168,11 @@ def sk_resnet_34(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
-    cfg = replace(_CFG_SK34, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK34
+    cfg = (
+        replace(_CFG_SK34, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK34
+    )
     return SKNet(cfg)
 
 
@@ -216,7 +224,11 @@ def sk_resnet_50(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_SK50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK50
+    cfg = (
+        replace(_CFG_SK50, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK50
+    )
     return SKNet(cfg)
 
 
@@ -264,7 +276,11 @@ def sk_resnet_101(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_SK101, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK101
+    cfg = (
+        replace(_CFG_SK101, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK101
+    )
     return SKNet(cfg)
 
 
@@ -324,7 +340,11 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK_RX50
+    cfg = (
+        replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK_RX50
+    )
     return SKNet(cfg)
 
 
@@ -333,7 +353,9 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
 # ---------------------------------------------------------------------------
 
 
-@register_model(  # type: ignore[arg-type]  # reason: sk_resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: sk_resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="sknet",
     model_type="sknet",
@@ -401,14 +423,20 @@ def sk_resnet_18_cls(
     >>> model = sk_resnet_18_cls(weights=SKResNet18Weights.RA_IN1K)
     """
     entry = weights_mod.resolve_weights(SKResNet18Weights, pretrained, weights)
-    cfg = replace(_CFG_SK18, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK18
+    cfg = (
+        replace(_CFG_SK18, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK18
+    )
     model = SKNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="sk_resnet_18_cls")
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: sk_resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: sk_resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="sknet",
     model_type="sknet",
@@ -467,7 +495,11 @@ def sk_resnet_34_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SKResNet34Weights, pretrained, weights)
-    cfg = replace(_CFG_SK34, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK34
+    cfg = (
+        replace(_CFG_SK34, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK34
+    )
     model = SKNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="sk_resnet_34_cls")
@@ -521,7 +553,11 @@ def sk_resnet_50_cls(
     >>> out.logits.shape
     (2, 10)
     """
-    cfg = replace(_CFG_SK50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK50
+    cfg = (
+        replace(_CFG_SK50, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK50
+    )
     return SKNetForImageClassification(cfg)
 
 
@@ -571,7 +607,11 @@ def sk_resnet_101_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = replace(_CFG_SK101, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK101
+    cfg = (
+        replace(_CFG_SK101, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK101
+    )
     return SKNetForImageClassification(cfg)
 
 
@@ -623,5 +663,9 @@ def sk_resnext_50_32x4d_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    cfg = replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides)) if overrides else _CFG_SK_RX50
+    cfg = (
+        replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SK_RX50
+    )
     return SKNetForImageClassification(cfg)

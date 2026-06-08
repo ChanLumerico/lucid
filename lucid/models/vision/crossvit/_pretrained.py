@@ -86,7 +86,9 @@ def _b(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViT:
 
 
 def _c(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViTForImageClassification:
-    return CrossViTForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return CrossViTForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ---------------------------------------------------------------------------

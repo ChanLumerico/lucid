@@ -73,7 +73,10 @@ def inception_resnet_v2(
     return InceptionResNetV2(cfg)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: inception_resnet_v2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: inception_resnet_v2_cls adds typed weights= kwarg (per-model
+# WeightsEnum); ModelFactory protocol predates the v3.1 weights system and
+# still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="inception_resnet",
     model_type="inception_resnet",

@@ -38,7 +38,9 @@ def _b(cfg: DenseNetConfig, kw: dict[str, object]) -> DenseNet:
 
 
 def _c(cfg: DenseNetConfig, kw: dict[str, object]) -> DenseNetForImageClassification:
-    return DenseNetForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return DenseNetForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

@@ -70,7 +70,11 @@ def mobilenet_v3_large(pretrained: bool = False, **overrides: object) -> MobileN
     >>> out.last_hidden_state.shape
     (1, 960, 1, 1)
     """
-    cfg = replace(_CFG_LARGE, **cast(dict[str, Any], overrides)) if overrides else _CFG_LARGE
+    cfg = (
+        replace(_CFG_LARGE, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_LARGE
+    )
     return MobileNetV3(cfg)
 
 
@@ -122,14 +126,21 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
     >>> out.last_hidden_state.shape
     (1, 576, 1, 1)
     """
-    cfg = replace(_CFG_SMALL, **cast(dict[str, Any], overrides)) if overrides else _CFG_SMALL
+    cfg = (
+        replace(_CFG_SMALL, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SMALL
+    )
     return MobileNetV3(cfg)
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v3_large_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mobilenet_v3_large_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="mobilenet_v3",
     model_type="mobilenet_v3",
@@ -196,14 +207,21 @@ def mobilenet_v3_large_cls(
     >>> model = mobilenet_v3_large_cls(weights=MobileNetV3LargeWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(MobileNetV3LargeWeights, pretrained, weights)
-    cfg = replace(_CFG_LARGE, **cast(dict[str, Any], overrides)) if overrides else _CFG_LARGE
+    cfg = (
+        replace(_CFG_LARGE, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_LARGE
+    )
     model = MobileNetV3ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v3_large_cls")
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v3_small_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mobilenet_v3_small_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="mobilenet_v3",
     model_type="mobilenet_v3",
@@ -269,7 +287,11 @@ def mobilenet_v3_small_cls(
     >>> model = mobilenet_v3_small_cls(weights=MobileNetV3SmallWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(MobileNetV3SmallWeights, pretrained, weights)
-    cfg = replace(_CFG_SMALL, **cast(dict[str, Any], overrides)) if overrides else _CFG_SMALL
+    cfg = (
+        replace(_CFG_SMALL, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_SMALL
+    )
     model = MobileNetV3ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v3_small_cls")

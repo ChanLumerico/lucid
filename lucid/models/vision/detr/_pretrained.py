@@ -48,10 +48,14 @@ _CFG_R101 = DETRConfig(
 
 
 def _det(cfg: DETRConfig, kw: dict[str, object]) -> DETRForObjectDetection:
-    return DETRForObjectDetection(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return DETRForObjectDetection(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
-@register_model(  # type: ignore[arg-type]  # reason: detr_resnet50 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: detr_resnet50 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="detr",
     model_type="detr",
@@ -119,7 +123,9 @@ def detr_resnet50(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: detr_resnet101 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: detr_resnet101 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="detr",
     model_type="detr",

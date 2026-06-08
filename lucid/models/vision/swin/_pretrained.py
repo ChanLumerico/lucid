@@ -232,7 +232,9 @@ def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: swin_tiny_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: swin_tiny_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="swin",
     model_type="swin",
@@ -297,7 +299,9 @@ def swin_tiny_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: swin_small_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: swin_small_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="swin",
     model_type="swin",
@@ -357,7 +361,9 @@ def swin_small_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: swin_base_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: swin_base_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="swin",
     model_type="swin",
@@ -419,7 +425,9 @@ def swin_base_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: swin_large_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: swin_large_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="swin",
     model_type="swin",

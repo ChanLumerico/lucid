@@ -20,7 +20,10 @@ def _seg(cfg: MaskRCNNConfig, kw: dict[str, object]) -> MaskRCNNForObjectDetecti
     )
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mask_rcnn adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mask_rcnn adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="mask_rcnn",
     model_type="mask_rcnn",
@@ -79,7 +82,10 @@ def mask_rcnn(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: mask_rcnn_resnet50_fpn adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: mask_rcnn_resnet50_fpn adds a typed weights= kwarg (per-model WeightsEnum);
+# the ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="mask_rcnn",
     model_type="mask_rcnn",

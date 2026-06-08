@@ -50,7 +50,9 @@ def _b(cfg: EfficientFormerConfig, kw: dict[str, object]) -> EfficientFormer:
 def _c(
     cfg: EfficientFormerConfig, kw: dict[str, object]
 ) -> EfficientFormerForImageClassification:
-    return EfficientFormerForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return EfficientFormerForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -206,7 +208,10 @@ def efficientformer_l7(
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: efficientformer_l1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: efficientformer_l1_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",
@@ -270,7 +275,10 @@ def efficientformer_l1_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: efficientformer_l3_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: efficientformer_l3_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",
@@ -332,7 +340,10 @@ def efficientformer_l3_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: efficientformer_l7_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: efficientformer_l7_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",

@@ -26,7 +26,9 @@ def _b(cfg: ViTConfig, kw: dict[str, object]) -> ViT:
 
 
 def _c(cfg: ViTConfig, kw: dict[str, object]) -> ViTForImageClassification:
-    return ViTForImageClassification(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+    return ViTForImageClassification(
+        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -276,7 +278,10 @@ def vit_huge_14(pretrained: bool = False, **overrides: object) -> ViT:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: vit_base_16_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: vit_base_16_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="vit",
     model_type="vit",
@@ -344,7 +349,10 @@ def vit_base_16_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: vit_base_32_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: vit_base_32_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="vit",
     model_type="vit",
@@ -404,7 +412,10 @@ def vit_base_32_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: vit_large_16_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: vit_large_16_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="vit",
     model_type="vit",
@@ -465,7 +476,10 @@ def vit_large_16_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: vit_large_32_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: vit_large_32_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="vit",
     model_type="vit",

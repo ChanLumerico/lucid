@@ -228,7 +228,9 @@ def se_resnet_101(pretrained: bool = False, **overrides: object) -> SENet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    cfg = (
+        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    )
     return SENet(cfg)
 
 
@@ -278,7 +280,9 @@ def se_resnet_152(pretrained: bool = False, **overrides: object) -> SENet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    cfg = (
+        replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    )
     return SENet(cfg)
 
 
@@ -287,7 +291,9 @@ def se_resnet_152(pretrained: bool = False, **overrides: object) -> SENet:
 # ---------------------------------------------------------------------------
 
 
-@register_model(  # type: ignore[arg-type]  # reason: se_resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: se_resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -353,7 +359,9 @@ def se_resnet_18_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: se_resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: se_resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -419,7 +427,9 @@ def se_resnet_34_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: se_resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: se_resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -488,7 +498,10 @@ def se_resnet_50_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: se_resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: se_resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -547,14 +560,19 @@ def se_resnet_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SEResNet101Weights, pretrained, weights)
-    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    cfg = (
+        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    )
     model = SENetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="se_resnet_101_cls")
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: se_resnet_152_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: se_resnet_152_cls adds typed weights= kwarg (per-model WeightsEnum);
+# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -614,7 +632,9 @@ def se_resnet_152_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SEResNet152Weights, pretrained, weights)
-    cfg = replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    cfg = (
+        replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
+    )
     model = SENetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="se_resnet_152_cls")

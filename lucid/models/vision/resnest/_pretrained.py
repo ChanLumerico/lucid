@@ -222,7 +222,9 @@ def resnest_101(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    cfg = (
+        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    )
     return ResNeSt(cfg)
 
 
@@ -270,7 +272,9 @@ def resnest_200(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    cfg = (
+        replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    )
     return ResNeSt(cfg)
 
 
@@ -321,7 +325,9 @@ def resnest_269(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
-    cfg = replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    cfg = (
+        replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    )
     return ResNeSt(cfg)
 
 
@@ -430,7 +436,9 @@ def resnest_26_cls(
     return ResNeStForImageClassification(cfg)
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnest_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnest_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -497,7 +505,9 @@ def resnest_50_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnest_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnest_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -555,14 +565,18 @@ def resnest_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNeSt101Weights, pretrained, weights)
-    cfg = replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    cfg = (
+        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
+    )
     model = ResNeStForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnest_101_cls")
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnest_200_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnest_200_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -620,14 +634,18 @@ def resnest_200_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNeSt200Weights, pretrained, weights)
-    cfg = replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    cfg = (
+        replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
+    )
     model = ResNeStForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnest_200_cls")
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: resnest_269_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+# reason: resnest_269_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
+# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -686,7 +704,9 @@ def resnest_269_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNeSt269Weights, pretrained, weights)
-    cfg = replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    cfg = (
+        replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
+    )
     model = ResNeStForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnest_269_cls")

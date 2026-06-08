@@ -31,7 +31,10 @@ def _apply(cfg: RoFormerConfig, overrides: dict[str, object]) -> RoFormerConfig:
 # ── Backbone ──────────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: roformer adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: roformer adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="base",
     family="roformer",
     model_type="roformer",
@@ -107,7 +110,10 @@ def roformer(
 # ── Task heads ────────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]  # reason: roformer_mlm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: roformer_mlm adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="masked-lm",
     family="roformer",
     model_type="roformer",
@@ -166,7 +172,10 @@ def roformer_mlm(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: roformer_cls adds a typed weights= kwarg (the encoder RoFormerWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: roformer_cls adds a typed weights= kwarg (the encoder RoFormerWeights); the
+# ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="sequence-classification",
     family="roformer",
     model_type="roformer",
@@ -232,7 +241,10 @@ def roformer_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]  # reason: roformer_token_cls adds a typed weights= kwarg (the encoder RoFormerWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+# reason: roformer_token_cls adds a typed weights= kwarg (the encoder RoFormerWeights);
+# the ModelFactory protocol predates the weights system and names only pretrained +
+# **overrides.
+@register_model(  # type: ignore[arg-type]
     task="token-classification",
     family="roformer",
     model_type="roformer",
