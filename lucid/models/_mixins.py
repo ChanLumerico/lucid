@@ -15,6 +15,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor.tensor import Tensor
+from lucid.utils.cache import DynamicCache
 
 if TYPE_CHECKING:
     from lucid.models._output import GenerationOutput
@@ -361,6 +362,7 @@ class GenerationMixin:
         repetition_penalty: float = 1.0,
         pad_token_id: int | None = None,
         eos_token_id: int | None = None,
+        use_cache: bool = True,
     ) -> Tensor:
         r"""Autoregressively extend ``input_ids`` until a stop condition.
 
@@ -398,6 +400,11 @@ class GenerationMixin:
         eos_token_id : int or None, optional, keyword-only
             Stop generating per-sequence once this id is emitted.
             Defaults to ``config.eos_token_id``.
+        use_cache : bool, optional, keyword-only, default=True
+            Use a :class:`~lucid.utils.cache.DynamicCache` so each step only
+            encodes the new token (O(T²) generation) instead of re-running the
+            whole prefix (O(T³)).  Falls back to re-encoding automatically when
+            the host model does not accept a cache.
 
         Returns
         -------
@@ -464,17 +471,32 @@ class GenerationMixin:
         # we don't repeatedly re-allocate the full prefix tensor.
         out_tokens: list[Tensor] = [input_ids[:, t] for t in range(T_prompt)]
 
+        # KV cache: encode the whole prompt once, then feed only the new token
+        # each step (O(T²) total instead of O(T³)).  ``past`` is ``None`` when
+        # caching is disabled or the host model does not accept a cache, in
+        # which case we re-encode the full prefix every step.
+        model = cast(nn.Module, self)
+        past: DynamicCache | None = DynamicCache() if use_cache else None
+        model_input = input_ids
+
         for _step in range(stop_len - T_prompt):
-            # Build current prefix: (B, T_cur)
-            prefix = lucid.stack(out_tokens, dim=1)
-            outputs = cast(nn.Module, self)(prefix)
+            if past is not None:
+                try:
+                    outputs = model(model_input, use_cache=True, past_key_values=past)
+                except TypeError:
+                    # Host model has no cache support — degrade to re-encoding.
+                    past = None
+                    outputs = model(lucid.stack(out_tokens, dim=1))
+            else:
+                outputs = model(lucid.stack(out_tokens, dim=1))
             logits = cast(
                 Tensor, outputs.logits if hasattr(outputs, "logits") else outputs
             )
             next_logits = logits[:, -1, :]  # (B, vocab)
 
-            # ── repetition penalty ────────────────────────────────────────
+            # ── repetition penalty (over the full running prefix) ─────────
             if repetition_penalty != 1.0:
+                prefix = lucid.stack(out_tokens, dim=1)
                 next_logits = _apply_repetition_penalty(
                     next_logits, prefix, repetition_penalty
                 )
@@ -499,10 +521,14 @@ class GenerationMixin:
                     next_list[b] = pad_token_id
                 elif eos_token_id is not None and next_list[b] == eos_token_id:
                     finished[b] = True
-            out_tokens.append(lucid.tensor(next_list, device=dev).long())
+            new_row = lucid.tensor(next_list, device=dev).long()
+            out_tokens.append(new_row)
 
             if all(finished):
                 break
+
+            # With a cache the next step only needs the freshly produced token.
+            model_input = new_row.reshape(B, 1)
 
         return lucid.stack(out_tokens, dim=1).long()
 

@@ -35,6 +35,7 @@ from lucid.models._output import (
     Seq2SeqLMOutput,
 )
 from lucid.models.text.transformer._config import TransformerConfig
+from lucid.utils.cache import DynamicCache, EncoderDecoderCache
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -195,15 +196,20 @@ class TransformerModel(PretrainedModel):
         """Target-side embedding — used to tie an LM head against."""
         return self.tgt_tok_emb
 
-    def _embed(self, ids: Tensor, table: nn.Module) -> Tensor:
-        """Token-embed + scale-by-√d + sin/cos PE + dropout."""
+    def _embed(self, ids: Tensor, table: nn.Module, pos_offset: int = 0) -> Tensor:
+        """Token-embed + scale-by-√d + sin/cos PE + dropout.
+
+        ``pos_offset`` shifts the positional-encoding slice so cached decode
+        steps embed the new tokens at their true absolute positions.
+        """
         T = int(ids.shape[1])
-        if T > self._max_pos:
+        if pos_offset + T > self._max_pos:
             raise ValueError(
-                f"Sequence length {T} exceeds max_position_embeddings {self._max_pos}"
+                f"Sequence length {pos_offset + T} exceeds "
+                f"max_position_embeddings {self._max_pos}"
             )
         emb = cast(Tensor, table(ids)) * math.sqrt(self._d_model)
-        pe = cast(Tensor, self.positional_encoding())[:T]  # (T, d_model)
+        pe = cast(Tensor, self.positional_encoding())[pos_offset : pos_offset + T]
         emb = emb + pe.unsqueeze(0)  # broadcast over batch
         return cast(Tensor, self.dropout(emb))
 
@@ -226,12 +232,28 @@ class TransformerModel(PretrainedModel):
         memory: Tensor,
         tgt_attention_mask: Tensor | None = None,
         memory_attention_mask: Tensor | None = None,
+        *,
+        past_key_value: EncoderDecoderCache | None = None,
+        use_cache: bool = False,
     ) -> Tensor:
-        """Run only the decoder against precomputed encoder memory."""
+        """Run only the decoder against precomputed encoder memory.
+
+        When ``use_cache`` is set, ``past_key_value`` accumulates the decoder
+        self-attention keys/values (and caches the cross-attention projection
+        of ``memory`` once), so each step only needs the freshly appended
+        ``tgt_ids`` token(s).
+        """
         T = int(tgt_ids.shape[1])
         dev = tgt_ids.device.type
-        tgt_emb = self._embed(tgt_ids, self.tgt_tok_emb)
-        tgt_mask = _causal_mask(T, device=dev)
+        past_len = (
+            past_key_value.get_seq_length()
+            if (use_cache and past_key_value is not None)
+            else 0
+        )
+        tgt_emb = self._embed(tgt_ids, self.tgt_tok_emb, pos_offset=past_len)
+        # A single new token attends over the whole cached history (no causal
+        # mask needed); the first/full pass uses the (T, T) causal mask.
+        tgt_mask = None if past_len > 0 else _causal_mask(T, device=dev)
         tgt_kpm = _key_padding_to_kpm(tgt_attention_mask)
         mem_kpm = _key_padding_to_kpm(memory_attention_mask)
         return cast(
@@ -242,6 +264,8 @@ class TransformerModel(PretrainedModel):
                 tgt_mask=tgt_mask,
                 tgt_key_padding_mask=tgt_kpm,
                 memory_key_padding_mask=mem_kpm,
+                past_key_value=past_key_value,
+                use_cache=use_cache,
             ),
         )
 
@@ -399,6 +423,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
         eos_token_id: int | None = None,
         pad_token_id: int | None = None,
         attention_mask: Tensor | None = None,
+        use_cache: bool = True,
     ) -> Tensor:
         """Greedy seq2seq decoding.
 
@@ -417,6 +442,8 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             pad_token_id:  Right-padding for finished rows; defaults to
                            ``config.pad_token_id`` then 0.
             attention_mask: Optional source padding mask.
+            use_cache:     Use an ``EncoderDecoderCache`` so each step only
+                           decodes the new token (default True).
 
         Returns:
             ``(B, T_out)`` int Tensor of generated target tokens.
@@ -437,11 +464,29 @@ class TransformerForSeq2SeqLM(PretrainedModel):
         finished: list[bool] = [False] * B
         out_tokens: list[Tensor] = [lucid.tensor([bos] * B, device=dev).long()]
 
+        # Encoder-decoder KV cache: decoder self-attention grows each step and
+        # the cross-attention projection of ``memory`` is cached once.  Falls
+        # back to re-decoding the whole prefix when caching is disabled.
+        past = (
+            EncoderDecoderCache(DynamicCache(), DynamicCache()) if use_cache else None
+        )
+        model_input = lucid.stack(out_tokens, dim=1)  # (B, 1) — just BOS
+
         for _ in range(max_length - 1):
-            tgt = lucid.stack(out_tokens, dim=1)  # (B, T_cur)
-            decoded = self.transformer.decode(
-                tgt, memory, memory_attention_mask=attention_mask
-            )  # (B, T_cur, d_model)
+            if past is not None:
+                decoded = self.transformer.decode(
+                    model_input,
+                    memory,
+                    memory_attention_mask=attention_mask,
+                    past_key_value=past,
+                    use_cache=True,
+                )
+            else:
+                decoded = self.transformer.decode(
+                    lucid.stack(out_tokens, dim=1),
+                    memory,
+                    memory_attention_mask=attention_mask,
+                )
             next_logits = cast(Tensor, self.lm_head(decoded[:, -1, :]))  # (B, V)
             next_tok = lucid.argmax(next_logits, dim=-1)  # (B,)
 
@@ -451,10 +496,14 @@ class TransformerForSeq2SeqLM(PretrainedModel):
                     row[b] = pad
                 elif eos is not None and row[b] == eos:
                     finished[b] = True
-            out_tokens.append(lucid.tensor(row, device=dev).long())
+            new_row = lucid.tensor(row, device=dev).long()
+            out_tokens.append(new_row)
 
             if all(finished):
                 break
+
+            # With a cache the next step only needs the freshly produced token.
+            model_input = new_row.reshape(B, 1)
 
         return lucid.stack(out_tokens, dim=1).long()
 

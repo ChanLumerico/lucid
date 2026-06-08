@@ -41,6 +41,7 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.models.text.gpt2._config import GPT2Config
+from lucid.utils.cache import Cache, DynamicCache
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Multi-head causal self-attention (fused QKV) — identical shape to GPT-1
@@ -71,16 +72,33 @@ class _GPT2SelfAttention(nn.Module):
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
+        *,
+        past_key_value: Cache | None = None,
+        layer_idx: int = 0,
+        cache_position: Tensor | None = None,
+        use_cache: bool = False,
     ) -> Tensor:
         B, T, _ = hidden.shape
         H, D = self.num_heads, self.head_dim
 
         qkv = cast(Tensor, self.c_attn(hidden))
         qkv = qkv.reshape(B, T, 3, H, D).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]
+        q, k, v = qkv[0], qkv[1], qkv[2]  # each (B, H, T, D)
 
-        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
-        causal = self.causal_mask[:, :, :T, :T]
+        # KV cache: prepend the accumulated past and store the new tokens.  The
+        # query stays length T (the new tokens); keys/values span the full
+        # history so the new tokens attend over everything seen so far.
+        past_len = 0
+        if past_key_value is not None:
+            past_len = past_key_value.get_seq_length(layer_idx)
+            k, v = past_key_value.update(k, v, layer_idx)
+        t_total = int(k.shape[2])  # past_len + T
+
+        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, T, t_total)
+        # Causal slice for query positions [past_len, past_len+T) over keys
+        # [0, t_total).  With no cache (past_len=0, t_total=T) this is the
+        # original [:, :, :T, :T] block.
+        causal = self.causal_mask[:, :, past_len : past_len + T, :t_total]
         scores = scores + (1.0 - causal) * -1e4
         if attention_mask is not None:
             scores = scores + attention_mask
@@ -134,11 +152,23 @@ class _GPT2Block(nn.Module):
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
+        *,
+        past_key_value: Cache | None = None,
+        layer_idx: int = 0,
+        cache_position: Tensor | None = None,
+        use_cache: bool = False,
     ) -> Tensor:
         # x = x + Attn(LN(x))   — pre-LN: residual carries un-normalised state
         a = cast(
             Tensor,
-            self.attn(cast(Tensor, self.ln_1(hidden)), attention_mask=attention_mask),
+            self.attn(
+                cast(Tensor, self.ln_1(hidden)),
+                attention_mask=attention_mask,
+                past_key_value=past_key_value,
+                layer_idx=layer_idx,
+                cache_position=cache_position,
+                use_cache=use_cache,
+            ),
         )
         hidden = hidden + a
         m = cast(Tensor, self.mlp(cast(Tensor, self.ln_2(hidden))))
@@ -282,21 +312,41 @@ class GPT2Model(PretrainedModel):
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
+        *,
+        past_key_values: Cache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
     ) -> BaseModelOutput:
         B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
-        if T > self._max_pos:
+        past_len = (
+            past_key_values.get_seq_length() if past_key_values is not None else 0
+        )
+        if past_len + T > self._max_pos:
             raise ValueError(
-                f"Sequence length {T} exceeds max_position_embeddings {self._max_pos}"
+                f"Sequence length {past_len + T} exceeds "
+                f"max_position_embeddings {self._max_pos}"
             )
 
-        pos_ids = self.position_ids[:, :T]
+        # Positions are offset by the cached length so the new tokens get their
+        # true absolute positions (past_len, past_len+1, ...).
+        pos_ids = self.position_ids[:, past_len : past_len + T]
         tok_emb = cast(Tensor, self.wte(input_ids))
         pos_emb = cast(Tensor, self.wpe(pos_ids))
         hidden = cast(Tensor, self.drop(tok_emb + pos_emb))
 
         ext_mask = extended_attention_mask(attention_mask, (B, T))
-        for block in self.h:
-            hidden = cast(Tensor, block(hidden, attention_mask=ext_mask))
+        for layer_idx, block in enumerate(self.h):
+            hidden = cast(
+                Tensor,
+                block(
+                    hidden,
+                    attention_mask=ext_mask,
+                    past_key_value=past_key_values,
+                    layer_idx=layer_idx,
+                    cache_position=cache_position,
+                    use_cache=use_cache,
+                ),
+            )
 
         hidden = cast(Tensor, self.ln_f(hidden))
         return BaseModelOutput(last_hidden_state=hidden)
@@ -381,10 +431,23 @@ class GPT2LMHeadModel(PretrainedModel, GenerationMixin):
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
+        *,
+        past_key_values: Cache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
     ) -> CausalLMOutput:
+        if use_cache and past_key_values is None:
+            past_key_values = DynamicCache()
+
         outputs = cast(
             BaseModelOutput,
-            self.transformer(input_ids, attention_mask=attention_mask),
+            self.transformer(
+                input_ids,
+                attention_mask=attention_mask,
+                past_key_values=past_key_values,
+                use_cache=use_cache,
+                cache_position=cache_position,
+            ),
         )
         logits = cast(Tensor, self.lm_head(outputs.last_hidden_state))
 
@@ -395,7 +458,11 @@ class GPT2LMHeadModel(PretrainedModel, GenerationMixin):
             shift_labels = labels[:, 1:].reshape((B * (T - 1),)).long()
             loss = F.cross_entropy(shift_logits, shift_labels, ignore_index=-100)
 
-        return CausalLMOutput(logits=logits, loss=loss)
+        return CausalLMOutput(
+            logits=logits,
+            loss=loss,
+            past_key_values=past_key_values if use_cache else None,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

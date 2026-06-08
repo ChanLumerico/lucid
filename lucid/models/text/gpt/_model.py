@@ -35,6 +35,7 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.models.text.gpt._config import GPTConfig
+from lucid.utils.cache import Cache, DynamicCache
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Multi-head causal self-attention (fused QKV)
@@ -73,6 +74,11 @@ class _GPTSelfAttention(nn.Module):
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
+        *,
+        past_key_value: Cache | None = None,
+        layer_idx: int = 0,
+        cache_position: Tensor | None = None,
+        use_cache: bool = False,
     ) -> Tensor:
         B, T, _ = hidden.shape
         H, D = self.num_heads, self.head_dim
@@ -83,8 +89,17 @@ class _GPTSelfAttention(nn.Module):
         k: Tensor = qkv[1]
         v: Tensor = qkv[2]
 
-        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, T, T)
-        causal = self.causal_mask[:, :, :T, :T]
+        # KV cache: keys/values span the full history, query stays length T.
+        past_len = 0
+        if past_key_value is not None:
+            past_len = past_key_value.get_seq_length(layer_idx)
+            k, v = past_key_value.update(k, v, layer_idx)
+        t_total = int(k.shape[2])  # past_len + T
+
+        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, T, t_total)
+        # Causal slice for query positions [past_len, past_len+T) over keys
+        # [0, t_total); with no cache this is the original [:, :, :T, :T] block.
+        causal = self.causal_mask[:, :, past_len : past_len + T, :t_total]
         # ``(1 - causal) * -1e4`` blocks attention to the upper triangle.
         scores = scores + (1.0 - causal) * -1e4
         if attention_mask is not None:
@@ -139,9 +154,24 @@ class _GPTBlock(nn.Module):
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
+        *,
+        past_key_value: Cache | None = None,
+        layer_idx: int = 0,
+        cache_position: Tensor | None = None,
+        use_cache: bool = False,
     ) -> Tensor:
         # Residual + post-LN, as in the original paper.
-        a = cast(Tensor, self.attn(hidden, attention_mask=attention_mask))
+        a = cast(
+            Tensor,
+            self.attn(
+                hidden,
+                attention_mask=attention_mask,
+                past_key_value=past_key_value,
+                layer_idx=layer_idx,
+                cache_position=cache_position,
+                use_cache=use_cache,
+            ),
+        )
         hidden = cast(Tensor, self.ln_1(hidden + a))
         m = cast(Tensor, self.mlp(hidden))
         hidden = cast(Tensor, self.ln_2(hidden + m))
@@ -253,22 +283,41 @@ class GPTModel(PretrainedModel):
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
+        *,
+        past_key_values: Cache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
     ) -> BaseModelOutput:
         B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
-        if T > self._max_pos:
+        past_len = (
+            past_key_values.get_seq_length() if past_key_values is not None else 0
+        )
+        if past_len + T > self._max_pos:
             raise ValueError(
-                f"Sequence length {T} exceeds max_position_embeddings "
+                f"Sequence length {past_len + T} exceeds max_position_embeddings "
                 f"{self._max_pos}"
             )
 
-        pos_ids = self.position_ids[:, :T]
+        # Positions are offset by the cached length so new tokens get their
+        # true absolute positions.
+        pos_ids = self.position_ids[:, past_len : past_len + T]
         tok_emb = cast(Tensor, self.tokens_embed(input_ids))
         pos_emb = cast(Tensor, self.positions_embed(pos_ids))
         hidden = cast(Tensor, self.drop(tok_emb + pos_emb))
 
         ext_mask = extended_attention_mask(attention_mask, (B, T))
-        for block in self.h:
-            hidden = cast(Tensor, block(hidden, attention_mask=ext_mask))
+        for layer_idx, block in enumerate(self.h):
+            hidden = cast(
+                Tensor,
+                block(
+                    hidden,
+                    attention_mask=ext_mask,
+                    past_key_value=past_key_values,
+                    layer_idx=layer_idx,
+                    cache_position=cache_position,
+                    use_cache=use_cache,
+                ),
+            )
 
         return BaseModelOutput(last_hidden_state=hidden)
 
@@ -350,10 +399,23 @@ class GPTLMHeadModel(PretrainedModel, GenerationMixin):
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
+        *,
+        past_key_values: Cache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
     ) -> CausalLMOutput:
+        if use_cache and past_key_values is None:
+            past_key_values = DynamicCache()
+
         outputs = cast(
             BaseModelOutput,
-            self.transformer(input_ids, attention_mask=attention_mask),
+            self.transformer(
+                input_ids,
+                attention_mask=attention_mask,
+                past_key_values=past_key_values,
+                use_cache=use_cache,
+                cache_position=cache_position,
+            ),
         )
         hidden = outputs.last_hidden_state
         logits = cast(Tensor, self.lm_head(hidden))
@@ -366,7 +428,11 @@ class GPTLMHeadModel(PretrainedModel, GenerationMixin):
             shift_labels = labels[:, 1:].reshape((B * (T - 1),)).long()
             loss = F.cross_entropy(shift_logits, shift_labels, ignore_index=-100)
 
-        return CausalLMOutput(logits=logits, loss=loss)
+        return CausalLMOutput(
+            logits=logits,
+            loss=loss,
+            past_key_values=past_key_values if use_cache else None,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

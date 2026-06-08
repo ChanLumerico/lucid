@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+    from lucid.utils.cache import Cache, EncoderDecoderCache
 
 
 class ModelOutput:
@@ -393,7 +394,7 @@ class CausalLMOutput(ModelOutput):
 
     logits: Tensor
     loss: Tensor | None = None
-    past_key_values: tuple[tuple[Tensor, Tensor], ...] | None = None
+    past_key_values: Cache | tuple[tuple[Tensor, Tensor], ...] | None = None
     hidden_states: tuple[Tensor, ...] | None = None
     attentions: tuple[Tensor, ...] | None = None
 
@@ -476,7 +477,9 @@ class Seq2SeqLMOutput(ModelOutput):
 
     logits: Tensor
     loss: Tensor | None = None
-    past_key_values: tuple[tuple[Tensor, Tensor], ...] | None = None
+    past_key_values: EncoderDecoderCache | tuple[tuple[Tensor, Tensor], ...] | None = (
+        None
+    )
     decoder_hidden_states: tuple[Tensor, ...] | None = None
     decoder_attentions: tuple[Tensor, ...] | None = None
     encoder_last_hidden_state: Tensor | None = None

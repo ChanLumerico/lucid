@@ -3,7 +3,7 @@ Transformer modules: TransformerEncoderLayer, TransformerEncoder,
 TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
-from typing import cast, override
+from typing import TYPE_CHECKING, cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -15,6 +15,9 @@ from lucid.nn.modules.normalization import LayerNorm
 from lucid.nn.modules.linear import Linear
 from lucid.nn.modules.dropout import Dropout
 from lucid.nn.functional.activations import gelu, relu
+
+if TYPE_CHECKING:
+    from lucid.utils.cache import Cache
 
 
 class TransformerEncoderLayer(Module):
@@ -675,6 +678,11 @@ class TransformerDecoderLayer(Module):
         memory_key_padding_mask: Tensor | None = None,
         tgt_is_causal: bool = False,
         memory_is_causal: bool = False,
+        *,
+        past_key_value: Cache | None = None,
+        layer_idx: int = 0,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
     ) -> Tensor:
         """Run the forward pass of the module.
 
@@ -696,6 +704,15 @@ class TransformerDecoderLayer(Module):
             See the class docstring.
         memory_is_causal : Tensor
             See the class docstring.
+        past_key_value : Cache or None, optional, keyword-only
+            Encoder-decoder cache; self-attention grows it, cross-attention
+            fills it once from ``memory``.
+        layer_idx : int, optional, keyword-only, default=0
+            Index of this layer within the cache.
+        use_cache : bool, optional, keyword-only, default=False
+            Enable incremental KV caching.
+        cache_position : Tensor or None, optional, keyword-only
+            Absolute positions of the new ``tgt`` tokens; accepted for parity.
 
         Returns
         -------
@@ -712,6 +729,11 @@ class TransformerDecoderLayer(Module):
                 key_padding_mask=tgt_key_padding_mask,
                 need_weights=False,
                 is_causal=tgt_is_causal,
+                past_key_value=past_key_value,
+                layer_idx=layer_idx,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                is_cross_attention=False,
             )
             tgt = tgt + cast(Tensor, self.dropout1(tgt2))
             tgt2, _ = self.multihead_attn(
@@ -722,6 +744,11 @@ class TransformerDecoderLayer(Module):
                 key_padding_mask=memory_key_padding_mask,
                 need_weights=False,
                 is_causal=memory_is_causal,
+                past_key_value=past_key_value,
+                layer_idx=layer_idx,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                is_cross_attention=True,
             )
             tgt = tgt + cast(Tensor, self.dropout3(tgt2))
             tgt = tgt + cast(
@@ -736,6 +763,11 @@ class TransformerDecoderLayer(Module):
                 key_padding_mask=tgt_key_padding_mask,
                 need_weights=False,
                 is_causal=tgt_is_causal,
+                past_key_value=past_key_value,
+                layer_idx=layer_idx,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                is_cross_attention=False,
             )
             tgt = cast(Tensor, self.norm1(tgt + cast(Tensor, self.dropout1(tgt2))))
             tgt2, _ = self.multihead_attn(
@@ -746,6 +778,11 @@ class TransformerDecoderLayer(Module):
                 key_padding_mask=memory_key_padding_mask,
                 need_weights=False,
                 is_causal=memory_is_causal,
+                past_key_value=past_key_value,
+                layer_idx=layer_idx,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                is_cross_attention=True,
             )
             tgt = cast(Tensor, self.norm2(tgt + cast(Tensor, self.dropout3(tgt2))))
             tgt = cast(
@@ -905,6 +942,10 @@ class TransformerDecoder(Module):
         memory_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         memory_key_padding_mask: Tensor | None = None,
+        *,
+        past_key_value: Cache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
     ) -> Tensor:
         """Run the forward pass of the module.
 
@@ -922,6 +963,13 @@ class TransformerDecoder(Module):
             See the class docstring.
         memory_key_padding_mask : Tensor
             See the class docstring.
+        past_key_value : Cache or None, optional, keyword-only
+            Shared encoder-decoder cache threaded to every layer (each layer
+            writes its own ``layer_idx`` slot).
+        use_cache : bool, optional, keyword-only, default=False
+            Enable incremental KV caching.
+        cache_position : Tensor or None, optional, keyword-only
+            Absolute positions of the new ``tgt`` tokens; accepted for parity.
 
         Returns
         -------
@@ -929,10 +977,19 @@ class TransformerDecoder(Module):
             Output tensor; refer to the class docstring for the exact shape.
         """
         output = tgt
-        for layer in self.layers:
+        for layer_idx, layer in enumerate(self.layers):
             output = cast(
                 Tensor,
-                layer(output, memory, tgt_mask=tgt_mask, memory_mask=memory_mask),
+                layer(
+                    output,
+                    memory,
+                    tgt_mask=tgt_mask,
+                    memory_mask=memory_mask,
+                    past_key_value=past_key_value,
+                    layer_idx=layer_idx,
+                    use_cache=use_cache,
+                    cache_position=cache_position,
+                ),
             )
         if self.norm is not None:
             output = cast(Tensor, self.norm(output))

@@ -18,6 +18,7 @@ from lucid.nn.functional.attention import scaled_dot_product_attention
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+    from lucid.utils.cache import Cache
 
 
 _NEG_INF: float = float("-inf")
@@ -378,7 +379,7 @@ class MultiheadAttention(Module):
     @override
     def _load_from_state_dict(
         self,
-        state_dict: dict[str, "Tensor"],
+        state_dict: dict[str, Tensor],
         prefix: str,
         local_metadata: dict[str, object],
         strict: bool,
@@ -413,7 +414,7 @@ class MultiheadAttention(Module):
 
     def _project_qkv(
         self, query: Tensor, key: Tensor, value: Tensor
-    ) -> tuple["Tensor", "Tensor", "Tensor"]:
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """Apply the input projections, returning ``(q, k, v)`` each shaped
         ``(B, T*, embed_dim)``."""
         d: int = self.embed_dim
@@ -454,13 +455,13 @@ class MultiheadAttention(Module):
 
     def _build_attn_mask(
         self,
-        attn_mask: "Tensor | None",
-        key_padding_mask: "Tensor | None",
+        attn_mask: Tensor | None,
+        key_padding_mask: Tensor | None,
         batch_size: int,
         target_len: int,
         source_len: int,
         float_dtype: object,
-    ) -> "Tensor | None":
+    ) -> Tensor | None:
         """Combine ``attn_mask`` and ``key_padding_mask`` into a single
         ``(B, H, T, S)`` additive float mask suitable for SDPA."""
         merged: Tensor | None = None
@@ -492,12 +493,18 @@ class MultiheadAttention(Module):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        key_padding_mask: "Tensor | None" = None,
+        key_padding_mask: Tensor | None = None,
         need_weights: bool = True,
-        attn_mask: "Tensor | None" = None,
+        attn_mask: Tensor | None = None,
         average_attn_weights: bool = True,
         is_causal: bool = False,
-    ) -> tuple["Tensor", "Tensor | None"]:
+        *,
+        past_key_value: Cache | None = None,
+        layer_idx: int = 0,
+        cache_position: Tensor | None = None,
+        use_cache: bool = False,
+        is_cross_attention: bool = False,
+    ) -> tuple[Tensor, Tensor | None]:
         # Internally operate in (B, T, E) layout regardless of batch_first.
         """Run the forward pass of the module.
 
@@ -519,6 +526,18 @@ class MultiheadAttention(Module):
             See the class docstring.
         is_causal : Tensor
             See the class docstring.
+        past_key_value : Cache or None, optional, keyword-only
+            Key/value cache for incremental decoding.  ``None`` disables
+            caching.
+        layer_idx : int, optional, keyword-only, default=0
+            Index of this attention layer within the cache.
+        cache_position : Tensor or None, optional, keyword-only
+            Absolute positions of the query tokens; accepted for API parity.
+        use_cache : bool, optional, keyword-only, default=False
+            Read/write ``past_key_value`` when ``True``.
+        is_cross_attention : bool, optional, keyword-only, default=False
+            ``True`` for decoder cross-attention (keys/values from the encoder
+            memory, cached once); ``False`` for self-attention (cache grows).
 
         Returns
         -------
@@ -558,9 +577,53 @@ class MultiheadAttention(Module):
         kh: Tensor = self._split_heads(k, B, Tk)
         vh: Tensor = self._split_heads(v, B, Tk)
 
+        # ── KV cache ──────────────────────────────────────────────────────
+        # Keys/values are laid out (B, num_heads, T, head_dim); self-attention
+        # grows the cache, cross-attention fills it once from the (constant)
+        # encoder memory and reuses it thereafter.
+        if use_cache and past_key_value is not None:
+            from lucid.utils.cache import EncoderDecoderCache
+
+            if is_cross_attention and isinstance(past_key_value, EncoderDecoderCache):
+                cross = past_key_value.cross_attention_cache
+                if past_key_value.is_updated.get(layer_idx, False):
+                    kh, vh = cross[layer_idx]
+                else:
+                    kh, vh = cross.update(kh, vh, layer_idx)
+                    past_key_value.is_updated[layer_idx] = True
+            else:
+                self_cache = (
+                    past_key_value.self_attention_cache
+                    if isinstance(past_key_value, EncoderDecoderCache)
+                    else past_key_value
+                )
+                kh, vh = self_cache.update(kh, vh, layer_idx)
+            Tk = int(kh.shape[2])
+
         merged_mask: Tensor | None = self._build_attn_mask(
             attn_mask, key_padding_mask, B, Tq, Tk, q.dtype
         )
+
+        # With a KV cache the query tokens sit at absolute positions
+        # [past_len, past_len + Tq) while keys span [0, Tk).  A plain top-left
+        # ``is_causal`` mask would be wrong (a single new query would only see
+        # key 0), so fold it into an explicit bottom-right-aligned additive
+        # mask: query ``i`` may attend to key ``j`` iff ``j <= (Tk - Tq) + i``.
+        # The non-cache path keeps the original ``is_causal`` fast path intact.
+        if is_causal and use_cache and past_key_value is not None:
+            offset = Tk - Tq
+            causal_add: Tensor = _lucid.tensor(
+                [
+                    [_NEG_INF if j > i + offset else 0.0 for j in range(Tk)]
+                    for i in range(Tq)
+                ],
+                dtype=q.dtype,
+                device=q.device,
+            ).reshape(1, 1, Tq, Tk)
+            merged_mask = (
+                causal_add if merged_mask is None else merged_mask + causal_add
+            )
+            is_causal = False
 
         # Adding a bias / zero row to K means key_padding_mask (which is
         # only sized for the original sequence) needs to be extended.  We
@@ -606,9 +669,9 @@ class MultiheadAttention(Module):
         q: Tensor,
         k: Tensor,
         v: Tensor,
-        attn_mask: "Tensor | None",
+        attn_mask: Tensor | None,
         is_causal: bool,
-    ) -> tuple["Tensor", "Tensor"]:
+    ) -> tuple[Tensor, Tensor]:
         """Manual scaled-dot-product attention that also returns weights.
 
         Used when the caller asks for attention weights — the fused SDPA
