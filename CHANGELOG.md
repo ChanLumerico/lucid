@@ -63,6 +63,7 @@ now a single component.
 
 - add KV cache for incremental autoregressive generation
 - add DynamicCache crop/reset/batch helper methods
+- add StaticCache for compile-friendly incremental decoding
 
 ---
 

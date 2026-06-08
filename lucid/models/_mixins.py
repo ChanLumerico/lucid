@@ -15,7 +15,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor.tensor import Tensor
-from lucid.utils.cache import DynamicCache
+from lucid.utils.cache import Cache, DynamicCache, StaticCache
 
 if TYPE_CHECKING:
     from lucid.models._output import GenerationOutput
@@ -363,6 +363,8 @@ class GenerationMixin:
         pad_token_id: int | None = None,
         eos_token_id: int | None = None,
         use_cache: bool = True,
+        cache_implementation: str = "dynamic",
+        max_cache_len: int | None = None,
     ) -> Tensor:
         r"""Autoregressively extend ``input_ids`` until a stop condition.
 
@@ -401,10 +403,18 @@ class GenerationMixin:
             Stop generating per-sequence once this id is emitted.
             Defaults to ``config.eos_token_id``.
         use_cache : bool, optional, keyword-only, default=True
-            Use a :class:`~lucid.utils.cache.DynamicCache` so each step only
-            encodes the new token (O(T²) generation) instead of re-running the
-            whole prefix (O(T³)).  Falls back to re-encoding automatically when
-            the host model does not accept a cache.
+            Use a KV cache so each step only encodes the new token (O(T²)
+            generation) instead of re-running the whole prefix (O(T³)).  Falls
+            back to re-encoding automatically when the host model has no cache.
+        cache_implementation : str, optional, keyword-only, default="dynamic"
+            ``"dynamic"`` → :class:`~lucid.utils.cache.DynamicCache` (grows by
+            concatenation); ``"static"`` →
+            :class:`~lucid.utils.cache.StaticCache` (fixed pre-allocated buffer
+            written in place — the shape stays constant, so the decode forward
+            is ``lucid.compile``-friendly).
+        max_cache_len : int or None, optional, keyword-only
+            Buffer capacity for ``cache_implementation="static"``; defaults to
+            the total target length (prompt + generated).
 
         Returns
         -------
@@ -476,7 +486,14 @@ class GenerationMixin:
         # caching is disabled or the host model does not accept a cache, in
         # which case we re-encode the full prefix every step.
         model = cast(nn.Module, self)
-        past: DynamicCache | None = DynamicCache() if use_cache else None
+        past: Cache | None = None
+        if use_cache:
+            if cache_implementation == "static":
+                past = StaticCache(
+                    max_cache_len=max_cache_len if max_cache_len is not None else stop_len
+                )
+            else:
+                past = DynamicCache()
         model_input = input_ids
 
         for _step in range(stop_len - T_prompt):

@@ -91,8 +91,12 @@ class _GPT2SelfAttention(nn.Module):
         past_len = 0
         if past_key_value is not None:
             past_len = past_key_value.get_seq_length(layer_idx)
-            k, v = past_key_value.update(k, v, layer_idx)
-        t_total = int(k.shape[2])  # past_len + T
+            # cache_position is consumed by StaticCache (the in-place write
+            # location); DynamicCache ignores it and simply appends.
+            k, v = past_key_value.update(
+                k, v, layer_idx, cache_kwargs={"cache_position": cache_position}
+            )
+        t_total = int(k.shape[2])  # DynamicCache: past_len+T; StaticCache: max_cache_len
 
         scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, T, t_total)
         # Causal slice for query positions [past_len, past_len+T) over keys
@@ -330,6 +334,12 @@ class GPT2Model(PretrainedModel):
         # Positions are offset by the cached length so the new tokens get their
         # true absolute positions (past_len, past_len+1, ...).
         pos_ids = self.position_ids[:, past_len : past_len + T]
+        # A StaticCache needs the absolute write positions; default them here so
+        # both the position embedding and the cache write agree.
+        if cache_position is None:
+            cache_position = lucid.arange(
+                past_len, past_len + T, device=input_ids.device.type
+            ).long()
         tok_emb = cast(Tensor, self.wte(input_ids))
         pos_emb = cast(Tensor, self.wpe(pos_ids))
         hidden = cast(Tensor, self.drop(tok_emb + pos_emb))

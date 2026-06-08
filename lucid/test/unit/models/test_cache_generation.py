@@ -92,6 +92,38 @@ class TestGPT2Cache:
         )
         assert_close(g_cache, g_nocache, atol=0.0)
 
+    def test_static_cache_equals_dynamic(self) -> None:
+        lucid.manual_seed(0)
+        m = _gpt2()
+        prompt = lucid.tensor([[3, 7, 1]]).long()
+        g_static = m.generate(
+            prompt, max_new_tokens=6, do_sample=False, use_cache=True,
+            cache_implementation="static",
+        )
+        g_dynamic = m.generate(
+            prompt, max_new_tokens=6, do_sample=False, use_cache=True,
+            cache_implementation="dynamic",
+        )
+        assert_close(g_static, g_dynamic, atol=0.0)
+
+    def test_static_cache_incremental_equals_full(self) -> None:
+        from lucid.utils.cache import StaticCache
+
+        lucid.manual_seed(0)
+        m = _gpt2()
+        ids = lucid.tensor([[3, 7, 1, 9, 2, 8]]).long()
+        T = int(ids.shape[1])
+        full = m(ids).logits
+        cache = StaticCache(max_cache_len=16)
+        steps = []
+        for t in range(T):
+            out = m(ids[:, t : t + 1], use_cache=True, past_key_values=cache)
+            steps.append(out.logits[:, -1, :])
+        inc = lucid.stack(steps, dim=1)
+        assert_close(inc, full, atol=1e-4)
+        assert cache.get_seq_length() == T
+        assert tuple(cache.key_cache[0].shape) == (1, 2, 16, 16)  # fixed buffer
+
 
 class TestGPTCache:
     def test_incremental_equals_full(self) -> None:
