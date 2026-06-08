@@ -125,7 +125,7 @@ class TestSamplingFilters:
     """The vectorized on-device sampling primitives (no per-element CPU loops)."""
 
     def test_top_k_keeps_exactly_k(self) -> None:
-        from lucid.models._mixins import _top_k_filter
+        from lucid.models._sampling import _top_k_filter
 
         logits = lucid.tensor([[1.0, 5.0, 2.0, 4.0, 3.0]])
         out = _top_k_filter(logits, 2)  # keep 5.0, 4.0
@@ -133,14 +133,14 @@ class TestSamplingFilters:
         assert kept == [False, True, False, True, False]
 
     def test_top_k_ge_vocab_is_identity(self) -> None:
-        from lucid.models._mixins import _top_k_filter
+        from lucid.models._sampling import _top_k_filter
 
         logits = lucid.tensor([[1.0, 2.0, 3.0]])
         out = _top_k_filter(logits, 5)
         assert out[0].numpy().tolist() == [1.0, 2.0, 3.0]
 
     def test_top_p_keeps_dominant_token(self) -> None:
-        from lucid.models._mixins import _top_p_filter
+        from lucid.models._sampling import _top_p_filter
 
         # softmax mass concentrates on index 1; a tight p keeps only it.
         logits = lucid.tensor([[0.0, 10.0, 0.1, 0.2]])
@@ -150,7 +150,7 @@ class TestSamplingFilters:
         assert sum(kept) == 1  # nucleus is just the dominant token
 
     def test_repetition_penalty_lowers_seen(self) -> None:
-        from lucid.models._mixins import _apply_repetition_penalty
+        from lucid.models._sampling import _apply_repetition_penalty
 
         logits = lucid.tensor([[2.0, 2.0, 2.0, 2.0]])
         prefix = lucid.tensor([[1, 3]]).long()  # tokens 1, 3 already generated
@@ -160,7 +160,7 @@ class TestSamplingFilters:
         assert row[1] == 1.0 and row[3] == 1.0  # seen positive logit halved
 
     def test_multinomial_in_range_and_deterministic(self) -> None:
-        from lucid.models._mixins import _multinomial_one
+        from lucid.models._sampling import _multinomial_one
 
         probs = lucid.tensor([[0.1, 0.2, 0.3, 0.4]])
         lucid.manual_seed(0)

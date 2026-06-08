@@ -597,7 +597,11 @@ class MultiheadAttention(Module):
                     if isinstance(past_key_value, EncoderDecoderCache)
                     else past_key_value
                 )
-                kh, vh = self_cache.update(kh, vh, layer_idx)
+                # cache_position is the in-place write slot for a StaticCache
+                # (compiled decode); a DynamicCache ignores it and appends.
+                kh, vh = self_cache.update(
+                    kh, vh, layer_idx, cache_kwargs={"cache_position": cache_position}
+                )
             Tk = int(kh.shape[2])
 
         merged_mask: Tensor | None = self._build_attn_mask(

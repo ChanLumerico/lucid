@@ -67,6 +67,7 @@ now a single component.
 - add DynamicCache crop/reset/batch helper methods
 - add StaticCache for compile-friendly incremental decoding
 - compiled StaticCache decode for generate (compile_decode)
+- encoder-decoder compiled static decode + shared sampling
 
 ---
 

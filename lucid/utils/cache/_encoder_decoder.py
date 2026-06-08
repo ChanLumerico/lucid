@@ -6,15 +6,27 @@ attributes and method surface.  Used by encoder-decoder models, where the
 decoder's self-attention cache grows each step while the cross-attention
 key/value (derived only from the constant encoder ``memory``) is computed
 once and reused.
+
+Either sub-cache may be a :class:`DynamicCache` (eager) or a
+:class:`StaticCache` (compile-friendly fixed buffer).  A ``StaticCache`` pair
+plus a pre-set ``is_updated`` is what the compiled encoder-decoder decode path
+threads each step (the cross buffer is filled once at prefill, then constant).
 """
 
 from typing import TYPE_CHECKING, Iterator, Self, final, override
 
 from lucid.utils.cache._base import Cache
 from lucid.utils.cache._dynamic import DynamicCache
+from lucid.utils.cache._static import StaticCache
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+
+# A single-stream KV cache (one key list + one value list per layer): the two
+# concrete caches a decoder/cross sub-cache may be.  EncoderDecoderCache needs
+# the richer single-stream surface (``__getitem__`` / ``__len__`` / ``crop`` /
+# ``batch_*``) that the bare ``Cache`` ABC does not declare.
+type _KVCache = DynamicCache | StaticCache
 
 
 @final
@@ -23,15 +35,21 @@ class EncoderDecoderCache(Cache):
 
     Parameters
     ----------
-    self_attention_cache : DynamicCache
+    self_attention_cache : DynamicCache or StaticCache
         Grows by one position per decode step (decoder self-attention).
-    cross_attention_cache : DynamicCache
+    cross_attention_cache : DynamicCache or StaticCache
         Filled once from the encoder ``memory`` then reused unchanged.
+    is_updated : dict[int, bool] or None, optional, keyword-only
+        Per-layer cross-attention "already filled" flags.  When ``None``
+        (default) they are inferred from ``cross_attention_cache``'s sequence
+        length — correct for eager use.  The compiled decode path passes them
+        explicitly (all True) because a re-wrapped ``StaticCache`` resets its
+        length counter, so length can no longer signal filled-ness.
 
     Attributes
     ----------
-    self_attention_cache : DynamicCache
-    cross_attention_cache : DynamicCache
+    self_attention_cache : DynamicCache or StaticCache
+    cross_attention_cache : DynamicCache or StaticCache
     is_updated : dict[int, bool]
         Per-layer flag marking whether the cross-attention key/value for that
         layer has already been computed; lets cross-attention skip the
@@ -40,17 +58,22 @@ class EncoderDecoderCache(Cache):
 
     def __init__(
         self,
-        self_attention_cache: DynamicCache,
-        cross_attention_cache: DynamicCache,
+        self_attention_cache: _KVCache,
+        cross_attention_cache: _KVCache,
+        *,
+        is_updated: dict[int, bool] | None = None,
     ) -> None:
         """Pair an existing self-attention and cross-attention cache."""
         self.self_attention_cache = self_attention_cache
         self.cross_attention_cache = cross_attention_cache
-        self.is_updated: dict[int, bool] = {}
-        for layer_idx in range(len(cross_attention_cache)):
-            self.is_updated[layer_idx] = (
-                cross_attention_cache.get_seq_length(layer_idx) > 0
-            )
+        self.is_updated: dict[int, bool]
+        if is_updated is not None:
+            self.is_updated = dict(is_updated)
+        else:
+            self.is_updated = {
+                layer_idx: cross_attention_cache.get_seq_length(layer_idx) > 0
+                for layer_idx in range(len(cross_attention_cache))
+            }
 
     def __len__(self) -> int:
         """Number of decoder layers (from the self-attention cache)."""

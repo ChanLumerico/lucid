@@ -355,3 +355,145 @@ class TestTransformerSeq2SeqCache:
         g_cache = m.generate(src, max_length=8, use_cache=True)
         g_nocache = m.generate(src, max_length=8, use_cache=False)
         assert_close(g_cache, g_nocache, atol=0.0)
+
+    def test_static_encoder_decoder_cache_decode_equals_dynamic(self) -> None:
+        # The eager StaticCache enc-dec decode path (self-attn cache_position
+        # write + masked future tail + constant cross) must match DynamicCache.
+        from lucid.utils.cache import EncoderDecoderCache, StaticCache
+
+        lucid.manual_seed(0)
+        m = _seq2seq()
+        src = lucid.tensor([[3, 7, 1, 9, 2]]).long()
+        tgt = [1, 4, 2, 5, 6, 3]
+        memory = m.transformer.encode(src)
+        s_len = int(memory.shape[1])
+
+        dyn = EncoderDecoderCache(DynamicCache(), DynamicCache())
+        sta = EncoderDecoderCache(StaticCache(max_cache_len=16), StaticCache(s_len))
+        dlog, slog = [], []
+        for t, tok in enumerate(tgt):
+            tok_t = lucid.tensor([[tok]]).long()
+            d = m.transformer.decode(tok_t, memory, past_key_value=dyn, use_cache=True)
+            s = m.transformer.decode(
+                tok_t,
+                memory,
+                past_key_value=sta,
+                use_cache=True,
+                cache_position=lucid.tensor([t]).long(),
+            )
+            dlog.append(d[:, -1, :])
+            slog.append(s[:, -1, :])
+        assert_close(lucid.stack(slog, dim=1), lucid.stack(dlog, dim=1), atol=1e-4)
+        assert all(sta.is_updated.values())  # cross filled once
+        # fixed self-attention buffer; cross capacity == source length
+        assert tuple(sta.self_attention_cache.key_cache[0].shape)[2] == 16
+        assert tuple(sta.cross_attention_cache.key_cache[0].shape)[2] == s_len
+
+    def test_compiled_decode_equals_eager(self) -> None:
+        lucid.manual_seed(0)
+        m = _seq2seq()
+        src = lucid.tensor([[3, 7, 1, 9, 2]]).long()
+        g_eager = m.generate(src, max_length=12, do_sample=False)
+        g_compiled = m.generate(
+            src, max_length=12, do_sample=False, compile_decode=True
+        )
+        assert_close(g_compiled, g_eager, atol=0.0)
+
+    def test_compiled_decode_batch(self) -> None:
+        lucid.manual_seed(0)
+        m = _seq2seq()
+        src = lucid.tensor([[3, 7, 1, 9, 2], [5, 5, 8, 0, 4]]).long()
+        g_eager = m.generate(src, max_length=10, do_sample=False)
+        g_compiled = m.generate(
+            src, max_length=10, do_sample=False, compile_decode=True
+        )
+        assert_close(g_compiled, g_eager, atol=0.0)
+
+    def test_compiled_decode_sampling_matches_eager(self) -> None:
+        m = _seq2seq()
+        src = lucid.tensor([[3, 7, 1, 9, 2]]).long()
+        lucid.manual_seed(7)
+        g_eager = m.generate(
+            src, max_length=12, do_sample=True, top_k=8, temperature=0.9
+        )
+        lucid.manual_seed(7)
+        g_compiled = m.generate(
+            src,
+            max_length=12,
+            do_sample=True,
+            top_k=8,
+            temperature=0.9,
+            compile_decode=True,
+        )
+        assert_close(g_compiled, g_eager, atol=0.0)
+
+    def test_compiled_decode_logits_parity(self) -> None:
+        # Degeneracy-independent: full per-step logits through the compiled
+        # driver must match the eager DynamicCache logits.
+        from lucid.models._compiled_decode import _CompiledSeq2SeqDecoder
+        from lucid.utils.cache import EncoderDecoderCache, StaticCache
+
+        lucid.manual_seed(0)
+        m = _seq2seq()
+        src = lucid.tensor([[3, 7, 1, 9, 2]]).long()
+        toks = [0, 4, 2, 9, 5, 1]
+        memory = m.transformer.encode(src)
+        s_len = int(memory.shape[1])
+
+        dyn = EncoderDecoderCache(DynamicCache(), DynamicCache())
+        elog = []
+        for tok in toks:
+            d = m.transformer.decode(
+                lucid.tensor([[tok]]).long(), memory, past_key_value=dyn, use_cache=True
+            )
+            elog.append(m.lm_head(d[:, -1, :]))
+
+        past = EncoderDecoderCache(StaticCache(max_cache_len=16), StaticCache(s_len))
+        d0 = m.transformer.decode(
+            lucid.tensor([[toks[0]]]).long(),
+            memory,
+            past_key_value=past,
+            use_cache=True,
+            cache_position=lucid.tensor([0]).long(),
+        )
+        clog = [m.lm_head(d0[:, -1, :])]
+        decoder = _CompiledSeq2SeqDecoder(m, past, memory)
+        for t in range(1, len(toks)):
+            lg = decoder.step(
+                lucid.tensor([[toks[t]]]).long(), lucid.tensor([t]).long()
+            )
+            clog.append(lg[:, -1, :])
+        assert_close(lucid.stack(clog, dim=1), lucid.stack(elog, dim=1), atol=1e-4)
+
+    def test_compiled_decode_max_length_exceeds_max_pos_raises(self) -> None:
+        import pytest
+
+        lucid.manual_seed(0)
+        m = _seq2seq()  # max_position_embeddings=32
+        src = lucid.tensor([[3, 7, 1, 9, 2]]).long()
+        with pytest.raises(ValueError, match="max_position_embeddings"):
+            m.generate(src, max_length=40, compile_decode=True)
+
+    def test_single_compile_across_positions(self, device_gpu_only: str) -> None:
+        from lucid.models._compiled_decode import _CompiledSeq2SeqDecoder
+        from lucid.utils.cache import EncoderDecoderCache, StaticCache
+
+        lucid.manual_seed(0)
+        m = _seq2seq().to(device_gpu_only)
+        src = lucid.tensor([[3, 7, 1, 9, 2]], device=device_gpu_only).long()
+        memory = m.transformer.encode(src)
+        s_len = int(memory.shape[1])
+        past = EncoderDecoderCache(StaticCache(max_cache_len=16), StaticCache(s_len))
+        m.transformer.decode(
+            lucid.tensor([[1]], device=device_gpu_only).long(),
+            memory,
+            past_key_value=past,
+            use_cache=True,
+            cache_position=lucid.tensor([0], device=device_gpu_only).long(),
+        )
+        decoder = _CompiledSeq2SeqDecoder(m, past, memory)
+        tok = lucid.tensor([[5]], device=device_gpu_only).long()
+        for pos in (1, 2, 3, 4):
+            decoder.step(tok, lucid.tensor([pos], device=device_gpu_only).long())
+        assert len(decoder._compiled._cache) == 1
+        assert len(decoder._compiled._eager_only.snapshot()) == 0
