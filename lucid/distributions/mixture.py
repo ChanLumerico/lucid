@@ -262,4 +262,4 @@ class MixtureSameFamily(Distribution):
             + list(value.shape[value.ndim - len(self._event_shape) :])
         )
         log_pk: Tensor = self.component_distribution.log_prob(v_unsq)
-        return lucid.logsumexp(log_pi + log_pk, dim=-1)  # type: ignore[arg-type]
+        return lucid.logsumexp(log_pi + log_pk, dim=-1)

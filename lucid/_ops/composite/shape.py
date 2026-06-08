@@ -164,7 +164,7 @@ def moveaxis(
     """
     _src = list(source) if not isinstance(source, int) else source
     _dst = list(destination) if not isinstance(destination, int) else destination
-    return lucid.movedim(x, _src, _dst)  # type: ignore[arg-type]
+    return lucid.movedim(x, _src, _dst)
 
 
 def adjoint(x: Tensor) -> Tensor:
@@ -1036,10 +1036,10 @@ def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     if k == 0:
         return x
     if k == 1:
-        return _swap_dims(lucid.flip(x, [d1]), d0, d1)  # type: ignore[list-item]
+        return _swap_dims(lucid.flip(x, [d1]), d0, d1)
     if k == 2:
-        return lucid.flip(x, list(dims))  # type: ignore[arg-type]
-    return _swap_dims(lucid.flip(x, [d0]), d0, d1)  # type: ignore[list-item]
+        return lucid.flip(x, list(dims))
+    return _swap_dims(lucid.flip(x, [d0]), d0, d1)
 
 
 __all__ = [

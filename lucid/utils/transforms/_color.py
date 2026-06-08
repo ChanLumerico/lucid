@@ -1543,7 +1543,7 @@ class FancyPCA(PhotometricTransform[Empty]):
         flat = img.reshape(c, -1)  # (3, N)
         mean = lucid.mean(flat, dim=[1], keepdim=True)
         centered = flat - mean
-        cov = lucid.matmul(centered, lucid.swapaxes(centered, 0, 1)) / float(flat.shape[1])  # type: ignore[arg-type]
+        cov = lucid.matmul(centered, lucid.swapaxes(centered, 0, 1)) / float(flat.shape[1])
         evals, evecs = lucid.linalg.eigh(cov)
         alphas = [self.alpha * _random.uniform(-1.0, 1.0) for _ in range(c)]
         scaled = lucid.tensor([alphas[i] for i in range(c)], dtype=img.dtype).reshape(

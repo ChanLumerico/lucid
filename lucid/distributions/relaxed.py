@@ -428,7 +428,7 @@ class RelaxedOneHotCategorical(Distribution):
         l: Tensor = self._logits
         tau: Tensor = self.temperature
         log_y: Tensor = value.log()
-        log_z: Tensor = lucid.logsumexp(l - tau * log_y, dim=-1)  # type: ignore[arg-type]
+        log_z: Tensor = lucid.logsumexp(l - tau * log_y, dim=-1)
         return (
             float(_lgamma_int(K))
             + (K - 1.0) * tau.log()

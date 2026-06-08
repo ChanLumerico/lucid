@@ -184,11 +184,11 @@ class Embedding(Module):
         # so requires_grad / parameter identity are preserved.
         new_w: Tensor = _lucid.index_fill(
             self.weight,
-            0,  # type: ignore[arg-type]
+            0,
             _lucid.tensor(
                 [int(self.padding_idx)], dtype=_lucid.int64, device=self.weight.device  # type: ignore[arg-type]
             ),
-            0.0,  # type: ignore[arg-type]
+            0.0,
         )
         self.weight._impl = new_w._impl
 

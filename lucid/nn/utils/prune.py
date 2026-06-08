@@ -216,7 +216,7 @@ def l1_unstructured(
     # right argument.  The bare comparison op doesn't broadcast a 0-d
     # tensor against a multi-D one, so materialise the threshold as a
     # ``full_like`` tensor that already shares the weight's shape.
-    threshold_scalar: float = float(lucid.kthvalue(flat, n_drop).item())  # type: ignore[arg-type]
+    threshold_scalar: float = float(lucid.kthvalue(flat, n_drop).item())
     threshold_t: Tensor = lucid.full_like(abs_w, threshold_scalar)
     keep: Tensor = abs_w > threshold_t
     mask: Tensor = lucid.where(keep, lucid.ones_like(weight), lucid.zeros_like(weight))

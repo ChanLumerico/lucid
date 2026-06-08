@@ -245,7 +245,7 @@ class MedianBlur(PhotometricTransform[KSizeParam]):
         k = params.ksize
         half = k // 2
         neigh = [
-            lucid.roll(img, (dy, dx), dims=(-2, -1))  # type: ignore[arg-type]
+            lucid.roll(img, (dy, dx), dims=(-2, -1))
             for dy in range(-half, half + 1)
             for dx in range(-half, half + 1)
         ]

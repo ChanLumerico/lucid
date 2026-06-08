@@ -20,7 +20,7 @@ _RESIZE_ALIGN_MODES = frozenset({"bilinear", "bicubic", "linear", "trilinear"})
 
 def _cat(tensors: list[Tensor], dim: int) -> Tensor:
     """``lucid.concat`` wrapper (absorbs the int32-typed ``dim`` stub)."""
-    return lucid.concat(tensors, dim=dim)  # type: ignore[arg-type]
+    return lucid.concat(tensors, dim=dim)
 
 
 def _inv(x: Tensor) -> Tensor:
@@ -167,7 +167,7 @@ def hflip(img: Tensor) -> Tensor:
         Image flipped left-right; same shape and dtype as ``img``.
     """
     # lucid.flip's stub types dims as int32; a plain int works at runtime.
-    return lucid.flip(img, dims=-1)  # type: ignore[arg-type]
+    return lucid.flip(img, dims=-1)
 
 
 def vflip(img: Tensor) -> Tensor:
@@ -183,7 +183,7 @@ def vflip(img: Tensor) -> Tensor:
     Tensor
         Image flipped top-bottom; same shape and dtype as ``img``.
     """
-    return lucid.flip(img, dims=-2)  # type: ignore[arg-type]
+    return lucid.flip(img, dims=-2)
 
 
 def pad(
@@ -737,7 +737,7 @@ def affine_points(pts: Tensor, matrix: Tensor) -> Tensor:
     n = int(pts.shape[0])
     ones = lucid.ones(n, 1, dtype=pts.dtype)
     hom = _cat([pts, ones], 1)  # (N, 3)
-    out = lucid.matmul(hom, lucid.swapaxes(matrix, 0, 1))  # type: ignore[arg-type]  # (N, 3)
+    out = lucid.matmul(hom, lucid.swapaxes(matrix, 0, 1))  # (N, 3)
     return out[:, :2] / out[:, 2:3]  # perspective divide (no-op for affine)
 
 
@@ -1000,7 +1000,7 @@ def _equalize_channel(ch: Tensor, clip_limit: float | None = None) -> Tensor:
     """Histogram-equalize a single ``(H, W)`` channel in ``[0, 1]``."""
     h, w = int(ch.shape[0]), int(ch.shape[1])
     idx = lucid.clip(lucid.round(ch * 255.0), 0.0, 255.0).long().reshape(-1)
-    hist = lucid.bincount(idx, minlength=256).to(lucid.float32)  # type: ignore[arg-type]
+    hist = lucid.bincount(idx, minlength=256).to(lucid.float32)
     if clip_limit is not None:
         cap = clip_limit * (h * w) / 256.0
         clipped = lucid.clip(hist, 0.0, cap)
@@ -1076,7 +1076,7 @@ def _clahe_lut(tile: Tensor, clip_limit: float) -> Tensor:
     """
     n = int(tile.shape[0]) * int(tile.shape[1])
     idx = lucid.clip(lucid.round(tile * 255.0), 0.0, 255.0).long().reshape(-1)
-    hist = lucid.bincount(idx, minlength=256).to(lucid.float32)  # type: ignore[arg-type]
+    hist = lucid.bincount(idx, minlength=256).to(lucid.float32)
     if clip_limit > 0.0:
         cap = max(1.0, clip_limit * float(n) / 256.0)
         clipped = lucid.clip(hist, 0.0, cap)

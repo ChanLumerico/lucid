@@ -72,7 +72,7 @@ def normalize_box_format(fmt: str) -> str:
 
 def _cat(tensors: list[Tensor], dim: int) -> Tensor:
     """``lucid.concat`` wrapper (absorbs the int32-typed ``dim`` stub)."""
-    return lucid.concat(tensors, dim=dim)  # type: ignore[arg-type]
+    return lucid.concat(tensors, dim=dim)
 
 
 @dataclass(slots=True)

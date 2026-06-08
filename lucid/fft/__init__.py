@@ -2042,7 +2042,7 @@ def fftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
     rank = input.ndim
     dims = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
     shifts = [int(input.shape[a]) // 2 for a in dims]
-    return lucid.roll(input, shifts=shifts, dims=dims)  # type: ignore[arg-type]
+    return lucid.roll(input, shifts=shifts, dims=dims)
 
 
 def ifftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
@@ -2121,7 +2121,7 @@ def ifftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
     rank = input.ndim
     dims = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
     shifts = [-(int(input.shape[a]) // 2) for a in dims]
-    return lucid.roll(input, shifts=shifts, dims=dims)  # type: ignore[arg-type]
+    return lucid.roll(input, shifts=shifts, dims=dims)
 
 
 __all__ = [

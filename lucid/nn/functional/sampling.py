@@ -1125,7 +1125,7 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     # flatten the two leading channel-related axes back into a single ``C``.
     reshaped = x.reshape(n, int(groups), ch_per_group, *spatial)
     perm = [0, 2, 1] + list(range(3, 3 + len(spatial)))
-    transposed = _lucid.permute(reshaped, *perm)  # type: ignore[arg-type]
+    transposed = _lucid.permute(reshaped, *perm)
     return transposed.reshape(n, c, *spatial)
 
 
@@ -1180,10 +1180,10 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     n = int(x.shape[0])
     if n < 2:
         return _lucid.zeros(0, dtype=x.dtype, device=x.device)
-    full = _lucid.cdist(x, x, p=p)  # type: ignore[arg-type]  # (N, N)
+    full = _lucid.cdist(x, x, p=p)  # (N, N)
     # Pull out the strict upper triangle (i < j) in row-major order via the
     # index pair generator from ``triu_indices``.
-    pairs = _lucid.triu_indices(n, n, offset=1)  # type: ignore[arg-type]  # shape (2, N·(N-1)/2)
+    pairs = _lucid.triu_indices(n, n, offset=1)  # shape (2, N·(N-1)/2)
     flat = full.reshape(n * n)
     flat_idx = pairs[0] * n + pairs[1]
     return _lucid.gather(flat, flat_idx, dim=0)

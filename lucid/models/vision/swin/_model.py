@@ -263,7 +263,7 @@ class _SwinBlock(nn.Module):
         eff_ss = 0 if self.ws >= min(H, W) else self.shift_size
 
         if eff_ss > 0:
-            x = lucid.roll(x, [-eff_ss, -eff_ss], dims=[1, 2])  # type: ignore[list-item]
+            x = lucid.roll(x, [-eff_ss, -eff_ss], dims=[1, 2])
 
         mask = self._attn_mask(H, W, eff_ss, device=x.device.type)
         windows, nH, nW = _window_partition(x, self.ws)
@@ -274,7 +274,7 @@ class _SwinBlock(nn.Module):
         x = _window_reverse(attn_out, self.ws, nH, nW)
 
         if eff_ss > 0:
-            x = lucid.roll(x, [eff_ss, eff_ss], dims=[1, 2])  # type: ignore[list-item]
+            x = lucid.roll(x, [eff_ss, eff_ss], dims=[1, 2])
 
         x = shortcut + cast(Tensor, self.drop_path(x))
         x = x + cast(

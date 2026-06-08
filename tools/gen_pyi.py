@@ -1804,6 +1804,26 @@ def _stringify_annotation(ann) -> str:
     return raw
 
 
+def _avoid_dtype_shadow(sig: str) -> str:
+    """Rewrite builtin scalar types to the ``_int`` / ``_float`` / ``_bool``
+    aliases in a generated ``__init__.pyi`` signature.
+
+    ``lucid``'s public top-level dtype aliases (``int = int32``,
+    ``float = float32``, ``bool = bool_`` — see ``_INIT_HEADER``) shadow the
+    builtins at module scope, so a bare ``: int`` annotation would wrongly
+    resolve to the ``int32`` dtype for external type checkers.  The private
+    ``_int`` / ``_float`` / ``_bool`` aliases (defined at the top of
+    ``_INIT_HEADER``) point at the real builtins.  Word boundaries keep
+    ``int32`` / ``bool_`` / ``float_power`` and similar identifiers untouched.
+
+    Only applied to ``__init__.pyi`` signatures (the engine / tensor stubs do
+    not define the shadowing aliases).
+    """
+    import re as _re
+
+    return _re.sub(r"\b(int|float|bool)\b", r"_\1", sig)
+
+
 def _sig_from_callable(name: str, fn: object) -> str:
     """Generate a stub line from a live callable via AST source parsing.
 
@@ -2063,7 +2083,11 @@ def gen_init_pyi() -> tuple[str, int]:
         if fn is None or fn in seen or fn in _OVERRIDE_NAMES:
             continue
         seen.add(fn)
-        lines.append(_format_with_docstring(_free_fn_sig(entry), fn, _existing_docs))
+        lines.append(
+            _format_with_docstring(
+                _avoid_dtype_shadow(_free_fn_sig(entry)), fn, _existing_docs
+            )
+        )
         count += 1
 
     # Also include reference-compatible overrides defined directly in _ops/__init__.py.
@@ -2093,10 +2117,10 @@ def gen_init_pyi() -> tuple[str, int]:
 
     composite_lines = [
         "\n# ── Constants ────────────────────────────────────────────────────────",
-        "pi: float",
-        "e: float",
-        "inf: float",
-        "nan: float",
+        "pi: _float",
+        "e: _float",
+        "inf: _float",
+        "nan: _float",
         "newaxis: None",
         "\n# ── Composite ops (elementwise / shape / blas / reductions / predicates / dtype) ─",
     ]
@@ -2109,7 +2133,9 @@ def gen_init_pyi() -> tuple[str, int]:
             continue
         seen.add(n)
         composite_lines.append(
-            _format_with_docstring(_sig_from_callable(n, fn), n, _existing_docs)
+            _format_with_docstring(
+                _avoid_dtype_shadow(_sig_from_callable(n, fn)), n, _existing_docs
+            )
         )
 
     # ── nn.functional / linalg / method aliases ───────────────────────────────
@@ -2129,7 +2155,9 @@ def gen_init_pyi() -> tuple[str, int]:
                 continue
             seen.add(n)
             group.append(
-                _format_with_docstring(_sig_from_callable(n, fn), n, _existing_docs)
+                _format_with_docstring(
+                    _avoid_dtype_shadow(_sig_from_callable(n, fn)), n, _existing_docs
+                )
             )
         if group:
             alias_lines.append(f"\n# ── {group_label} ─────────────────")
@@ -2139,7 +2167,9 @@ def gen_init_pyi() -> tuple[str, int]:
     # mean, prod, var, std, argmax, argmin, squeeze, repeat, split, ...).
     overrides = [
         _format_with_docstring(
-            line, line.split("(")[0].removeprefix("def ").strip(), _existing_docs
+            _avoid_dtype_shadow(line),
+            line.split("(")[0].removeprefix("def ").strip(),
+            _existing_docs,
         )
         for line in overrides
     ]

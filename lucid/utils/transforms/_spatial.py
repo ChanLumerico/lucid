@@ -117,11 +117,11 @@ class Transpose(_NoParams, GeometricTransform[Empty]):
 
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return lucid.swapaxes(img, -1, -2)  # type: ignore[arg-type]
+        return lucid.swapaxes(img, -1, -2)
 
     @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
-        return lucid.swapaxes(mask, -1, -2)  # type: ignore[arg-type]
+        return lucid.swapaxes(mask, -1, -2)
 
     @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
@@ -238,11 +238,11 @@ class RandomRotate90(GeometricTransform[Rot90Param]):
 
     @override
     def _apply_image(self, img: Tensor, params: Rot90Param) -> Tensor:
-        return lucid.rot90(img, params.k, dims=(-2, -1))  # type: ignore[arg-type]
+        return lucid.rot90(img, params.k, dims=(-2, -1))
 
     @override
     def _apply_mask(self, mask: Tensor, params: Rot90Param) -> Tensor:
-        return lucid.rot90(mask, params.k, dims=(-2, -1))  # type: ignore[arg-type]
+        return lucid.rot90(mask, params.k, dims=(-2, -1))
 
     @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Rot90Param) -> BoundingBoxes:
@@ -738,12 +738,12 @@ class D4(GeometricTransform[D4Param]):
 
     @override
     def _apply_image(self, img: Tensor, params: D4Param) -> Tensor:
-        out = lucid.rot90(img, params.k, dims=(-2, -1))  # type: ignore[arg-type]
+        out = lucid.rot90(img, params.k, dims=(-2, -1))
         return F.hflip(out) if params.flip else out
 
     @override
     def _apply_mask(self, mask: Tensor, params: D4Param) -> Tensor:
-        out = lucid.rot90(mask, params.k, dims=(-2, -1))  # type: ignore[arg-type]
+        out = lucid.rot90(mask, params.k, dims=(-2, -1))
         return F.hflip(out) if params.flip else out
 
     @override

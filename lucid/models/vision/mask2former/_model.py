@@ -340,7 +340,7 @@ class _SwinLayer(nn.Module):
 
         # Cyclic shift
         if ss > 0:
-            x = lucid.roll(x, [-ss, -ss], dims=[1, 2])  # type: ignore[list-item]
+            x = lucid.roll(x, [-ss, -ss], dims=[1, 2])
 
         x_windows = _window_partition(x, ws).reshape(-1, ws * ws, c)
         attn_mask: Tensor | None = None
@@ -353,7 +353,7 @@ class _SwinLayer(nn.Module):
 
         # Reverse cyclic shift
         if ss > 0:
-            x = lucid.roll(x, [ss, ss], dims=[1, 2])  # type: ignore[list-item]
+            x = lucid.roll(x, [ss, ss], dims=[1, 2])
 
         if pad_r > 0 or pad_b > 0:
             x = x[:, :h, :w, :]

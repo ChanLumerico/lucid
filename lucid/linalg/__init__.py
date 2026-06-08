@@ -2927,7 +2927,7 @@ def diagonal(
     >>> diagonal(A, offset=1)
     Tensor([2.0000])
     """
-    return lucid.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)  # type: ignore[arg-type]
+    return lucid.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)
 
 
 __all__ = [

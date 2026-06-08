@@ -218,7 +218,7 @@ class LBFGS(Optimizer):
         for group in self.param_groups:
             for p in cast(list[Tensor], group["params"]):
                 n = p._impl.numel()
-                chunk = lucid.reshape(update_flat[offset : offset + n], list(p._impl.shape))  # type: ignore[arg-type]
+                chunk = lucid.reshape(update_flat[offset : offset + n], list(p._impl.shape))
                 p._impl = lucid.add(p, lucid.mul(lucid.tensor(alpha), chunk))._impl
                 offset += n
 

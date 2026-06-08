@@ -228,7 +228,7 @@ class Wishart(Distribution):
 
         # ── off-diagonal: standard normals ──────────────────────────────────
         Z = lucid.randn(*sample_shape, d, d, dtype=dt, device=dev)
-        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dt, device=dev), k=-1)  # type: ignore[arg-type]
+        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dt, device=dev), k=-1)
         Z_lower = Z * lower_mask  # strictly lower triangular
 
         # ── assemble A ──────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ class LKJCholesky(Distribution):
         full_shape = self._extended_shape(sample_shape)  # (*s, *b, d, d)
         u_normal = lucid.randn(*full_shape, dtype=dtype, device=dev)
         # Zero strictly upper triangle (keep only lower triangle with k=-1)
-        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dtype, device=dev), k=-1)  # type: ignore[arg-type]
+        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dtype, device=dev), k=-1)
         u_normal = u_normal * lower_mask
 
         # Normalise rows to lie on the unit hypersphere (ignoring row 0 which
