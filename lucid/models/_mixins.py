@@ -550,7 +550,7 @@ class CausalLMMixin:
             and compile_decode
             and self.supports_compiled_static_decode
         ):
-            from lucid.models._compiled_decode import _CompiledStaticDecoder
+            from lucid.models._utils._compiled_decode import _CompiledStaticDecoder
 
             cache_len = max_cache_len if max_cache_len is not None else stop_len
             past_static = StaticCache(max_cache_len=cache_len)

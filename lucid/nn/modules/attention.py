@@ -443,6 +443,25 @@ class MultiheadAttention(Module):
         v: Tensor = linear(value, v_w, v_b)
         return q, k, v
 
+    def _project_q(self, query: Tensor) -> Tensor:
+        """Project only the query, ``(B, Tq, embed_dim)``.
+
+        Cross-attention reusing an already-filled cache reads its key/value
+        straight from the cache, so projecting K/V from ``memory`` would be
+        wasted work (discarded immediately).  This is the query-only path.
+        """
+        d: int = self.embed_dim
+        if self._qkv_same_embed_dim:
+            q_w: Tensor = _wrap(
+                _C_engine.split_at(self.in_proj_weight._impl, [d, 2 * d], 0)[0]  # type: ignore[union-attr]
+            )
+        else:
+            q_w = self.q_proj_weight  # type: ignore[assignment]
+        q_b: Tensor | None = None
+        if self.in_proj_bias is not None:
+            q_b = _wrap(_C_engine.split_at(self.in_proj_bias._impl, [d, 2 * d], 0)[0])
+        return linear(query, q_w, q_b)
+
     def _split_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
         """Reshape ``(B, T, embed_dim)`` → ``(B, num_heads, T, head_dim)``."""
         return x.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(
@@ -552,60 +571,80 @@ class MultiheadAttention(Module):
         B: int = query.shape[0]
         Tq: int = query.shape[1]
 
-        q, k, v = self._project_qkv(query, key, value)
+        from lucid.utils.cache import EncoderDecoderCache
 
-        # ── add_bias_kv: prepend learnable bias rows to K / V ───────────
-        if self.bias_k is not None:
-            assert self.bias_v is not None
-            bk: Tensor = self.bias_k.expand(B, 1, self.embed_dim)
-            bv: Tensor = self.bias_v.expand(B, 1, self.embed_dim)
-            k = _lucid.cat([k, bk], 1)
-            v = _lucid.cat([v, bv], 1)
-
-        # ── add_zero_attn: append a zero row to K / V ───────────────────
-        if self.add_zero_attn:
-            zero_kv: Tensor = _lucid.zeros(
-                B, 1, self.embed_dim, dtype=k.dtype, device=k.device
-            )
-            k = _lucid.cat([k, zero_kv], 1)
-            v = _lucid.cat([v, zero_kv], 1)
-
-        Tk: int = k.shape[1]
-
-        # Split heads.
-        qh: Tensor = self._split_heads(q, B, Tq)
-        kh: Tensor = self._split_heads(k, B, Tk)
-        vh: Tensor = self._split_heads(v, B, Tk)
-
-        # ── KV cache ──────────────────────────────────────────────────────
-        # Keys/values are laid out (B, num_heads, T, head_dim); self-attention
-        # grows the cache, cross-attention fills it once from the (constant)
-        # encoder memory and reuses it thereafter.
-        if use_cache and past_key_value is not None:
-            from lucid.utils.cache import EncoderDecoderCache
-
-            if is_cross_attention and isinstance(past_key_value, EncoderDecoderCache):
-                cross = past_key_value.cross_attention_cache
-                if past_key_value.is_updated.get(layer_idx, False):
-                    kh, vh = cross[layer_idx]
-                else:
-                    kh, vh = cross.update(kh, vh, layer_idx)
-                    past_key_value.is_updated[layer_idx] = True
-            else:
-                self_cache = (
-                    past_key_value.self_attention_cache
-                    if isinstance(past_key_value, EncoderDecoderCache)
-                    else past_key_value
-                )
-                # cache_position is the in-place write slot for a StaticCache
-                # (compiled decode); a DynamicCache ignores it and appends.
-                kh, vh = self_cache.update(
-                    kh, vh, layer_idx, cache_kwargs={"cache_position": cache_position}
-                )
+        # Keys/values are laid out (B, num_heads, T, head_dim).  Cross-attention
+        # that reuses an already-filled cache reads K/V straight from it, so it
+        # needs ONLY the query projection — skip the (otherwise discarded) memory
+        # K/V projection (saves it eagerly; drops it from the compiled graph).
+        cross_reuse: bool = (
+            use_cache
+            and is_cross_attention
+            and isinstance(past_key_value, EncoderDecoderCache)
+            and past_key_value.is_updated.get(layer_idx, False)
+        )
+        qh: Tensor
+        kh: Tensor
+        vh: Tensor
+        Tk: int
+        if cross_reuse:
+            assert isinstance(past_key_value, EncoderDecoderCache)
+            qh = self._split_heads(self._project_q(query), B, Tq)
+            kh, vh = past_key_value.cross_attention_cache[layer_idx]
             Tk = int(kh.shape[2])
+        else:
+            q, k, v = self._project_qkv(query, key, value)
+
+            # ── add_bias_kv: prepend learnable bias rows to K / V ───────────
+            if self.bias_k is not None:
+                assert self.bias_v is not None
+                bk: Tensor = self.bias_k.expand(B, 1, self.embed_dim)
+                bv: Tensor = self.bias_v.expand(B, 1, self.embed_dim)
+                k = _lucid.cat([k, bk], 1)
+                v = _lucid.cat([v, bv], 1)
+
+            # ── add_zero_attn: append a zero row to K / V ───────────────────
+            if self.add_zero_attn:
+                zero_kv: Tensor = _lucid.zeros(
+                    B, 1, self.embed_dim, dtype=k.dtype, device=k.device
+                )
+                k = _lucid.cat([k, zero_kv], 1)
+                v = _lucid.cat([v, zero_kv], 1)
+
+            Tk = k.shape[1]
+            qh = self._split_heads(q, B, Tq)
+            kh = self._split_heads(k, B, Tk)
+            vh = self._split_heads(v, B, Tk)
+
+            # ── KV cache ────────────────────────────────────────────────────
+            # Self-attention grows the cache; cross-attention fills it once from
+            # the (constant) encoder memory (the reuse path is handled above).
+            if use_cache and past_key_value is not None:
+                if is_cross_attention and isinstance(
+                    past_key_value, EncoderDecoderCache
+                ):
+                    kh, vh = past_key_value.cross_attention_cache.update(
+                        kh, vh, layer_idx
+                    )
+                    past_key_value.is_updated[layer_idx] = True
+                else:
+                    self_cache = (
+                        past_key_value.self_attention_cache
+                        if isinstance(past_key_value, EncoderDecoderCache)
+                        else past_key_value
+                    )
+                    # cache_position is the in-place write slot for a StaticCache
+                    # (compiled decode); a DynamicCache ignores it and appends.
+                    kh, vh = self_cache.update(
+                        kh,
+                        vh,
+                        layer_idx,
+                        cache_kwargs={"cache_position": cache_position},
+                    )
+                Tk = int(kh.shape[2])
 
         merged_mask: Tensor | None = self._build_attn_mask(
-            attn_mask, key_padding_mask, B, Tq, Tk, q.dtype
+            attn_mask, key_padding_mask, B, Tq, Tk, qh.dtype
         )
 
         # With a KV cache the query tokens sit at absolute positions
@@ -621,8 +660,8 @@ class MultiheadAttention(Module):
                     [_NEG_INF if j > i + offset else 0.0 for j in range(Tk)]
                     for i in range(Tq)
                 ],
-                dtype=q.dtype,
-                device=q.device,
+                dtype=qh.dtype,
+                device=qh.device,
             ).reshape(1, 1, Tq, Tk)
             merged_mask = (
                 causal_add if merged_mask is None else merged_mask + causal_add

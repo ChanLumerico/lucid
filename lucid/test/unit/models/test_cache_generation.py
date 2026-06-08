@@ -299,7 +299,7 @@ class TestCompiledStaticDecode:
 
     def test_single_compile_across_positions(self, device_gpu_only: str) -> None:
         # The payoff property: one executable serves every decode position.
-        from lucid.models._compiled_decode import _CompiledStaticDecoder
+        from lucid.models._utils._compiled_decode import _CompiledStaticDecoder
         from lucid.utils.cache import StaticCache
 
         lucid.manual_seed(0)
@@ -430,7 +430,7 @@ class TestTransformerSeq2SeqCache:
     def test_compiled_decode_logits_parity(self) -> None:
         # Degeneracy-independent: full per-step logits through the compiled
         # driver must match the eager DynamicCache logits.
-        from lucid.models._compiled_decode import _CompiledSeq2SeqDecoder
+        from lucid.models._utils._compiled_decode import _CompiledSeq2SeqDecoder
         from lucid.utils.cache import EncoderDecoderCache, StaticCache
 
         lucid.manual_seed(0)
@@ -457,7 +457,8 @@ class TestTransformerSeq2SeqCache:
             cache_position=lucid.tensor([0]).long(),
         )
         clog = [m.lm_head(d0[:, -1, :])]
-        decoder = _CompiledSeq2SeqDecoder(m, past, memory)
+        mem_mask = lucid.ones((1, int(memory.shape[1])))
+        decoder = _CompiledSeq2SeqDecoder(m, past, memory, mem_mask)
         for t in range(1, len(toks)):
             lg = decoder.step(
                 lucid.tensor([[toks[t]]]).long(), lucid.tensor([t]).long()
@@ -475,7 +476,7 @@ class TestTransformerSeq2SeqCache:
             m.generate(src, max_length=40, compile_decode=True)
 
     def test_single_compile_across_positions(self, device_gpu_only: str) -> None:
-        from lucid.models._compiled_decode import _CompiledSeq2SeqDecoder
+        from lucid.models._utils._compiled_decode import _CompiledSeq2SeqDecoder
         from lucid.utils.cache import EncoderDecoderCache, StaticCache
 
         lucid.manual_seed(0)
@@ -491,9 +492,48 @@ class TestTransformerSeq2SeqCache:
             use_cache=True,
             cache_position=lucid.tensor([0], device=device_gpu_only).long(),
         )
-        decoder = _CompiledSeq2SeqDecoder(m, past, memory)
+        mem_mask = lucid.ones((1, int(memory.shape[1])), device=device_gpu_only)
+        decoder = _CompiledSeq2SeqDecoder(m, past, memory, mem_mask)
         tok = lucid.tensor([[5]], device=device_gpu_only).long()
         for pos in (1, 2, 3, 4):
             decoder.step(tok, lucid.tensor([pos], device=device_gpu_only).long())
         assert len(decoder._compiled._cache) == 1
         assert len(decoder._compiled._eager_only.snapshot()) == 0
+
+    def test_decoder_applies_padding_masks(self) -> None:
+        # Regression: TransformerDecoder.forward dropped tgt/memory key-padding
+        # masks before the layers.  Correctness check: with the mask applied,
+        # the decoder output must be INVARIANT to whatever tokens sit in the
+        # padded source positions (encoder self-attn + cross-attn both mask).
+        lucid.manual_seed(0)
+        m = _seq2seq()
+        amask = lucid.tensor([[1.0, 1, 1, 1, 1, 0, 0]])
+        dec_in = lucid.tensor([[1, 4, 2]]).long()
+        src_a = lucid.tensor([[3, 7, 1, 9, 2, 0, 0]]).long()
+        src_b = lucid.tensor([[3, 7, 1, 9, 2, 5, 8]]).long()  # differs only in pad cols
+        out_a = m.transformer.decode(
+            dec_in, m.transformer.encode(src_a, amask), memory_attention_mask=amask
+        )
+        out_b = m.transformer.decode(
+            dec_in, m.transformer.encode(src_b, amask), memory_attention_mask=amask
+        )
+        assert_close(out_a, out_b, atol=1e-4)  # padded positions do not leak
+        # and dropping the mask DOES let them leak (the bug's signature)
+        leak_a = m.transformer.decode(dec_in, m.transformer.encode(src_a, amask))
+        leak_b = m.transformer.decode(dec_in, m.transformer.encode(src_b, amask))
+        assert float((leak_a - leak_b).abs().max().item()) > 1e-3
+
+    def test_compiled_decode_padded_source_equals_eager(self) -> None:
+        lucid.manual_seed(0)
+        m = _seq2seq()
+        src = lucid.tensor([[3, 7, 1, 9, 2, 0, 0]]).long()
+        amask = lucid.tensor([[1.0, 1, 1, 1, 1, 0, 0]])
+        g_eager = m.generate(src, max_length=12, do_sample=False, attention_mask=amask)
+        g_compiled = m.generate(
+            src,
+            max_length=12,
+            do_sample=False,
+            attention_mask=amask,
+            compile_decode=True,
+        )
+        assert_close(g_compiled, g_eager, atol=0.0)

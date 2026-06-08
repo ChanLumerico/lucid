@@ -159,6 +159,10 @@ class _Seq2SeqDecodeWrap(nn.Module):
         Fixed sequence capacity of the self-attention buffers.
     cross_len : int
         Encoder source length (fixed capacity of the cross-attention buffers).
+    has_memory_mask : bool, keyword-only
+        Whether a source padding mask is threaded as an extra positional input.
+        Omitted for an unpadded source so cross-attention keeps the fused SDPA
+        fast path (an all-attend mask would force the slower explicit path).
     """
 
     def __init__(
@@ -167,17 +171,29 @@ class _Seq2SeqDecodeWrap(nn.Module):
         num_layers: int,
         self_max_len: int,
         cross_len: int,
+        *,
+        has_memory_mask: bool,
     ) -> None:
         super().__init__()
         self.model = model
         self.num_layers = int(num_layers)
         self.self_max_len = int(self_max_len)
         self.cross_len = int(cross_len)
+        self.has_memory_mask = has_memory_mask
 
     @override
     def forward(  # type: ignore[override]  # reason: variadic buffer pass-through; the base Module.forward types *args loosely.
-        self, token: Tensor, cache_position: Tensor, memory: Tensor, *buffers: Tensor
+        self, token: Tensor, cache_position: Tensor, memory: Tensor, *rest: Tensor
     ) -> tuple[Tensor, ...]:
+        # The source padding mask (when present) is the first of ``rest``; the
+        # rest are the 4N self/cross key/value buffers.
+        memory_mask: Tensor | None
+        if self.has_memory_mask:
+            memory_mask = rest[0]
+            buffers = rest[1:]
+        else:
+            memory_mask = None
+            buffers = rest
         n = self.num_layers
         cache = EncoderDecoderCache(
             StaticCache.from_buffers(
@@ -193,6 +209,7 @@ class _Seq2SeqDecodeWrap(nn.Module):
         decoded = self.model.transformer.decode(
             token,
             memory,
+            memory_attention_mask=memory_mask,
             past_key_value=cache,
             use_cache=True,
             cache_position=cache_position,
@@ -221,10 +238,17 @@ class _CompiledSeq2SeqDecoder:
         The prefilled cache (both sub-caches are ``StaticCache``).
     memory : Tensor
         Encoder output ``(B, S, d_model)`` — constant across decode steps.
+    memory_mask : Tensor or None
+        ``(B, S)`` source attention mask (1 = attend, 0 = pad), constant across
+        steps; ``None`` for an unpadded source (keeps the fused SDPA path).
     """
 
     def __init__(
-        self, model: TransformerForSeq2SeqLM, past: EncoderDecoderCache, memory: Tensor
+        self,
+        model: TransformerForSeq2SeqLM,
+        past: EncoderDecoderCache,
+        memory: Tensor,
+        memory_mask: Tensor | None,
     ) -> None:
         self_cache = past.self_attention_cache
         cross_cache = past.cross_attention_cache
@@ -237,8 +261,9 @@ class _CompiledSeq2SeqDecoder:
         self._num_layers = len(self_cache.key_cache)
         self._self_key = self_cache.key_cache
         self._self_value = self_cache.value_cache
+        # memory + cross buffers + the source mask are constant graph feeds.
         self._memory = memory
-        # Cross buffers are constant — threaded in, never written back.
+        self._memory_mask = memory_mask
         self._cross_key = cross_cache.key_cache
         self._cross_value = cross_cache.value_cache
         wrap = _Seq2SeqDecodeWrap(
@@ -246,6 +271,7 @@ class _CompiledSeq2SeqDecoder:
             self._num_layers,
             self_cache.max_cache_len,
             cross_cache.max_cache_len,
+            has_memory_mask=memory_mask is not None,
         )
         self._compiled = lucid.compile(wrap)
 
@@ -259,10 +285,14 @@ class _CompiledSeq2SeqDecoder:
         cache_position : Tensor
             ``(1,)`` int64 absolute write position for this step.
         """
+        mask: tuple[Tensor, ...] = (
+            (self._memory_mask,) if self._memory_mask is not None else ()
+        )
         result = self._compiled(
             token,
             cache_position,
             self._memory,
+            *mask,
             *self._self_key,
             *self._self_value,
             *self._cross_key,

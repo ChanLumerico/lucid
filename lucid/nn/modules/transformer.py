@@ -985,6 +985,8 @@ class TransformerDecoder(Module):
                     memory,
                     tgt_mask=tgt_mask,
                     memory_mask=memory_mask,
+                    tgt_key_padding_mask=tgt_key_padding_mask,
+                    memory_key_padding_mask=memory_key_padding_mask,
                     past_key_value=past_key_value,
                     layer_idx=layer_idx,
                     use_cache=use_cache,

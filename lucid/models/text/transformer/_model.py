@@ -519,11 +519,13 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             do_sample / temperature / top_k / top_p / repetition_penalty:
                            Sampling knobs (greedy ``argmax`` when
                            ``do_sample=False``).
-            compile_decode: With ``use_cache`` and no source-padding
-                           ``attention_mask``, run each new token through one
+            compile_decode: With ``use_cache``, run each new token through one
                            reused compiled decode executable (fixed StaticCache
-                           self-attention + constant cross-attention).  Opt-in;
-                           silently falls back to eager otherwise.
+                           self-attention + constant cross-attention).  Works
+                           for both unpadded and padded sources (the padding
+                           mask is threaded as a constant graph feed only when
+                           present).  Opt-in; silently falls back to eager when
+                           caching is off or the model does not declare support.
 
         Returns:
             ``(B, T_out)`` int Tensor of generated target tokens.
@@ -554,15 +556,17 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             dev=dev,
         )
 
-        # ── compiled static decode (opt-in; needs an unpadded source) ───────
-        if (
-            use_cache
-            and compile_decode
-            and self.supports_compiled_static_decode
-            and attention_mask is None
-        ):
+        # ── compiled static decode (opt-in) ─────────────────────────────────
+        if use_cache and compile_decode and self.supports_compiled_static_decode:
             return self._generate_compiled(
-                memory, out_tokens, finished, sampling, max_length, B, dev
+                memory,
+                attention_mask,
+                out_tokens,
+                finished,
+                sampling,
+                max_length,
+                B,
+                dev,
             )
 
         # ── eager path (DynamicCache) ───────────────────────────────────────
@@ -601,6 +605,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
     def _generate_compiled(
         self,
         memory: Tensor,
+        attention_mask: Tensor | None,
         out_tokens: list[Tensor],
         finished: list[bool],
         sampling: _SamplingParams,
@@ -609,7 +614,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
         dev: str,
     ) -> Tensor:
         """Compiled-static decode loop: eager BOS prefill, then reused steps."""
-        from lucid.models._compiled_decode import _CompiledSeq2SeqDecoder
+        from lucid.models._utils._compiled_decode import _CompiledSeq2SeqDecoder
 
         max_pos = cast(TransformerConfig, self.config).max_position_embeddings
         if max_length > max_pos:
@@ -621,11 +626,14 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             StaticCache(max_cache_len=max_length),
             StaticCache(max_cache_len=int(memory.shape[1])),
         )
+        # The source padding mask (or None when unpadded — keeps cross-attention
+        # on the fused SDPA path) is constant across steps.
         # Eager BOS prefill at position 0: fills the cross-attention buffers from
         # the encoder memory and writes the BOS self-attention key/value.
         decoded = self.transformer.decode(
             out_tokens[0].reshape(B, 1),
             memory,
+            memory_attention_mask=attention_mask,
             past_key_value=past,
             use_cache=True,
             cache_position=lucid.tensor([0], device=dev).long(),
@@ -642,7 +650,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             if done or step_idx == n_new - 1:
                 break
             if decoder is None:
-                decoder = _CompiledSeq2SeqDecoder(self, past, memory)
+                decoder = _CompiledSeq2SeqDecoder(self, past, memory, attention_mask)
             cache_position = lucid.tensor([cur_pos], device=dev).long()
             logits = decoder.step(out_tokens[-1].reshape(B, 1), cache_position)
             cur_pos += 1
