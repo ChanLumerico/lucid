@@ -37,6 +37,44 @@ except ImportError:                                          # graceful fallback
     tqdm = None                                              # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
+# Griffe robustness shim — callable-module / overload collision
+# ---------------------------------------------------------------------------
+#
+# ``lucid.compile`` is a *callable module*: the runtime swaps its class to a
+# ModuleType subclass so ``lucid.compile(model)`` works, and ``lucid/__init__.pyi``
+# advertises ``compile`` as ``@overload``'d functions so type-checkers can model
+# the call.  Griffe's stub-overload merger then looks up ``lucid.compile`` while
+# merging the package stub, finds the *submodule* (a ``Module``) under that name,
+# and crashes on ``Module.parameters`` — taking down whichever module happens to
+# be loaded first on a worker (the api-data for that module silently goes
+# unbuilt).  Guard the merger so a name that resolves to a non-Function member is
+# skipped rather than fatal; real function-overload merges are untouched.
+
+_GRIFFE_GUARD_INSTALLED = False
+
+
+def _install_griffe_overload_guard() -> None:
+    """Make Griffe's stub-overload merge tolerant of callable-module name
+    collisions (idempotent; safe to call before every loader build)."""
+    global _GRIFFE_GUARD_INSTALLED
+    if _GRIFFE_GUARD_INSTALLED:
+        return
+    try:
+        import griffe._internal.merger as _merger
+        from griffe import Function as _GFunction
+    except Exception:
+        return
+    _orig = _merger._merge_overload_annotations
+
+    def _guarded(function: Any, overloads: Any) -> Any:
+        if not isinstance(function, _GFunction):
+            return None
+        return _orig(function, overloads)
+
+    _merger._merge_overload_annotations = _guarded
+    _GRIFFE_GUARD_INSTALLED = True
+
+# ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
@@ -1916,6 +1954,7 @@ def _worker_loader() -> Any:
     paid once per worker, not once per task."""
     global _WORKER_LOADER
     if _WORKER_LOADER is None:
+        _install_griffe_overload_guard()
         from griffe import GriffeLoader, Parser
         _WORKER_LOADER = GriffeLoader(
             docstring_parser=Parser.numpy,
@@ -2118,6 +2157,8 @@ def main() -> None:
     except ImportError:
         print("ERROR: griffe not installed. Run: pip install griffe")
         sys.exit(1)
+
+    _install_griffe_overload_guard()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     sha = _get_commit_sha()

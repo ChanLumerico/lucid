@@ -116,6 +116,9 @@ class StaticCache(Cache):
             yield self.key_cache[layer_idx], self.value_cache[layer_idx]
 
     def _lazy_init(self, layer_idx: int, key_states: Tensor) -> None:
+        """Allocate zero-filled ``(B, num_heads, max_cache_len, head_dim)``
+        buffers up to and including ``layer_idx``, inferring batch / head /
+        head-dim / dtype / device from the first ``key_states`` seen."""
         b, h, _, d = key_states.shape
         dev = key_states.device.type
         while len(self.key_cache) <= layer_idx:
@@ -149,6 +152,34 @@ class StaticCache(Cache):
         layer_idx: int,
         cache_kwargs: dict[str, object] | None = None,
     ) -> tuple[Tensor, Tensor]:
+        """Write ``key_states`` / ``value_states`` into the fixed buffer at
+        ``cache_position`` and return the **full** buffer.
+
+        The write goes through the traceable :func:`lucid.index_copy` (not
+        in-place ``__setitem__``), so the decode forward stays compile-visible
+        and the buffer keeps a constant shape every step.
+
+        Parameters
+        ----------
+        key_states : Tensor
+            New key projections of shape ``(B, num_heads, T_new, head_dim)``.
+        value_states : Tensor
+            New value projections of the same shape.
+        layer_idx : int
+            Index of the transformer layer this update belongs to (buffers are
+            lazily allocated on the first call for a layer).
+        cache_kwargs : dict or None, optional
+            May carry ``"cache_position"`` (a fixed-shape int64 ``Tensor`` of
+            absolute write indices).  When absent, positions are taken from the
+            per-layer running counter.
+
+        Returns
+        -------
+        tuple of (Tensor, Tensor)
+            The full ``(keys, values)`` buffers for ``layer_idx``, each of shape
+            ``(B, num_heads, max_cache_len, head_dim)`` — unwritten future slots
+            are zero and are masked out by the attention's causal mask.
+        """
         if len(self.key_cache) <= layer_idx:
             self._lazy_init(layer_idx, key_states)
 
@@ -178,16 +209,22 @@ class StaticCache(Cache):
 
     @override
     def get_seq_length(self, layer_idx: int = 0) -> int:
+        """Number of tokens written so far for ``layer_idx``, read from the
+        per-layer counter (the buffer shape is always ``max_cache_len``, so the
+        count cannot be inferred from it)."""
         if layer_idx >= len(self._cumulative_length):
             return 0
         return self._cumulative_length[layer_idx]
 
     @override
     def get_max_cache_shape(self) -> int | None:
+        """Return the fixed buffer capacity ``max_cache_len`` (always bounded)."""
         return self.max_cache_len
 
     @override
     def reorder_cache(self, beam_idx: Tensor) -> None:
+        """Reindex every layer's buffers along the batch dimension with
+        ``beam_idx`` (in place) to keep beams aligned after a beam permutation."""
         for layer_idx in range(len(self.key_cache)):
             self.key_cache[layer_idx] = self.key_cache[layer_idx].index_select(
                 0, beam_idx

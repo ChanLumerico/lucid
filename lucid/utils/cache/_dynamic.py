@@ -24,8 +24,9 @@ _SEQ_DIM = -2
 class DynamicCache(Cache):
     """A cache that grows its key/value tensors by concatenation each step.
 
-    Holds one key tensor and one value tensor per layer in :attr:`key_cache`
-    and :attr:`value_cache`.  The first :meth:`update` for a layer seeds the
+    Holds one key tensor and one value tensor per layer in ``key_cache`` and
+    ``value_cache`` (see the Attributes section).  The
+    first :meth:`update` for a layer seeds the
     entry; subsequent updates concatenate the new token(s) along the sequence
     dimension.  This is the eager default for autoregressive decoding.
 
@@ -87,6 +88,29 @@ class DynamicCache(Cache):
         layer_idx: int,
         cache_kwargs: dict[str, object] | None = None,
     ) -> tuple[Tensor, Tensor]:
+        """Concatenate ``key_states`` / ``value_states`` onto ``layer_idx`` and
+        return the grown key/value tensors.
+
+        The first call for a layer seeds the entry; later calls
+        :func:`lucid.cat` the new token(s) onto the sequence dimension.
+
+        Parameters
+        ----------
+        key_states : Tensor
+            New key projections of shape ``(B, num_heads, T_new, head_dim)``.
+        value_states : Tensor
+            New value projections of the same shape.
+        layer_idx : int
+            Index of the transformer layer this update belongs to.
+        cache_kwargs : dict or None, optional
+            Accepted for interface parity; unused by the dynamic cache.
+
+        Returns
+        -------
+        tuple of (Tensor, Tensor)
+            The accumulated ``(keys, values)`` for ``layer_idx``, each of shape
+            ``(B, num_heads, T_total, head_dim)``.
+        """
         if layer_idx == 0:
             self._seen_tokens += int(key_states.shape[_SEQ_DIM])
 
@@ -107,16 +131,21 @@ class DynamicCache(Cache):
 
     @override
     def get_seq_length(self, layer_idx: int = 0) -> int:
+        """Number of cached tokens for ``layer_idx`` (0 if not yet seeded),
+        read directly from the accumulated tensor's sequence dimension."""
         if len(self.key_cache) <= layer_idx:
             return 0
         return int(self.key_cache[layer_idx].shape[_SEQ_DIM])
 
     @override
     def get_max_cache_shape(self) -> int | None:
+        """Always ``None`` — the dynamic cache is unbounded and grows on demand."""
         return None
 
     @override
     def reorder_cache(self, beam_idx: Tensor) -> None:
+        """Reindex every layer's keys/values along the batch dimension with
+        ``beam_idx`` (in place) to keep beams aligned after a beam permutation."""
         for layer_idx in range(len(self.key_cache)):
             self.key_cache[layer_idx] = self.key_cache[layer_idx].index_select(
                 0, beam_idx

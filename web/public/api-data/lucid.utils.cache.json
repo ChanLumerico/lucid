@@ -1,0 +1,1407 @@
+{
+  "slug": "lucid.utils.cache",
+  "name": "cache",
+  "path": "lucid.utils.cache",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/__init__.py#L1",
+  "members": [
+    {
+      "name": "Cache",
+      "path": "lucid.utils.cache._base.Cache",
+      "kind": "class",
+      "class_kind": "abstract",
+      "bases": [
+        "ABC"
+      ],
+      "labels": [],
+      "signature": "Cache()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_base.py#L16",
+      "subcategory": "base",
+      "methods": [
+        {
+          "name": "update",
+          "path": "lucid.utils.cache._base.Cache.update",
+          "kind": "function",
+          "labels": [
+            "abstractmethod"
+          ],
+          "signature": "update(key_states: Tensor, value_states: Tensor, layer_idx: int, cache_kwargs: dict[str, object] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_base.py#L33",
+          "subcategory": "base",
+          "summary": "Append `key_states` / `value_states` for `layer_idx` and return\nthe full cached key/value tensors.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "key_states",
+              "annotation": "Tensor",
+              "description": "New key projections of shape `(B, num_heads, T_new, head_dim)`.",
+              "default": null
+            },
+            {
+              "name": "value_states",
+              "annotation": "Tensor",
+              "description": "New value projections of the same shape.",
+              "default": null
+            },
+            {
+              "name": "layer_idx",
+              "annotation": "int",
+              "description": "Index of the transformer layer this update belongs to.",
+              "default": null
+            },
+            {
+              "name": "cache_kwargs",
+              "annotation": "dict or None",
+              "description": "Extra per-cache arguments (e.g. rotary `cache_position`).\nIgnored by the dynamic cache; reserved for parity with other\ncache implementations.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "tuple of (Tensor, Tensor)",
+            "description": "The accumulated `(keys, values)` for `layer_idx`, each of\nshape `(B, num_heads, T_total, head_dim)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_seq_length",
+          "path": "lucid.utils.cache._base.Cache.get_seq_length",
+          "kind": "function",
+          "labels": [
+            "abstractmethod"
+          ],
+          "signature": "get_seq_length(layer_idx: int = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_base.py#L64",
+          "subcategory": "base",
+          "summary": "Return the number of cached tokens for `layer_idx` (0 if empty).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_max_cache_shape",
+          "path": "lucid.utils.cache._base.Cache.get_max_cache_shape",
+          "kind": "function",
+          "labels": [
+            "abstractmethod"
+          ],
+          "signature": "get_max_cache_shape()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_base.py#L68",
+          "subcategory": "base",
+          "summary": "Return the maximum sequence length the cache can hold.",
+          "extended": "`None` for an unbounded (dynamically growing) cache.",
+          "parameters": [],
+          "returns": {
+            "annotation": "int | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reorder_cache",
+          "path": "lucid.utils.cache._base.Cache.reorder_cache",
+          "kind": "function",
+          "labels": [
+            "abstractmethod"
+          ],
+          "signature": "reorder_cache(beam_idx: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_base.py#L75",
+          "subcategory": "base",
+          "summary": "Reindex the cache along the batch dimension with `beam_idx`.",
+          "extended": "Used by beam search to keep each beam's cache aligned after the\nper-step beam permutation.  Mutates the cache in place.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_usable_length",
+          "path": "lucid.utils.cache._base.Cache.get_usable_length",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_usable_length(new_seq_length: int, layer_idx: int = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_base.py#L83",
+          "subcategory": "base",
+          "summary": "Return how many cached tokens can be used given `new_seq_length`.",
+          "extended": "For a bounded cache this clamps so that `previous + new` never\nexceeds `get_max_cache_shape`; for an unbounded cache it is\nsimply the current sequence length.",
+          "parameters": [
+            {
+              "name": "new_seq_length",
+              "annotation": "int",
+              "description": "Number of new tokens about to be appended this step.",
+              "default": null
+            },
+            {
+              "name": "layer_idx",
+              "annotation": "int",
+              "description": "Layer whose current length is queried.",
+              "default": "0"
+            }
+          ],
+          "returns": {
+            "annotation": "int",
+            "description": "The count of already-cached tokens that remain usable once the\n`new_seq_length` tokens are accounted for against the cap."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Abstract base class for all key/value caches used in attention.",
+      "extended": "A cache stores, per transformer layer, the key and value projections of\nevery token seen so far so that an incremental (one-token-at-a-time)\nforward pass only has to project the *new* token's key/value and attend\nagainst the accumulated history — turning an $O(T^2)$ re-encode of\nthe whole prefix at every step into an $O(T)$ update.\n\nSubclasses implement `update` (the per-layer write/read), plus the\nlength-introspection and beam-reordering hooks.  Concrete subclasses are\n`lucid.utils.cache.DynamicCache` (the default growing cache),\n`lucid.utils.cache.StaticCache` (a fixed pre-allocated buffer for\ncompiled decoding), and `lucid.utils.cache.EncoderDecoderCache`\n(paired self- + cross-attention).",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DynamicCache",
+      "path": "lucid.utils.cache._dynamic.DynamicCache",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Cache"
+      ],
+      "labels": [],
+      "signature": "DynamicCache()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L23",
+      "subcategory": "dynamic",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L55",
+          "subcategory": "dynamic",
+          "summary": "Create an empty cache with no layers populated.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "seen_tokens",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.seen_tokens",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "seen_tokens: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L62",
+          "summary": "Total number of tokens processed across all `update` calls.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__len__",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.__len__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__len__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L66",
+          "subcategory": "dynamic",
+          "summary": "Number of layers currently held in the cache.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__getitem__",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.__getitem__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__getitem__(layer_idx: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L70",
+          "subcategory": "dynamic",
+          "summary": "Return the `(keys, values)` pair cached for `layer_idx`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__iter__",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.__iter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__iter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L78",
+          "subcategory": "dynamic",
+          "summary": "Iterate `(keys, values)` pairs in layer order.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Iterator[tuple[Tensor, Tensor]]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.update",
+          "kind": "function",
+          "labels": [],
+          "signature": "update(key_states: Tensor, value_states: Tensor, layer_idx: int, cache_kwargs: dict[str, object] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L83",
+          "subcategory": "dynamic",
+          "summary": "Concatenate `key_states` / `value_states` onto `layer_idx` and\nreturn the grown key/value tensors.",
+          "extended": "The first call for a layer seeds the entry; later calls\n`lucid.cat` the new token(s) onto the sequence dimension.",
+          "parameters": [
+            {
+              "name": "key_states",
+              "annotation": "Tensor",
+              "description": "New key projections of shape `(B, num_heads, T_new, head_dim)`.",
+              "default": null
+            },
+            {
+              "name": "value_states",
+              "annotation": "Tensor",
+              "description": "New value projections of the same shape.",
+              "default": null
+            },
+            {
+              "name": "layer_idx",
+              "annotation": "int",
+              "description": "Index of the transformer layer this update belongs to.",
+              "default": null
+            },
+            {
+              "name": "cache_kwargs",
+              "annotation": "dict or None",
+              "description": "Accepted for interface parity; unused by the dynamic cache.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "tuple of (Tensor, Tensor)",
+            "description": "The accumulated `(keys, values)` for `layer_idx`, each of shape\n`(B, num_heads, T_total, head_dim)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_seq_length",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.get_seq_length",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_seq_length(layer_idx: int = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L132",
+          "subcategory": "dynamic",
+          "summary": "Number of cached tokens for `layer_idx` (0 if not yet seeded),\nread directly from the accumulated tensor's sequence dimension.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_max_cache_shape",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.get_max_cache_shape",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_max_cache_shape()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L140",
+          "subcategory": "dynamic",
+          "summary": "Always `None` — the dynamic cache is unbounded and grows on demand.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reorder_cache",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.reorder_cache",
+          "kind": "function",
+          "labels": [],
+          "signature": "reorder_cache(beam_idx: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L145",
+          "subcategory": "dynamic",
+          "summary": "Reindex every layer's keys/values along the batch dimension with\n`beam_idx` (in place) to keep beams aligned after a beam permutation.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L157",
+          "subcategory": "dynamic",
+          "summary": "Empty the cache in place so the same object can be reused for a\nfresh sequence (clears every layer and the token counter).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "crop",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.crop",
+          "kind": "function",
+          "labels": [],
+          "signature": "crop(max_length: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L164",
+          "subcategory": "dynamic",
+          "summary": "Truncate the cache to at most `max_length` tokens along the\nsequence dimension (in place).",
+          "extended": "A negative `max_length` drops that many tokens off the end.  Useful\nfor rolling the cache back (e.g. rejecting speculative tokens).  A\n`max_length` at or above the current length is a no-op.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "batch_repeat_interleave",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.batch_repeat_interleave",
+          "kind": "function",
+          "labels": [],
+          "signature": "batch_repeat_interleave(repeats: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L183",
+          "subcategory": "dynamic",
+          "summary": "Repeat every batch row `repeats` times along the batch dimension\n(in place) — e.g. to fan one prompt out into `repeats` samples.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "batch_select_indices",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.batch_select_indices",
+          "kind": "function",
+          "labels": [],
+          "signature": "batch_select_indices(indices: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L194",
+          "subcategory": "dynamic",
+          "summary": "Keep only the batch rows named by `indices` along the batch\ndimension (in place).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "to_legacy_cache",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.to_legacy_cache",
+          "kind": "function",
+          "labels": [],
+          "signature": "to_legacy_cache()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L205",
+          "subcategory": "dynamic",
+          "summary": "Convert to the legacy `tuple(tuple(key, value), ...)` format.",
+          "extended": "Returns one `(key, value)` pair per layer, in layer order — the\nrepresentation older decoder `forward` signatures consumed before\n`Cache` objects existed.",
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[tuple[Tensor, Tensor], ...]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_legacy_cache",
+          "path": "lucid.utils.cache._dynamic.DynamicCache.from_legacy_cache",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_legacy_cache(past_key_values: tuple[tuple[Tensor, Tensor], ...] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_dynamic.py#L217",
+          "subcategory": "dynamic",
+          "summary": "Build a `DynamicCache` from the legacy tuple format.",
+          "extended": "`past_key_values` is a per-layer tuple of `(key, value)` tensors;\n`None` yields an empty cache.",
+          "parameters": [],
+          "returns": {
+            "annotation": "Self",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A cache that grows its key/value tensors by concatenation each step.",
+      "extended": "Holds one key tensor and one value tensor per layer in `key_cache` and\n`value_cache` (see the Attributes section).  The\nfirst `update` for a layer seeds the\nentry; subsequent updates concatenate the new token(s) along the sequence\ndimension.  This is the eager default for autoregressive decoding.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.utils.cache import DynamicCache\n>>> cache = DynamicCache()\n>>> k = lucid.zeros(1, 2, 3, 4)   # (B, H, T, D)\n>>> v = lucid.zeros(1, 2, 3, 4)\n>>> ck, cv = cache.update(k, v, layer_idx=0)\n>>> cache.get_seq_length()\n3"
+      ],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "key_cache",
+          "annotation": "list[Tensor]",
+          "description": "Per-layer accumulated keys, each `(B, num_heads, T, head_dim)`."
+        },
+        {
+          "name": "value_cache",
+          "annotation": "list[Tensor]",
+          "description": "Per-layer accumulated values, same shapes."
+        },
+        {
+          "name": "_seen_tokens",
+          "annotation": "int",
+          "description": "Running count of tokens the cache has processed (tracked from\n`layer_idx == 0`), exposed via `seen_tokens`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "EncoderDecoderCache",
+      "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Cache"
+      ],
+      "labels": [],
+      "signature": "EncoderDecoderCache(self_attention_cache: _KVCache, cross_attention_cache: _KVCache, is_updated: dict[int, bool] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L32",
+      "subcategory": "encoder_decoder",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(self_attention_cache: _KVCache, cross_attention_cache: _KVCache, is_updated: dict[int, bool] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L59",
+          "subcategory": "encoder_decoder",
+          "summary": "Pair an existing self-attention and cross-attention cache.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__len__",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.__len__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__len__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L78",
+          "subcategory": "encoder_decoder",
+          "summary": "Number of decoder layers (from the self-attention cache).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__getitem__",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.__getitem__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__getitem__(layer_idx: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L82",
+          "subcategory": "encoder_decoder",
+          "summary": "Return `(self_k, self_v, cross_k, cross_v)` for `layer_idx`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor, Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__iter__",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.__iter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__iter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L88",
+          "subcategory": "encoder_decoder",
+          "summary": "Iterate `(self_k, self_v, cross_k, cross_v)` tuples in layer order.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Iterator[tuple[Tensor, Tensor, Tensor, Tensor]]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.update",
+          "kind": "function",
+          "labels": [],
+          "signature": "update(key_states: Tensor, value_states: Tensor, layer_idx: int, cache_kwargs: dict[str, object] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L93",
+          "subcategory": "encoder_decoder",
+          "summary": "Update the decoder **self-attention** cache for `layer_idx`.",
+          "extended": "Cross-attention key/value are written directly through the\n`cross_attention_cache` by the attention module (guarded by\n`is_updated`), not through this method — so this delegates only to the\nself-attention sub-cache.",
+          "parameters": [
+            {
+              "name": "key_states",
+              "annotation": "Tensor",
+              "description": "New decoder self-attention keys, `(B, num_heads, T_new, head_dim)`.",
+              "default": null
+            },
+            {
+              "name": "value_states",
+              "annotation": "Tensor",
+              "description": "New decoder self-attention values, same shape.",
+              "default": null
+            },
+            {
+              "name": "layer_idx",
+              "annotation": "int",
+              "description": "Index of the decoder layer this update belongs to.",
+              "default": null
+            },
+            {
+              "name": "cache_kwargs",
+              "annotation": "dict or None",
+              "description": "Forwarded to the self-attention sub-cache (e.g. a `StaticCache`\nreads `\"cache_position\"` from it).",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "tuple of (Tensor, Tensor)",
+            "description": "The accumulated self-attention `(keys, values)` for `layer_idx`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_seq_length",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.get_seq_length",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_seq_length(layer_idx: int = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L129",
+          "subcategory": "encoder_decoder",
+          "summary": "Decoder sequence length for `layer_idx` (from the self-attention\nsub-cache; the cross-attention length is fixed and not counted).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_max_cache_shape",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.get_max_cache_shape",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_max_cache_shape()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L135",
+          "subcategory": "encoder_decoder",
+          "summary": "Maximum decoder length, delegated to the self-attention sub-cache\n(`None` if it is a growing `DynamicCache`).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reorder_cache",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.reorder_cache",
+          "kind": "function",
+          "labels": [],
+          "signature": "reorder_cache(beam_idx: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L141",
+          "subcategory": "encoder_decoder",
+          "summary": "Reindex both sub-caches along the batch dimension with `beam_idx`\n(in place) so self- and cross-attention stay beam-aligned.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L148",
+          "subcategory": "encoder_decoder",
+          "summary": "Empty both sub-caches and clear the cross-attention 'updated' flags.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "crop",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.crop",
+          "kind": "function",
+          "labels": [],
+          "signature": "crop(max_length: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L154",
+          "subcategory": "encoder_decoder",
+          "summary": "Truncate the decoder self-attention cache to `max_length` tokens.",
+          "extended": "The cross-attention cache is the fixed-length encoder memory and is\nleft untouched.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "batch_repeat_interleave",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.batch_repeat_interleave",
+          "kind": "function",
+          "labels": [],
+          "signature": "batch_repeat_interleave(repeats: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L162",
+          "subcategory": "encoder_decoder",
+          "summary": "Repeat every batch row `repeats` times in both sub-caches.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "batch_select_indices",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.batch_select_indices",
+          "kind": "function",
+          "labels": [],
+          "signature": "batch_select_indices(indices: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L167",
+          "subcategory": "encoder_decoder",
+          "summary": "Keep only the batch rows named by `indices` in both sub-caches.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "to_legacy_cache",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.to_legacy_cache",
+          "kind": "function",
+          "labels": [],
+          "signature": "to_legacy_cache()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L172",
+          "subcategory": "encoder_decoder",
+          "summary": "Convert to the legacy per-layer `(self_k, self_v, cross_k, cross_v)`\ntuple format.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[tuple[Tensor, Tensor, Tensor, Tensor], ...]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_legacy_cache",
+          "path": "lucid.utils.cache._encoder_decoder.EncoderDecoderCache.from_legacy_cache",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_legacy_cache(past_key_values: tuple[tuple[Tensor, Tensor, Tensor, Tensor], ...] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_encoder_decoder.py#L184",
+          "subcategory": "encoder_decoder",
+          "summary": "Build an `EncoderDecoderCache` from the legacy 4-tuple format.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Self",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Wraps a decoder self-attention cache and a cross-attention cache.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "self_attention_cache",
+          "annotation": "DynamicCache or StaticCache",
+          "description": "Grows by one position per decode step (decoder self-attention).",
+          "default": null
+        },
+        {
+          "name": "cross_attention_cache",
+          "annotation": "DynamicCache or StaticCache",
+          "description": "Filled once from the encoder `memory` then reused unchanged.",
+          "default": null
+        },
+        {
+          "name": "is_updated",
+          "annotation": "(dict[int, bool] or None, optional, keyword - only)",
+          "description": "Per-layer cross-attention \"already filled\" flags.  When `None`\n(default) they are inferred from `cross_attention_cache`'s sequence\nlength — correct for eager use.  The compiled decode path passes them\nexplicitly (all True) because a re-wrapped `StaticCache` resets its\nlength counter, so length can no longer signal filled-ness.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "self_attention_cache",
+          "annotation": "DynamicCache or StaticCache",
+          "description": ""
+        },
+        {
+          "name": "cross_attention_cache",
+          "annotation": "DynamicCache or StaticCache",
+          "description": ""
+        },
+        {
+          "name": "is_updated",
+          "annotation": "dict[int, bool]",
+          "description": "Per-layer flag marking whether the cross-attention key/value for that\nlayer has already been computed; lets cross-attention skip the\nredundant `memory` projection on every step after the first."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "StaticCache",
+      "path": "lucid.utils.cache._static.StaticCache",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Cache"
+      ],
+      "labels": [],
+      "signature": "StaticCache(max_cache_len: int)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L27",
+      "subcategory": "static",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.cache._static.StaticCache.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(max_cache_len: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L55",
+          "subcategory": "static",
+          "summary": "Create an empty static cache with capacity `max_cache_len`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_buffers",
+          "path": "lucid.utils.cache._static.StaticCache.from_buffers",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_buffers(key_cache: list[Tensor], value_cache: list[Tensor], max_cache_len: int, seen_tokens: int = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L63",
+          "subcategory": "static",
+          "summary": "Wrap already-allocated per-layer buffers as a `StaticCache`.",
+          "extended": "Used by the compiled decode driver: the executable threads the fixed\nbuffers in and out as positional tensors, and each step reconstructs a\ncache view over them so the model's attention sees a `StaticCache`.\nThe per-layer length counters start at zero (the authoritative write\nlocation is the runtime `cache_position`, not the counter).",
+          "parameters": [
+            {
+              "name": "key_cache",
+              "annotation": "list[Tensor]",
+              "description": "Per-layer `(B, num_heads, max_cache_len, head_dim)` buffers.",
+              "default": null
+            },
+            {
+              "name": "value_cache",
+              "annotation": "list[Tensor]",
+              "description": "Per-layer `(B, num_heads, max_cache_len, head_dim)` buffers.",
+              "default": null
+            },
+            {
+              "name": "max_cache_len",
+              "annotation": "int",
+              "description": "Fixed sequence capacity (must match the buffers' dim-2 length).",
+              "default": null
+            },
+            {
+              "name": "seen_tokens",
+              "annotation": "(int, optional, keyword - only)",
+              "description": "Initial value for `seen_tokens`.",
+              "default": "0"
+            }
+          ],
+          "returns": {
+            "annotation": "StaticCache",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "seen_tokens",
+          "path": "lucid.utils.cache._static.StaticCache.seen_tokens",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "seen_tokens: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L97",
+          "summary": "Total number of tokens written (tracked from `layer_idx == 0`).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__len__",
+          "path": "lucid.utils.cache._static.StaticCache.__len__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__len__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L101",
+          "subcategory": "static",
+          "summary": "Number of layers currently allocated.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__getitem__",
+          "path": "lucid.utils.cache._static.StaticCache.__getitem__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__getitem__(layer_idx: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L105",
+          "subcategory": "static",
+          "summary": "Return the full `(keys, values)` buffers for `layer_idx`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__iter__",
+          "path": "lucid.utils.cache._static.StaticCache.__iter__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__iter__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L113",
+          "subcategory": "static",
+          "summary": "Iterate the per-layer `(keys, values)` buffers.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Iterator[tuple[Tensor, Tensor]]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update",
+          "path": "lucid.utils.cache._static.StaticCache.update",
+          "kind": "function",
+          "labels": [],
+          "signature": "update(key_states: Tensor, value_states: Tensor, layer_idx: int, cache_kwargs: dict[str, object] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L147",
+          "subcategory": "static",
+          "summary": "Write `key_states` / `value_states` into the fixed buffer at\n`cache_position` and return the **full** buffer.",
+          "extended": "The write goes through the traceable `lucid.index_copy` (not\nin-place `__setitem__`), so the decode forward stays compile-visible\nand the buffer keeps a constant shape every step.",
+          "parameters": [
+            {
+              "name": "key_states",
+              "annotation": "Tensor",
+              "description": "New key projections of shape `(B, num_heads, T_new, head_dim)`.",
+              "default": null
+            },
+            {
+              "name": "value_states",
+              "annotation": "Tensor",
+              "description": "New value projections of the same shape.",
+              "default": null
+            },
+            {
+              "name": "layer_idx",
+              "annotation": "int",
+              "description": "Index of the transformer layer this update belongs to (buffers are\nlazily allocated on the first call for a layer).",
+              "default": null
+            },
+            {
+              "name": "cache_kwargs",
+              "annotation": "dict or None",
+              "description": "May carry `\"cache_position\"` (a fixed-shape int64 `Tensor` of\nabsolute write indices).  When absent, positions are taken from the\nper-layer running counter.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "tuple of (Tensor, Tensor)",
+            "description": "The full `(keys, values)` buffers for `layer_idx`, each of shape\n`(B, num_heads, max_cache_len, head_dim)` — unwritten future slots\nare zero and are masked out by the attention's causal mask."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_seq_length",
+          "path": "lucid.utils.cache._static.StaticCache.get_seq_length",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_seq_length(layer_idx: int = 0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L210",
+          "subcategory": "static",
+          "summary": "Number of tokens written so far for `layer_idx`, read from the\nper-layer counter (the buffer shape is always `max_cache_len`, so the\ncount cannot be inferred from it).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_max_cache_shape",
+          "path": "lucid.utils.cache._static.StaticCache.get_max_cache_shape",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_max_cache_shape()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L219",
+          "subcategory": "static",
+          "summary": "Return the fixed buffer capacity `max_cache_len` (always bounded).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reorder_cache",
+          "path": "lucid.utils.cache._static.StaticCache.reorder_cache",
+          "kind": "function",
+          "labels": [],
+          "signature": "reorder_cache(beam_idx: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L224",
+          "subcategory": "static",
+          "summary": "Reindex every layer's buffers along the batch dimension with\n`beam_idx` (in place) to keep beams aligned after a beam permutation.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset",
+          "path": "lucid.utils.cache._static.StaticCache.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L236",
+          "subcategory": "static",
+          "summary": "Zero every buffer and reset the length counters in place.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "crop",
+          "path": "lucid.utils.cache._static.StaticCache.crop",
+          "kind": "function",
+          "labels": [],
+          "signature": "crop(max_length: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L244",
+          "subcategory": "static",
+          "summary": "Logically truncate the cache to `max_length` tokens.",
+          "extended": "The buffer is fixed-size, so cropping only rewinds the length counters\n(cropped positions become 'future' and are masked by the causal mask).\nA negative `max_length` drops that many tokens off the end.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "batch_repeat_interleave",
+          "path": "lucid.utils.cache._static.StaticCache.batch_repeat_interleave",
+          "kind": "function",
+          "labels": [],
+          "signature": "batch_repeat_interleave(repeats: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L257",
+          "subcategory": "static",
+          "summary": "Repeat every batch row `repeats` times along the batch dimension.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "batch_select_indices",
+          "path": "lucid.utils.cache._static.StaticCache.batch_select_indices",
+          "kind": "function",
+          "labels": [],
+          "signature": "batch_select_indices(indices: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/834dec2e4/lucid/utils/cache/_static.py#L267",
+          "subcategory": "static",
+          "summary": "Keep only the batch rows named by `indices` along the batch dim.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A bounded cache backed by fixed pre-allocated buffers written in place.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "max_cache_len",
+          "annotation": "int",
+          "description": "Maximum sequence length the buffers can hold.  Must not exceed the\nmodel's positional range.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "`get_seq_length` is tracked by a per-layer counter (not inferred from the\nbuffer shape, which is always `max_cache_len`).  `update` returns the\n**full** buffer; the attention masks out the not-yet-written (future) tail\nvia the usual causal mask, so the zero-filled slots never contribute."
+      ],
+      "attributes": [
+        {
+          "name": "max_cache_len",
+          "annotation": "int",
+          "description": "Fixed sequence capacity of every layer's buffer."
+        },
+        {
+          "name": "key_cache",
+          "annotation": "list[Tensor]",
+          "description": "Per-layer key buffers, each `(B, num_heads, max_cache_len, head_dim)`\n(lazily allocated on the first `update`)."
+        },
+        {
+          "name": "value_cache",
+          "annotation": "list[Tensor]",
+          "description": "Per-layer value buffers, same shapes."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "lucid.utils.cache: key/value caches for incremental attention (generation).",
+  "extended": "Class names, method names, and argument names mirror the reference\n`cache_utils` module so that generation code ports across with only an\nimport change.  The eager default is `DynamicCache` (grows by\nconcatenation); `StaticCache` is a fixed pre-allocated buffer that keeps\nshapes constant for compiled single-token decoding; and encoder-decoder models\nuse `EncoderDecoderCache` (paired self- + cross-attention).  Canonical\npaths: `lucid.utils.cache.Cache` / `DynamicCache` / `StaticCache` /\n`EncoderDecoderCache`.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

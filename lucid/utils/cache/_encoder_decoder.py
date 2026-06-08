@@ -100,9 +100,27 @@ class EncoderDecoderCache(Cache):
     ) -> tuple[Tensor, Tensor]:
         """Update the decoder **self-attention** cache for ``layer_idx``.
 
-        Cross-attention key/value are written directly through
-        :attr:`cross_attention_cache` by the attention module (guarded by
-        :attr:`is_updated`), not through this method.
+        Cross-attention key/value are written directly through the
+        ``cross_attention_cache`` by the attention module (guarded by
+        ``is_updated``), not through this method — so this delegates only to the
+        self-attention sub-cache.
+
+        Parameters
+        ----------
+        key_states : Tensor
+            New decoder self-attention keys, ``(B, num_heads, T_new, head_dim)``.
+        value_states : Tensor
+            New decoder self-attention values, same shape.
+        layer_idx : int
+            Index of the decoder layer this update belongs to.
+        cache_kwargs : dict or None, optional
+            Forwarded to the self-attention sub-cache (e.g. a ``StaticCache``
+            reads ``"cache_position"`` from it).
+
+        Returns
+        -------
+        tuple of (Tensor, Tensor)
+            The accumulated self-attention ``(keys, values)`` for ``layer_idx``.
         """
         return self.self_attention_cache.update(
             key_states, value_states, layer_idx, cache_kwargs
@@ -110,14 +128,20 @@ class EncoderDecoderCache(Cache):
 
     @override
     def get_seq_length(self, layer_idx: int = 0) -> int:
+        """Decoder sequence length for ``layer_idx`` (from the self-attention
+        sub-cache; the cross-attention length is fixed and not counted)."""
         return self.self_attention_cache.get_seq_length(layer_idx)
 
     @override
     def get_max_cache_shape(self) -> int | None:
+        """Maximum decoder length, delegated to the self-attention sub-cache
+        (``None`` if it is a growing :class:`DynamicCache`)."""
         return self.self_attention_cache.get_max_cache_shape()
 
     @override
     def reorder_cache(self, beam_idx: Tensor) -> None:
+        """Reindex both sub-caches along the batch dimension with ``beam_idx``
+        (in place) so self- and cross-attention stay beam-aligned."""
         self.self_attention_cache.reorder_cache(beam_idx)
         self.cross_attention_cache.reorder_cache(beam_idx)
 

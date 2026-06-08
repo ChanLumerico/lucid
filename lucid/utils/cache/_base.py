@@ -24,8 +24,10 @@ class Cache(abc.ABC):
 
     Subclasses implement :meth:`update` (the per-layer write/read), plus the
     length-introspection and beam-reordering hooks.  Concrete subclasses are
-    :class:`~lucid.utils.cache.DynamicCache` (the default growing cache) and
-    :class:`~lucid.utils.cache.EncoderDecoderCache` (self- + cross-attention).
+    :class:`~lucid.utils.cache.DynamicCache` (the default growing cache),
+    :class:`~lucid.utils.cache.StaticCache` (a fixed pre-allocated buffer for
+    compiled decoding), and :class:`~lucid.utils.cache.EncoderDecoderCache`
+    (paired self- + cross-attention).
     """
 
     @abc.abstractmethod
@@ -84,6 +86,19 @@ class Cache(abc.ABC):
         For a bounded cache this clamps so that ``previous + new`` never
         exceeds :meth:`get_max_cache_shape`; for an unbounded cache it is
         simply the current sequence length.
+
+        Parameters
+        ----------
+        new_seq_length : int
+            Number of new tokens about to be appended this step.
+        layer_idx : int, optional, default=0
+            Layer whose current length is queried.
+
+        Returns
+        -------
+        int
+            The count of already-cached tokens that remain usable once the
+            ``new_seq_length`` tokens are accounted for against the cap.
         """
         max_length = self.get_max_cache_shape()
         previous_seq_length = self.get_seq_length(layer_idx)

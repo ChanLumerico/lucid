@@ -276,6 +276,24 @@ class TransformerModel(PretrainedModel):
         position rather than the cache's length counter — which a re-wrapped
         ``StaticCache`` resets — and masks the fixed buffer's not-yet-written
         tail (the eager grow-by-one path needs no such mask).
+
+        Args:
+            tgt_ids:        ``(B, T)`` target token ids to decode this step.
+            memory:         ``(B, S, d_model)`` encoder output to cross-attend.
+            tgt_attention_mask:    Optional ``(B, T)`` target padding mask.
+            memory_attention_mask: Optional ``(B, S)`` source padding mask.
+            past_key_value: Optional :class:`EncoderDecoderCache` accumulating
+                            decoder self-attention and the once-computed
+                            cross-attention key/value.
+            use_cache:      Read/write ``past_key_value`` so each step only
+                            decodes the freshly appended token(s).
+            cache_position: Optional fixed-shape int64 write index that drives
+                            the compiled static decode path (positional encoding
+                            + causal mask come from it instead of the counter).
+
+        Returns:
+            ``(B, T, d_model)`` decoder hidden states (the ``ForSeq2SeqLM``
+            wrapper projects these through the LM head).
         """
         T = int(tgt_ids.shape[1])
         dev = tgt_ids.device.type
@@ -516,9 +534,13 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             attention_mask: Optional source padding mask.
             use_cache:     Use an ``EncoderDecoderCache`` so each step only
                            decodes the new token (default True).
-            do_sample / temperature / top_k / top_p / repetition_penalty:
-                           Sampling knobs (greedy ``argmax`` when
-                           ``do_sample=False``).
+            do_sample:     Sample from the (filtered) distribution instead of
+                           greedy ``argmax`` (default False).
+            temperature:   Logit temperature applied before sampling.
+            top_k:         Keep only the ``top_k`` highest-probability tokens.
+            top_p:         Nucleus threshold — keep the smallest set whose
+                           cumulative probability reaches ``top_p``.
+            repetition_penalty: Down-weight logits of already-generated tokens.
             compile_decode: With ``use_cache``, run each new token through one
                            reused compiled decode executable (fixed StaticCache
                            self-attention + constant cross-attention).  Works
