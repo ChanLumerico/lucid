@@ -8,7 +8,7 @@ is contracted to provide.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import lucid
 import lucid.nn as nn
@@ -348,6 +348,12 @@ class GenerationMixin:
     (1, 13)
     """
 
+    # Set True on subclasses whose attention derives the position embedding and
+    # causal mask from the runtime ``cache_position`` tensor (so a fixed
+    # StaticCache buffer compiles into one position-agnostic decode executable).
+    # Default False → ``generate(compile_decode=True)`` falls back to eager.
+    supports_compiled_static_decode: ClassVar[bool] = False
+
     @lucid.no_grad()
     def generate(
         self,
@@ -365,6 +371,7 @@ class GenerationMixin:
         use_cache: bool = True,
         cache_implementation: str = "dynamic",
         max_cache_len: int | None = None,
+        compile_decode: bool = False,
     ) -> Tensor:
         r"""Autoregressively extend ``input_ids`` until a stop condition.
 
@@ -415,6 +422,15 @@ class GenerationMixin:
         max_cache_len : int or None, optional, keyword-only
             Buffer capacity for ``cache_implementation="static"``; defaults to
             the total target length (prompt + generated).
+        compile_decode : bool, optional, keyword-only, default=False
+            With ``cache_implementation="static"``, compile the single-token
+            decode step (the prompt is prefilled eagerly, then each new token
+            runs through one reused MPSGraph executable — the fixed buffer keeps
+            the shape constant).  Opt-in: it wins for **long-context** decoding
+            (flat per-step cost vs ``DynamicCache``'s growing concat + widening
+            attention) and is roughly even for short prompts.  Silently ignored
+            unless ``use_cache`` and ``cache_implementation="static"``, and falls
+            back to eager if the host model does not accept a cache.
 
         Returns
         -------
@@ -474,6 +490,27 @@ class GenerationMixin:
         if stop_len <= T_prompt:
             return input_ids
 
+        # StaticCache writes by absolute position into a fixed buffer.  The
+        # compiled decode path rebuilds the cache each step (resetting the
+        # per-layer length counter), so the trunk's own "past_len + T > max_pos"
+        # guard cannot fire — and an out-of-range index_copy / position lookup
+        # is a *silent* no-op / garbage read on Metal.  Validate up front (the
+        # eager static path shares the same latent overflow), matching the
+        # error the eager/dynamic paths raise mid-generation.
+        if use_cache and cache_implementation == "static":
+            max_pos = getattr(cfg, "max_position_embeddings", None) if cfg else None
+            if max_pos is not None and stop_len > int(max_pos):
+                raise ValueError(
+                    f"generate(): target length {stop_len} exceeds the model's "
+                    f"max_position_embeddings {int(max_pos)}"
+                )
+            if max_cache_len is not None and int(max_cache_len) < stop_len:
+                raise ValueError(
+                    f"generate(): max_cache_len={int(max_cache_len)} is smaller than "
+                    f"the target length {stop_len} (prompt + generated) — the static "
+                    f"buffer cannot hold every position"
+                )
+
         dev = input_ids.device.type
         # Per-row "is finished" flag — once True, future tokens are pad.
         finished: list[bool] = [False] * B
@@ -486,11 +523,66 @@ class GenerationMixin:
         # caching is disabled or the host model does not accept a cache, in
         # which case we re-encode the full prefix every step.
         model = cast(nn.Module, self)
+        sampling = _SamplingParams(
+            do_sample=do_sample,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
+            eos_token_id=eos_token_id,
+            pad_token_id=pad_token_id,
+            dev=dev,
+        )
+
+        # ── compiled static decode (opt-in; wins for long context) ──────────
+        # Prefill the prompt eagerly into a StaticCache, then run each new token
+        # through one reused compiled executable.  Falls through to the eager
+        # loop below if the host model does not accept a cache.
+        if (
+            use_cache
+            and cache_implementation == "static"
+            and compile_decode
+            and self.supports_compiled_static_decode
+        ):
+            from lucid.models._compiled_decode import _CompiledStaticDecoder
+
+            cache_len = max_cache_len if max_cache_len is not None else stop_len
+            past_static = StaticCache(max_cache_len=cache_len)
+            prefilled = True
+            try:
+                outputs = model(input_ids, use_cache=True, past_key_values=past_static)
+            except TypeError:
+                prefilled = False  # no cache support — degrade to eager below
+            if prefilled:
+                logits = cast(
+                    Tensor, outputs.logits if hasattr(outputs, "logits") else outputs
+                )
+                # Built lazily on the first decode step — a 1-new-token request
+                # samples straight off the prefill logits and never compiles.
+                decoder: _CompiledStaticDecoder | None = None
+                cur_pos = T_prompt
+                n_new = stop_len - T_prompt
+                for step_idx in range(n_new):
+                    done = _select_and_append_next(
+                        logits[:, -1, :], out_tokens, finished, sampling
+                    )
+                    if done or step_idx == n_new - 1:
+                        break
+                    if decoder is None:
+                        decoder = _CompiledStaticDecoder(model, past_static)
+                    cache_position = lucid.tensor([cur_pos], device=dev).long()
+                    logits = decoder.step(out_tokens[-1].reshape(B, 1), cache_position)
+                    cur_pos += 1
+                return lucid.stack(out_tokens, dim=1).long()
+
+        # ── eager path (DynamicCache / StaticCache without compile) ─────────
         past: Cache | None = None
         if use_cache:
             if cache_implementation == "static":
                 past = StaticCache(
-                    max_cache_len=max_cache_len if max_cache_len is not None else stop_len
+                    max_cache_len=(
+                        max_cache_len if max_cache_len is not None else stop_len
+                    )
                 )
             else:
                 past = DynamicCache()
@@ -509,43 +601,13 @@ class GenerationMixin:
             logits = cast(
                 Tensor, outputs.logits if hasattr(outputs, "logits") else outputs
             )
-            next_logits = logits[:, -1, :]  # (B, vocab)
-
-            # ── repetition penalty (over the full running prefix) ─────────
-            if repetition_penalty != 1.0:
-                prefix = lucid.stack(out_tokens, dim=1)
-                next_logits = _apply_repetition_penalty(
-                    next_logits, prefix, repetition_penalty
-                )
-
-            # ── greedy fast path ──────────────────────────────────────────
-            if not do_sample:
-                next_tok = lucid.argmax(next_logits, dim=-1)  # (B,)
-            else:
-                if temperature != 1.0:
-                    next_logits = next_logits / temperature
-                if top_k is not None:
-                    next_logits = _top_k_filter(next_logits, top_k)
-                if top_p is not None:
-                    next_logits = _top_p_filter(next_logits, top_p)
-                probs = F.softmax(next_logits, dim=-1)  # (B, vocab)
-                next_tok = _multinomial_one(probs, device=dev)
-
-            # ── enforce padding for already-finished rows ────────────────
-            next_list: list[int] = [int(next_tok[b].item()) for b in range(B)]
-            for b in range(B):
-                if finished[b]:
-                    next_list[b] = pad_token_id
-                elif eos_token_id is not None and next_list[b] == eos_token_id:
-                    finished[b] = True
-            new_row = lucid.tensor(next_list, device=dev).long()
-            out_tokens.append(new_row)
-
-            if all(finished):
+            if _select_and_append_next(
+                logits[:, -1, :], out_tokens, finished, sampling
+            ):
                 break
 
             # With a cache the next step only needs the freshly produced token.
-            model_input = new_row.reshape(B, 1)
+            model_input = out_tokens[-1].reshape(B, 1)
 
         return lucid.stack(out_tokens, dim=1).long()
 
@@ -553,6 +615,80 @@ class GenerationMixin:
 # ─────────────────────────────────────────────────────────────────────────────
 # Sampling primitives (module-private)
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class _SamplingParams:
+    r"""Bundle of next-token selection knobs shared by the eager and compiled
+    decode loops (so both paths sample identically)."""
+
+    do_sample: bool
+    temperature: float
+    top_k: int | None
+    top_p: float | None
+    repetition_penalty: float
+    eos_token_id: int | None
+    pad_token_id: int
+    dev: str
+
+
+def _select_and_append_next(
+    next_logits: Tensor,
+    out_tokens: list[Tensor],
+    finished: list[bool],
+    params: _SamplingParams,
+) -> bool:
+    r"""Choose the next token row, append it, and report whether decoding is done.
+
+    Applies the repetition penalty (over the running prefix), then greedy
+    ``argmax`` or temperature / top-k / top-p sampling; substitutes
+    ``pad_token_id`` for already-finished rows and flips ``finished`` on EOS.
+    Mutates ``out_tokens`` (appends the new ``(B,)`` row) and ``finished`` in
+    place.
+
+    Parameters
+    ----------
+    next_logits : Tensor
+        ``(B, vocab)`` logits at the current step.
+    out_tokens : list[Tensor]
+        Running list of ``(B,)`` token rows; the chosen row is appended.
+    finished : list[bool]
+        Per-row completion flags, updated in place.
+    params : _SamplingParams
+        Shared sampling configuration.
+
+    Returns
+    -------
+    bool
+        ``True`` once every row has emitted EOS (caller breaks the loop).
+    """
+    B = int(next_logits.shape[0])
+    if params.repetition_penalty != 1.0:
+        prefix = lucid.stack(out_tokens, dim=1)
+        next_logits = _apply_repetition_penalty(
+            next_logits, prefix, params.repetition_penalty
+        )
+
+    if not params.do_sample:
+        next_tok = lucid.argmax(next_logits, dim=-1)  # (B,)
+    else:
+        if params.temperature != 1.0:
+            next_logits = next_logits / params.temperature
+        if params.top_k is not None:
+            next_logits = _top_k_filter(next_logits, params.top_k)
+        if params.top_p is not None:
+            next_logits = _top_p_filter(next_logits, params.top_p)
+        probs = F.softmax(next_logits, dim=-1)  # (B, vocab)
+        next_tok = _multinomial_one(probs, device=params.dev)
+
+    next_list: list[int] = [int(next_tok[b].item()) for b in range(B)]
+    for b in range(B):
+        if finished[b]:
+            next_list[b] = params.pad_token_id
+        elif params.eos_token_id is not None and next_list[b] == params.eos_token_id:
+            finished[b] = True
+    out_tokens.append(lucid.tensor(next_list, device=params.dev).long())
+    return all(finished)
 
 
 def _apply_repetition_penalty(logits: Tensor, prefix: Tensor, penalty: float) -> Tensor:

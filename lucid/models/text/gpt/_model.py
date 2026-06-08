@@ -35,7 +35,7 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.models.text.gpt._config import GPTConfig
-from lucid.utils.cache import Cache, DynamicCache
+from lucid.utils.cache import Cache, DynamicCache, StaticCache
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Multi-head causal self-attention (fused QKV)
@@ -93,13 +93,27 @@ class _GPTSelfAttention(nn.Module):
         past_len = 0
         if past_key_value is not None:
             past_len = past_key_value.get_seq_length(layer_idx)
-            k, v = past_key_value.update(k, v, layer_idx)
-        t_total = int(k.shape[2])  # past_len + T
+            # cache_position is consumed by StaticCache (the in-place write
+            # location); DynamicCache ignores it and simply appends.
+            k, v = past_key_value.update(
+                k, v, layer_idx, cache_kwargs={"cache_position": cache_position}
+            )
+        t_total = int(
+            k.shape[2]
+        )  # DynamicCache: past_len+T; StaticCache: max_cache_len
 
         scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, T, t_total)
-        # Causal slice for query positions [past_len, past_len+T) over keys
-        # [0, t_total); with no cache this is the original [:, :, :T, :T] block.
-        causal = self.causal_mask[:, :, past_len : past_len + T, :t_total]
+        if isinstance(past_key_value, StaticCache) and cache_position is not None:
+            # StaticCache returns the fixed max_len buffer with a dynamic write
+            # position.  Row p of the lower-triangular causal_mask is exactly the
+            # allowed-key pattern for a query at absolute position p (keys j <= p),
+            # so gather the rows named by cache_position — keeps the compiled graph
+            # position-agnostic and avoids ``arange`` (no MPSGraph emitter).
+            causal = self.causal_mask.index_select(2, cache_position)[:, :, :, :t_total]
+        else:
+            # Causal slice for query positions [past_len, past_len+T) over keys
+            # [0, t_total); with no cache this is the original [:, :, :T, :T] block.
+            causal = self.causal_mask[:, :, past_len : past_len + T, :t_total]
         # ``(1 - causal) * -1e4`` blocks attention to the upper triangle.
         scores = scores + (1.0 - causal) * -1e4
         if attention_mask is not None:
@@ -299,8 +313,13 @@ class GPTModel(PretrainedModel):
             )
 
         # Positions are offset by the cached length so new tokens get their
-        # true absolute positions.
-        pos_ids = self.position_ids[:, past_len : past_len + T]
+        # true absolute positions.  Under a compiled StaticCache decode the
+        # write position arrives as the runtime cache_position tensor (keeping
+        # the graph position-agnostic); otherwise slice the static buffer.
+        if isinstance(past_key_values, StaticCache) and cache_position is not None:
+            pos_ids = cache_position.reshape(1, T)
+        else:
+            pos_ids = self.position_ids[:, past_len : past_len + T]
         tok_emb = cast(Tensor, self.tokens_embed(input_ids))
         pos_emb = cast(Tensor, self.positions_embed(pos_ids))
         hidden = cast(Tensor, self.drop(tok_emb + pos_emb))
@@ -382,6 +401,9 @@ class GPTLMHeadModel(PretrainedModel, GenerationMixin):
 
     config_class: ClassVar[type[GPTConfig]] = GPTConfig
     base_model_prefix: ClassVar[str] = "transformer"
+    # Attention derives position + causal mask from the runtime cache_position,
+    # so a fixed StaticCache buffer compiles into one decode executable.
+    supports_compiled_static_decode: ClassVar[bool] = True
 
     def __init__(self, config: GPTConfig) -> None:
         super().__init__(config)

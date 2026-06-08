@@ -41,7 +41,7 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.models.text.gpt2._config import GPT2Config
-from lucid.utils.cache import Cache, DynamicCache
+from lucid.utils.cache import Cache, DynamicCache, StaticCache
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Multi-head causal self-attention (fused QKV) — identical shape to GPT-1
@@ -96,13 +96,24 @@ class _GPT2SelfAttention(nn.Module):
             k, v = past_key_value.update(
                 k, v, layer_idx, cache_kwargs={"cache_position": cache_position}
             )
-        t_total = int(k.shape[2])  # DynamicCache: past_len+T; StaticCache: max_cache_len
+        t_total = int(
+            k.shape[2]
+        )  # DynamicCache: past_len+T; StaticCache: max_cache_len
 
         scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, T, t_total)
-        # Causal slice for query positions [past_len, past_len+T) over keys
-        # [0, t_total).  With no cache (past_len=0, t_total=T) this is the
-        # original [:, :, :T, :T] block.
-        causal = self.causal_mask[:, :, past_len : past_len + T, :t_total]
+        if isinstance(past_key_value, StaticCache) and cache_position is not None:
+            # StaticCache returns the fixed max_len buffer, and the write
+            # position is dynamic.  Row p of the lower-triangular causal_mask is
+            # exactly the allowed-key pattern for a query at absolute position p
+            # (keys j <= p), so gather the rows named by cache_position.  This
+            # keeps the compiled graph position-agnostic and avoids ``arange``
+            # (which has no MPSGraph emitter).  Bit-identical to the eager slice.
+            causal = self.causal_mask.index_select(2, cache_position)[:, :, :, :t_total]
+        else:
+            # Causal slice for query positions [past_len, past_len+T) over keys
+            # [0, t_total); with no cache (past_len=0, t_total=T) this is the
+            # original [:, :, :T, :T] block.
+            causal = self.causal_mask[:, :, past_len : past_len + T, :t_total]
         scores = scores + (1.0 - causal) * -1e4
         if attention_mask is not None:
             scores = scores + attention_mask
@@ -331,15 +342,19 @@ class GPT2Model(PretrainedModel):
                 f"max_position_embeddings {self._max_pos}"
             )
 
-        # Positions are offset by the cached length so the new tokens get their
-        # true absolute positions (past_len, past_len+1, ...).
-        pos_ids = self.position_ids[:, past_len : past_len + T]
-        # A StaticCache needs the absolute write positions; default them here so
-        # both the position embedding and the cache write agree.
+        # Absolute write positions (past_len, past_len+1, ...).  Defaulted here so
+        # the position embedding and the cache write agree.
         if cache_position is None:
             cache_position = lucid.arange(
                 past_len, past_len + T, device=input_ids.device.type
             ).long()
+        # StaticCache drives the position embedding off the runtime
+        # cache_position tensor (keeps the compiled graph position-agnostic);
+        # otherwise slice the static position-id buffer by the Python offset.
+        if isinstance(past_key_values, StaticCache):
+            pos_ids = cache_position.reshape(1, T)
+        else:
+            pos_ids = self.position_ids[:, past_len : past_len + T]
         tok_emb = cast(Tensor, self.wte(input_ids))
         pos_emb = cast(Tensor, self.wpe(pos_ids))
         hidden = cast(Tensor, self.drop(tok_emb + pos_emb))
@@ -424,6 +439,9 @@ class GPT2LMHeadModel(PretrainedModel, GenerationMixin):
 
     config_class: ClassVar[type[GPT2Config]] = GPT2Config
     base_model_prefix: ClassVar[str] = "transformer"
+    # Attention derives position + causal mask from the runtime cache_position,
+    # so a fixed StaticCache buffer compiles into one decode executable.
+    supports_compiled_static_decode: ClassVar[bool] = True
 
     def __init__(self, config: GPT2Config) -> None:
         super().__init__(config)

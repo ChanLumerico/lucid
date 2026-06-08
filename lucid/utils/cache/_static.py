@@ -60,6 +60,39 @@ class StaticCache(Cache):
         self._cumulative_length: list[int] = []
         self._seen_tokens: int = 0
 
+    @classmethod
+    def from_buffers(
+        cls,
+        key_cache: list[Tensor],
+        value_cache: list[Tensor],
+        max_cache_len: int,
+        *,
+        seen_tokens: int = 0,
+    ) -> StaticCache:
+        """Wrap already-allocated per-layer buffers as a ``StaticCache``.
+
+        Used by the compiled decode driver: the executable threads the fixed
+        buffers in and out as positional tensors, and each step reconstructs a
+        cache view over them so the model's attention sees a ``StaticCache``.
+        The per-layer length counters start at zero (the authoritative write
+        location is the runtime ``cache_position``, not the counter).
+
+        Parameters
+        ----------
+        key_cache, value_cache : list[Tensor]
+            Per-layer ``(B, num_heads, max_cache_len, head_dim)`` buffers.
+        max_cache_len : int
+            Fixed sequence capacity (must match the buffers' dim-2 length).
+        seen_tokens : int, optional, keyword-only, default=0
+            Initial value for :attr:`seen_tokens`.
+        """
+        obj = cls(max_cache_len=max_cache_len)
+        obj.key_cache = list(key_cache)
+        obj.value_cache = list(value_cache)
+        obj._cumulative_length = [0] * len(key_cache)
+        obj._seen_tokens = int(seen_tokens)
+        return obj
+
     @property
     def seen_tokens(self) -> int:
         """Total number of tokens written (tracked from ``layer_idx == 0``)."""

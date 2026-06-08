@@ -97,11 +97,17 @@ class TestGPT2Cache:
         m = _gpt2()
         prompt = lucid.tensor([[3, 7, 1]]).long()
         g_static = m.generate(
-            prompt, max_new_tokens=6, do_sample=False, use_cache=True,
+            prompt,
+            max_new_tokens=6,
+            do_sample=False,
+            use_cache=True,
             cache_implementation="static",
         )
         g_dynamic = m.generate(
-            prompt, max_new_tokens=6, do_sample=False, use_cache=True,
+            prompt,
+            max_new_tokens=6,
+            do_sample=False,
+            use_cache=True,
             cache_implementation="dynamic",
         )
         assert_close(g_static, g_dynamic, atol=0.0)
@@ -124,6 +130,34 @@ class TestGPT2Cache:
         assert cache.get_seq_length() == T
         assert tuple(cache.key_cache[0].shape) == (1, 2, 16, 16)  # fixed buffer
 
+    def test_compiled_static_decode_equals_dynamic(self) -> None:
+        lucid.manual_seed(0)
+        m = _gpt2()
+        prompt = lucid.tensor([[3, 7, 1, 9]]).long()
+        g_compiled = m.generate(
+            prompt,
+            max_new_tokens=8,
+            do_sample=False,
+            cache_implementation="static",
+            compile_decode=True,
+        )
+        g_dynamic = m.generate(prompt, max_new_tokens=8, do_sample=False)
+        assert_close(g_compiled, g_dynamic, atol=0.0)
+
+    def test_compiled_static_decode_batch(self) -> None:
+        lucid.manual_seed(0)
+        m = _gpt2()
+        prompt = lucid.tensor([[3, 7, 1, 9], [2, 5, 8, 0]]).long()
+        g_compiled = m.generate(
+            prompt,
+            max_new_tokens=6,
+            do_sample=False,
+            cache_implementation="static",
+            compile_decode=True,
+        )
+        g_dynamic = m.generate(prompt, max_new_tokens=6, do_sample=False)
+        assert_close(g_compiled, g_dynamic, atol=0.0)
+
 
 class TestGPTCache:
     def test_incremental_equals_full(self) -> None:
@@ -138,6 +172,149 @@ class TestGPTCache:
             prompt, max_new_tokens=6, do_sample=False, use_cache=False
         )
         assert_close(g_cache, g_nocache, atol=0.0)
+
+    def test_static_cache_equals_dynamic(self) -> None:
+        # GPT-1's eager StaticCache path uses the past_len-slice branches (its
+        # trunk does not default cache_position), distinct from GPT-2's — cover
+        # it explicitly so a future edit can't silently regress it.
+        lucid.manual_seed(0)
+        m = _gpt()
+        prompt = lucid.tensor([[3, 7, 1]]).long()
+        g_static = m.generate(
+            prompt,
+            max_new_tokens=6,
+            do_sample=False,
+            cache_implementation="static",
+        )
+        g_dynamic = m.generate(prompt, max_new_tokens=6, do_sample=False)
+        assert_close(g_static, g_dynamic, atol=0.0)
+
+    def test_compiled_static_decode_equals_dynamic(self) -> None:
+        lucid.manual_seed(0)
+        m = _gpt()
+        prompt = lucid.tensor([[3, 7, 1, 9]]).long()
+        g_compiled = m.generate(
+            prompt,
+            max_new_tokens=8,
+            do_sample=False,
+            cache_implementation="static",
+            compile_decode=True,
+        )
+        g_dynamic = m.generate(prompt, max_new_tokens=8, do_sample=False)
+        assert_close(g_compiled, g_dynamic, atol=0.0)
+
+
+class TestCompiledStaticDecode:
+    """The compiled StaticCache decode driver — capability guard, the
+    ``from_buffers`` view constructor, and the single-executable property."""
+
+    def test_capability_flag_defaults_false(self) -> None:
+        from lucid.models._mixins import GenerationMixin
+
+        assert GenerationMixin.supports_compiled_static_decode is False
+        assert GPT2LMHeadModel.supports_compiled_static_decode is True
+        assert GPTLMHeadModel.supports_compiled_static_decode is True
+
+    def test_unsupported_host_falls_back_to_eager(self) -> None:
+        # A GenerationMixin host that does NOT declare static-decode support
+        # must silently ignore compile_decode and stay token-identical to eager.
+        class _Unsupported(GPT2LMHeadModel):
+            supports_compiled_static_decode = False
+
+        lucid.manual_seed(0)
+        m = _Unsupported(
+            GPT2Config(
+                vocab_size=50,
+                hidden_size=32,
+                num_attention_heads=2,
+                num_hidden_layers=2,
+                intermediate_size=64,
+                max_position_embeddings=32,
+            )
+        ).eval()
+        assert m.supports_compiled_static_decode is False
+        prompt = lucid.tensor([[3, 7, 1, 9]]).long()
+        g_flagged = m.generate(
+            prompt,
+            max_new_tokens=6,
+            do_sample=False,
+            cache_implementation="static",
+            compile_decode=True,
+        )
+        g_eager = m.generate(prompt, max_new_tokens=6, do_sample=False)
+        assert_close(g_flagged, g_eager, atol=0.0)
+
+    def test_from_buffers_roundtrip(self) -> None:
+        from lucid.utils.cache import StaticCache
+
+        lucid.manual_seed(0)
+        m = _gpt2()
+        ids = lucid.tensor([[3, 7, 1, 9]]).long()
+        # Prefill a real StaticCache, then re-wrap its buffers via from_buffers.
+        cache = StaticCache(max_cache_len=16)
+        m(ids, use_cache=True, past_key_values=cache)
+        view = StaticCache.from_buffers(
+            cache.key_cache, cache.value_cache, cache.max_cache_len
+        )
+        assert len(view) == len(cache)
+        assert view.max_cache_len == 16
+        assert view.get_seq_length() == 0  # counter resets; position is authoritative
+        assert view.key_cache[0] is cache.key_cache[0]  # buffers shared by reference
+
+    def test_target_exceeds_max_position_raises(self) -> None:
+        # StaticCache writes by absolute position; a target past the model's
+        # positional range must raise (not silently corrupt) on every static
+        # path — the compiled path's counter reset defeats the trunk's guard.
+        import pytest
+
+        lucid.manual_seed(0)
+        m = _gpt2()  # max_position_embeddings=32
+        prompt = lucid.tensor([[3, 7, 1, 9]]).long()
+        for compile_decode in (False, True):
+            with pytest.raises(ValueError, match="max_position_embeddings"):
+                m.generate(
+                    prompt,
+                    max_length=40,
+                    do_sample=False,
+                    cache_implementation="static",
+                    compile_decode=compile_decode,
+                )
+
+    def test_max_cache_len_too_small_raises(self) -> None:
+        import pytest
+
+        lucid.manual_seed(0)
+        m = _gpt2()
+        prompt = lucid.tensor([[3, 7, 1, 9]]).long()
+        for compile_decode in (False, True):
+            with pytest.raises(ValueError, match="max_cache_len"):
+                m.generate(
+                    prompt,
+                    max_new_tokens=10,
+                    do_sample=False,
+                    cache_implementation="static",
+                    max_cache_len=8,  # < 4 + 10 target
+                    compile_decode=compile_decode,
+                )
+
+    def test_single_compile_across_positions(self, device_gpu_only: str) -> None:
+        # The payoff property: one executable serves every decode position.
+        from lucid.models._compiled_decode import _CompiledStaticDecoder
+        from lucid.utils.cache import StaticCache
+
+        lucid.manual_seed(0)
+        m = _gpt2().to(device_gpu_only)
+        ids = lucid.tensor([[3, 7, 1, 9]], device=device_gpu_only).long()
+        cache = StaticCache(max_cache_len=16)
+        m(ids, use_cache=True, past_key_values=cache)
+        decoder = _CompiledStaticDecoder(m, cache)
+        tok = lucid.tensor([[5]], device=device_gpu_only).long()
+        for pos in (4, 5, 6, 7):
+            cp = lucid.tensor([pos], device=device_gpu_only).long()
+            decoder.step(tok, cp)
+        # All four positions reused a single compiled signature (no recompile).
+        assert len(decoder._compiled._cache) == 1
+        assert len(decoder._compiled._eager_only.snapshot()) == 0
 
 
 class TestTransformerSeq2SeqCache:
