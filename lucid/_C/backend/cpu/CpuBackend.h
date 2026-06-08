@@ -3338,6 +3338,17 @@ public:
                                    "cpu_backend::scatter_prod", [](auto& d, auto s) { d *= s; });
     }
 
+    Storage scatter_set(const Storage& base,
+                        const Storage& indices,
+                        const Storage& src,
+                        const Shape& base_shape,
+                        const Shape& idx_shape,
+                        int dim,
+                        Dtype dt) override {
+        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
+                                   "cpu_backend::scatter_set", [](auto& d, auto s) { d = s; });
+    }
+
     // Sliding-window view: out shape is (*in_shape[:dim], L, *in_shape[dim+1:], size)
     Storage unfold_dim(
         const Storage& a, const Shape& in_shape, int dim, int size, int step, Dtype dt) override {

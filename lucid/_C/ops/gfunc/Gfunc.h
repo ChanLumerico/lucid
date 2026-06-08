@@ -503,6 +503,32 @@ LUCID_API TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
                                         const TensorImplPtr& src,
                                         int dim);
 
+// scatter_set: out[..., index[i], ...] = src[..., i, ...] along dim (overwrite).
+// A copy of ``base`` with the indexed slices replaced by ``src`` — the single-op
+// primitive that ``index_copy`` routes through.
+//
+// Parameters
+// ----------
+// base, indices, src, dim
+//     Same semantics as ``scatter_add_op``.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Same shape and dtype as ``base``.
+//
+// Notes
+// -----
+// Gradients:
+//   $\partial / \partial \text{base}[i] = \text{grad}[i]$ except at overwritten
+//   positions where it is 0; $\partial / \partial \text{src}[j] =
+//   \text{grad}[\text{idx}[j]]$ (a plain gather).  Duplicate indices follow the
+//   reference framework's last-writer-wins convention.
+LUCID_API TensorImplPtr scatter_set_op(const TensorImplPtr& base,
+                                       const TensorImplPtr& indices,
+                                       const TensorImplPtr& src,
+                                       int dim);
+
 // Sliding-window view of ``a`` along a single dimension.
 //
 // Parameters

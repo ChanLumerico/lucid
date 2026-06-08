@@ -889,6 +889,18 @@ public:
                                  int dim,
                                  Dtype dt) = 0;
 
+    // User-facing scatter-set (overwrite): out[..., index[i], ...] = src[..., i, ...]
+    // along dim.  base is copied, then the indexed slices are replaced by src.
+    // Single-kernel write that index_copy routes through (MPSGraphScatterModeSet
+    // when compiled; mlx::put_along_axis eager on GPU).
+    virtual Storage scatter_set(const Storage& base,
+                                const Storage& indices,
+                                const Storage& src,
+                                const Shape& base_shape,
+                                const Shape& idx_shape,
+                                int dim,
+                                Dtype dt) = 0;
+
     // Sliding-window view along a single dimension.
     // Returns shape (*base.shape[:dim], L, *base.shape[dim+1:], size)
     // where L = (dim_size - size) / step + 1.

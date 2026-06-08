@@ -68,6 +68,7 @@ now a single component.
 - add StaticCache for compile-friendly incremental decoding
 - compiled StaticCache decode for generate (compile_decode)
 - encoder-decoder compiled static decode + shared sampling
+- add scatter_set primitive; index_copy is now a single op
 
 ---
 

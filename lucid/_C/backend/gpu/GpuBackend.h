@@ -1400,6 +1400,31 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
+    // Axis-scatter overwrite — out[..., idx[..., j, ...], ...] = src[..., j, ...]
+    // along dim.  ``mlx::core::put_along_axis`` is the exact set-mode analogue
+    // of ``scatter_add_axis`` (single kernel); index_copy routes through it.
+    Storage scatter_set(const Storage& base,
+                        const Storage& indices,
+                        const Storage& src,
+                        const Shape& base_shape,
+                        const Shape& /*idx_shape*/,
+                        int dim,
+                        Dtype dt) override {
+        const auto& gb = std::get<GpuStorage>(base);
+        const auto& gi = std::get<GpuStorage>(indices);
+        const auto& gs = std::get<GpuStorage>(src);
+        const int ndim = static_cast<int>(base_shape.size());
+        const int d = dim < 0 ? dim + ndim : dim;
+        auto idx = *gi.arr;
+        auto axis_len = ::mlx::core::array(
+            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), idx.dtype());
+        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
+        auto fixed =
+            ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
+        auto out = ::mlx::core::put_along_axis(*gb.arr, fixed, *gs.arr, d);
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
+    }
+
 private:
     // MLX's ``scatter_{max,min,prod}`` lack an axis-only variant the way
     // ``scatter_add`` does (``scatter_add_axis``).  For axis-scatter we

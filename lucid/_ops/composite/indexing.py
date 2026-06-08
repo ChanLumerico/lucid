@@ -162,9 +162,11 @@ def index_copy(
 ) -> Tensor:
     """Return a copy of ``input`` with slices at ``index`` replaced by ``source``.
 
-    Composite implementation: first zeroes the indexed slices via
-    :func:`index_fill`, then adds ``source`` via :func:`index_add`.
-    Differentiable through both ``input`` and ``source``.
+    Single set-scatter: the 1-D ``index`` is broadcast along ``dim`` to
+    ``source``'s shape and applied through the engine ``scatter_set`` primitive
+    — one MPSGraph ``scatterAlongAxis`` (Set mode) op when compiled, or
+    ``mlx.put_along_axis`` eager on GPU.  Differentiable through both ``input``
+    and ``source``.
 
     Parameters
     ----------
@@ -185,8 +187,16 @@ def index_copy(
         Same shape and dtype as ``input``; values at the indexed
         positions are taken from ``source``, others from ``input``.
     """
-    zeroed = index_fill(input, dim, index, 0.0)
-    return index_add(zeroed, dim, index, source)
+    ndim = input.ndim
+    if dim < 0:
+        dim += ndim
+    m = int(source.shape[dim])
+    # Broadcast the 1-D index to source's shape, then a single set-scatter.
+    idx_impl = _to_i32(_unwrap(index))
+    reshaped = [1] * ndim
+    reshaped[dim] = m
+    idx_bc = _C_engine.broadcast_to(_C_engine.reshape(idx_impl, reshaped), list(source.shape))
+    return _wrap(_C_engine.scatter_set(_unwrap(input), idx_bc, _unwrap(source), dim))
 
 
 def scatter_reduce(

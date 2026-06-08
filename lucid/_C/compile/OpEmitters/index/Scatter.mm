@@ -1,10 +1,10 @@
 // lucid/_C/compile/OpEmitters/index/Scatter.mm
 //
 // Axis-style scatter family — ``scatter_add`` / ``scatter_amax`` /
-// ``scatter_amin`` / ``scatter_prod``.  All four route through
+// ``scatter_amin`` / ``scatter_prod`` / ``scatter_set``.  All route through
 // MPSGraph's ``scatterAlongAxisTensor:`` (SDK 13+) which matches
 // Lucid / reference-framework semantics
-// ``base[..., indices[i], ...] op= src[..., i, ...]``.
+// ``base[..., indices[i], ...] op= src[..., i, ...]`` (``=`` for set).
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -20,7 +20,7 @@ namespace lucid::compile {
 
 namespace {
 
-// MODE: 0=Add 1=Max 2=Min 3=Mul.
+// MODE: 0=Add 1=Max 2=Min 3=Mul 4=Set.
 template <int MODE>
 class ScatterEmitterT final : public OpEmitter {
 public:
@@ -44,6 +44,7 @@ public:
             case 1: mode = MPSGraphScatterModeMax; break;
             case 2: mode = MPSGraphScatterModeMin; break;
             case 3: mode = MPSGraphScatterModeMul; break;
+            case 4: mode = MPSGraphScatterModeSet; break;
             default: return false;
         }
         if (![g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:indicesTensor:mode:name:)]) {
@@ -68,6 +69,7 @@ struct ScatterEmitterRegistrar {
         register_emitter(std::make_unique<ScatterEmitterT<1>>("scatter_amax"));
         register_emitter(std::make_unique<ScatterEmitterT<2>>("scatter_amin"));
         register_emitter(std::make_unique<ScatterEmitterT<3>>("scatter_prod"));
+        register_emitter(std::make_unique<ScatterEmitterT<4>>("scatter_set"));
     }
 };
 
