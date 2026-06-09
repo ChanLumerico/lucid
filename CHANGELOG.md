@@ -54,32 +54,27 @@ rules); compile-db deploy target aligned to 26.0; and dedicated padding /
 upsampling / transformer unit tests. The docs `SubsectionHeading` recipe is
 now a single component.
 
-### Added — Reference-style KV cache + compiled incremental decode
+### Added — Reference-style KV cache for incremental generation
 
 Autoregressive generation gained a full key/value cache subsystem under
 `lucid.utils.cache`, mirroring the established reference-framework layout.
 `DynamicCache` grows its per-layer K/V by concatenation and ships the usual
 maintenance helpers (`crop` / `reset` / `batch_repeat_interleave` /
 `batch_select_indices` / `reorder_cache`); `StaticCache` pre-allocates a fixed
-`(B, H, max_cache_len, D)` buffer and writes each step in place at a dynamic
-`cache_position`, keeping the decode tensor shapes **constant** across steps; and
-`EncoderDecoderCache` pairs a growing self-attention cache with a fill-once,
-read-only cross-attention cache (tracked by an `is_updated` flag).
+`(B, H, max_cache_len, D)` buffer and writes each step in place at the next
+position; and `EncoderDecoderCache` pairs a growing self-attention cache with a
+fill-once, read-only cross-attention cache (tracked by an `is_updated` flag).
+`generate(cache_implementation="dynamic"|"static", max_cache_len=...)` selects
+the cache; sampling was factored into a shared `lucid/models/_sampling.py` reused
+across every causal-LM head.
 
-Because `StaticCache` holds the shape constant, the single-token decode forward
-**compiles once** into a reused MPSGraph executable (cached across `generate()`
-calls) instead of recompiling every step. `generate(..., compile_decode=True)`
-drives this opt-in path for the decoder-only models (GPT-1 / GPT-2) and the
-encoder-decoder `TransformerForSeq2SeqLM`, staying token-identical to the eager
-path. It is a **niche lever, not a general speedup**: the static path attends
-over the full `max_cache_len` buffer every step, so it only beats `DynamicCache`
-in a near-full + compute-bound regime (large batch / long context with
-`max_cache_len` sized close to the tokens decoded); for typical `B=1` inference
-or an over-sized buffer, `DynamicCache` (the default) is faster (~0.65–0.8× at
-GPT-2-base scale). `DynamicCache` is the recommended path: it turns the prefix
-re-encode from O(T²) into O(T) and is ~1.9–2× over no cache at scale. The decode
-drivers live in `lucid/models/_utils/_compiled_decode.py`; sampling was factored
-into a shared `lucid/models/_sampling.py` reused across every causal-LM head.
+`StaticCache.update` returns a **filled-prefix view** of its buffer (narrowed to
+the written width), so the decoder-only attention does q·kᵀ over only the real
+keys — O(filled), not O(max_cache_len). This makes `StaticCache` the *faster*
+path on compute-bound batches (in-place write + filled-prefix attention beat
+`DynamicCache`'s growing concat — ~1.4× at GPT-2-base / B=16), tied at `B=1`, and
+makes an over-sized `max_cache_len` free. Both caches turn the prefix re-encode
+from O(T²) into O(T).
 
 ### Added — `scatter_set` engine primitive
 
@@ -104,11 +99,23 @@ round-trips that previously dominated decode.
 `memory_key_padding_mask` instead of threading them into each layer, so padded
 cross-attention attended to pad positions. Both masks are now passed through.
 
-### Performance
+### Performance — `StaticCache` attends over the filled prefix
 
-- attend over filled prefix, not full StaticCache buffer
-- compiled decode power-of-two read-window bucket ladder
-- narrow seq2seq compiled self-attention to read-window buckets
+`StaticCache.update` narrows its returned K/V view to the filled prefix (via
+`lucid.narrow`) so attention costs O(filled) not O(max_cache_len); the write and
+the stored buffer stay full, so it is bit-identical to the masked-full-buffer
+result. Recovers the up-to-~12× wasted q·kᵀ an over-sized buffer used to spend,
+making eager `StaticCache` faster than `DynamicCache` on compute-bound batches.
+
+### Removed — `compile_decode` generation path
+
+The opt-in compiled single-token decode (`generate(compile_decode=True)`, the
+`StaticCache` MPSGraph decode drivers, `supports_compiled_static_decode`) was
+removed: measurement showed it was dominated in every regime — the full-buffer
+`copy_`-back and launch-bound dispatch are the ceiling, and the eager
+`StaticCache` filled-prefix path above is faster (1.4× at batch, tied at `B=1`)
+without compiling. `DynamicCache` (default) and eager `StaticCache` cover all
+generation; no public cache class changed.
 
 ---
 
