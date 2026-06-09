@@ -8,7 +8,7 @@ is contracted to provide.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, cast
 
 import lucid
 import lucid.nn as nn
@@ -354,12 +354,6 @@ class CausalLMMixin:
     (1, 13)
     """
 
-    # Set True on subclasses whose attention derives the position embedding and
-    # causal mask from the runtime ``cache_position`` tensor (so a fixed
-    # StaticCache buffer compiles into one position-agnostic decode executable).
-    # Default False → ``generate(compile_decode=True)`` falls back to eager.
-    supports_compiled_static_decode: ClassVar[bool] = False
-
     @lucid.no_grad()
     def generate(
         self,
@@ -377,7 +371,6 @@ class CausalLMMixin:
         use_cache: bool = True,
         cache_implementation: str = "dynamic",
         max_cache_len: int | None = None,
-        compile_decode: bool = False,
     ) -> Tensor:
         r"""Autoregressively extend ``input_ids`` until a stop condition.
 
@@ -423,27 +416,14 @@ class CausalLMMixin:
             ``"dynamic"`` → :class:`~lucid.utils.cache.DynamicCache` (grows by
             concatenation); ``"static"`` →
             :class:`~lucid.utils.cache.StaticCache` (fixed pre-allocated buffer
-            written in place — the shape stays constant, so the decode forward
-            is ``lucid.compile``-friendly).
+            written in place at ``cache_position``, attending over only the filled
+            prefix).  ``"static"`` is *faster* on compute-bound batches (in-place
+            write + filled-prefix attention beat the growing concat — ~1.4× at
+            GPT-2-base / B=16) and tied at ``B=1``; it needs ``max_cache_len``.
         max_cache_len : int or None, optional, keyword-only
             Buffer capacity for ``cache_implementation="static"``; defaults to
-            the total target length (prompt + generated).
-        compile_decode : bool, optional, keyword-only, default=False
-            With ``cache_implementation="static"``, compile the single-token
-            decode step (the prompt is prefilled eagerly, then each new token
-            runs through one reused MPSGraph executable — the fixed buffer keeps
-            the shape constant; the executable is cached across ``generate()``
-            calls, so the one-time compile is paid once per shape).  **Niche
-            lever, not a general speedup**: the static path attends over the full
-            ``max_cache_len`` buffer every step, so it only beats ``DynamicCache``
-            in a narrow regime — a *near-full* buffer (``max_cache_len`` sized
-            close to the tokens actually decoded) **and** a compute-bound workload
-            (large batch / long context).  For typical ``B=1`` inference, or when
-            ``max_cache_len`` is over-sized relative to tokens decoded,
-            ``DynamicCache`` (the default) is faster — measured ~0.65–0.8× at
-            GPT-2-base scale.  Silently ignored unless ``use_cache`` and
-            ``cache_implementation="static"``, and falls back to eager if the host
-            model does not accept a cache.
+            the total target length (prompt + generated).  An over-sized buffer is
+            free — attention narrows to the filled prefix regardless.
 
         Returns
         -------
@@ -546,51 +526,6 @@ class CausalLMMixin:
             pad_token_id=pad_token_id,
             dev=dev,
         )
-
-        # ── compiled static decode (opt-in; niche — see compile_decode doc) ──
-        # Prefill the prompt eagerly into a StaticCache, then run each new token
-        # through one reused compiled executable (cached across generate() calls
-        # on the model).  Only beats DynamicCache in the near-full + compute-bound
-        # regime; DynamicCache is faster for typical B=1 / over-sized buffers.
-        # Falls through to the eager loop below if the host model rejects a cache.
-        if (
-            use_cache
-            and cache_implementation == "static"
-            and compile_decode
-            and self.supports_compiled_static_decode
-        ):
-            from lucid.models._utils._compiled_decode import _CompiledStaticDecoder
-
-            cache_len = max_cache_len if max_cache_len is not None else stop_len
-            past_static = StaticCache(max_cache_len=cache_len)
-            prefilled = True
-            try:
-                outputs = model(input_ids, use_cache=True, past_key_values=past_static)
-            except TypeError:
-                prefilled = False  # no cache support — degrade to eager below
-            if prefilled:
-                logits = cast(
-                    Tensor, outputs.logits if hasattr(outputs, "logits") else outputs
-                )
-                # Built lazily on the first decode step — a 1-new-token request
-                # samples straight off the prefill logits and never compiles.
-                decoder: _CompiledStaticDecoder | None = None
-                cur_pos = T_prompt
-                n_new = stop_len - T_prompt
-                for step_idx in range(n_new):
-                    done = _select_and_append_next(
-                        logits[:, -1, :], out_tokens, finished, sampling
-                    )
-                    if done or step_idx == n_new - 1:
-                        break
-                    if decoder is None:
-                        decoder = _CompiledStaticDecoder(model, past_static)
-                    cache_position = lucid.tensor([cur_pos], device=dev).long()
-                    logits = decoder.step(
-                        out_tokens[-1].reshape(B, 1), cache_position, cur_pos
-                    )
-                    cur_pos += 1
-                return lucid.stack(out_tokens, dim=1).long()
 
         # ── eager path (DynamicCache / StaticCache without compile) ─────────
         past: Cache | None = None

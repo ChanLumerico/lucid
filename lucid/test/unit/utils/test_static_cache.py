@@ -59,18 +59,6 @@ class TestStaticCache:
         full = cache.key_cache[0]
         assert float((nk - full[:, :, :4, :]).abs().sum().item()) == 0.0
 
-    def test_from_buffers_read_len_default_full(self) -> None:
-        # A rebuilt cache (compiled-decode driver) defaults read_len to the full
-        # width, so its returned view is unnarrowed unless a bucket is supplied.
-        base = StaticCache(max_cache_len=8)
-        base.update(*_ones(2, 1.0), layer_idx=0)
-        rebuilt = StaticCache.from_buffers(base.key_cache, base.value_cache, 8)
-        assert rebuilt.read_len == 8
-        bucketed = StaticCache.from_buffers(
-            base.key_cache, base.value_cache, 8, read_len=4
-        )
-        assert bucketed.read_len == 4
-
     def test_multi_layer_lazy_alloc(self) -> None:
         cache = StaticCache(max_cache_len=8)
         cache.update(*_ones(2, 1.0), layer_idx=0)

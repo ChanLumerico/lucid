@@ -95,14 +95,10 @@ class _GPT2SelfAttention(nn.Module):
             # location); DynamicCache ignores it and simply appends.
             cache_kwargs: dict[str, object] = {"cache_position": cache_position}
             if isinstance(past_key_value, StaticCache):
-                # Attend over only the filled prefix, not the full max_cache_len
-                # buffer (the latter is max_cache_len/(filled+1)× wasted q·kᵀ).
-                # Eager: read_len is None on the cache → the exact fill
-                # ``past_len + T``.  Compiled decode: the rebuilt cache carries a
-                # baked ``read_len`` (a fixed bucket / full width) so the executable
-                # signature stays stable.
-                rl = past_key_value.read_len
-                cache_kwargs["read_len"] = rl if rl is not None else past_len + T
+                # Attend over only the filled prefix (``past_len + T``), not the
+                # full max_cache_len buffer — the latter is max_cache_len/(filled+1)×
+                # wasted q·kᵀ.  StaticCache.update narrows its returned view to it.
+                cache_kwargs["read_len"] = past_len + T
             k, v = past_key_value.update(k, v, layer_idx, cache_kwargs=cache_kwargs)
         t_total = int(
             k.shape[2]
@@ -447,9 +443,6 @@ class GPT2LMHeadModel(PretrainedModel, CausalLMMixin):
 
     config_class: ClassVar[type[GPT2Config]] = GPT2Config
     base_model_prefix: ClassVar[str] = "transformer"
-    # Attention derives position + causal mask from the runtime cache_position,
-    # so a fixed StaticCache buffer compiles into one decode executable.
-    supports_compiled_static_decode: ClassVar[bool] = True
 
     def __init__(self, config: GPT2Config) -> None:
         super().__init__(config)

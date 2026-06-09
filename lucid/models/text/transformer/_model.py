@@ -36,7 +36,7 @@ from lucid.models._output import (
 )
 from lucid.models.text.transformer._config import TransformerConfig
 from lucid.models._sampling import _SamplingParams, _select_and_append_next
-from lucid.utils.cache import DynamicCache, EncoderDecoderCache, StaticCache
+from lucid.utils.cache import DynamicCache, EncoderDecoderCache
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -146,7 +146,6 @@ class TransformerModel(PretrainedModel):
 
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig
     base_model_prefix: ClassVar[str] = "transformer"
-    decoder_causal_mask: Tensor
 
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__(config)
@@ -168,17 +167,6 @@ class TransformerModel(PretrainedModel):
             embedding_dim=config.hidden_size,
         )
         self.dropout = nn.Dropout(p=config.hidden_dropout)
-
-        # Additive lower-triangular causal mask (0 on/below diagonal, -1e4
-        # above), reused by the compiled static decode: row p — gathered by the
-        # runtime cache_position — is the allowed-key pattern for a query at
-        # absolute position p, so the mask stays position-agnostic in the graph
-        # (mirrors GPT-2; matches _causal_mask's convention).
-        T = config.max_position_embeddings
-        causal = (1.0 - lucid.tril(lucid.ones((T, T)))) * -1e4
-        self.register_buffer(
-            "decoder_causal_mask", causal.reshape(1, 1, T, T), persistent=False
-        )
 
         # Activation choice mapped to nn.Transformer's allowed set.
         act = "gelu" if config.hidden_act in ("gelu", "gelu_new") else "relu"
@@ -209,34 +197,21 @@ class TransformerModel(PretrainedModel):
         """Target-side embedding — used to tie an LM head against."""
         return self.tgt_tok_emb
 
-    def _embed(
-        self,
-        ids: Tensor,
-        table: nn.Module,
-        pos_offset: int = 0,
-        *,
-        cache_position: Tensor | None = None,
-    ) -> Tensor:
+    def _embed(self, ids: Tensor, table: nn.Module, pos_offset: int = 0) -> Tensor:
         """Token-embed + scale-by-√d + sin/cos PE + dropout.
 
         ``pos_offset`` shifts the positional-encoding slice so cached decode
-        steps embed the new tokens at their true absolute positions.  Under a
-        compiled static decode the absolute positions arrive as the runtime
-        ``cache_position`` tensor instead (keeping the graph position-agnostic);
-        the PE rows are then gathered by it rather than sliced by a Python int.
+        steps embed the new tokens at their true absolute positions.
         """
         T = int(ids.shape[1])
         emb = cast(Tensor, table(ids)) * math.sqrt(self._d_model)
         full_pe = cast(Tensor, self.positional_encoding())
-        if cache_position is not None:
-            pe = full_pe.index_select(0, cache_position)  # (T, d) by runtime pos
-        else:
-            if pos_offset + T > self._max_pos:
-                raise ValueError(
-                    f"Sequence length {pos_offset + T} exceeds "
-                    f"max_position_embeddings {self._max_pos}"
-                )
-            pe = full_pe[pos_offset : pos_offset + T]
+        if pos_offset + T > self._max_pos:
+            raise ValueError(
+                f"Sequence length {pos_offset + T} exceeds "
+                f"max_position_embeddings {self._max_pos}"
+            )
+        pe = full_pe[pos_offset : pos_offset + T]
         emb = emb + pe.unsqueeze(0)  # broadcast over batch
         return cast(Tensor, self.dropout(emb))
 
@@ -262,7 +237,6 @@ class TransformerModel(PretrainedModel):
         *,
         past_key_value: EncoderDecoderCache | None = None,
         use_cache: bool = False,
-        cache_position: Tensor | None = None,
     ) -> Tensor:
         """Run only the decoder against precomputed encoder memory.
 
@@ -270,12 +244,6 @@ class TransformerModel(PretrainedModel):
         self-attention keys/values (and caches the cross-attention projection
         of ``memory`` once), so each step only needs the freshly appended
         ``tgt_ids`` token(s).
-
-        ``cache_position`` (the compiled static decode path) makes both the
-        positional encoding and the causal mask derive from the runtime write
-        position rather than the cache's length counter — which a re-wrapped
-        ``StaticCache`` resets — and masks the fixed buffer's not-yet-written
-        tail (the eager grow-by-one path needs no such mask).
 
         Args:
             tgt_ids:        ``(B, T)`` target token ids to decode this step.
@@ -287,9 +255,6 @@ class TransformerModel(PretrainedModel):
                             cross-attention key/value.
             use_cache:      Read/write ``past_key_value`` so each step only
                             decodes the freshly appended token(s).
-            cache_position: Optional fixed-shape int64 write index that drives
-                            the compiled static decode path (positional encoding
-                            + causal mask come from it instead of the counter).
 
         Returns:
             ``(B, T, d_model)`` decoder hidden states (the ``ForSeq2SeqLM``
@@ -297,28 +262,15 @@ class TransformerModel(PretrainedModel):
         """
         T = int(tgt_ids.shape[1])
         dev = tgt_ids.device.type
-        if cache_position is not None:
-            # Static decode: position + causal mask from the runtime
-            # cache_position; the self-attn keys are narrowed to the read-window
-            # bucket (``_static_self_len``), so gather row ``cache_position`` of the
-            # additive mask and trim to that same width (covers the filled prefix).
-            tgt_emb = self._embed(
-                tgt_ids, self.tgt_tok_emb, cache_position=cache_position
-            )
-            t_total = self._static_self_len(past_key_value)
-            tgt_mask: Tensor | None = self.decoder_causal_mask.index_select(
-                2, cache_position
-            )[:, :, :, :t_total]
-        else:
-            past_len = (
-                past_key_value.get_seq_length()
-                if (use_cache and past_key_value is not None)
-                else 0
-            )
-            tgt_emb = self._embed(tgt_ids, self.tgt_tok_emb, pos_offset=past_len)
-            # A single new token attends over the whole cached history (no causal
-            # mask needed); the first/full pass uses the (T, T) causal mask.
-            tgt_mask = None if past_len > 0 else _causal_mask(T, device=dev)
+        past_len = (
+            past_key_value.get_seq_length()
+            if (use_cache and past_key_value is not None)
+            else 0
+        )
+        tgt_emb = self._embed(tgt_ids, self.tgt_tok_emb, pos_offset=past_len)
+        # A single new token attends over the whole cached history (no causal
+        # mask needed); the first/full pass uses the (T, T) causal mask.
+        tgt_mask = None if past_len > 0 else _causal_mask(T, device=dev)
         tgt_kpm = _key_padding_to_kpm(tgt_attention_mask)
         mem_kpm = _key_padding_to_kpm(memory_attention_mask)
         return cast(
@@ -331,31 +283,7 @@ class TransformerModel(PretrainedModel):
                 memory_key_padding_mask=mem_kpm,
                 past_key_value=past_key_value,
                 use_cache=use_cache,
-                cache_position=cache_position,
             ),
-        )
-
-    @staticmethod
-    def _static_self_len(past_key_value: EncoderDecoderCache | None) -> int:
-        """Self-attention read-window width for the compiled static decode.
-
-        This is the width the self-attn ``q·kᵀ`` (and so the gathered causal mask
-        trimmed to it) attends over — the power-of-two bucket baked into the
-        decode wrap (``StaticCache.read_len``), NOT the full buffer capacity, so
-        attention covers only the filled prefix.
-        """
-        if past_key_value is None:
-            raise ValueError("compiled static decode requires a StaticCache")
-        self_cache = past_key_value.self_attention_cache
-        if not isinstance(self_cache, StaticCache):
-            raise ValueError(
-                "compiled static decode requires a StaticCache self-attention "
-                "cache (got an unbounded cache with no max length)"
-            )
-        return (
-            self_cache.read_len
-            if self_cache.read_len is not None
-            else self_cache.max_cache_len
         )
 
     @override
@@ -458,10 +386,6 @@ class TransformerForSeq2SeqLM(PretrainedModel):
 
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig
     base_model_prefix: ClassVar[str] = "transformer"
-    # Decoder self-attention derives position + causal mask from the runtime
-    # cache_position, so a fixed StaticCache pair compiles into one decode
-    # executable (cross-attention is constant after the encoder runs).
-    supports_compiled_static_decode: ClassVar[bool] = True
 
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__(config)
@@ -522,7 +446,6 @@ class TransformerForSeq2SeqLM(PretrainedModel):
         top_k: int | None = None,
         top_p: float | None = None,
         repetition_penalty: float = 1.0,
-        compile_decode: bool = False,
     ) -> Tensor:
         """Seq2seq decoding — greedy (default) or stochastic sampling.
 
@@ -551,13 +474,6 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             top_p:         Nucleus threshold — keep the smallest set whose
                            cumulative probability reaches ``top_p``.
             repetition_penalty: Down-weight logits of already-generated tokens.
-            compile_decode: With ``use_cache``, run each new token through one
-                           reused compiled decode executable (fixed StaticCache
-                           self-attention + constant cross-attention).  Works
-                           for both unpadded and padded sources (the padding
-                           mask is threaded as a constant graph feed only when
-                           present).  Opt-in; silently falls back to eager when
-                           caching is off or the model does not declare support.
 
         Returns:
             ``(B, T_out)`` int Tensor of generated target tokens.
@@ -587,19 +503,6 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             pad_token_id=pad,
             dev=dev,
         )
-
-        # ── compiled static decode (opt-in) ─────────────────────────────────
-        if use_cache and compile_decode and self.supports_compiled_static_decode:
-            return self._generate_compiled(
-                memory,
-                attention_mask,
-                out_tokens,
-                finished,
-                sampling,
-                max_length,
-                B,
-                dev,
-            )
 
         # ── eager path (DynamicCache) ───────────────────────────────────────
         # Decoder self-attention grows each step; the cross-attention projection
@@ -632,62 +535,6 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             # With a cache the next step only needs the freshly produced token.
             model_input = out_tokens[-1].reshape(B, 1)
 
-        return lucid.stack(out_tokens, dim=1).long()
-
-    def _generate_compiled(
-        self,
-        memory: Tensor,
-        attention_mask: Tensor | None,
-        out_tokens: list[Tensor],
-        finished: list[bool],
-        sampling: _SamplingParams,
-        max_length: int,
-        B: int,
-        dev: str,
-    ) -> Tensor:
-        """Compiled-static decode loop: eager BOS prefill, then reused steps."""
-        from lucid.models._utils._compiled_decode import _CompiledSeq2SeqDecoder
-
-        max_pos = cast(TransformerConfig, self.config).max_position_embeddings
-        if max_length > max_pos:
-            raise ValueError(
-                f"generate(): max_length {max_length} exceeds the decoder's "
-                f"max_position_embeddings {max_pos}"
-            )
-        past = EncoderDecoderCache(
-            StaticCache(max_cache_len=max_length),
-            StaticCache(max_cache_len=int(memory.shape[1])),
-        )
-        # The source padding mask (or None when unpadded — keeps cross-attention
-        # on the fused SDPA path) is constant across steps.
-        # Eager BOS prefill at position 0: fills the cross-attention buffers from
-        # the encoder memory and writes the BOS self-attention key/value.
-        decoded = self.transformer.decode(
-            out_tokens[0].reshape(B, 1),
-            memory,
-            memory_attention_mask=attention_mask,
-            past_key_value=past,
-            use_cache=True,
-            cache_position=lucid.tensor([0], device=dev).long(),
-        )
-        logits = cast(Tensor, self.lm_head(decoded))  # (B, 1, V)
-        # Built lazily on the first decode step (a 1-token request never compiles).
-        decoder: _CompiledSeq2SeqDecoder | None = None
-        cur_pos = 1
-        n_new = max_length - 1
-        for step_idx in range(n_new):
-            done = _select_and_append_next(
-                logits[:, -1, :], out_tokens, finished, sampling
-            )
-            if done or step_idx == n_new - 1:
-                break
-            if decoder is None:
-                decoder = _CompiledSeq2SeqDecoder(self, past, memory, attention_mask)
-            cache_position = lucid.tensor([cur_pos], device=dev).long()
-            logits = decoder.step(
-                out_tokens[-1].reshape(B, 1), cache_position, cur_pos
-            )
-            cur_pos += 1
         return lucid.stack(out_tokens, dim=1).long()
 
 
