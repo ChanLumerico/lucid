@@ -42,6 +42,37 @@ class TestStaticCache:
         )
         assert float(cache.key_cache[0][:, :, 4, :].sum().item()) == 5 * 2 * 4
 
+    def test_read_len_narrows_return_only(self) -> None:
+        # Opt-in read_len narrows the RETURNED view (attention reads O(filled)),
+        # while the STORED buffer stays full max_cache_len (compile-stable write).
+        cache = StaticCache(max_cache_len=16)
+        # No read_len -> full buffer (back-compatible default).
+        fk, _ = cache.update(*_ones(3, 1.0), layer_idx=0)
+        assert tuple(fk.shape) == (1, 2, 16, 4)
+        # read_len=4 -> returned view narrowed to width 4, holding the 4 written
+        # positions (0..3); the stored buffer is still the full 16.
+        nk, nv = cache.update(
+            *_ones(1, 2.0), layer_idx=0, cache_kwargs={"read_len": 4}
+        )
+        assert tuple(nk.shape) == (1, 2, 4, 4)
+        assert tuple(nv.shape) == (1, 2, 4, 4)
+        assert tuple(cache.key_cache[0].shape) == (1, 2, 16, 4)  # buffer full
+        # The narrowed view equals the full buffer's first 4 positions exactly.
+        full = cache.key_cache[0]
+        assert float((nk - full[:, :, :4, :]).abs().sum().item()) == 0.0
+
+    def test_from_buffers_read_len_default_full(self) -> None:
+        # A rebuilt cache (compiled-decode driver) defaults read_len to the full
+        # width, so its returned view is unnarrowed unless a bucket is supplied.
+        base = StaticCache(max_cache_len=8)
+        base.update(*_ones(2, 1.0), layer_idx=0)
+        rebuilt = StaticCache.from_buffers(base.key_cache, base.value_cache, 8)
+        assert rebuilt.read_len == 8
+        bucketed = StaticCache.from_buffers(
+            base.key_cache, base.value_cache, 8, read_len=4
+        )
+        assert bucketed.read_len == 4
+
     def test_multi_layer_lazy_alloc(self) -> None:
         cache = StaticCache(max_cache_len=8)
         cache.update(*_ones(2, 1.0), layer_idx=0)

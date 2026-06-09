@@ -104,6 +104,10 @@ round-trips that previously dominated decode.
 `memory_key_padding_mask` instead of threading them into each layer, so padded
 cross-attention attended to pad positions. Both masks are now passed through.
 
+### Performance
+
+- attend over filled prefix, not full StaticCache buffer
+
 ---
 
 ## [3.5.0] — 2026-06-05

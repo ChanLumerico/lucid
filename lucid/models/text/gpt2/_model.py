@@ -93,9 +93,17 @@ class _GPT2SelfAttention(nn.Module):
             past_len = past_key_value.get_seq_length(layer_idx)
             # cache_position is consumed by StaticCache (the in-place write
             # location); DynamicCache ignores it and simply appends.
-            k, v = past_key_value.update(
-                k, v, layer_idx, cache_kwargs={"cache_position": cache_position}
-            )
+            cache_kwargs: dict[str, object] = {"cache_position": cache_position}
+            if isinstance(past_key_value, StaticCache):
+                # Attend over only the filled prefix, not the full max_cache_len
+                # buffer (the latter is max_cache_len/(filled+1)× wasted q·kᵀ).
+                # Eager: read_len is None on the cache → the exact fill
+                # ``past_len + T``.  Compiled decode: the rebuilt cache carries a
+                # baked ``read_len`` (a fixed bucket / full width) so the executable
+                # signature stays stable.
+                rl = past_key_value.read_len
+                cache_kwargs["read_len"] = rl if rl is not None else past_len + T
+            k, v = past_key_value.update(k, v, layer_idx, cache_kwargs=cache_kwargs)
         t_total = int(
             k.shape[2]
         )  # DynamicCache: past_len+T; StaticCache: max_cache_len

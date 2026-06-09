@@ -112,6 +112,27 @@ class TestGPT2Cache:
         )
         assert_close(g_static, g_dynamic, atol=0.0)
 
+    def test_static_cache_oversized_equals_dynamic(self) -> None:
+        # An OVER-SIZED max_cache_len (buffer far larger than tokens decoded) must
+        # be both correct AND free: the read_len narrowing makes eager StaticCache
+        # attend over only the filled prefix, so an oversized buffer stays
+        # bit-identical to DynamicCache (no O(max_cache_len) attention penalty).
+        lucid.manual_seed(0)
+        m = _gpt2()
+        prompt = lucid.tensor([[3, 7, 1]]).long()
+        g_static = m.generate(
+            prompt,
+            max_new_tokens=6,
+            do_sample=False,
+            use_cache=True,
+            cache_implementation="static",
+            max_cache_len=32,  # 3 + 6 = 9 filled, buffer is 32 → mostly empty
+        )
+        g_dynamic = m.generate(
+            prompt, max_new_tokens=6, do_sample=False, use_cache=True
+        )
+        assert_close(g_static, g_dynamic, atol=0.0)
+
     def test_static_cache_incremental_equals_full(self) -> None:
         from lucid.utils.cache import StaticCache
 

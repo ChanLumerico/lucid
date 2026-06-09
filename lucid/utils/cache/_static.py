@@ -47,9 +47,11 @@ class StaticCache(Cache):
     Notes
     -----
     ``get_seq_length`` is tracked by a per-layer counter (not inferred from the
-    buffer shape, which is always ``max_cache_len``).  ``update`` returns the
-    **full** buffer; the attention masks out the not-yet-written (future) tail
-    via the usual causal mask, so the zero-filled slots never contribute.
+    buffer shape, which is always ``max_cache_len``).  ``update`` stores into the
+    full buffer; when the consumer opts in (passes ``read_len`` / a baked
+    :attr:`read_len`), it returns a **filled-prefix view** so attention attends
+    only over real keys — O(filled), not O(max_cache_len).  The stored buffer
+    stays full, so a compiled write-back and signature stay shape-constant.
     """
 
     def __init__(self, max_cache_len: int) -> None:
@@ -59,6 +61,13 @@ class StaticCache(Cache):
         self.value_cache: list[Tensor] = []
         self._cumulative_length: list[int] = []
         self._seen_tokens: int = 0
+        # Width of the q·kᵀ READ window that :meth:`update` narrows its returned
+        # view to (the write + the stored buffer stay full ``max_cache_len``).
+        # ``None`` → eager: the post-write counter (the true contiguous fill) is
+        # used, so attention is O(filled) not O(max_cache_len).  A compiled decode
+        # driver sets this to a FIXED bucket width via :meth:`from_buffers`,
+        # because its rebuilt counter is reset and does not track the real fill.
+        self.read_len: int | None = None
 
     @classmethod
     def from_buffers(
@@ -68,6 +77,7 @@ class StaticCache(Cache):
         max_cache_len: int,
         *,
         seen_tokens: int = 0,
+        read_len: int | None = None,
     ) -> StaticCache:
         """Wrap already-allocated per-layer buffers as a ``StaticCache``.
 
@@ -85,12 +95,21 @@ class StaticCache(Cache):
             Fixed sequence capacity (must match the buffers' dim-2 length).
         seen_tokens : int, optional, keyword-only, default=0
             Initial value for :attr:`seen_tokens`.
+        read_len : int or None, optional, keyword-only
+            Fixed width the q·kᵀ READ window narrows to (see :attr:`read_len`).
+            ``None`` (default) → the full ``max_cache_len`` (no narrowing), which
+            keeps a compiled decode executable signature-stable; a driver that
+            attends over a smaller bucket passes that fixed bucket width here.
         """
         obj = cls(max_cache_len=max_cache_len)
         obj.key_cache = list(key_cache)
         obj.value_cache = list(value_cache)
         obj._cumulative_length = [0] * len(key_cache)
         obj._seen_tokens = int(seen_tokens)
+        # A rebuilt cache cannot trust its (reset) counter, so the read window is
+        # an explicit fixed width — default full so existing compiled decode is
+        # unchanged until a driver opts into bucketing.
+        obj.read_len = int(read_len) if read_len is not None else max_cache_len
         return obj
 
     @property
@@ -153,11 +172,14 @@ class StaticCache(Cache):
         cache_kwargs: dict[str, object] | None = None,
     ) -> tuple[Tensor, Tensor]:
         """Write ``key_states`` / ``value_states`` into the fixed buffer at
-        ``cache_position`` and return the **full** buffer.
+        ``cache_position`` and return a **filled-prefix view** of it.
 
         The write goes through the traceable :func:`lucid.index_copy` (not
         in-place ``__setitem__``), so the decode forward stays compile-visible
-        and the buffer keeps a constant shape every step.
+        and the stored buffer keeps a constant ``max_cache_len`` shape every step.
+        The *returned* keys/values are narrowed (dim 2) to the filled-prefix /
+        bucket width (see :attr:`read_len`) so attention attends over the real
+        keys, not the zero-padded tail — recovering O(filled) attention cost.
 
         Parameters
         ----------
@@ -170,15 +192,19 @@ class StaticCache(Cache):
             lazily allocated on the first call for a layer).
         cache_kwargs : dict or None, optional
             May carry ``"cache_position"`` (a fixed-shape int64 ``Tensor`` of
-            absolute write indices).  When absent, positions are taken from the
-            per-layer running counter.
+            absolute write indices; absent → positions from the running counter)
+            and ``"read_len"`` (an int — narrow the returned view to this width;
+            the decoder-only attention passes ``past_len + T`` here to attend over
+            only the filled prefix).  When neither ``read_len`` nor a baked
+            :attr:`read_len` is set, the full buffer is returned (back-compatible).
 
         Returns
         -------
         tuple of (Tensor, Tensor)
-            The full ``(keys, values)`` buffers for ``layer_idx``, each of shape
-            ``(B, num_heads, max_cache_len, head_dim)`` — unwritten future slots
-            are zero and are masked out by the attention's causal mask.
+            The ``(keys, values)`` for ``layer_idx``, narrowed on dim 2 to the
+            opted-in ``read_len`` / bucket width when provided, else the full
+            ``(B, num_heads, max_cache_len, head_dim)`` buffer.  A narrowed view is
+            equivalent to the full buffer with the unwritten tail masked.
         """
         if len(self.key_cache) <= layer_idx:
             self._lazy_init(layer_idx, key_states)
@@ -205,7 +231,31 @@ class StaticCache(Cache):
         if layer_idx == 0:
             self._seen_tokens += n
         self._cumulative_length[layer_idx] += n
-        return self.key_cache[layer_idx], self.value_cache[layer_idx]
+
+        # Narrow the RETURNED view to the filled-prefix / bucket width so the
+        # consumer attends over O(filled) keys, not O(max_cache_len).  The stored
+        # buffer (``self.key_cache[layer_idx]``) and the write above stay full —
+        # the compiled write-back and the masked-tail equivalence are untouched.
+        # Narrowing is OPT-IN: only when the caller passes an explicit ``read_len``
+        # (the decoder-only attention computes ``past_len + T``) or a rebuilt
+        # cache carries a baked :attr:`read_len`.  Direct-API callers and
+        # consumers that size their own mask off ``max_cache_len`` (the seq2seq
+        # ``nn.MultiheadAttention`` path) pass nothing → the full buffer, unchanged.
+        rl_kwarg = cache_kwargs.get("read_len") if cache_kwargs is not None else None
+        if isinstance(rl_kwarg, int):
+            read_window = rl_kwarg
+        elif self.read_len is not None:
+            read_window = self.read_len
+        else:
+            read_window = self.max_cache_len
+        kbuf = self.key_cache[layer_idx]
+        vbuf = self.value_cache[layer_idx]
+        if 0 < read_window < self.max_cache_len:
+            return (
+                lucid.narrow(kbuf, _SEQ_DIM, 0, read_window),
+                lucid.narrow(vbuf, _SEQ_DIM, 0, read_window),
+            )
+        return kbuf, vbuf
 
     @override
     def get_seq_length(self, layer_idx: int = 0) -> int:
