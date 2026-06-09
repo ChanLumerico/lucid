@@ -67,14 +67,19 @@ maintenance helpers (`crop` / `reset` / `batch_repeat_interleave` /
 read-only cross-attention cache (tracked by an `is_updated` flag).
 
 Because `StaticCache` holds the shape constant, the single-token decode forward
-now **compiles once** into a reused MPSGraph executable instead of recompiling
-every step. `generate(..., compile_decode=True)` drives this path for both the
-decoder-only models (GPT-1 / GPT-2) and the encoder-decoder
-`TransformerForSeq2SeqLM` (self-attention grows in a `StaticCache`,
-cross-attention is prefilled static), staying token-identical to the eager path.
-Measured ~1.83× on long-context decode. The decode drivers live in
-`lucid/models/_utils/_compiled_decode.py`; sampling was factored into a shared
-`lucid/models/_sampling.py` reused across every causal-LM head.
+**compiles once** into a reused MPSGraph executable (cached across `generate()`
+calls) instead of recompiling every step. `generate(..., compile_decode=True)`
+drives this opt-in path for the decoder-only models (GPT-1 / GPT-2) and the
+encoder-decoder `TransformerForSeq2SeqLM`, staying token-identical to the eager
+path. It is a **niche lever, not a general speedup**: the static path attends
+over the full `max_cache_len` buffer every step, so it only beats `DynamicCache`
+in a near-full + compute-bound regime (large batch / long context with
+`max_cache_len` sized close to the tokens decoded); for typical `B=1` inference
+or an over-sized buffer, `DynamicCache` (the default) is faster (~0.65–0.8× at
+GPT-2-base scale). `DynamicCache` is the recommended path: it turns the prefix
+re-encode from O(T²) into O(T) and is ~1.9–2× over no cache at scale. The decode
+drivers live in `lucid/models/_utils/_compiled_decode.py`; sampling was factored
+into a shared `lucid/models/_sampling.py` reused across every causal-LM head.
 
 ### Added — `scatter_set` engine primitive
 

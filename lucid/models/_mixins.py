@@ -432,11 +432,18 @@ class CausalLMMixin:
             With ``cache_implementation="static"``, compile the single-token
             decode step (the prompt is prefilled eagerly, then each new token
             runs through one reused MPSGraph executable — the fixed buffer keeps
-            the shape constant).  Opt-in: it wins for **long-context** decoding
-            (flat per-step cost vs ``DynamicCache``'s growing concat + widening
-            attention) and is roughly even for short prompts.  Silently ignored
-            unless ``use_cache`` and ``cache_implementation="static"``, and falls
-            back to eager if the host model does not accept a cache.
+            the shape constant; the executable is cached across ``generate()``
+            calls, so the one-time compile is paid once per shape).  **Niche
+            lever, not a general speedup**: the static path attends over the full
+            ``max_cache_len`` buffer every step, so it only beats ``DynamicCache``
+            in a narrow regime — a *near-full* buffer (``max_cache_len`` sized
+            close to the tokens actually decoded) **and** a compute-bound workload
+            (large batch / long context).  For typical ``B=1`` inference, or when
+            ``max_cache_len`` is over-sized relative to tokens decoded,
+            ``DynamicCache`` (the default) is faster — measured ~0.65–0.8× at
+            GPT-2-base scale.  Silently ignored unless ``use_cache`` and
+            ``cache_implementation="static"``, and falls back to eager if the host
+            model does not accept a cache.
 
         Returns
         -------
@@ -540,10 +547,12 @@ class CausalLMMixin:
             dev=dev,
         )
 
-        # ── compiled static decode (opt-in; wins for long context) ──────────
+        # ── compiled static decode (opt-in; niche — see compile_decode doc) ──
         # Prefill the prompt eagerly into a StaticCache, then run each new token
-        # through one reused compiled executable.  Falls through to the eager
-        # loop below if the host model does not accept a cache.
+        # through one reused compiled executable (cached across generate() calls
+        # on the model).  Only beats DynamicCache in the near-full + compute-bound
+        # regime; DynamicCache is faster for typical B=1 / over-sized buffers.
+        # Falls through to the eager loop below if the host model rejects a cache.
         if (
             use_cache
             and cache_implementation == "static"

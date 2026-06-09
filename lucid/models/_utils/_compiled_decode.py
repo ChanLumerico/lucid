@@ -14,27 +14,85 @@ args/returns and rebuilds a cache *view* over them inside ``forward`` — the
 executable reads the buffers, writes the new token's K/V, and returns the
 updated buffers as extra outputs.  :class:`_CompiledStaticDecoder` then drives
 the loop, ``copy_``-ing each step's output buffers back into the cache's
-**persistent, freshly-allocated** storage.  That ``copy_`` (1) keeps the re-fed
-input tensors *identity-stable* across steps and (2) lands each step's K/V into
-contiguous owned buffers rather than re-feeding the executable's own output
-tensors back as inputs — feeding a view / shared-storage tensor as a compiled
-input reads a stale compile-time offset (silent garbage), so the inputs every
-step must be independent materialised tensors.
+**persistent** storage so the re-fed inputs stay identity- and signature-stable
+— which lets the executable compile exactly **once** and be reused for every
+position.  (Rebinding to the executable's output tensors would drop that
+~13 %-of-step copy, but the outputs carry a different compile signature than the
+zero-allocated buffers, triggering a second compile that outweighs the copy
+saving for realistic decode lengths — measured and rejected.)
 
-For long-context decoding (the real KV-cache use case) the flat fixed-buffer
-cost beats ``DynamicCache``'s growing concat + widening attention; for short
-prompts the two are roughly even.
+The compiled executable is also reused across ``generate()`` calls (cached on
+the model by a shape signature via :func:`_cached_compile`), so the one-time
+MPSGraph compile is paid once per shape, not per call.
+
+Measured reality (Apple Silicon, MLX): even with the compile amortised and the
+``copy_``-back removed, a warm compiled decode step ties — does *not* beat —
+eager ``StaticCache``, because MLX eager already fuses these ops well and both
+``StaticCache`` paths attend over the **full** ``max_cache_len`` buffer (more
+work than ``DynamicCache``'s actual-length attention).  ``DynamicCache`` (eager)
+remains the fastest path; ``compile_decode`` is an opt-in for when a single
+reused MPSGraph executable is wanted, not a guaranteed speedup.
 """
 
-from typing import TYPE_CHECKING, cast, final, override
+from typing import TYPE_CHECKING, Callable, cast, final, override
 
 import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
+from lucid.compile import CompiledModule
 from lucid.utils.cache import EncoderDecoderCache, StaticCache
 
 if TYPE_CHECKING:
     from lucid.models.text.transformer._model import TransformerForSeq2SeqLM
+
+# Attribute under which a model caches its compiled decode executables, keyed by
+# a shape signature.  Stored on the model instance (not a module-level dict) so
+# the cache's lifetime tracks the model's — the model<->wrap reference cycle is
+# collected together by the cyclic GC when the model is dropped, no leak.
+_DECODE_CACHE_ATTR = "_lucid_compiled_decode"
+
+
+def _cached_compile(
+    model: nn.Module, key: tuple[object, ...], build_wrap: Callable[[], nn.Module]
+) -> CompiledModule[..., tuple[Tensor, ...]]:
+    """Return a ``CompiledModule`` for ``key``, reusing it across ``generate()``
+    calls instead of recompiling every call.
+
+    The compiled executable depends only on the model's parameters (identity-
+    stable) and the per-step input *shapes* captured in ``key`` — the decode
+    buffers are passed positionally each step, so one executable serves every
+    same-shape ``StaticCache``.  Rebuilding a fresh ``lucid.compile(wrap)`` per
+    call (the previous behaviour) discarded the executable and re-paid the
+    one-time MPSGraph compile on every call; caching it amortises that cost.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The decoder model; owns the per-key executable cache.
+    key : tuple of object
+        Shape signature distinguishing executables (layers / buffer dims /
+        dtype / device / mask presence).
+    build_wrap : callable returning nn.Module
+        Factory for the wrap module to compile on a cache miss.
+
+    Returns
+    -------
+    CompiledModule
+        The cached (or freshly compiled) executable wrapper.
+    """
+    cache: dict[tuple[object, ...], CompiledModule[..., tuple[Tensor, ...]]] | None = (
+        getattr(model, _DECODE_CACHE_ATTR, None)
+    )
+    if cache is None:
+        cache = {}
+        setattr(model, _DECODE_CACHE_ATTR, cache)
+    compiled = cache.get(key)
+    if compiled is None:
+        compiled = cast(
+            CompiledModule[..., tuple[Tensor, ...]], lucid.compile(build_wrap())
+        )
+        cache[key] = compiled
+    return compiled
 
 
 @final
@@ -88,9 +146,9 @@ class _CompiledStaticDecoder:
 
     The cache's per-layer buffers are the persistent decode state: the compiled
     executable reads them, the driver ``copy_``-s each step's output back into
-    them.  Construct *after* the prompt has been prefilled into ``past`` (the
-    buffers must already hold the prompt's K/V) — ``step`` continues from the
-    next position.
+    them (keeping inputs signature-stable for a single compile).  Construct
+    *after* the prompt has been prefilled into ``past`` (the buffers must already
+    hold the prompt's K/V) — ``step`` continues from the next position.
 
     Parameters
     ----------
@@ -105,8 +163,22 @@ class _CompiledStaticDecoder:
         self._num_layers = len(past.key_cache)
         self._key_cache = past.key_cache
         self._value_cache = past.value_cache
-        wrap = _StaticDecodeWrap(model, self._num_layers, past.max_cache_len)
-        self._compiled = lucid.compile(wrap)
+        b, h, _, d = past.key_cache[0].shape
+        key: tuple[object, ...] = (
+            "decoder-only",
+            self._num_layers,
+            past.max_cache_len,
+            int(b),
+            int(h),
+            int(d),
+            str(past.key_cache[0].dtype),
+            past.key_cache[0].device.type,
+        )
+        self._compiled = _cached_compile(
+            model,
+            key,
+            lambda: _StaticDecodeWrap(model, self._num_layers, past.max_cache_len),
+        )
 
     def step(self, token: Tensor, cache_position: Tensor) -> Tensor:
         """Run one compiled decode step; return ``(B, 1, vocab)`` logits.
@@ -123,9 +195,15 @@ class _CompiledStaticDecoder:
             token, cache_position, *self._key_cache, *self._value_cache
         )
         logits = result[0]
-        # Land the updated K/V into the cache's persistent, contiguous buffers
-        # (identity-stable, owned storage) rather than re-feeding the
-        # executable's output tensors as next-step inputs.
+        # ``copy_`` the updated K/V back into the cache's persistent buffers
+        # rather than rebinding to the executable's output tensors.  This keeps
+        # the re-fed inputs *identity- and signature-stable* across steps, so the
+        # executable compiles exactly ONCE (the whole point of StaticCache
+        # compiled decode).  Rebinding to the outputs would save this ~13%-of-
+        # step copy but the output tensors carry a different compile signature
+        # than the zero-allocated buffers → a second compile fires (~one-time,
+        # but it dwarfs the per-step copy saving for any realistic decode
+        # length, and is non-deterministic) — measured and rejected.
         for layer_idx in range(self._num_layers):
             self._key_cache[layer_idx].copy_(result[1 + layer_idx])
             self._value_cache[layer_idx].copy_(result[1 + self._num_layers + layer_idx])
@@ -266,14 +344,30 @@ class _CompiledSeq2SeqDecoder:
         self._memory_mask = memory_mask
         self._cross_key = cross_cache.key_cache
         self._cross_value = cross_cache.value_cache
-        wrap = _Seq2SeqDecodeWrap(
-            model,
+        b, h, _, d = self_cache.key_cache[0].shape
+        key: tuple[object, ...] = (
+            "seq2seq",
             self._num_layers,
             self_cache.max_cache_len,
             cross_cache.max_cache_len,
-            has_memory_mask=memory_mask is not None,
+            int(b),
+            int(h),
+            int(d),
+            str(self_cache.key_cache[0].dtype),
+            self_cache.key_cache[0].device.type,
+            memory_mask is not None,
         )
-        self._compiled = lucid.compile(wrap)
+        self._compiled = _cached_compile(
+            model,
+            key,
+            lambda: _Seq2SeqDecodeWrap(
+                model,
+                self._num_layers,
+                self_cache.max_cache_len,
+                cross_cache.max_cache_len,
+                has_memory_mask=memory_mask is not None,
+            ),
+        )
 
     def step(self, token: Tensor, cache_position: Tensor) -> Tensor:
         """Run one compiled decode step; return ``(B, 1, vocab)`` logits.
@@ -299,7 +393,10 @@ class _CompiledSeq2SeqDecoder:
             *self._cross_value,
         )
         logits = result[0]
-        # Write back only the self-attention buffers (cross + memory constant).
+        # ``copy_`` back only the self-attention buffers (cross + memory are
+        # constant read-only feeds), keeping inputs signature-stable for a single
+        # compile — see :meth:`_CompiledStaticDecoder.step` for why rebinding to
+        # the executable outputs is rejected.
         for layer_idx in range(self._num_layers):
             self._self_key[layer_idx].copy_(result[1 + layer_idx])
             self._self_value[layer_idx].copy_(result[1 + self._num_layers + layer_idx])
