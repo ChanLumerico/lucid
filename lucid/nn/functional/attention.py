@@ -97,3 +97,35 @@ def scaled_dot_product_attention(
             is_causal,
         )
     )
+
+
+def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
+    r"""Repeat each key/value head ``n_rep`` times along the head axis.
+
+    The expansion underlying grouped-query / multi-query attention: a model
+    projects fewer key/value heads (``num_kv_heads``) than query heads
+    (``num_heads``) — sharing each K/V head across a group of
+    ``n_rep = num_heads // num_kv_heads`` query heads — which shrinks the K/V
+    projection and, crucially, the K/V cache.  Before the attention scores are
+    computed, each K/V head is repeated ``n_rep`` times so the head count matches
+    the queries.  Head ``h`` of the result maps to source head ``h // n_rep``, so
+    query head ``q`` attends to K/V head ``q // n_rep`` — the grouping GQA
+    expects.  ``n_rep == 1`` (standard multi-head attention) is a no-op.
+
+    Parameters
+    ----------
+    hidden_states : Tensor
+        Key or value tensor of shape ``(B, num_kv_heads, T, head_dim)``.
+    n_rep : int
+        Repeat factor ``num_heads // num_kv_heads`` (``>= 1``).
+
+    Returns
+    -------
+    Tensor
+        Shape ``(B, num_kv_heads * n_rep, T, head_dim)``.
+    """
+    if n_rep == 1:
+        return hidden_states
+    b, h, t, d = hidden_states.shape
+    expanded = hidden_states.unsqueeze(2).expand(b, h, n_rep, t, d)
+    return expanded.reshape(b, h * n_rep, t, d)

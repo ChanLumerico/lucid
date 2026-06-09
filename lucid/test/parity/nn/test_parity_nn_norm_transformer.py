@@ -366,6 +366,33 @@ class TestMultiheadAttentionParity:
 
         assert_close(lucid_out, ref_out, atol=1e-4)
 
+    def test_gqa_repeat_matches_ref_enable_gqa(self, ref: Any) -> None:
+        # lucid's repeat_kv + SDPA must match the reference framework's grouped-
+        # query attention (enable_gqa repeats K/V internally), confirming the
+        # head-grouping convention is identical.  Skips on older ref SDPA.
+        ref_sdpa = ref.nn.functional.scaled_dot_product_attention
+        B, H, KV, T, D = 2, 8, 2, 5, 4
+        rng = np.random.default_rng(21)
+        q = rng.standard_normal((B, H, T, D)).astype(np.float32)
+        k = rng.standard_normal((B, KV, T, D)).astype(np.float32)
+        v = rng.standard_normal((B, KV, T, D)).astype(np.float32)
+
+        try:
+            ref_out = ref_sdpa(
+                ref.tensor(q.copy()),
+                ref.tensor(k.copy()),
+                ref.tensor(v.copy()),
+                enable_gqa=True,
+            )
+        except (TypeError, RuntimeError):
+            pytest.skip("reference SDPA has no enable_gqa")
+        kl = nn.functional.repeat_kv(lucid.tensor(k.copy()), H // KV)
+        vl = nn.functional.repeat_kv(lucid.tensor(v.copy()), H // KV)
+        lucid_out = nn.functional.scaled_dot_product_attention(
+            lucid.tensor(q.copy()), kl, vl
+        )
+        assert_close(lucid_out, ref_out, atol=1e-4)
+
 
 # ── TransformerEncoderLayer ───────────────────────────────────────────────────
 

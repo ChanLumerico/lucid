@@ -14,7 +14,7 @@ from lucid._C import engine as _C_engine
 import lucid as _lucid
 import lucid.nn.init as init
 from lucid.nn.functional.linear import linear
-from lucid.nn.functional.attention import scaled_dot_product_attention
+from lucid.nn.functional.attention import repeat_kv, scaled_dot_product_attention
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -115,6 +115,16 @@ class MultiheadAttention(Module):
     vdim : int or None, optional
         Feature dimension of the value input.  When ``None``
         (default), falls back to ``embed_dim``.
+    num_kv_heads : int or None, optional
+        Number of key/value heads for **grouped-query attention** (GQA) /
+        **multi-query attention** (MQA).  Must divide ``num_heads``.  ``None``
+        (default) → ``num_heads`` (standard multi-head attention).  With fewer
+        K/V heads the model projects a smaller key/value space — shared across
+        ``num_heads // num_kv_heads`` query heads — which shrinks the K/V
+        projection and, during incremental decoding, the K/V cache; each K/V head
+        is repeated to match the query heads just before attention.  ``1`` is MQA
+        (all query heads share one K/V head).  GQA forces the separate-projection
+        layout (no fused ``in_proj_weight``).
     batch_first : bool, optional
         Controls the expected layout of all input and output tensors.
 
@@ -135,7 +145,10 @@ class MultiheadAttention(Module):
     embed_dim : int
         Total model dimension passed at construction.
     num_heads : int
-        Number of attention heads.
+        Number of attention (query) heads.
+    num_kv_heads : int
+        Number of key/value heads (``== num_heads`` for standard MHA; fewer for
+        GQA/MQA).
     head_dim : int
         Per-head dimension: ``embed_dim // num_heads``.
     kdim : int
@@ -278,6 +291,7 @@ class MultiheadAttention(Module):
         add_zero_attn: bool = False,
         kdim: int | None = None,
         vdim: int | None = None,
+        num_kv_heads: int | None = None,
         batch_first: bool = False,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
@@ -291,14 +305,30 @@ class MultiheadAttention(Module):
             )
         self.embed_dim: int = embed_dim
         self.num_heads: int = num_heads
+        # Grouped-query / multi-query attention: project ``num_kv_heads`` <=
+        # ``num_heads`` key/value heads (``None`` → standard MHA = num_heads).
+        # Each K/V head is shared by ``num_heads // num_kv_heads`` query heads,
+        # shrinking the K/V projection and the K/V cache.
+        self.num_kv_heads: int = num_heads if num_kv_heads is None else int(num_kv_heads)
+        if num_heads % self.num_kv_heads != 0:
+            raise ValueError(
+                f"num_heads ({num_heads}) must be divisible by num_kv_heads "
+                f"({self.num_kv_heads})"
+            )
         self.dropout: float = dropout
         self.batch_first: bool = batch_first
         self.head_dim: int = embed_dim // num_heads
+        self._kv_dim: int = self.num_kv_heads * self.head_dim  # K/V projected width
         self.kdim: int = kdim if kdim is not None else embed_dim
         self.vdim: int = vdim if vdim is not None else embed_dim
         self.add_zero_attn: bool = add_zero_attn
+        # The combined ``in_proj_weight`` only applies when Q/K/V all map
+        # ``embed_dim → embed_dim`` from one source; GQA (fewer K/V heads) or a
+        # differing ``kdim``/``vdim`` forces the separate-projection layout.
         self._qkv_same_embed_dim: bool = (
-            self.kdim == embed_dim and self.vdim == embed_dim
+            self.kdim == embed_dim
+            and self.vdim == embed_dim
+            and self.num_kv_heads == num_heads
         )
 
         if self._qkv_same_embed_dim:
@@ -309,33 +339,35 @@ class MultiheadAttention(Module):
             self.k_proj_weight: Parameter | None = None
             self.v_proj_weight: Parameter | None = None
         else:
-            # Reference layout: separate projection weights when Q/K/V come
-            # from sources with different feature dims.  ``in_proj_weight``
-            # is unset; load hooks may still accept it for compatibility.
+            # Separate projection weights when Q/K/V come from sources with
+            # different feature dims, or under GQA where K/V project to fewer
+            # heads (``_kv_dim`` < ``embed_dim``).  ``in_proj_weight`` is unset.
             self.in_proj_weight = None
             self.q_proj_weight = Parameter(
                 empty(embed_dim, embed_dim, dtype=dtype, device=device)
             )
             self.k_proj_weight = Parameter(
-                empty(embed_dim, self.kdim, dtype=dtype, device=device)
+                empty(self._kv_dim, self.kdim, dtype=dtype, device=device)
             )
             self.v_proj_weight = Parameter(
-                empty(embed_dim, self.vdim, dtype=dtype, device=device)
+                empty(self._kv_dim, self.vdim, dtype=dtype, device=device)
             )
 
         if bias:
+            # Q bias is embed_dim wide; K/V biases are _kv_dim wide (== embed_dim
+            # for standard MHA, so this is 3*embed_dim then).
             self.in_proj_bias: Parameter | None = Parameter(
-                empty(3 * embed_dim, dtype=dtype, device=device)
+                empty(embed_dim + 2 * self._kv_dim, dtype=dtype, device=device)
             )
         else:
             self.in_proj_bias = None
 
         if add_bias_kv:
             self.bias_k: Parameter | None = Parameter(
-                empty(1, 1, embed_dim, dtype=dtype, device=device)
+                empty(1, 1, self._kv_dim, dtype=dtype, device=device)
             )
             self.bias_v: Parameter | None = Parameter(
-                empty(1, 1, embed_dim, dtype=dtype, device=device)
+                empty(1, 1, self._kv_dim, dtype=dtype, device=device)
             )
         else:
             self.bias_k = None
@@ -431,7 +463,8 @@ class MultiheadAttention(Module):
 
         if self.in_proj_bias is not None:
             bt = self.in_proj_bias._impl
-            b_parts = _C_engine.split_at(bt, [d, 2 * d], 0)
+            # Q bias is embed_dim wide; K/V biases _kv_dim wide (GQA: < embed_dim).
+            b_parts = _C_engine.split_at(bt, [d, d + self._kv_dim], 0)
             q_b: Tensor | None = _wrap(b_parts[0])
             k_b: Tensor | None = _wrap(b_parts[1])
             v_b: Tensor | None = _wrap(b_parts[2])
@@ -459,14 +492,19 @@ class MultiheadAttention(Module):
             q_w = self.q_proj_weight  # type: ignore[assignment]
         q_b: Tensor | None = None
         if self.in_proj_bias is not None:
-            q_b = _wrap(_C_engine.split_at(self.in_proj_bias._impl, [d, 2 * d], 0)[0])
+            q_b = _wrap(_C_engine.split_at(self.in_proj_bias._impl, [d], 0)[0])
         return linear(query, q_w, q_b)
 
-    def _split_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
-        """Reshape ``(B, T, embed_dim)`` → ``(B, num_heads, T, head_dim)``."""
-        return x.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(
-            [0, 2, 1, 3]
-        )
+    def _split_heads(
+        self, x: Tensor, batch_size: int, seq_len: int, heads: int | None = None
+    ) -> Tensor:
+        """Reshape ``(B, T, heads*head_dim)`` → ``(B, heads, T, head_dim)``.
+
+        ``heads`` defaults to ``num_heads`` (query); pass ``num_kv_heads`` for the
+        key/value projections under grouped-query attention.
+        """
+        h = self.num_heads if heads is None else heads
+        return x.reshape(batch_size, seq_len, h, self.head_dim).permute([0, 2, 1, 3])
 
     def _merge_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
         """Inverse of :meth:`_split_heads`."""
@@ -596,25 +634,27 @@ class MultiheadAttention(Module):
             q, k, v = self._project_qkv(query, key, value)
 
             # ── add_bias_kv: prepend learnable bias rows to K / V ───────────
+            # K/V are ``_kv_dim`` wide (== embed_dim for standard MHA).
             if self.bias_k is not None:
                 assert self.bias_v is not None
-                bk: Tensor = self.bias_k.expand(B, 1, self.embed_dim)
-                bv: Tensor = self.bias_v.expand(B, 1, self.embed_dim)
+                bk: Tensor = self.bias_k.expand(B, 1, self._kv_dim)
+                bv: Tensor = self.bias_v.expand(B, 1, self._kv_dim)
                 k = _lucid.cat([k, bk], 1)
                 v = _lucid.cat([v, bv], 1)
 
             # ── add_zero_attn: append a zero row to K / V ───────────────────
             if self.add_zero_attn:
                 zero_kv: Tensor = _lucid.zeros(
-                    B, 1, self.embed_dim, dtype=k.dtype, device=k.device
+                    B, 1, self._kv_dim, dtype=k.dtype, device=k.device
                 )
                 k = _lucid.cat([k, zero_kv], 1)
                 v = _lucid.cat([v, zero_kv], 1)
 
             Tk = k.shape[1]
             qh = self._split_heads(q, B, Tq)
-            kh = self._split_heads(k, B, Tk)
-            vh = self._split_heads(v, B, Tk)
+            # K/V split into num_kv_heads (GQA); repeated to num_heads below.
+            kh = self._split_heads(k, B, Tk, self.num_kv_heads)
+            vh = self._split_heads(v, B, Tk, self.num_kv_heads)
 
             # ── KV cache ────────────────────────────────────────────────────
             # Self-attention grows the cache; cross-attention fills it once from
@@ -642,6 +682,14 @@ class MultiheadAttention(Module):
                         cache_kwargs={"cache_position": cache_position},
                     )
                 Tk = int(kh.shape[2])
+
+        # GQA/MQA: the cache stores the smaller ``num_kv_heads`` K/V; repeat each
+        # head to match the ``num_heads`` query heads before attention.  No-op for
+        # standard MHA (``num_kv_heads == num_heads``).
+        if self.num_kv_heads != self.num_heads:
+            n_rep = self.num_heads // self.num_kv_heads
+            kh = repeat_kv(kh, n_rep)
+            vh = repeat_kv(vh, n_rep)
 
         merged_mask: Tensor | None = self._build_attn_mask(
             attn_mask, key_padding_mask, B, Tq, Tk, qh.dtype

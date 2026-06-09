@@ -90,7 +90,7 @@ from lucid.nn.functional.dropout import (
     alpha_dropout,
     feature_alpha_dropout,
 )
-from lucid.nn.functional.attention import scaled_dot_product_attention
+from lucid.nn.functional.attention import repeat_kv, scaled_dot_product_attention
 from lucid.nn.functional.loss import (
     mse_loss,
     l1_loss,
@@ -228,6 +228,7 @@ __all__ = [
     "feature_alpha_dropout",
     # attention
     "scaled_dot_product_attention",
+    "repeat_kv",
     # losses
     "mse_loss",
     "l1_loss",

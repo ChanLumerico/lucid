@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Grouped-query / multi-query attention
+
+`nn.MultiheadAttention` gained `num_kv_heads` (keyword, must divide `num_heads`;
+`None` → standard MHA, fully backward-compatible). With fewer K/V heads the module
+projects a smaller key/value space — `k_proj_weight` / `v_proj_weight` become
+`(num_kv_heads * head_dim, …)`, shared across `num_heads // num_kv_heads` query
+heads — and the **K/V cache stores the smaller set** (the real GQA win for
+incremental decode). Each K/V head is repeated to match the queries just before
+attention via the new `nn.functional.repeat_kv(hidden_states, n_rep)`. `1` = MQA.
+The pattern used by Llama / Mistral / Qwen / Gemma. Parity-verified against the
+reference SDPA's `enable_gqa=True` and a hand-rolled GQA (≤1e-5).
+
 ### Fixed — device/dtype preserved on empty-input gradient norm + NaN quantile
 
 `clip_grad_norm_` / `get_total_norm` returned their zero norm via `zeros(1)`
