@@ -216,6 +216,7 @@ const PACKAGE_LABELS: Record<string, string> = {
   "lucid.profiler":          "Profiler",
   "lucid.serialization":     "Serialization",
   "lucid.utils":             "Utils",        // synthetic-ish parent
+  "lucid.utils.cache":       "KV Cache",
   "lucid.utils.data":        "Data",
   "lucid.utils.tokenizer":   "Tokenizers",
   "lucid.utils.transforms":  "Transforms",
