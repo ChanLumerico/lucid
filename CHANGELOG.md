@@ -25,7 +25,11 @@ heads — and the **K/V cache stores the smaller set** (the real GQA win for
 incremental decode). Each K/V head is repeated to match the queries just before
 attention via the new `nn.functional.repeat_kv(hidden_states, n_rep)`. `1` = MQA.
 The pattern used by Llama / Mistral / Qwen / Gemma. Parity-verified against the
-reference SDPA's `enable_gqa=True` and a hand-rolled GQA (≤1e-5).
+reference SDPA's `enable_gqa=True` and a hand-rolled GQA (≤1e-5).  Two thin
+convenience subclasses are also exported for discoverability:
+`nn.GroupedQueryAttention(embed_dim, num_heads, num_kv_heads, …)` (with
+`num_kv_heads` required) and `nn.MultiQueryAttention(embed_dim, num_heads, …)`
+(fixes `num_kv_heads=1`) — both delegate to `MultiheadAttention`.
 
 ### Fixed — device/dtype preserved on empty-input gradient norm + NaN quantile
 

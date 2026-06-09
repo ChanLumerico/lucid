@@ -100,7 +100,11 @@ from lucid.nn.modules.positional import (
     SinusoidalEmbedding2D,
     TimestepEmbedding,
 )
-from lucid.nn.modules.attention import MultiheadAttention
+from lucid.nn.modules.attention import (
+    GroupedQueryAttention,
+    MultiheadAttention,
+    MultiQueryAttention,
+)
 from lucid.nn.modules.rnn import LSTM, GRU, RNN, LSTMCell, GRUCell, RNNCell
 from lucid.nn.modules.loss import (
     MSELoss,
@@ -264,6 +268,8 @@ __all__ = [
     "SinusoidalEmbedding2D",
     "TimestepEmbedding",
     "MultiheadAttention",
+    "GroupedQueryAttention",
+    "MultiQueryAttention",
     "LSTM",
     "GRU",
     "RNN",

@@ -169,6 +169,31 @@ class TestGroupedQueryAttention:
 
         assert_close(out, ref, atol=1e-5)
 
+    def test_grouped_query_attention_alias(self) -> None:
+        # nn.GroupedQueryAttention(E, H, KV) == MultiheadAttention(num_kv_heads=KV).
+        lucid.manual_seed(3)
+        a = nn.GroupedQueryAttention(64, 8, 2, batch_first=True)
+        lucid.manual_seed(3)
+        b = nn.MultiheadAttention(64, 8, num_kv_heads=2, batch_first=True)
+        assert a.num_kv_heads == 2
+        assert isinstance(a, nn.MultiheadAttention)
+        x = lucid.randn(2, 5, 64)
+        oa, _ = a(x, x, x, need_weights=False)
+        ob, _ = b(x, x, x, need_weights=False)
+        assert float((oa - ob).abs().max().item()) == 0.0
+
+    def test_multi_query_attention_alias(self) -> None:
+        # nn.MultiQueryAttention(E, H) == MultiheadAttention(num_kv_heads=1).
+        lucid.manual_seed(4)
+        a = nn.MultiQueryAttention(32, 4, batch_first=True)
+        lucid.manual_seed(4)
+        b = nn.MultiheadAttention(32, 4, num_kv_heads=1, batch_first=True)
+        assert a.num_kv_heads == 1
+        x = lucid.randn(1, 3, 32)
+        oa, _ = a(x, x, x, need_weights=False)
+        ob, _ = b(x, x, x, need_weights=False)
+        assert float((oa - ob).abs().max().item()) == 0.0
+
 
 class TestPadding:
     def test_circular_pad_1d(self) -> None:

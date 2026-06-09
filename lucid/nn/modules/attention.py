@@ -3,7 +3,7 @@ Multi-head attention module.
 """
 
 import math
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, cast, final, override
 
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
@@ -805,6 +805,8 @@ class MultiheadAttention(Module):
             f"embed_dim={self.embed_dim}, num_heads={self.num_heads}, "
             f"dropout={self.dropout}, batch_first={self.batch_first}"
         )
+        if self.num_kv_heads != self.num_heads:
+            s += f", num_kv_heads={self.num_kv_heads}"
         if self.kdim != self.embed_dim:
             s += f", kdim={self.kdim}"
         if self.vdim != self.embed_dim:
@@ -814,3 +816,129 @@ class MultiheadAttention(Module):
         if self.add_zero_attn:
             s += ", add_zero_attn=True"
         return s
+
+
+@final
+class GroupedQueryAttention(MultiheadAttention):
+    r"""Grouped-query attention — multi-head attention with fewer key/value heads.
+
+    A thin :class:`MultiheadAttention` with ``num_kv_heads`` promoted to a required
+    argument.  The ``num_kv_heads`` key/value heads are each shared by
+    ``num_heads // num_kv_heads`` query heads, which shrinks the key/value
+    projection and — during incremental decoding — the K/V cache (the primary win).
+    This is the attention used by Llama 2/3, Mistral, Qwen, and Gemma.  Exactly
+    equivalent to ``MultiheadAttention(..., num_kv_heads=num_kv_heads)``; refer to
+    that class for the full parameter, shape, and KV-cache semantics.
+
+    Parameters
+    ----------
+    embed_dim : int
+        Total model dimension.
+    num_heads : int
+        Number of query heads.  Must divide ``embed_dim``.
+    num_kv_heads : int
+        Number of key/value heads.  Must divide ``num_heads``; ``1`` is multi-query
+        attention (see :class:`MultiQueryAttention`).
+    dropout, bias, add_bias_kv, add_zero_attn, kdim, vdim, batch_first, device, dtype
+        Forwarded to :class:`MultiheadAttention` unchanged.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> gqa = nn.GroupedQueryAttention(embed_dim=512, num_heads=8, num_kv_heads=2,
+    ...                                batch_first=True)
+    >>> x = lucid.randn(1, 10, 512)
+    >>> out, _ = gqa(x, x, x, need_weights=False)
+    >>> out.shape
+    (1, 10, 512)
+    """
+
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        num_kv_heads: int,
+        dropout: float = 0.0,
+        bias: bool = True,
+        add_bias_kv: bool = False,
+        add_zero_attn: bool = False,
+        kdim: int | None = None,
+        vdim: int | None = None,
+        batch_first: bool = False,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        """Initialise grouped-query attention; see the class docstring."""
+        super().__init__(
+            embed_dim,
+            num_heads,
+            dropout=dropout,
+            bias=bias,
+            add_bias_kv=add_bias_kv,
+            add_zero_attn=add_zero_attn,
+            kdim=kdim,
+            vdim=vdim,
+            num_kv_heads=num_kv_heads,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
+        )
+
+
+@final
+class MultiQueryAttention(MultiheadAttention):
+    r"""Multi-query attention — multi-head attention with a single key/value head.
+
+    A thin :class:`MultiheadAttention` that fixes ``num_kv_heads = 1``: all
+    ``num_heads`` query heads share one key/value head, the extreme of grouped-query
+    attention (Shazeer 2019).  Minimises the key/value projection and the K/V cache
+    at some quality cost vs GQA.  Exactly equivalent to
+    ``MultiheadAttention(..., num_kv_heads=1)``; refer to that class for the full
+    parameter, shape, and KV-cache semantics.
+
+    Parameters
+    ----------
+    embed_dim : int
+        Total model dimension.
+    num_heads : int
+        Number of query heads.  Must divide ``embed_dim``.
+    dropout, bias, add_bias_kv, add_zero_attn, kdim, vdim, batch_first, device, dtype
+        Forwarded to :class:`MultiheadAttention` unchanged.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> mqa = nn.MultiQueryAttention(embed_dim=512, num_heads=8, batch_first=True)
+    >>> mqa.num_kv_heads
+    1
+    """
+
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        dropout: float = 0.0,
+        bias: bool = True,
+        add_bias_kv: bool = False,
+        add_zero_attn: bool = False,
+        kdim: int | None = None,
+        vdim: int | None = None,
+        batch_first: bool = False,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        """Initialise multi-query attention (``num_kv_heads = 1``)."""
+        super().__init__(
+            embed_dim,
+            num_heads,
+            dropout=dropout,
+            bias=bias,
+            add_bias_kv=add_bias_kv,
+            add_zero_attn=add_zero_attn,
+            kdim=kdim,
+            vdim=vdim,
+            num_kv_heads=1,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
+        )
