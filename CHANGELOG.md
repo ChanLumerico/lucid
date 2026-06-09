@@ -108,6 +108,7 @@ cross-attention attended to pad positions. Both masks are now passed through.
 
 - attend over filled prefix, not full StaticCache buffer
 - compiled decode power-of-two read-window bucket ladder
+- narrow seq2seq compiled self-attention to read-window buckets
 
 ---
 

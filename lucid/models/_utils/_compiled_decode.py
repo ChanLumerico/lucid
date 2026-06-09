@@ -224,9 +224,7 @@ class _CompiledStaticDecoder:
                 self._model, self._num_layers, self._max_cache_len, bucket
             ),
         )
-        result = compiled(
-            token, cache_position, *self._key_cache, *self._value_cache
-        )
+        result = compiled(token, cache_position, *self._key_cache, *self._value_cache)
         logits = result[0]
         # ``copy_`` the updated K/V back into the cache's persistent buffers
         # rather than rebinding to the executable's output tensors.  This keeps
@@ -270,6 +268,10 @@ class _Seq2SeqDecodeWrap(nn.Module):
         Fixed sequence capacity of the self-attention buffers.
     cross_len : int
         Encoder source length (fixed capacity of the cross-attention buffers).
+    self_read_len : int
+        Baked read-window width for the SELF-attention (a power-of-two bucket);
+        the decoder narrows its self-attention q·kᵀ to this many keys.  The
+        cross-attention always reads the full ``cross_len`` (constant source).
     has_memory_mask : bool, keyword-only
         Whether a source padding mask is threaded as an extra positional input.
         Omitted for an unpadded source so cross-attention keeps the fused SDPA
@@ -282,6 +284,7 @@ class _Seq2SeqDecodeWrap(nn.Module):
         num_layers: int,
         self_max_len: int,
         cross_len: int,
+        self_read_len: int,
         *,
         has_memory_mask: bool,
     ) -> None:
@@ -290,6 +293,7 @@ class _Seq2SeqDecodeWrap(nn.Module):
         self.num_layers = int(num_layers)
         self.self_max_len = int(self_max_len)
         self.cross_len = int(cross_len)
+        self.self_read_len = int(self_read_len)
         self.has_memory_mask = has_memory_mask
 
     @override
@@ -308,12 +312,15 @@ class _Seq2SeqDecodeWrap(nn.Module):
         n = self.num_layers
         cache = EncoderDecoderCache(
             StaticCache.from_buffers(
-                list(buffers[:n]), list(buffers[n : 2 * n]), self.self_max_len
+                list(buffers[:n]),
+                list(buffers[n : 2 * n]),
+                self.self_max_len,
+                read_len=self.self_read_len,  # narrow self-attn to the bucket
             ),
             StaticCache.from_buffers(
                 list(buffers[2 * n : 3 * n]),
                 list(buffers[3 * n : 4 * n]),
-                self.cross_len,
+                self.cross_len,  # cross-attn stays full (constant source)
             ),
             is_updated={layer_idx: True for layer_idx in range(n)},
         )
@@ -369,16 +376,21 @@ class _CompiledSeq2SeqDecoder:
             raise TypeError(
                 "compiled seq2seq decode requires StaticCache self/cross caches"
             )
+        self._model = model
         self._num_layers = len(self_cache.key_cache)
         self._self_key = self_cache.key_cache
         self._self_value = self_cache.value_cache
+        self._self_max_len = self_cache.max_cache_len
         # memory + cross buffers + the source mask are constant graph feeds.
         self._memory = memory
         self._memory_mask = memory_mask
         self._cross_key = cross_cache.key_cache
         self._cross_value = cross_cache.value_cache
+        self._cross_len = cross_cache.max_cache_len
         b, h, _, d = self_cache.key_cache[0].shape
-        key: tuple[object, ...] = (
+        # Shape signature shared by every self-attn bucket's executable (the bucket
+        # is appended per step), so each distinct self read-window compiles once.
+        self._sig: tuple[object, ...] = (
             "seq2seq",
             self._num_layers,
             self_cache.max_cache_len,
@@ -390,19 +402,8 @@ class _CompiledSeq2SeqDecoder:
             self_cache.key_cache[0].device.type,
             memory_mask is not None,
         )
-        self._compiled = _cached_compile(
-            model,
-            key,
-            lambda: _Seq2SeqDecodeWrap(
-                model,
-                self._num_layers,
-                self_cache.max_cache_len,
-                cross_cache.max_cache_len,
-                has_memory_mask=memory_mask is not None,
-            ),
-        )
 
-    def step(self, token: Tensor, cache_position: Tensor) -> Tensor:
+    def step(self, token: Tensor, cache_position: Tensor, cur_pos: int) -> Tensor:
         """Run one compiled decode step; return ``(B, 1, vocab)`` logits.
 
         Parameters
@@ -411,11 +412,28 @@ class _CompiledSeq2SeqDecoder:
             ``(B, 1)`` int next-token ids.
         cache_position : Tensor
             ``(1,)`` int64 absolute write position for this step.
+        cur_pos : int
+            The absolute self-attention write index of this step.  The self-attn
+            read window is the power-of-two bucket ``ceil_pow2(cur_pos + 1)``
+            (capped at ``self_max_len``); cross-attention stays full.
         """
+        self_bucket = min(_ceil_pow2(cur_pos + 1), self._self_max_len)
+        compiled = _cached_compile(
+            self._model,
+            (*self._sig, self_bucket),
+            lambda: _Seq2SeqDecodeWrap(
+                self._model,
+                self._num_layers,
+                self._self_max_len,
+                self._cross_len,
+                self_bucket,
+                has_memory_mask=self._memory_mask is not None,
+            ),
+        )
         mask: tuple[Tensor, ...] = (
             (self._memory_mask,) if self._memory_mask is not None else ()
         )
-        result = self._compiled(
+        result = compiled(
             token,
             cache_position,
             self._memory,

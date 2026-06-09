@@ -522,7 +522,7 @@ class TestTransformerSeq2SeqCache:
         decoder = _CompiledSeq2SeqDecoder(m, past, memory, mem_mask)
         for t in range(1, len(toks)):
             lg = decoder.step(
-                lucid.tensor([[toks[t]]]).long(), lucid.tensor([t]).long()
+                lucid.tensor([[toks[t]]]).long(), lucid.tensor([t]).long(), t
             )
             clog.append(lg[:, -1, :])
         assert_close(lucid.stack(clog, dim=1), lucid.stack(elog, dim=1), atol=1e-4)
@@ -536,8 +536,17 @@ class TestTransformerSeq2SeqCache:
         with pytest.raises(ValueError, match="max_position_embeddings"):
             m.generate(src, max_length=40, compile_decode=True)
 
-    def test_single_compile_across_positions(self, device_gpu_only: str) -> None:
-        from lucid.models._utils._compiled_decode import _CompiledSeq2SeqDecoder
+    def test_bucket_ladder_bounded_across_positions(
+        self, device_gpu_only: str
+    ) -> None:
+        # The self-attention read window grows in power-of-two buckets, so a
+        # contiguous decode touches a BOUNDED number of executables
+        # (<= log2(self_max_cache_len)+1), each reused within its bucket — never
+        # an eager fallback.  Positions 1..4 cross buckets {2, 4, 8}.
+        from lucid.models._utils._compiled_decode import (
+            _CompiledSeq2SeqDecoder,
+            _DECODE_CACHE_ATTR,
+        )
         from lucid.utils.cache import EncoderDecoderCache, StaticCache
 
         lucid.manual_seed(0)
@@ -557,9 +566,11 @@ class TestTransformerSeq2SeqCache:
         decoder = _CompiledSeq2SeqDecoder(m, past, memory, mem_mask)
         tok = lucid.tensor([[5]], device=device_gpu_only).long()
         for pos in (1, 2, 3, 4):
-            decoder.step(tok, lucid.tensor([pos], device=device_gpu_only).long())
-        assert len(decoder._compiled._cache) == 1
-        assert len(decoder._compiled._eager_only.snapshot()) == 0
+            decoder.step(tok, lucid.tensor([pos], device=device_gpu_only).long(), pos)
+        cm_cache = getattr(m, _DECODE_CACHE_ATTR)
+        assert 1 <= len(cm_cache) <= 5  # bounded by log2(16)+1
+        for compiled in cm_cache.values():
+            assert len(compiled._eager_only.snapshot()) == 0
 
     def test_decoder_applies_padding_masks(self) -> None:
         # Regression: TransformerDecoder.forward dropped tgt/memory key-padding

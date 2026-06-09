@@ -299,9 +299,9 @@ class TransformerModel(PretrainedModel):
         dev = tgt_ids.device.type
         if cache_position is not None:
             # Static decode: position + causal mask from the runtime
-            # cache_position; the self-attn keys span the full fixed buffer, so
-            # gather row ``cache_position`` of the additive mask and trim to the
-            # buffer width (the zero-filled future tail is masked out).
+            # cache_position; the self-attn keys are narrowed to the read-window
+            # bucket (``_static_self_len``), so gather row ``cache_position`` of the
+            # additive mask and trim to that same width (covers the filled prefix).
             tgt_emb = self._embed(
                 tgt_ids, self.tgt_tok_emb, cache_position=cache_position
             )
@@ -337,16 +337,26 @@ class TransformerModel(PretrainedModel):
 
     @staticmethod
     def _static_self_len(past_key_value: EncoderDecoderCache | None) -> int:
-        """Fixed self-attention buffer width for the compiled static decode."""
+        """Self-attention read-window width for the compiled static decode.
+
+        This is the width the self-attn ``q·kᵀ`` (and so the gathered causal mask
+        trimmed to it) attends over — the power-of-two bucket baked into the
+        decode wrap (``StaticCache.read_len``), NOT the full buffer capacity, so
+        attention covers only the filled prefix.
+        """
         if past_key_value is None:
             raise ValueError("compiled static decode requires a StaticCache")
-        width = past_key_value.self_attention_cache.get_max_cache_shape()
-        if width is None:
+        self_cache = past_key_value.self_attention_cache
+        if not isinstance(self_cache, StaticCache):
             raise ValueError(
                 "compiled static decode requires a StaticCache self-attention "
                 "cache (got an unbounded cache with no max length)"
             )
-        return width
+        return (
+            self_cache.read_len
+            if self_cache.read_len is not None
+            else self_cache.max_cache_len
+        )
 
     @override
     def forward(  # type: ignore[override]
@@ -674,7 +684,9 @@ class TransformerForSeq2SeqLM(PretrainedModel):
             if decoder is None:
                 decoder = _CompiledSeq2SeqDecoder(self, past, memory, attention_mask)
             cache_position = lucid.tensor([cur_pos], device=dev).long()
-            logits = decoder.step(out_tokens[-1].reshape(B, 1), cache_position)
+            logits = decoder.step(
+                out_tokens[-1].reshape(B, 1), cache_position, cur_pos
+            )
             cur_pos += 1
         return lucid.stack(out_tokens, dim=1).long()
 
