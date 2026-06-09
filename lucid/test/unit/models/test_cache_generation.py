@@ -319,8 +319,12 @@ class TestCompiledStaticDecode:
                 )
 
     def test_single_compile_across_positions(self, device_gpu_only: str) -> None:
-        # The payoff property: one executable serves every decode position.
-        from lucid.models._utils._compiled_decode import _CompiledStaticDecoder
+        # The payoff property: positions sharing a read-window bucket reuse ONE
+        # executable.  Positions 4..7 all map to ceil_pow2(pos+1) == 8.
+        from lucid.models._utils._compiled_decode import (
+            _CompiledStaticDecoder,
+            _DECODE_CACHE_ATTR,
+        )
         from lucid.utils.cache import StaticCache
 
         lucid.manual_seed(0)
@@ -332,10 +336,46 @@ class TestCompiledStaticDecode:
         tok = lucid.tensor([[5]], device=device_gpu_only).long()
         for pos in (4, 5, 6, 7):
             cp = lucid.tensor([pos], device=device_gpu_only).long()
-            decoder.step(tok, cp)
-        # All four positions reused a single compiled signature (no recompile).
-        assert len(decoder._compiled._cache) == 1
-        assert len(decoder._compiled._eager_only.snapshot()) == 0
+            decoder.step(tok, cp, pos)
+        cm_cache = getattr(m, _DECODE_CACHE_ATTR)
+        assert len(cm_cache) == 1  # single bucket (8) → single executable
+        compiled = next(iter(cm_cache.values()))
+        assert len(compiled._cache) == 1
+        assert len(compiled._eager_only.snapshot()) == 0
+
+    def test_bucket_ladder_bounded_and_token_identical(
+        self, device_gpu_only: str
+    ) -> None:
+        # Crossing a bucket boundary (8 → 16) compiles a second executable but the
+        # count stays bounded (<= log2(max_cache_len)+1), and the decoded tokens
+        # are bit-identical to the eager StaticCache path across the boundary.
+        from lucid.models._utils._compiled_decode import _DECODE_CACHE_ATTR
+
+        lucid.manual_seed(0)
+        m = _gpt2().to(device_gpu_only)
+        prompt = lucid.tensor([[3, 7, 1, 9, 2, 4]], device=device_gpu_only).long()
+        # decode 8 tokens: fill goes 6→14, crossing the 8→16 bucket boundary.
+        g_compiled = m.generate(
+            prompt,
+            max_new_tokens=8,
+            do_sample=False,
+            use_cache=True,
+            cache_implementation="static",
+            max_cache_len=16,
+            compile_decode=True,
+        )
+        g_eager = m.generate(
+            prompt,
+            max_new_tokens=8,
+            do_sample=False,
+            use_cache=True,
+            cache_implementation="static",
+            max_cache_len=16,
+        )
+        assert_close(g_compiled, g_eager, atol=0.0)
+        cm_cache = getattr(m, _DECODE_CACHE_ATTR)
+        # buckets touched: 8 and 16 → 2 executables; bounded by log2(16)+1 = 5.
+        assert 1 <= len(cm_cache) <= 5
 
 
 class TestTransformerSeq2SeqCache:

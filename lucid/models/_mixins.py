@@ -586,7 +586,9 @@ class CausalLMMixin:
                     if decoder is None:
                         decoder = _CompiledStaticDecoder(model, past_static)
                     cache_position = lucid.tensor([cur_pos], device=dev).long()
-                    logits = decoder.step(out_tokens[-1].reshape(B, 1), cache_position)
+                    logits = decoder.step(
+                        out_tokens[-1].reshape(B, 1), cache_position, cur_pos
+                    )
                     cur_pos += 1
                 return lucid.stack(out_tokens, dim=1).long()
 

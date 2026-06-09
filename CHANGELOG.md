@@ -107,6 +107,7 @@ cross-attention attended to pad positions. Both masks are now passed through.
 ### Performance
 
 - attend over filled prefix, not full StaticCache buffer
+- compiled decode power-of-two read-window bucket ladder
 
 ---
 

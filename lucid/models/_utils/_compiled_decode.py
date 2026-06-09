@@ -95,6 +95,18 @@ def _cached_compile(
     return compiled
 
 
+def _ceil_pow2(n: int) -> int:
+    """Smallest power of two ``>= n`` (for ``n >= 1``).
+
+    Drives the compiled-decode read-window ladder: a decode step that has written
+    ``filled`` positions attends over ``ceil_pow2(filled + 1)`` keys, so the live
+    write index ``filled`` is always inside ``[0, bucket)`` and the executable is
+    reused across every position sharing a bucket (≤ ``log2(max_cache_len) + 1``
+    distinct widths total).  ``n + 1`` (not ``n``) is the caller's responsibility.
+    """
+    return 1 << (n - 1).bit_length() if n > 1 else 1
+
+
 @final
 class _StaticDecodeWrap(nn.Module):
     """Thread a ``StaticCache``'s buffers through a model's single-token forward.
@@ -113,13 +125,21 @@ class _StaticDecodeWrap(nn.Module):
         index).
     max_cache_len : int
         Fixed sequence capacity of every buffer.
+    read_len : int
+        Baked read-window width — the attention narrows its q·kᵀ to this many
+        keys (a power-of-two bucket ``>= filled + 1``).  Baked as a constant so it
+        keys the executable (one compile per bucket); ``max_cache_len`` ⇒ full
+        width (no narrowing).
     """
 
-    def __init__(self, model: nn.Module, num_layers: int, max_cache_len: int) -> None:
+    def __init__(
+        self, model: nn.Module, num_layers: int, max_cache_len: int, read_len: int
+    ) -> None:
         super().__init__()
         self.model = model
         self.num_layers = int(num_layers)
         self.max_cache_len = int(max_cache_len)
+        self.read_len = int(read_len)
 
     @override
     def forward(  # type: ignore[override]  # reason: variadic buffer pass-through; the base Module.forward types *args loosely.
@@ -129,6 +149,7 @@ class _StaticDecodeWrap(nn.Module):
             list(buffers[: self.num_layers]),
             list(buffers[self.num_layers :]),
             self.max_cache_len,
+            read_len=self.read_len,
         )
         out = self.model(
             token,
@@ -160,11 +181,15 @@ class _CompiledStaticDecoder:
     """
 
     def __init__(self, model: nn.Module, past: StaticCache) -> None:
+        self._model = model
         self._num_layers = len(past.key_cache)
         self._key_cache = past.key_cache
         self._value_cache = past.value_cache
+        self._max_cache_len = past.max_cache_len
         b, h, _, d = past.key_cache[0].shape
-        key: tuple[object, ...] = (
+        # Shape signature shared by every bucket's executable (the bucket itself is
+        # appended per step), so each distinct read-window width compiles once.
+        self._sig: tuple[object, ...] = (
             "decoder-only",
             self._num_layers,
             past.max_cache_len,
@@ -174,13 +199,8 @@ class _CompiledStaticDecoder:
             str(past.key_cache[0].dtype),
             past.key_cache[0].device.type,
         )
-        self._compiled = _cached_compile(
-            model,
-            key,
-            lambda: _StaticDecodeWrap(model, self._num_layers, past.max_cache_len),
-        )
 
-    def step(self, token: Tensor, cache_position: Tensor) -> Tensor:
+    def step(self, token: Tensor, cache_position: Tensor, cur_pos: int) -> Tensor:
         """Run one compiled decode step; return ``(B, 1, vocab)`` logits.
 
         Parameters
@@ -190,8 +210,21 @@ class _CompiledStaticDecoder:
         cache_position : Tensor
             ``(1,)`` int64 absolute write position for this step (shared across
             the batch — all rows decode in lockstep).
+        cur_pos : int
+            The absolute write index of this step (== ``cache_position`` value).
+            The read window is the power-of-two bucket ``ceil_pow2(cur_pos + 1)``
+            (capped at ``max_cache_len``), so attention covers the written prefix
+            ``[0, cur_pos]`` and the executable is reused across the bucket.
         """
-        result = self._compiled(
+        bucket = min(_ceil_pow2(cur_pos + 1), self._max_cache_len)
+        compiled = _cached_compile(
+            self._model,
+            (*self._sig, bucket),
+            lambda: _StaticDecodeWrap(
+                self._model, self._num_layers, self._max_cache_len, bucket
+            ),
+        )
+        result = compiled(
             token, cache_position, *self._key_cache, *self._value_cache
         )
         logits = result[0]

@@ -51,9 +51,7 @@ class TestStaticCache:
         assert tuple(fk.shape) == (1, 2, 16, 4)
         # read_len=4 -> returned view narrowed to width 4, holding the 4 written
         # positions (0..3); the stored buffer is still the full 16.
-        nk, nv = cache.update(
-            *_ones(1, 2.0), layer_idx=0, cache_kwargs={"read_len": 4}
-        )
+        nk, nv = cache.update(*_ones(1, 2.0), layer_idx=0, cache_kwargs={"read_len": 4})
         assert tuple(nk.shape) == (1, 2, 4, 4)
         assert tuple(nv.shape) == (1, 2, 4, 4)
         assert tuple(cache.key_cache[0].shape) == (1, 2, 16, 4)  # buffer full
