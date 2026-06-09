@@ -822,25 +822,62 @@ class MultiheadAttention(Module):
 class GroupedQueryAttention(MultiheadAttention):
     r"""Grouped-query attention — multi-head attention with fewer key/value heads.
 
-    A thin :class:`MultiheadAttention` with ``num_kv_heads`` promoted to a required
-    argument.  The ``num_kv_heads`` key/value heads are each shared by
-    ``num_heads // num_kv_heads`` query heads, which shrinks the key/value
-    projection and — during incremental decoding — the K/V cache (the primary win).
-    This is the attention used by Llama 2/3, Mistral, Qwen, and Gemma.  Exactly
-    equivalent to ``MultiheadAttention(..., num_kv_heads=num_kv_heads)``; refer to
-    that class for the full parameter, shape, and KV-cache semantics.
+    A thin :class:`MultiheadAttention` with ``num_kv_heads`` promoted to a
+    **required** argument (the parameter that defines GQA; on the base class it is
+    optional and defaults to ``num_heads``).  The ``num_kv_heads`` key/value heads
+    are split into groups, each shared by ``num_heads // num_kv_heads`` query heads,
+    so the model projects a smaller key/value space and — during incremental
+    decoding — carries a smaller K/V cache.  This is the attention used by Llama 2 /
+    3, Mistral, Qwen, and Gemma.  Exactly equivalent to
+    ``MultiheadAttention(..., num_kv_heads=num_kv_heads)`` (forward, shapes, and the
+    KV-cache contract are inherited verbatim); this subclass only reshapes the
+    constructor for discoverability.
 
     Parameters
     ----------
     embed_dim : int
-        Total model dimension.
+        Total model dimension.  Must be divisible by ``num_heads``.
     num_heads : int
-        Number of query heads.  Must divide ``embed_dim``.
+        Number of query heads.
     num_kv_heads : int
-        Number of key/value heads.  Must divide ``num_heads``; ``1`` is multi-query
-        attention (see :class:`MultiQueryAttention`).
-    dropout, bias, add_bias_kv, add_zero_attn, kdim, vdim, batch_first, device, dtype
-        Forwarded to :class:`MultiheadAttention` unchanged.
+        Number of key/value heads — the defining grouped-query parameter.  Must
+        divide ``num_heads``.  ``1`` is multi-query attention
+        (:class:`MultiQueryAttention`); passing ``num_heads`` degenerates to
+        standard multi-head attention.
+    dropout : float, optional, default=0.0
+        Dropout probability applied to the attention weights.
+    bias : bool, optional, default=True
+        If ``True``, add a learnable bias to the input and output projections.
+    add_bias_kv : bool, optional, default=False
+        If ``True``, prepend a learnable bias row to the keys and values.
+    add_zero_attn : bool, optional, default=False
+        If ``True``, append a zero row to the keys and values so a query can attend
+        to "nothing".
+    kdim : int or None, optional
+        Feature dimension of the key input; defaults to ``embed_dim``.
+    vdim : int or None, optional
+        Feature dimension of the value input; defaults to ``embed_dim``.
+    batch_first : bool, optional, default=False
+        If ``True``, inputs/outputs are ``(batch, seq, feature)``; otherwise
+        ``(seq, batch, feature)``.
+    device : DeviceLike, optional
+        Device on which the parameters are allocated.
+    dtype : DTypeLike, optional
+        Data type of the parameters.
+
+    Notes
+    -----
+    The key/value projections are sized ``(num_kv_heads * head_dim, …)`` instead of
+    ``(embed_dim, …)`` (so ``k_proj_weight`` / ``v_proj_weight`` and the K/V cache
+    are smaller — the cache shrink is the main inference win: less memory bandwidth
+    per decode step).  Just before the scores are formed, each K/V head is repeated
+    ``num_heads // num_kv_heads`` times via
+    :func:`~lucid.nn.functional.repeat_kv` so the head counts match; the output is
+    bit-identical to standard attention with K/V heads tied within each group.
+
+    Reference: Ainslie, Lee-Thorp, de Jong, Zemlyanskiy, Lebrón, and Sanghai,
+    *"GQA: Training Generalized Multi-Query Transformer Models from Multi-Head
+    Checkpoints"*, EMNLP 2023 (arXiv:2305.13245).
 
     Examples
     --------
@@ -851,6 +888,8 @@ class GroupedQueryAttention(MultiheadAttention):
     >>> out, _ = gqa(x, x, x, need_weights=False)
     >>> out.shape
     (1, 10, 512)
+    >>> tuple(gqa.k_proj_weight.shape)   # 2 K/V heads × head_dim 64 = 128
+    (128, 512)
     """
 
     def __init__(
@@ -889,21 +928,51 @@ class GroupedQueryAttention(MultiheadAttention):
 class MultiQueryAttention(MultiheadAttention):
     r"""Multi-query attention — multi-head attention with a single key/value head.
 
-    A thin :class:`MultiheadAttention` that fixes ``num_kv_heads = 1``: all
-    ``num_heads`` query heads share one key/value head, the extreme of grouped-query
-    attention (Shazeer 2019).  Minimises the key/value projection and the K/V cache
-    at some quality cost vs GQA.  Exactly equivalent to
-    ``MultiheadAttention(..., num_kv_heads=1)``; refer to that class for the full
-    parameter, shape, and KV-cache semantics.
+    A thin :class:`MultiheadAttention` that fixes ``num_kv_heads = 1`` (so it takes
+    no ``num_kv_heads`` argument): all ``num_heads`` query heads share one key/value
+    head — the extreme of grouped-query attention.  This minimises the key/value
+    projection and, decisively, the K/V cache (one head's worth of K/V per layer
+    instead of ``num_heads``), trading some quality for the smallest decode-memory
+    footprint.  Exactly equivalent to ``MultiheadAttention(..., num_kv_heads=1)``
+    (forward, shapes, and the KV-cache contract are inherited verbatim); this
+    subclass only reshapes the constructor for discoverability.
 
     Parameters
     ----------
     embed_dim : int
-        Total model dimension.
+        Total model dimension.  Must be divisible by ``num_heads``.
     num_heads : int
-        Number of query heads.  Must divide ``embed_dim``.
-    dropout, bias, add_bias_kv, add_zero_attn, kdim, vdim, batch_first, device, dtype
-        Forwarded to :class:`MultiheadAttention` unchanged.
+        Number of query heads (the single K/V head is shared across all of them).
+    dropout : float, optional, default=0.0
+        Dropout probability applied to the attention weights.
+    bias : bool, optional, default=True
+        If ``True``, add a learnable bias to the input and output projections.
+    add_bias_kv : bool, optional, default=False
+        If ``True``, prepend a learnable bias row to the keys and values.
+    add_zero_attn : bool, optional, default=False
+        If ``True``, append a zero row to the keys and values so a query can attend
+        to "nothing".
+    kdim : int or None, optional
+        Feature dimension of the key input; defaults to ``embed_dim``.
+    vdim : int or None, optional
+        Feature dimension of the value input; defaults to ``embed_dim``.
+    batch_first : bool, optional, default=False
+        If ``True``, inputs/outputs are ``(batch, seq, feature)``; otherwise
+        ``(seq, batch, feature)``.
+    device : DeviceLike, optional
+        Device on which the parameters are allocated.
+    dtype : DTypeLike, optional
+        Data type of the parameters.
+
+    Notes
+    -----
+    The single key/value head is projected once (``k_proj_weight`` /
+    ``v_proj_weight`` of shape ``(head_dim, …)``) and repeated ``num_heads`` times
+    via :func:`~lucid.nn.functional.repeat_kv` before the attention scores, so the
+    output is bit-identical to standard attention whose K/V heads are all tied.
+
+    Reference: Shazeer, *"Fast Transformer Decoding: One Write-Head is All You
+    Need"*, 2019 (arXiv:1911.02150).
 
     Examples
     --------
@@ -911,6 +980,8 @@ class MultiQueryAttention(MultiheadAttention):
     >>> mqa = nn.MultiQueryAttention(embed_dim=512, num_heads=8, batch_first=True)
     >>> mqa.num_kv_heads
     1
+    >>> tuple(mqa.k_proj_weight.shape)   # 1 K/V head × head_dim 64
+    (64, 512)
     """
 
     def __init__(

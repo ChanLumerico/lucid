@@ -123,6 +123,28 @@ def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
     -------
     Tensor
         Shape ``(B, num_kv_heads * n_rep, T, head_dim)``.
+
+    Notes
+    -----
+    Equivalent to ``unsqueeze`` → ``expand`` → ``reshape`` (an
+    ``interleave``-by-group, NOT a tile): the ``num_kv_heads`` heads expand to
+    consecutive blocks, so the output head order is
+    ``[kv0, kv0, …, kv1, kv1, …]`` with ``n_rep`` copies per block.  This matches
+    the contiguous query-head grouping used by GQA models, where query heads
+    ``[g·n_rep, (g+1)·n_rep)`` share key/value head ``g``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> kv = lucid.randn(1, 2, 4, 8)        # (B, num_kv_heads=2, T=4, head_dim=8)
+    >>> out = F.repeat_kv(kv, 3)            # 8 query heads / 2 kv heads
+    >>> out.shape
+    (1, 6, 4, 8)
+    >>> bool((out[:, 0] == kv[:, 0]).all().item())   # heads 0,1,2 ← kv head 0
+    True
+    >>> bool((out[:, 3] == kv[:, 1]).all().item())   # heads 3,4,5 ← kv head 1
+    True
     """
     if n_rep == 1:
         return hidden_states
