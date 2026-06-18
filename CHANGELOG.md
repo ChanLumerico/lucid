@@ -28,16 +28,28 @@ a full-shape scalar pinned the trace-time batch and aborted MPSGraph. With this
 plus the view-op fix below, `where`, manual LayerNorm and most hand-written
 arithmetic now compile under symbolic batch.
 
-### Changed — `lucid.compile(..., dynamic=True)`: dynamic batch sizes, never crashes
+### Changed — `lucid.compile(..., dynamic=True)`: symbolic batch by default, never crashes
 
-`dynamic=True` previously raised `NotImplementedError` unless an env var was set.
-It now **declares varying batch sizes** and is always safe:
+`dynamic=True` previously raised `NotImplementedError` (later: required an env
+opt-in for the symbolic path). It now **attempts a single symbolic-batch
+executable shared across all batch sizes by default**, guarded by a per-model
+safety gate decided on the first trace:
 
-- **Default** — robust *per-shape static caching*: one executable per distinct
-  input shape, cached and reused. Works for **every** model, never crashes or
-  raises; the same lever that already handles variable shapes, made explicit.
-- **`LUCID_COMPILE_DYNAMIC=1` (experimental)** — a single *symbolic-batch*
-  executable shared across all batch sizes (one cache entry for every batch).
+- **gate clears the graph** → one symbolic executable, reused for every batch
+  size (no recompile when the batch changes). Transformers, CNNs, MLPs and
+  hand-written arithmetic (`x*0.5`, `where`, manual LayerNorm) all qualify
+  (parity ≤ 7e-7 across batch sizes).
+- **gate rejects it** — the graph bakes the batch into a constant MPSGraph can't
+  infer (explicit broadcast / `expand` / `repeat`, a `concat`/`stack` on the
+  batch axis, or a batch-shaped factory like `zeros_like(x)` / an RNN's zero
+  hidden init) — or the symbolic lowering otherwise fails (off-dim-0 view) →
+  robust **per-shape static caching**. Correct, never crashes — just recompiles
+  per distinct shape.
+
+So `dynamic=True` never crashes or silently mis-shapes a real model: it shares
+one executable where provably safe and falls back to per-shape static otherwise.
+`LUCID_COMPILE_DYNAMIC=0` forces pure static (no symbolic attempt). The compiled
+training step (`make_step`) stays per-shape static.
 
 The same applies to `make_step(..., dynamic=True)`, which is always per-shape
 static (the backward graph of common reductions aborts under a symbolic batch).

@@ -234,6 +234,7 @@ class CompiledModule[**P, R]:
     _model: Module
     _dynamic: bool
     _symbolic: bool
+    _symbolic_resolved: bool | None
     _cache: dict[CacheKey, _CacheEntry]
     _eager_only: EagerFallbackSet
     _call_counter: dict[CacheKey, int]
@@ -381,19 +382,22 @@ class CompiledModule[**P, R]:
         # parameters / state_dict double-count).
         import os as _os
 
-        # Symbolic batch axis (one shared executable) is gated behind an
-        # explicit env opt-in because it aborts uncatchably on any graph that
-        # materialises a constant with the symbolic dim (scalar arithmetic /
-        # reshape / reduce / conv / attention — see [[perf-dynamic-batch-2026-05-25]]).
-        # Without the opt-in, dynamic=True is robust per-shape static caching.
-        _symbolic = bool(dynamic) and _os.environ.get("LUCID_COMPILE_DYNAMIC", "0") in (
-            "1",
-            "true",
-            "True",
-        )
+        # ``dynamic=True`` ATTEMPTS the symbolic batch axis (one shared
+        # executable).  Safety is enforced on the first trace by a gate
+        # (``graph_symbolic_safe``): graphs that bake the batch into a constant
+        # MPSGraph can't infer — broadcast / batch-axis join / batch-shaped
+        # factory — fall back to robust per-shape static caching instead.  So
+        # the attempt never crashes a real model; it just shares one executable
+        # where provably safe and recompiles per shape otherwise.  Escape hatch:
+        # ``LUCID_COMPILE_DYNAMIC=0`` forces pure static (no symbolic attempt).
+        _symbolic = bool(dynamic) and _os.environ.get("LUCID_COMPILE_DYNAMIC", "1") != "0"
         object.__setattr__(self, "_model", model)
         object.__setattr__(self, "_dynamic", bool(dynamic))  # requested (intent / repr)
-        object.__setattr__(self, "_symbolic", _symbolic)  # effective (drives compile)
+        object.__setattr__(self, "_symbolic", _symbolic)  # attempt symbolic?
+        # Resolved on the first trace by the gate + actual lowering: ``True`` →
+        # keep the symbolic executable, ``False`` → per-shape static.  ``None``
+        # until then (and forever for non-dynamic modules).
+        object.__setattr__(self, "_symbolic_resolved", None)
         object.__setattr__(self, "_cache", {})
         object.__setattr__(self, "_eager_only", EagerFallbackSet())
         object.__setattr__(self, "_call_counter", {})
@@ -799,14 +803,20 @@ class CompiledModule[**P, R]:
 
                 fp = _param_fingerprint(self._model)
                 object.__setattr__(self, "_param_fp_cache", fp)
-            # ``_symbolic`` wildcards the batch axis (one shared executable);
-            # it is only ever True under the experimental env opt-in.  The safe
-            # default keys on the concrete shape → per-shape static caching.
+            # A symbolic (shared) executable wildcards the batch axis; static
+            # keys on the concrete shape.  ``_symbolic_resolved`` is the
+            # per-instance decision (None until the first trace → tentatively
+            # ``_symbolic``).
+            eff = (
+                self._symbolic
+                if self._symbolic_resolved is None
+                else self._symbolic_resolved
+            )
             key = signature_of(
                 self._model,
                 args,
                 kwargs,
-                dynamic=self._symbolic,
+                dynamic=eff,
                 param_fingerprint=fp,
             )
         except TypeError, AttributeError:
@@ -820,6 +830,18 @@ class CompiledModule[**P, R]:
         entry = self._cache.get(key)
         if entry is None:
             entry = self._compile_for(key, args, kwargs)
+            # The first trace may have downgraded symbolic → static (gate
+            # rejected the graph, or the symbolic lowering failed): the
+            # wildcarded key above is then wrong, so re-key on the resolved
+            # decision before caching.
+            if self._symbolic_resolved is not None and self._symbolic_resolved != eff:
+                key = signature_of(
+                    self._model,
+                    args,
+                    kwargs,
+                    dynamic=self._symbolic_resolved,
+                    param_fingerprint=fp,
+                )
             if entry is None:
                 # Compile aborted — remember this signature is
                 # eager-only and route to eager.
@@ -829,6 +851,60 @@ class CompiledModule[**P, R]:
         return self._run(entry, args, kwargs)
 
     # ── Internals ────────────────────────────────────────────────
+
+    def _want_symbolic(self, graph: object, args: tuple[object, ...]) -> bool:
+        """Whether to attempt a symbolic-batch lowering for this traced graph.
+
+        Returns the cached ``_symbolic_resolved`` once resolved; on the first
+        trace, ``True`` only if ``dynamic=True`` was requested AND the safety
+        gate (:func:`graph_symbolic_safe`) clears the graph of batch-baking ops
+        (broadcast / batch-axis join / batch-shaped factory).  Otherwise the
+        compile uses per-shape static caching.
+        """
+        if self._symbolic_resolved is not None:
+            return bool(self._symbolic_resolved)
+        if not self._symbolic:
+            return False
+        from lucid._tensor.tensor import Tensor
+        from lucid.compile._core.symbolic_gate import graph_symbolic_safe
+
+        first = args[0] if args else None
+        if not isinstance(first, Tensor) or not first.shape:
+            return False
+        return graph_symbolic_safe(graph, int(first.shape[0]))
+
+    def _emit(
+        self,
+        graph: object,
+        ext: dict[int, object],
+        use_dynamic: bool,
+        explicit_outputs: list[int],
+    ) -> _ExecutableLike | None:
+        """Lower ``graph`` to an executable (symbolic or static).
+
+        For the symbolic path, the model's parameters are flagged so the builder
+        keeps their first dim static (only the per-call feeds get the symbolic
+        leading axis).  Returns the executable, or ``None`` on a graceful
+        lowering failure (unsupported op / off-dim-0 view / backend rejection),
+        which the caller turns into a static retry or eager fallback.
+        """
+        from lucid._dispatch import _unwrap
+
+        param_ids: list[int] = []
+        if use_dynamic:
+            p_impls = [_unwrap(p) for p in self._model.parameters()]
+            id_to_tid = {id(impl): tid for tid, impl in ext.items()}
+            for p_impl in p_impls:
+                tid = id_to_tid.get(id(p_impl))
+                if tid is not None:
+                    param_ids.append(tid)
+        try:
+            exe = _C_engine.compile.compile_or_cached(
+                graph, ext, use_dynamic, param_ids, explicit_outputs
+            )
+        except RuntimeError:
+            return None
+        return cast(_ExecutableLike, exe) if exe is not None else None
 
     def _compile_for(
         self,
@@ -907,27 +983,23 @@ class CompiledModule[**P, R]:
         # arbitrary scalars / strings / Nones via the "scalar" leaf.
         return_spec, explicit_outputs = _extract_return_impls(return_value, tracer)
 
-        # Phase 1.6 dynamic-batch path: tell the builder which feeds
-        # are model parameters (so their first dim stays static) and
-        # bypass the C++ session cache (the Python cache here holds
-        # the dynamic-aware key).
-        param_ids: list[int] = []
-        if self._symbolic:
-            p_impls = [_unwrap(p) for p in self._model.parameters()]
-            id_to_tid = {id(impl): tid for tid, impl in ext.items()}
-            for p_impl in p_impls:
-                tid = id_to_tid.get(id(p_impl))
-                if tid is not None:
-                    param_ids.append(tid)
-
-        try:
-            exe = _C_engine.compile.compile_or_cached(
-                graph, ext, self._symbolic, param_ids, explicit_outputs
-            )
-        except RuntimeError:
-            return None
+        # ── Symbolic-batch resolution (per-instance, decided on first trace) ──
+        # ``dynamic=True`` ATTEMPTS symbolic, but only for graphs the gate proves
+        # safe (``_want_symbolic``).  A graph that passes the gate yet still can't
+        # lower symbolically — e.g. an off-dim-0 view, which the emitter rejects
+        # so ``compile_or_cached`` returns None — falls back to per-shape static.
+        # The decision is cached in ``_symbolic_resolved`` so later input shapes
+        # key consistently (the model's symbolic-safety is graph-structural, the
+        # same across batch sizes).
+        use_dynamic = self._want_symbolic(graph, args)
+        exe = self._emit(graph, ext, use_dynamic, explicit_outputs)
+        if exe is None and use_dynamic:
+            use_dynamic = False  # symbolic lowering failed → per-shape static
+            exe = self._emit(graph, ext, False, explicit_outputs)
         if exe is None:
             return None
+        if self._symbolic and self._symbolic_resolved is None:
+            object.__setattr__(self, "_symbolic_resolved", use_dynamic)
 
         # Figure out, for each feed in exe.input_ids, whether it comes
         # from a positional arg (Tensor in ``args``) or from a pinned
