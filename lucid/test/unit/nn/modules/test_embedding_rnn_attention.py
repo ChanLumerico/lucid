@@ -119,7 +119,15 @@ class TestGroupedQueryAttention:
         gqa = nn.MultiheadAttention(64, 8, num_kv_heads=2, batch_first=True)
         cache = DynamicCache()
         x = lucid.randn(2, 1, 64)
-        gqa(x, x, x, use_cache=True, past_key_value=cache, layer_idx=0, need_weights=False)
+        gqa(
+            x,
+            x,
+            x,
+            use_cache=True,
+            past_key_value=cache,
+            layer_idx=0,
+            need_weights=False,
+        )
         # (B, num_kv_heads=2, T, head_dim=8) — NOT (B, 8, ...)
         assert tuple(cache.key_cache[0].shape) == (2, 2, 1, 8)
 

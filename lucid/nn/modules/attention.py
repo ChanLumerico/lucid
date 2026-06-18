@@ -309,7 +309,9 @@ class MultiheadAttention(Module):
         # ``num_heads`` key/value heads (``None`` → standard MHA = num_heads).
         # Each K/V head is shared by ``num_heads // num_kv_heads`` query heads,
         # shrinking the K/V projection and the K/V cache.
-        self.num_kv_heads: int = num_heads if num_kv_heads is None else int(num_kv_heads)
+        self.num_kv_heads: int = (
+            num_heads if num_kv_heads is None else int(num_kv_heads)
+        )
         if num_heads % self.num_kv_heads != 0:
             raise ValueError(
                 f"num_heads ({num_heads}) must be divisible by num_kv_heads "
