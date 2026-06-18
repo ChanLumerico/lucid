@@ -33,14 +33,17 @@
 #include <string>
 #include <vector>
 
+#include "../../core/Dtype.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../bfunc/Matmul.h"
 #include "../bfunc/Mul.h"
 #include "../ufunc/Reductions.h"
 #include "../ufunc/Transpose.h"
+#include "../utils/Contiguous.h"
 #include "../utils/Layout.h"
 #include "../utils/View.h"
 #include "Einops.h"
@@ -346,6 +349,113 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
         // Drop loner axes from both sides before the broadcast.
         cur = drop_loners(cur, cur_labels, right_set);
         auto right_pre = drop_loners(right, right_labels, cur_set);
+
+        // ── Fast path: a pairwise step with at least one shared *contracted*
+        // label IS a (batched) matrix multiply.  Routing it through matmul_op
+        // avoids materialising the rank-(keep+contract) broadcast product the
+        // mul+sum path would build — e.g. "bik,bkj->bij" otherwise allocates a
+        // [b,i,j,k] intermediate before summing k — and lets the compiled graph
+        // emit a single MPSGraph GEMM instead of broadcast+mul+reduce.  Only
+        // floating dtypes take this path: BLAS/MPSGraph GEMM is float-only, and
+        // matmul reorders the reduction (fp results agree with mul+sum to ~1e-6,
+        // not bit-for-bit), so integer / bool einsum stays on the exact path.
+        if (is_floating_point(cur->dtype())) {
+            std::set<std::string> cl(cur_labels.begin(), cur_labels.end());
+            std::set<std::string> rl(right_labels.begin(), right_labels.end());
+            // batch = shared & kept ; contr = shared & summed ;
+            // lonly = cur-only (kept) ; ronly = right-only (kept).
+            std::vector<std::string> batch, lonly, ronly, contr;
+            for (const auto& c : cl) {
+                if (rl.count(c)) {
+                    if (future_labels.count(c))
+                        batch.push_back(c);
+                    else
+                        contr.push_back(c);
+                } else {
+                    lonly.push_back(c);  // loners already dropped → must be kept
+                }
+            }
+            for (const auto& c : rl)
+                if (!cl.count(c))
+                    ronly.push_back(c);
+            std::sort(batch.begin(), batch.end());
+            std::sort(lonly.begin(), lonly.end());
+            std::sort(ronly.begin(), ronly.end());
+            std::sort(contr.begin(), contr.end());
+
+            if (!contr.empty()) {
+                // Permute an operand whose axes are `src` (label order) into the
+                // target label order `dst`; identity perms are skipped.
+                auto permute_to = [](const TensorImplPtr& t, const std::vector<std::string>& src,
+                                     const std::vector<std::string>& dst) {
+                    std::vector<int> perm(dst.size());
+                    for (std::size_t i = 0; i < dst.size(); ++i) {
+                        auto it = std::find(src.begin(), src.end(), dst[i]);
+                        perm[i] = static_cast<int>(it - src.begin());
+                    }
+                    bool identity = true;
+                    for (std::size_t i = 0; i < perm.size(); ++i)
+                        if (perm[i] != static_cast<int>(i)) {
+                            identity = false;
+                            break;
+                        }
+                    return identity ? t : permute_op(t, perm);
+                };
+                // left → [batch, lonly, contr] ; right → [batch, contr, ronly].
+                std::vector<std::string> ldst = batch;
+                ldst.insert(ldst.end(), lonly.begin(), lonly.end());
+                ldst.insert(ldst.end(), contr.begin(), contr.end());
+                std::vector<std::string> rdst = batch;
+                rdst.insert(rdst.end(), contr.begin(), contr.end());
+                rdst.insert(rdst.end(), ronly.begin(), ronly.end());
+
+                auto lhs_t = permute_to(cur, cur_labels, ldst);
+                auto rhs_t = permute_to(right_pre, right_labels, rdst);
+
+                auto group_prod = [&](const std::vector<std::string>& g) {
+                    std::int64_t p = 1;
+                    for (const auto& c : g)
+                        p *= sizes.at(c);
+                    return p;
+                };
+                const std::int64_t in = group_prod(lonly);
+                const std::int64_t kn = group_prod(contr);
+                const std::int64_t nn = group_prod(ronly);
+
+                // Collapse each label group to one axis: matmul over the
+                // trailing (M,K)·(K,N) with the batch labels as leading dims
+                // (matmul_op batches over any leading rank).  reshape needs a
+                // contiguous source, so materialise the permuted views first.
+                Shape lshape, rshape;
+                for (const auto& c : batch) {
+                    lshape.push_back(sizes.at(c));
+                    rshape.push_back(sizes.at(c));
+                }
+                lshape.push_back(in);
+                lshape.push_back(kn);
+                rshape.push_back(kn);
+                rshape.push_back(nn);
+                lhs_t = reshape_op(contiguous_op(lhs_t), lshape);
+                rhs_t = reshape_op(contiguous_op(rhs_t), rshape);
+
+                auto prod = matmul_op(lhs_t, rhs_t);  // [batch..., in, nn]
+
+                // Expand the collapsed (M,N) axes back to their label groups.
+                Shape oshape;
+                for (const auto& c : batch)
+                    oshape.push_back(sizes.at(c));
+                for (const auto& c : lonly)
+                    oshape.push_back(sizes.at(c));
+                for (const auto& c : ronly)
+                    oshape.push_back(sizes.at(c));
+                cur = reshape_op(contiguous_op(prod), oshape);
+
+                cur_labels = batch;
+                cur_labels.insert(cur_labels.end(), lonly.begin(), lonly.end());
+                cur_labels.insert(cur_labels.end(), ronly.begin(), ronly.end());
+                continue;  // pairwise step complete — skip the mul+sum path
+            }
+        }
 
         // Align both tensors to the common [keep, contract] axis order via
         // unsqueeze + permute + broadcast, then multiply pointwise.
