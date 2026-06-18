@@ -45,9 +45,8 @@ struct BroadcastedPair {
 // the eager-only :func:`broadcast_to_op`.  Compile traces on GPU only, so the
 // CPU branch never runs under a tracer.
 inline BroadcastedPair broadcast_pair(const TensorImplPtr& a, const TensorImplPtr& b) {
-    Shape out_shape = (a->shape() == b->shape())
-                          ? a->shape()
-                          : detail::broadcast_shapes(a->shape(), b->shape());
+    Shape out_shape =
+        (a->shape() == b->shape()) ? a->shape() : detail::broadcast_shapes(a->shape(), b->shape());
     TensorImplPtr aa = a;
     TensorImplPtr bb = b;
     if (a->device() == Device::CPU) {

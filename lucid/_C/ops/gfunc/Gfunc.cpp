@@ -511,9 +511,8 @@ TensorImplPtr scatter_set_op(const TensorImplPtr& base,
             //             scatter_set(grad_out, indices, zeros-shaped-like-src).
             auto zeros_src = zeros_op(src_shape_, dtype_, device_, false);
             auto& be = backend::Dispatcher::for_device(device_);
-            Storage grad_base = be.scatter_set(g, saved_indices_->storage(),
-                                               zeros_src->storage(), base_shape_, idx_shape_,
-                                               dim_, dtype_);
+            Storage grad_base = be.scatter_set(g, saved_indices_->storage(), zeros_src->storage(),
+                                               base_shape_, idx_shape_, dim_, dtype_);
             return {std::move(grad_base), grad_src_impl->storage()};
         }
     };

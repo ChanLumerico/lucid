@@ -98,8 +98,7 @@ inline bool bool_attr(const OpNode& node, const char* key, bool def) {
 // ever symbolised (MpsBuilder), so this is the precise dynamic-batch predicate
 // — checking dim 0 specifically, NOT "any dim is -1".
 [[maybe_unused]] inline bool symbolic_batch_at_dim0(MPSGraphTensor* t) {
-    return t != nil && t.shape != nil && t.shape.count > 0 &&
-           t.shape[0].longLongValue < 0;
+    return t != nil && t.shape != nil && t.shape.count > 0 && t.shape[0].longLongValue < 0;
 }
 
 // Product of all dims EXCEPT the leading one (the "non-batch" numel).
@@ -137,8 +136,10 @@ inline bool bool_attr(const OpNode& node, const char* key, bool def) {
 //
 // Static (non-dynamic) compiles are unaffected — ``symbolic_batch_at_dim0`` is
 // false, so ``out_shape`` is used verbatim, identical to the prior behaviour.
-[[maybe_unused]] inline MPSGraphTensor* reshape_dynamic_aware(
-    MPSGraph* graph, MPSGraphTensor* x_t, const Shape& out_shape, NSString* name) {
+[[maybe_unused]] inline MPSGraphTensor* reshape_dynamic_aware(MPSGraph* graph,
+                                                              MPSGraphTensor* x_t,
+                                                              const Shape& out_shape,
+                                                              NSString* name) {
     NSMutableArray<NSNumber*>* tgt = [NSMutableArray arrayWithCapacity:out_shape.size()];
     for (std::int64_t d : out_shape)
         [tgt addObject:[NSNumber numberWithLongLong:d]];

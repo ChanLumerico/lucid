@@ -36,8 +36,8 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     auto bc = broadcast_pair(a, b);
     OpScopeFull scope{"floordiv", device, dt, bc.shape};
 
-    auto out_storage =
-        backend::Dispatcher::for_device(device).floordiv(bc.a->storage(), bc.b->storage(), bc.shape, dt);
+    auto out_storage = backend::Dispatcher::for_device(device).floordiv(
+        bc.a->storage(), bc.b->storage(), bc.shape, dt);
     // The output is always I64 regardless of the input dtype so that the result
     // type is consistent with Python's // operator semantics.
     return fresh(std::move(out_storage), bc.shape, Dtype::I64, device);
