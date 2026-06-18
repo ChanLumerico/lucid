@@ -9,15 +9,18 @@
 
 #include <cmath>
 
+#include "../../core/Dtype.h"
 #include "../../core/TensorImpl.h"
 #include "../bfunc/Add.h"
 #include "../bfunc/Compare.h"
 #include "../bfunc/Div.h"
+#include "../bfunc/Floordiv.h"
 #include "../bfunc/Maximum.h"
 #include "../bfunc/Mul.h"
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
 #include "../ufunc/Arith.h"
+#include "../ufunc/Astype.h"
 #include "../ufunc/Discrete.h"
 #include "../ufunc/Exponential.h"
 #include "../ufunc/Trig.h"
@@ -114,6 +117,19 @@ TensorImplPtr fmod_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 // ``remainder(a, b) = a − floor(a / b) · b``.  Python-style modulo: result
 // has the sign of ``b`` because ``floor`` rounds toward −∞.
 TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    if (!is_floating_point(a->dtype()) && !is_floating_point(b->dtype())) {
+        // Integer division truncates toward zero, so ``floor_op(div_op(...))``
+        // collapses to fmod (the sign of ``a``) instead of the floored modulo.
+        // Route through the integer-correct floored-division primitive so the
+        // remainder keeps the sign of ``b`` (and ``(a // b) * b + r == a``).  Do
+        // the arithmetic entirely in I64 (floordiv already yields I64; mul/sub
+        // require matching operand dtypes), then cast back to preserve the
+        // caller's integer dtype.
+        const auto a64 = astype_op(a, Dtype::I64);
+        const auto b64 = astype_op(b, Dtype::I64);
+        const auto k = floordiv_op(a64, b64);
+        return astype_op(sub_op(a64, mul_op(k, b64)), a->dtype());
+    }
     auto q = div_op(a, b);
     auto k = floor_op(q);
     return sub_op(a, mul_op(k, b));

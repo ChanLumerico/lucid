@@ -3417,23 +3417,32 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         std::memset(ptr.get(), 0, nb);
 
+        // Degenerate dims (M / N / K == 0): the zeroed (or empty) output is
+        // already the correct result — a K=0 contraction sums over nothing → 0 —
+        // and cblas_*gemm asserts on these ("lda must be >= MAX(K,1)" for K=0),
+        // so skip the BLAS call entirely.
+        const bool run_gemm = M > 0 && N > 0 && K > 0;
         if (dt == Dtype::F32) {
             const float* ap = reinterpret_cast<const float*>(ca.ptr.get());
             const float* bp = reinterpret_cast<const float*>(cb.ptr.get());
             float* cp = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t bi = 0; bi < batch; ++bi) {
-                cpu::sgemm(opts.transA, opts.transB, M, N, K, 1.0f, ap + bi * M * K,
-                           opts.transA ? M : K, bp + bi * K * N, opts.transB ? K : N, 0.0f,
-                           cp + bi * M * N, N);
+            if (run_gemm) {
+                for (std::size_t bi = 0; bi < batch; ++bi) {
+                    cpu::sgemm(opts.transA, opts.transB, M, N, K, 1.0f, ap + bi * M * K,
+                               opts.transA ? M : K, bp + bi * K * N, opts.transB ? K : N, 0.0f,
+                               cp + bi * M * N, N);
+                }
             }
         } else if (dt == Dtype::F64) {
             const double* ap = reinterpret_cast<const double*>(ca.ptr.get());
             const double* bp = reinterpret_cast<const double*>(cb.ptr.get());
             double* cp = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t bi = 0; bi < batch; ++bi) {
-                cpu::dgemm(opts.transA, opts.transB, M, N, K, 1.0, ap + bi * M * K,
-                           opts.transA ? M : K, bp + bi * K * N, opts.transB ? K : N, 0.0,
-                           cp + bi * M * N, N);
+            if (run_gemm) {
+                for (std::size_t bi = 0; bi < batch; ++bi) {
+                    cpu::dgemm(opts.transA, opts.transB, M, N, K, 1.0, ap + bi * M * K,
+                               opts.transA ? M : K, bp + bi * K * N, opts.transB ? K : N, 0.0,
+                               cp + bi * M * N, N);
+                }
             }
         } else {
             ErrorBuilder("cpu_backend::matmul").not_implemented("dtype not supported");

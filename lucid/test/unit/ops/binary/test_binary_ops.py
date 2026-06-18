@@ -126,6 +126,39 @@ class TestMatmul:
         out = lucid.bmm(a, b).numpy()
         assert out.shape == (2, 2, 2)
 
+    def test_empty_output_realize_no_crash(self, device: str) -> None:
+        # Realizing an empty-output matmul (.numpy() / repr) used to SIGSEGV on
+        # Metal — the download path ran contiguous()+eval() before the numel==0
+        # short-circuit. Must produce a correctly-shaped empty array, not crash.
+        a = lucid.zeros(0, 4, device=device)
+        b = lucid.zeros(4, 3, device=device)
+        out = (a @ b).numpy()
+        assert out.shape == (0, 3)
+        # empty inner dim too
+        c = (lucid.zeros(2, 0, device=device) @ lucid.zeros(0, 3, device=device)).numpy()
+        assert c.shape == (2, 3)
+
+
+class TestIntegerRemainder:
+    """`remainder` is the floored modulo (sign of the divisor) for integers too."""
+
+    def test_floored_sign_and_invariant(self, device: str) -> None:
+        a = lucid.tensor([-7, 7, -7, 7], dtype=lucid.int32, device=device)
+        b = lucid.tensor([3, -3, -3, 3], dtype=lucid.int32, device=device)
+        r = lucid.remainder(a, b)
+        # floored modulo follows the sign of b (vs fmod which follows a).
+        np.testing.assert_array_equal(r.numpy(), [2, -2, -1, 1])
+        assert r.dtype == lucid.int32  # input dtype preserved
+        # invariant: (a // b) * b + remainder == a
+        np.testing.assert_array_equal(
+            ((a // b) * b + r).numpy(), a.numpy()
+        )
+
+    def test_float_unchanged(self, device: str) -> None:
+        a = lucid.tensor([-7.0, 7.0], device=device)
+        b = lucid.tensor([3.0, -3.0], device=device)
+        np.testing.assert_allclose(lucid.remainder(a, b).numpy(), [2.0, -2.0], atol=1e-6)
+
 
 # ── backward sanity ──────────────────────────────────────────────────────
 

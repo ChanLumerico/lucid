@@ -39,6 +39,7 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "Astype.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -46,6 +47,23 @@ namespace lucid {
 namespace {
 
 using ufunc_detail::fresh;
+
+// Promote ``Bool / I8 / I16 / I32`` to ``I64`` before an integer scan, exactly
+// as sum/prod do (see ``promote_int_for_reduce`` in Reductions.cpp).  Without
+// it ``int32.cumsum()`` accumulates in int32 and silently overflows, while
+// ``int32.sum()`` promotes — an inconsistency the reference framework does not
+// have.  Floats / I64 pass through unchanged.
+TensorImplPtr promote_int_for_scan(const TensorImplPtr& a) {
+    switch (a->dtype()) {
+    case Dtype::Bool:
+    case Dtype::I8:
+    case Dtype::I16:
+    case Dtype::I32:
+        return astype_op(a, Dtype::I64);
+    default:
+        return a;
+    }
+}
 
 // Thin wrapper: reverse the storage contents along the given axis.
 Storage reverse_along_axis_storage(
@@ -148,7 +166,8 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
 
 // Dispatch cumsum, then wire CumsumBackward.  The axis is re-normalised here
 // (after scan_dispatch validated it) so that bwd->axis_ is always non-negative.
-TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis) {
+TensorImplPtr cumsum_op(const TensorImplPtr& a_in, int axis) {
+    const auto a = promote_int_for_scan(a_in);  // int8/16/32/bool -> I64 (sum parity)
     auto out = scan_dispatch(a, axis, false, "cumsum");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CumsumBackward>();
@@ -159,7 +178,8 @@ TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis) {
 }
 
 // Dispatch cumprod, then wire CumprodBackward with both input and output saved.
-TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis) {
+TensorImplPtr cumprod_op(const TensorImplPtr& a_in, int axis) {
+    const auto a = promote_int_for_scan(a_in);  // int8/16/32/bool -> I64 (sum parity)
     auto out = scan_dispatch(a, axis, true, "cumprod");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CumprodBackward>();

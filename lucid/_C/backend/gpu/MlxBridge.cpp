@@ -154,6 +154,19 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
         ErrorBuilder("download_gpu_to_cpu").fail("null GPU array");
     }
 
+    // Empty output (e.g. an empty-input/empty-result matmul): nothing to copy.
+    // Short-circuit BEFORE touching MLX — realizing a 0-element array
+    // (``contiguous()`` + ``eval()`` below) SIGSEGVs on Metal, an uncatchable
+    // crash on ``.numpy()`` / repr of such a tensor.  The empty CpuStorage here
+    // is identical to what the post-eval path produced.
+    const std::size_t total = shape_numel(shape) * dtype_size(gpu.dtype);
+    CpuStorage out;
+    out.dtype = gpu.dtype;
+    out.nbytes = total;
+    if (total == 0) {
+        return out;
+    }
+
     // Force shape-major byte layout before reading.  array::data<T>() returns
     // bytes in the buffer's underlying layout and ignores stride metadata, so
     // a lazily-transposed array (e.g. the deferred NHWC→NCHW perm in
@@ -164,15 +177,7 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
     ::mlx::core::array materialised = ::mlx::core::contiguous(*gpu.arr);
     materialised.eval();
 
-    const std::size_t total = shape_numel(shape) * dtype_size(gpu.dtype);
-    CpuStorage out;
-    out.dtype = gpu.dtype;
-    out.nbytes = total;
-    if (total == 0) {
-        return out;
-    }
     out.ptr = allocate_aligned_bytes(total, Device::CPU);
-
     const auto* src = materialised.data<std::uint8_t>();
     std::memcpy(out.ptr.get(), src, total);
     return out;

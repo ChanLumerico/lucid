@@ -15,6 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — degenerate matmul crashes, integer remainder, integer cumsum overflow
+
+A batch of small correctness/stability fixes surfaced by an audit:
+
+- **Degenerate matmul no longer crashes.** Realizing an *empty-output* matmul
+  (e.g. `(0,4) @ (4,3)`) via `.numpy()` / repr SIGSEGV'd on Metal — the GPU
+  download ran `contiguous()` + `eval()` before the `numel == 0` short-circuit;
+  the guard is now hoisted above the MLX ops. A *zero-contraction* matmul
+  (`(2,0) @ (0,3)`, K = 0) crashed the CPU path with a BLAS error
+  (`lda must be >= MAX(K,1)`); the backend now skips `cblas_*gemm` for M/N/K = 0
+  (the zeroed output is already correct).
+- **Integer `remainder` is the floored modulo.** It followed the sign of the
+  dividend (acting like `fmod`) because integer division truncates toward zero —
+  `remainder([-7], [3])` gave `-1` instead of `2`. It now routes through the
+  integer-correct floored division so the result has the sign of the divisor and
+  `(a // b) * b + remainder == a`. Float behaviour is unchanged.
+- **Integer `cumsum` / `cumprod` promote to int64.** They accumulated in the
+  input integer dtype and silently overflowed (`int32` wrapped), while `sum`
+  already promotes — now they match, mirroring `sum`/`prod`.
+
 ### Fixed — GPU optimizer step leaked unbounded memory
 
 `optim.step()` wrote each parameter back as an *unevaluated* MLX array, so on the
