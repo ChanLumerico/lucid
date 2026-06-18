@@ -196,11 +196,11 @@ class _CacheEntry:
 
     exe: object  # _C_engine.compile.PyCompiledExecutable
     external_feeds: dict[int, object]  # TensorId -> TensorImpl
-    # For each ``exe.input_ids[i]`` slot: either an integer index into
-    # ``args`` (the positional input tensor at call time) OR ``None``
-    # meaning "use the pinned external_feeds entry" (parameters,
-    # constants).
-    input_source: tuple[int | None, ...]
+    # For each ``exe.input_ids[i]`` slot: an integer index into ``args``
+    # (a positional input tensor), a ``str`` keyword name into ``kwargs``
+    # (a keyword-passed input tensor), OR ``None`` meaning "use the pinned
+    # external_feeds entry" (parameters, constants).
+    input_source: tuple[int | str | None, ...]
     # Structure descriptor used to re-pack the executable's flat output
     # list back into the shape the user's forward returned.  Each entry
     # is the path (sequence of keys / indices) to insert that output at
@@ -307,11 +307,12 @@ class CompiledModule[**P, R]:
       and its inputs live on the ``metal`` device.  On CPU every call
       silently routes through eager — the cache stays empty and
       ``eager_only`` grows.
-    * **kwargs force eager.**  The current MPSGraph builder is
-      positional-only; any call with non-empty ``kwargs`` falls back
-      to :func:`run_eager` and the signature is blacklisted as
-      ``eager_only`` so subsequent identical-shaped calls skip the
-      recompile attempt.
+    * **kwargs compile too.**  Keyword-passed tensors are traced like
+      positional ones; each executable feed is bound back to either an
+      ``args`` index or a ``kwargs`` name at call time (see
+      ``_CacheEntry.input_source``).  Non-tensor kwargs are baked into
+      the trace structure and captured by the :class:`CacheKey`, so a
+      different scalar kwarg re-keys (and recompiles) correctly.
     * **Dropout in training mode falls back per signature.**  See
       :file:`OpEmitters/nn/Dropout.mm` — the emitter returns nullptr
       when ``training=True and p>0`` to preserve dropout's
@@ -948,13 +949,10 @@ class CompiledModule[**P, R]:
         if self._model.training and model_has_tracking_bn(self._model):
             return None
 
-        if kwargs:
-            # The MPSGraph builder is positional-only.  Compose kwargs
-            # into the call as-is (the trace records them) but the
-            # feed-binding logic below indexes args by integer slot
-            # only.  Fall back to eager when keyword-bound tensor
-            # inputs are present until we add kw-aware feed binding.
-            return None
+        # kwargs are traced as-is (line below) and their tensor values are
+        # recorded as external feeds; the feed-binding step resolves each feed
+        # to an arg index OR a kwarg name (non-tensor kwargs are baked into the
+        # trace structure — captured by the CacheKey — and need no binding).
 
         # Trace under no_grad — kernel hooks fire before the GradMode
         # short-circuit so the captured DAG is identical to the
@@ -1001,15 +999,20 @@ class CompiledModule[**P, R]:
         if self._symbolic and self._symbolic_resolved is None:
             object.__setattr__(self, "_symbolic_resolved", use_dynamic)
 
-        # Figure out, for each feed in exe.input_ids, whether it comes
-        # from a positional arg (Tensor in ``args``) or from a pinned
-        # parameter / constant.  Index by ``TensorImpl is`` identity.
-        positional_impls: dict[int, int] = {}
+        # Figure out, for each feed in exe.input_ids, where it comes from at
+        # call time: a positional arg (int index), a keyword arg (str name), or
+        # a pinned parameter / constant (None).  Index by ``TensorImpl is``
+        # identity.  A tensor passed BOTH positionally and by keyword resolves
+        # to the positional slot (args win — they're checked first).
+        feed_source: dict[int, int | str] = {}
         for i, a in enumerate(args):
             if isinstance(a, Tensor):
-                positional_impls[id(_unwrap(a))] = i
+                feed_source.setdefault(id(_unwrap(a)), i)
+        for name, v in kwargs.items():
+            if isinstance(v, Tensor):
+                feed_source.setdefault(id(_unwrap(v)), name)
 
-        input_source: list[int | None] = []
+        input_source: list[int | str | None] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
             if impl is None:
@@ -1017,8 +1020,7 @@ class CompiledModule[**P, R]:
                 # ids that are in the external_feeds set.  Treat as a
                 # compile failure.
                 return None
-            slot = positional_impls.get(id(impl))
-            input_source.append(slot)
+            input_source.append(feed_source.get(id(impl)))
 
         from lucid.compile._debug.trace_dump import trace_to_json
 
@@ -1061,21 +1063,23 @@ class CompiledModule[**P, R]:
         from lucid._dispatch import _unwrap, _wrap
         from lucid._tensor.tensor import Tensor
 
-        # Build the feed list in exe.input_ids order.
+        # Build the feed list in exe.input_ids order.  ``src`` is an int
+        # (positional arg index), a str (keyword arg name), or None (a pinned
+        # parameter / constant).
         feed_impls: list[object] = []
         exe = cast(_ExecutableLike, entry.exe)
         for tid, src in zip(exe.input_ids, entry.input_source):
             if src is None:
                 # Pinned parameter / constant — use the trace-time impl.
                 feed_impls.append(entry.external_feeds[tid])
-            else:
-                # Fresh input tensor at this call site.
-                arg = args[src]
-                if not isinstance(arg, Tensor):
-                    # User changed the argument type between calls.
-                    # Treat as a compile failure for this call.
-                    return run_eager(self._model, args, kwargs)
-                feed_impls.append(_unwrap(arg))
+                continue
+            # Fresh input tensor at this call site — from args[i] or kwargs[name].
+            arg = args[src] if isinstance(src, int) else kwargs.get(src)
+            if not isinstance(arg, Tensor):
+                # User changed the argument type / dropped a kwarg between
+                # calls.  Treat as a compile failure for this call.
+                return run_eager(self._model, args, kwargs)
+            feed_impls.append(_unwrap(arg))
 
         t0 = time.perf_counter()
         outs = _C_engine.compile.run_executable(entry.exe, feed_impls)
