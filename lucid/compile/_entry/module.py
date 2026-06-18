@@ -233,6 +233,7 @@ class CompiledModule[**P, R]:
     # checkable instead of collapsing to ``object``.
     _model: Module
     _dynamic: bool
+    _symbolic: bool
     _cache: dict[CacheKey, _CacheEntry]
     _eager_only: EagerFallbackSet
     _call_counter: dict[CacheKey, int]
@@ -359,45 +360,40 @@ class CompiledModule[**P, R]:
             The compute unit to compile.  Stored unwrapped so
             attribute access falls through to it.
         dynamic : bool, optional
-            Opt-in to symbolic-batch-axis (Phase 1.6).  Currently
-            forbidden — raises :class:`NotImplementedError` because
-            the MPSGraph SDK rejects dynamic-shape lowering for
-            conv-heavy graphs.  Default ``False``.
-
-        Raises
-        ------
-        NotImplementedError
-            When ``dynamic=True`` is passed.
+            Declare that this module will be called with **varying batch
+            sizes**.  Default ``False``.  Variable batch is always handled by
+            **per-shape static caching** — each distinct input shape compiles its
+            own executable, cached and reused — which works for every model and
+            never recompiles for a shape already seen.  A *single* executable
+            shared across batch sizes (a symbolic batch axis) is **not** offered
+            automatically: Apple's MPSGraph aborts (uncatchably) the moment a
+            graph materialises a constant carrying the symbolic axis — scalar
+            arithmetic (``x * 0.5``), ``reshape`` / ``flatten``, reductions,
+            convolutions and attention all trip it, i.e. essentially every real
+            model.  The narrow class that *is* safe (pure ``linear`` /
+            activation / ``softmax`` / ``layer_norm`` / ``embedding`` graphs) can
+            opt in to the experimental symbolic path with the
+            ``LUCID_COMPILE_DYNAMIC=1`` environment variable; without it
+            ``dynamic=True`` is exactly the safe per-shape static behaviour.
         """
-        # Phase 1.6 (symbolic batch axis): the C++ side (compile_or_cached
-        # / compile_trace) already accepts ``dynamic_batch=True``.  Until
-        # macOS 25 the MPSGraph SDK aborted on conv-heavy graphs (MLIR
-        # pass manager) and drifted numerically on MLP placeholders, so
-        # this surface stayed locked off.  Re-enabled 2026-05-25 behind
-        # ``LUCID_COMPILE_DYNAMIC=1`` opt-in to characterize the macOS
-        # 26 / MPSGraph SDK state — flip the default to ``True`` once
-        # the model-zoo regression sweep is clean.
-        import os as _os
-
-        _dyn_opt_in = _os.environ.get(
-            "LUCID_COMPILE_DYNAMIC",
-            "0",
-        ) in ("1", "true", "True")
-        if dynamic and not _dyn_opt_in:
-            raise NotImplementedError(
-                "lucid.compile(..., dynamic=True) is gated behind "
-                "LUCID_COMPILE_DYNAMIC=1 while macOS 26's MPSGraph "
-                "symbolic-shape support is being characterised.  "
-                "Set the env var to opt in; otherwise use a static "
-                "shape and let the per-BS cache populate organically — "
-                "the cache entry per shape is cheap because MPSGraph's "
-                "own kernel cache is shared across them."
-            )
         # CRITICAL: bypass nn.Module's __setattr__ tracking so the
         # inner model is NOT registered as a submodule (otherwise
         # parameters / state_dict double-count).
+        import os as _os
+
+        # Symbolic batch axis (one shared executable) is gated behind an
+        # explicit env opt-in because it aborts uncatchably on any graph that
+        # materialises a constant with the symbolic dim (scalar arithmetic /
+        # reshape / reduce / conv / attention — see [[perf-dynamic-batch-2026-05-25]]).
+        # Without the opt-in, dynamic=True is robust per-shape static caching.
+        _symbolic = bool(dynamic) and _os.environ.get("LUCID_COMPILE_DYNAMIC", "0") in (
+            "1",
+            "true",
+            "True",
+        )
         object.__setattr__(self, "_model", model)
-        object.__setattr__(self, "_dynamic", bool(dynamic))
+        object.__setattr__(self, "_dynamic", bool(dynamic))  # requested (intent / repr)
+        object.__setattr__(self, "_symbolic", _symbolic)  # effective (drives compile)
         object.__setattr__(self, "_cache", {})
         object.__setattr__(self, "_eager_only", EagerFallbackSet())
         object.__setattr__(self, "_call_counter", {})
@@ -425,7 +421,12 @@ class CompiledModule[**P, R]:
 
     @property
     def dynamic(self) -> bool:
-        """Whether the compile path treats batch dim as symbolic (Phase 1.6)."""
+        """Whether ``dynamic=True`` (variable batch) was requested.
+
+        This is the *requested* flag.  By default it selects robust per-shape
+        static caching; a single symbolic-batch executable is used only when the
+        experimental ``LUCID_COMPILE_DYNAMIC=1`` opt-in is also set.
+        """
 
         return self._dynamic
 
@@ -798,11 +799,14 @@ class CompiledModule[**P, R]:
 
                 fp = _param_fingerprint(self._model)
                 object.__setattr__(self, "_param_fp_cache", fp)
+            # ``_symbolic`` wildcards the batch axis (one shared executable);
+            # it is only ever True under the experimental env opt-in.  The safe
+            # default keys on the concrete shape → per-shape static caching.
             key = signature_of(
                 self._model,
                 args,
                 kwargs,
-                dynamic=self._dynamic,
+                dynamic=self._symbolic,
                 param_fingerprint=fp,
             )
         except TypeError, AttributeError:
@@ -908,7 +912,7 @@ class CompiledModule[**P, R]:
         # bypass the C++ session cache (the Python cache here holds
         # the dynamic-aware key).
         param_ids: list[int] = []
-        if self._dynamic:
+        if self._symbolic:
             p_impls = [_unwrap(p) for p in self._model.parameters()]
             id_to_tid = {id(impl): tid for tid, impl in ext.items()}
             for p_impl in p_impls:
@@ -918,7 +922,7 @@ class CompiledModule[**P, R]:
 
         try:
             exe = _C_engine.compile.compile_or_cached(
-                graph, ext, self._dynamic, param_ids, explicit_outputs
+                graph, ext, self._symbolic, param_ids, explicit_outputs
             )
         except RuntimeError:
             return None

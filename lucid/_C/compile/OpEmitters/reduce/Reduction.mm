@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "../OpEmitter.h"
+#include "../_AttrHelpers.h"
 
 namespace lucid::compile {
 
@@ -82,11 +83,13 @@ inline bool emit_reduce(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     //     MPSGraphTensorData binding and the in-graph tensor agree.
     const auto& out_shape = node.outputs[0].shape;
     if (!*keepdim && !out_shape.empty()) {
-        NSMutableArray<NSNumber*>* target =
-            [NSMutableArray arrayWithCapacity:out_shape.size()];
-        for (std::int64_t d : out_shape)
-            [target addObject:[NSNumber numberWithLongLong:d]];
-        reduced = [graph reshapeTensor:reduced withShape:target name:@"reduce_squeeze"];
+        // Dynamic-batch-aware squeeze: a reduction over non-batch axes keeps the
+        // symbolic (-1) batch, so pin it -1 in the target instead of the
+        // trace-time concrete value (which would abort the MLIR pass).  nil =
+        // symbolic batch not provably at dim 0 → bail (compile falls back).
+        reduced = reshape_dynamic_aware(graph, reduced, out_shape, @"reduce_squeeze");
+        if (reduced == nil)
+            return false;
     }
     ctx.bind(node.outputs[0].id, (__bridge void*)(reduced));
         return true;

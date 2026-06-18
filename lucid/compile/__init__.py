@@ -409,9 +409,13 @@ def compile[**P, R](
         compiled unit carries learnable parameters) or any callable
         whose signature is ``(*tensor_args) -> Tensor | tuple | dict``.
     dynamic : bool, optional
-        Opt-in to symbolic batch-dim shape support (Phase 1.6).  Today
-        only the static path is implemented — passing ``True`` raises
-        ``NotImplementedError``.
+        Treat the leading (batch) axis as symbolic so calls differing only
+        in batch size share **one** compiled executable (no recompile per
+        batch).  Default ``False``.  Convolutions cannot be symbolic-batch on
+        Apple's MPSGraph, so a conv graph transparently falls back to per-shape
+        static caching (any batch size still works, one compile per distinct
+        shape); non-conv graphs (MLP / Transformer / attention) get a single
+        dynamic executable.
 
     Returns
     -------

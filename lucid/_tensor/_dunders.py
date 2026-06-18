@@ -76,17 +76,23 @@ def _unwrap_or_scalar(
     if isinstance(x, _C_engine.TensorImpl):
         return x
 
-    # scalar → TensorImpl broadcast to ref_impl shape, via engine ops only
+    # scalar → 0-dim scalar TensorImpl; the engine's binary ops (arithmetic AND
+    # comparison) broadcast it against the other operand.  A 0-dim constant
+    # (rather than one materialised to ref_impl's full shape) is what lets scalar
+    # arithmetic ride the symbolic-batch (dynamic) compile path — a full pinned
+    # to the trace-time batch would mismatch the symbolic input and abort
+    # MPSGraph's MLIR pass — and it skips allocating a full-shape buffer in
+    # eager.  dtype / device still track ref_impl so dtype promotion is
+    # unchanged.  (Comparison ops gained 0-dim broadcast in bfunc/Compare.cpp;
+    # before that this had to materialise the full shape.)
     if isinstance(x, (int, float, bool)):
         if ref_impl is not None:
             dtype = ref_impl.dtype
             device = ref_impl.device
-            shape = list(ref_impl.shape)
         else:
             dtype = _C_engine.Dtype.F32
             device = _C_engine.Device.CPU
-            shape = []
-        return _C_engine.full(shape, float(x), dtype, device)
+        return _C_engine.full([], float(x), dtype, device)
 
     raise TypeError(f"Cannot convert {type(x).__name__} to TensorImpl")
 

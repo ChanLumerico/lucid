@@ -10,6 +10,7 @@
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "_Broadcast.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -17,8 +18,9 @@ namespace lucid {
 namespace {
 
 using bfunc_detail::allocate_cpu;
+using bfunc_detail::broadcast_pair;
 using bfunc_detail::fresh;
-using bfunc_detail::validate_pair_eq_shape;
+using bfunc_detail::validate_pair;
 
 // Return true for dtypes that support bitwise operations.  Floating-point
 // types are excluded because their bit patterns are not meaningful as bitmasks.
@@ -60,13 +62,14 @@ bool is_integer(Dtype dt) {
 // because bitwise operations on integers have no meaningful gradient.
 TensorImplPtr
 bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
-    validate_pair_eq_shape(a, b, name);
+    validate_pair(a, b, name);
     if (!is_integer_or_bool(a->dtype()))
         ErrorBuilder(name).fail("dtype must be integer or bool");
-    OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
+    auto bc = broadcast_pair(a, b);
+    OpScopeFull scope{name, a->device(), a->dtype(), bc.shape};
     Storage out = backend::Dispatcher::for_device(a->device())
-                      .bitwise_binary(a->storage(), b->storage(), a->shape(), a->dtype(), op);
-    return fresh(std::move(out), a->shape(), a->dtype(), a->device());
+                      .bitwise_binary(bc.a->storage(), bc.b->storage(), bc.shape, a->dtype(), op);
+    return fresh(std::move(out), bc.shape, a->dtype(), a->device());
 }
 
 }  // namespace
@@ -90,13 +93,14 @@ namespace {
 // error messages tight.
 TensorImplPtr
 shift_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
-    validate_pair_eq_shape(a, b, name);
+    validate_pair(a, b, name);
     if (!is_integer(a->dtype()))
         ErrorBuilder(name).fail("dtype must be a signed integer (I8/I16/I32/I64)");
-    OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
+    auto bc = broadcast_pair(a, b);
+    OpScopeFull scope{name, a->device(), a->dtype(), bc.shape};
     Storage out = backend::Dispatcher::for_device(a->device())
-                      .bitwise_binary(a->storage(), b->storage(), a->shape(), a->dtype(), op);
-    return fresh(std::move(out), a->shape(), a->dtype(), a->device());
+                      .bitwise_binary(bc.a->storage(), bc.b->storage(), bc.shape, a->dtype(), op);
+    return fresh(std::move(out), bc.shape, a->dtype(), a->device());
 }
 
 }  // namespace

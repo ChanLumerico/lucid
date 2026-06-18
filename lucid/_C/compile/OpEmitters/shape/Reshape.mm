@@ -21,18 +21,11 @@
 #include <vector>
 
 #include "../OpEmitter.h"
+#include "../_AttrHelpers.h"
 
 namespace lucid::compile {
 
 namespace {
-
-// Build an NSArray<NSNumber*> from a Lucid Shape (int64_t vector).
-inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
-    NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:shape.size()];
-    for (std::int64_t d : shape)
-        [out addObject:[NSNumber numberWithLongLong:d]];
-    return out;
-}
 
 // All view-family ops (view / reshape / squeeze / unsqueeze / flatten)
 // share the same forward — reshape the input to ``node.outputs[0].shape``.
@@ -55,8 +48,14 @@ public:
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
             return false;
-        NSArray<NSNumber*>* new_shape = shape_to_nsarray(node.outputs[0].shape);
-        MPSGraphTensor* y = [graph reshapeTensor:x_t withShape:new_shape name:nil];
+        // Dynamic-batch: keep the symbolic (-1) batch flowing instead of
+        // pinning the trace-time concrete batch (which aborts the MLIR pass).
+        // nil = symbolic batch not provably at dim 0 (e.g. unsqueeze-at-front);
+        // bail so the compile falls back rather than mis-shaping the graph.
+        MPSGraphTensor* y =
+            reshape_dynamic_aware(graph, x_t, node.outputs[0].shape, nil);
+        if (y == nil)
+            return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
@@ -83,9 +82,13 @@ public:
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
             return false;
-        NSArray<NSNumber*>* same_shape = shape_to_nsarray(node.outputs[0].shape);
+        // Reshape-to-same-shape (new tensor identity); dynamic-batch-aware so a
+        // contiguous() under a symbolic batch keeps the -1 dim.  (Same-shape, so
+        // always batch-preserving — the nil guard is for uniformity.)
         MPSGraphTensor* y =
-            [graph reshapeTensor:x_t withShape:same_shape name:@"contiguous"];
+            reshape_dynamic_aware(graph, x_t, node.outputs[0].shape, @"contiguous");
+        if (y == nil)
+            return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }

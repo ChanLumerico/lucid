@@ -15,6 +15,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — comparison / bitwise / floor-division now broadcast (NumPy-style)
+
+`<`, `<=`, `>`, `>=`, `==`, `!=`, `&`, `|`, `^`, `<<`, `>>` and `//` previously
+required identical operand shapes; they now broadcast like the arithmetic ops
+and every reference framework — `x < 0.5`, `mask & 0xF0`, `x // 16` no longer
+need a full-shape right operand. Internally this let scalar promotion produce a
+0-dim constant instead of materialising the left operand's full shape, which
+(a) skips a buffer allocation in eager and (b) is what lets **scalar arithmetic
+(`x * 0.5`, `1.0 - x`, `(x - μ) / 2`) ride the symbolic-batch compile path** —
+a full-shape scalar pinned the trace-time batch and aborted MPSGraph. With this
+plus the view-op fix below, `where`, manual LayerNorm and most hand-written
+arithmetic now compile under symbolic batch.
+
+### Changed — `lucid.compile(..., dynamic=True)`: dynamic batch sizes, never crashes
+
+`dynamic=True` previously raised `NotImplementedError` unless an env var was set.
+It now **declares varying batch sizes** and is always safe:
+
+- **Default** — robust *per-shape static caching*: one executable per distinct
+  input shape, cached and reused. Works for **every** model, never crashes or
+  raises; the same lever that already handles variable shapes, made explicit.
+- **`LUCID_COMPILE_DYNAMIC=1` (experimental)** — a single *symbolic-batch*
+  executable shared across all batch sizes (one cache entry for every batch).
+
+The same applies to `make_step(..., dynamic=True)`, which is always per-shape
+static (the backward graph of common reductions aborts under a symbolic batch).
+
+### Fixed — symbolic-batch view ops (the keystone that unlocks transformers + CNNs)
+
+Under the symbolic-batch path, the compile emitters for the **view ops** (`reshape`
+/ `flatten` / `squeeze` / `contiguous` and the reduce-squeeze) copied a target
+shape verbatim from the trace, pinning the batch to its concrete trace-time value
+— which mismatched the symbolic-batch input and aborted MPSGraph's MLIR pass
+(uncatchable). A shared `reshape_dynamic_aware` helper now marks the target's
+leading dim `-1` when the input carries a symbolic batch, so MPSGraph infers it.
+With this, the earlier "conv aborts" belief is corrected — **conv2d and SDPA ops
+are themselves symbolic-batch-safe; the abort was always a surrounding view op**
+— and real `TransformerEncoder`s (attention head-split + SDPA + merge) and CNNs
+(conv + flatten) now share **one** symbolic-batch executable across batch sizes
+(parity ≤ 7e-7 across BS {2,4,8}). The static-compile path is unchanged (the
+helper is a no-op without a symbolic input). Remaining known limit: explicit
+scalar broadcast (`x * 0.5`) still materialises a batch-shaped constant and
+aborts under symbolic — fused-op models (BERT / GPT / ResNet / ViT) avoid it, so
+the symbolic path stays an experimental opt-in.
+
 ### Added — Grouped-query / multi-query attention
 
 `nn.MultiheadAttention` gained `num_kv_heads` (keyword, must divide `num_heads`;

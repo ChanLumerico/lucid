@@ -106,8 +106,15 @@ def make_step(
     loss_fn : callable
         ``loss_fn(model_output, *extra_inputs) -> Tensor`` scalar loss.
     dynamic : bool, optional
-        Reserved for Phase 1.6's symbolic batch axis.  Today the value
-        is recorded in the signature but otherwise unused.
+        Accepted for API symmetry with :func:`lucid.compile`, but the compiled
+        *training* step is always per-shape static: any batch size works (one
+        fwd+bwd executable per distinct shape), it just does not share a single
+        symbolic-batch executable across sizes.  Symbolic-batch is unavailable
+        here because the backward graph of common reductions (cross-entropy,
+        for one) aborts under a symbolic batch axis with an uncatchable MPSGraph
+        assertion — and training batch size is fixed across a run anyway, so the
+        per-shape compile happens once.  The forward-only :func:`lucid.compile`
+        path *does* offer symbolic-batch for non-conv graphs.
 
     Returns
     -------
@@ -148,25 +155,17 @@ def make_step(
     from lucid.compile._core.fallback import EagerFallbackSet
     from lucid.compile._core.signature import signature_of
 
-    # Phase 1.6 dynamic-batch: gated behind ``LUCID_COMPILE_DYNAMIC=1``
-    # alongside the matching surface in :class:`CompiledModule`.  Until
-    # macOS 25 ``gradientForPrimaryTensor:`` aborted on symbolic-shape
-    # primaries; reopened 2026-05-25 to characterise the macOS 26
-    # / MPSGraph SDK state.  Falls back to NotImplementedError unless
-    # the env opt-in is set.
-    import os as _os_step
-
-    _dyn_opt_in = _os_step.environ.get(
-        "LUCID_COMPILE_DYNAMIC",
-        "0",
-    ) in ("1", "true", "True")
-    if dynamic and not _dyn_opt_in:
-        raise NotImplementedError(
-            "lucid.compile.make_step(..., dynamic=True) is gated behind "
-            "LUCID_COMPILE_DYNAMIC=1 while macOS 26's MPSGraph backward "
-            "support for symbolic-shape primaries is being characterised. "
-            "Set the env var to opt in; otherwise use static shapes."
-        )
+    # Symbolic-batch is NOT offered for the compiled *training* step.  Unlike the
+    # forward-only path (see :class:`CompiledModule`, where conv is the single
+    # known abort and everything else shares one executable), the backward graph
+    # aborts under a symbolic batch axis for common reductions — cross-entropy,
+    # for one, lowers a batch-sized constant that MPSGraph rejects with
+    # ``shape[0] (-1) should be a strictly positive value`` — and the abort is an
+    # uncatchable process assertion.  There is no reliable predicate for "which
+    # backward will abort", so make_step always compiles per-shape static: any
+    # batch size still works (one executable per distinct shape), which is what
+    # training wants anyway since the batch size is fixed across a run.
+    use_dynamic = False
 
     cache: dict[Any, _StepEntry] = {}
     eager_only = EagerFallbackSet()
@@ -247,7 +246,7 @@ def make_step(
                 ext,
                 loss_id,
                 param_ids,
-                dynamic,
+                use_dynamic,
                 extra_output_ids=bn_stat_out_ids,
             )
         except RuntimeError:
@@ -413,8 +412,11 @@ def make_step(
         # Cache lookup / compile / eager-fallback decision happens
         # OUTSIDE the autograd Function so the eager path doesn't
         # accidentally end up with a "compiled" wrapper around it.
+        # Always per-shape static (use_dynamic is False — see the symbolic-batch
+        # note at the top of make_step); the batch axis stays concrete in the
+        # signature so each distinct shape gets its own fwd+bwd executable.
         try:
-            key = signature_of(model, x_args, {}, dynamic=dynamic)
+            key = signature_of(model, x_args, {}, dynamic=use_dynamic)
         except TypeError, AttributeError:
             key = None  # un-hashable → fresh per-call compile only
 

@@ -12,6 +12,7 @@
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "_Broadcast.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -19,8 +20,9 @@ namespace lucid {
 namespace {
 
 using bfunc_detail::allocate_cpu;
+using bfunc_detail::broadcast_pair;
 using bfunc_detail::fresh;
-using bfunc_detail::validate_pair_eq_shape;
+using bfunc_detail::validate_pair;
 
 // Shared implementation for all binary comparisons.
 //
@@ -36,11 +38,18 @@ using bfunc_detail::validate_pair_eq_shape;
 // node is attached because comparisons are not differentiable.
 TensorImplPtr
 cmp_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
-    validate_pair_eq_shape(a, b, name);
-    OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
+    // dtype / device only — comparisons broadcast NumPy-style (matches the
+    // arithmetic ops + MLX / reference-framework semantics), so the shapes need
+    // not be identical.  Previously this required equal shapes, which forced
+    // ``x < scalar`` to materialise a full-shape constant; broadcasting lets a
+    // 0-dim scalar ride through (and is what the symbolic-batch compile path
+    // needs, since a full-shape scalar pins the batch).
+    validate_pair(a, b, name);
+    auto bc = broadcast_pair(a, b);
+    OpScopeFull scope{name, a->device(), a->dtype(), bc.shape};
     Storage out = backend::Dispatcher::for_device(a->device())
-                      .compare_binary(a->storage(), b->storage(), a->shape(), a->dtype(), op);
-    auto result = fresh(std::move(out), a->shape(), Dtype::Bool, a->device());
+                      .compare_binary(bc.a->storage(), bc.b->storage(), bc.shape, a->dtype(), op);
+    auto result = fresh(std::move(out), bc.shape, Dtype::Bool, a->device());
     // 3.5 Phase 1.3: comparisons are non-differentiable so they bypass
     // ``wire_autograd`` — push the I/O wiring into the tracer manually
     // so cross_entropy's ``target != ignore_index`` mask shows up in the
