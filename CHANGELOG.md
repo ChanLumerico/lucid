@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — GPU optimizer step leaked unbounded memory
+
+`optim.step()` wrote each parameter back as an *unevaluated* MLX array, so on the
+GPU (Metal) path every step composed its update on top of the prior step's still-
+lazy graph — pinning all prior steps' compute → **unbounded active-memory / RSS
+growth until OOM** (Adam / SGD / SGD-momentum / RMSprop, ~60-90 B/step, +31 MB
+RSS per 400 steps). It only surfaced in loops that *don't* call `.item()` every
+step (sparse logging); `mx.synchronize()` drains the queue but does not eval the
+never-submitted lazy arrays. `Optimizer::step` now flushes the step's updated
+GPU parameter arrays with a single batched `mlx::core::eval` — near-zero cost
+(the next forward forces this compute anyway) and no host copy. Active memory is
+now flat across 500 steps (regression test added). The CPU path mutates in place
+and was unaffected.
+
 ### Changed — comparison / bitwise / floor-division now broadcast (NumPy-style)
 
 `<`, `<=`, `>`, `>=`, `==`, `!=`, `&`, `|`, `^`, `<<`, `>>` and `//` previously

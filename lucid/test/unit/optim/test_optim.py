@@ -88,3 +88,45 @@ class TestLRScheduler:
         # After one step the LR should be halved.
         for group in opt.param_groups:
             assert abs(group["lr"] - 0.5) < 1e-6
+
+
+class TestOptimizerGpuMemory:
+    """Regression: the GPU optimizer step must not leak active MLX memory.
+
+    ``Optimizer::step`` writes each param back as an UNEVALUATED MLX array;
+    without a per-step eval the lazy graph pins every prior step's compute →
+    unbounded active-memory / RSS growth on the GPU path (only loops that call
+    ``.item()`` every step happen to mask it). A leak grows linearly with steps;
+    the batched eval flush keeps it flat.
+    """
+
+    def test_no_active_memory_leak(self) -> None:
+        mx = pytest.importorskip("mlx.core")
+        import lucid.nn as nn
+
+        m = nn.Sequential(
+            nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 64)
+        ).to("metal")
+        opt = optim.Adam(m.parameters(), lr=1e-3)
+        x = lucid.randn(16, 64).to("metal")
+        t = lucid.randn(16, 64).to("metal")
+
+        def step() -> None:
+            opt.zero_grad()
+            loss = ((m(x) - t) ** 2).mean()
+            loss.backward()
+            opt.step()
+
+        for _ in range(20):  # warm up — lazy alloc / first-step state settles
+            step()
+        mx.synchronize()
+        before = mx.get_active_memory()
+        for _ in range(300):  # NO per-step .item() — the leak-exposing pattern
+            step()
+        mx.synchronize()
+        delta = mx.get_active_memory() - before
+        # Pre-fix this grew ~60-90 B/step (≈ 20+ KB over 300, unbounded). Flat now.
+        assert delta < 8192, (
+            f"optimizer leaked {delta} B over 300 steps "
+            f"({delta / 300:.1f} B/step) — Optimizer::step eval flush regressed"
+        )

@@ -12,6 +12,7 @@
 
 #include <mlx/array.h>
 #include <mlx/ops.h>
+#include <mlx/transforms.h>  // mlx::core::eval(std::vector<array>)
 
 #include "../core/Allocator.h"
 #include "../core/ErrorBuilder.h"
@@ -84,6 +85,8 @@ void Optimizer::step() {
     if (state_initialized_.size() != params_.size()) {
         state_initialized_.assign(params_.size(), false);
     }
+    // GPU param arrays updated this step, flushed in one batched eval below.
+    std::vector<::mlx::core::array> to_flush;
     for (std::size_t i = 0; i < params_.size(); ++i) {
         auto& p = params_[i];
         if (!p)
@@ -100,7 +103,29 @@ void Optimizer::step() {
         // Bump the version so that any autograd nodes that captured this
         // parameter before the update detect an in-place modification.
         p->bump_version();
+
+        // Collect the (lazy) updated GPU param array for the batched eval.  The
+        // CPU path mutates in place (no MLX graph) and is skipped.
+        const Storage& st = p->storage();
+        if (std::holds_alternative<GpuStorage>(st)) {
+            const auto& gs = std::get<GpuStorage>(st);
+            if (gs.arr)
+                to_flush.push_back(*gs.arr);
+        }
     }
+
+    // Sever the lazy MLX graph: ``update_one`` writes each param back as an
+    // UNEVALUATED array (param = subtract(param, lr*m/…)).  Without an eval here
+    // every step composes its update on top of the prior step's still-lazy
+    // graph, so the chain pins all prior steps' compute — an unbounded
+    // active-memory / RSS leak on the GPU path that only sparse-``.item()``
+    // loops happen to mask.  One batched eval per step flushes it (the param
+    // transitively depends on this step's optimizer state, so m/v/momentum are
+    // materialised too).  Near-zero marginal cost — the next forward forces this
+    // compute anyway; eval just submits it now — and, unlike ``.item()``, no
+    // host copy.
+    if (!to_flush.empty())
+        ::mlx::core::eval(to_flush);
 }
 
 // Clear accumulated gradients on all non-null parameters.
