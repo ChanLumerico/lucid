@@ -126,19 +126,19 @@ namespace detail {
 
 inline MPSDataType to_mps_dtype(Dtype dt) {
     switch (dt) {
-        case Dtype::F32:
-            return MPSDataTypeFloat32;
-        case Dtype::F16:
-            return MPSDataTypeFloat16;
-        case Dtype::I32:
-            return MPSDataTypeInt32;
-        case Dtype::I64:
-            return MPSDataTypeInt64;
-        case Dtype::Bool:
-            return MPSDataTypeBool;
-        default:
-            throw std::runtime_error(
-                "lucid::compile: dtype not supported on the MPSGraph compile path");
+    case Dtype::F32:
+        return MPSDataTypeFloat32;
+    case Dtype::F16:
+        return MPSDataTypeFloat16;
+    case Dtype::I32:
+        return MPSDataTypeInt32;
+    case Dtype::I64:
+        return MPSDataTypeInt64;
+    case Dtype::Bool:
+        return MPSDataTypeBool;
+    default:
+        throw std::runtime_error(
+            "lucid::compile: dtype not supported on the MPSGraph compile path");
     }
 }
 
@@ -167,9 +167,8 @@ inline std::size_t shape_nbytes(const Shape& shape, Dtype dt) {
 //
 // Defined here rather than in MpsBuilder.mm because all the
 // MPSGraph-side machinery is in this translation unit already.
-LUCID_API std::vector<TensorImplPtr> run_executable(
-        CompiledExecutable* exe,
-        const std::vector<TensorImplPtr>& input_feeds) {
+LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
+                                                    const std::vector<TensorImplPtr>& input_feeds) {
     if (exe == nullptr)
         throw std::invalid_argument("run_executable: null executable");
     if (input_feeds.size() != exe->input_ids.size())
@@ -180,18 +179,14 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
     // Total output count = forward outputs + grad outputs.  The output_*
     // vectors (shapes/dtypes) are sized to the combined total; output_ids
     // only enumerates the forward portion, grad_output_ids the backward.
-    const std::size_t total_outs =
-        exe->output_ids.size() + exe->grad_output_ids.size();
-    if (exe->output_shapes.size() != total_outs ||
-        exe->output_dtypes.size() != total_outs) {
-        throw std::runtime_error(
-            "run_executable: output_shapes/dtypes vector mismatch "
-            "(internal bug — builder did not populate consistently)");
+    const std::size_t total_outs = exe->output_ids.size() + exe->grad_output_ids.size();
+    if (exe->output_shapes.size() != total_outs || exe->output_dtypes.size() != total_outs) {
+        throw std::runtime_error("run_executable: output_shapes/dtypes vector mismatch "
+                                 "(internal bug — builder did not populate consistently)");
     }
 
     id<MTLDevice> device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
-    id<MTLCommandQueue> queue =
-        (__bridge id<MTLCommandQueue>)lucid::gpu::mps::shared_mtl_queue();
+    id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)lucid::gpu::mps::shared_mtl_queue();
 
     std::vector<TensorImplPtr> outputs;
     outputs.reserve(exe->output_ids.size());
@@ -226,8 +221,7 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
 
             const auto& gs = std::get<GpuStorage>(impl->storage());
             if (!gs.arr)
-                throw std::runtime_error(
-                    "run_executable: input feed GpuStorage has no MLX array");
+                throw std::runtime_error("run_executable: input feed GpuStorage has no MLX array");
 
             lucid::gpu::mps::BufferView view = lucid::gpu::mps::array_to_buffer(*gs.arr);
             id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)view.mtl_buffer;
@@ -235,9 +229,8 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
             // tensor's shape (so the leading BS axis matches the
             // call-site data); static mode uses the trace-time shape.
             Shape feed_shape;
-            const bool is_static_slot =
-                exe->dynamic_batch &&
-                exe->static_feed_slots.find(i) != exe->static_feed_slots.end();
+            const bool is_static_slot = exe->dynamic_batch && exe->static_feed_slots.find(i) !=
+                                                                  exe->static_feed_slots.end();
             if (exe->dynamic_batch && !is_static_slot) {
                 feed_shape = impl->shape();
             } else {
@@ -245,10 +238,9 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
             }
             NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(feed_shape);
             MPSDataType ns_dt = detail::to_mps_dtype(exe->input_dtypes[i]);
-            MPSGraphTensorData* td =
-                [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
-                                                        shape:ns_shape
-                                                     dataType:ns_dt];
+            MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
+                                                                             shape:ns_shape
+                                                                          dataType:ns_dt];
             [feeds addObject:td];
         }
 
@@ -273,8 +265,7 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
                 // reference value.
                 std::int64_t trace_bs = -1;
                 for (std::size_t i = 0; i < exe->input_shapes.size(); ++i) {
-                    if (exe->static_feed_slots.find(i) !=
-                        exe->static_feed_slots.end())
+                    if (exe->static_feed_slots.find(i) != exe->static_feed_slots.end())
                         continue;
                     if (!exe->input_shapes[i].empty()) {
                         trace_bs = exe->input_shapes[i][0];
@@ -291,21 +282,17 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
         for (std::size_t j = 0; j < total_outs; ++j) {
             const std::size_t nbytes =
                 detail::shape_nbytes(realized_output_shapes[j], exe->output_dtypes[j]);
-            id<MTLBuffer> out_buf =
-                [device newBufferWithLength:nbytes
-                                    options:MTLResourceStorageModeShared];
+            id<MTLBuffer> out_buf = [device newBufferWithLength:nbytes
+                                                        options:MTLResourceStorageModeShared];
             if (!out_buf)
-                throw std::runtime_error(
-                    "run_executable: MTLBuffer allocation for output failed");
+                throw std::runtime_error("run_executable: MTLBuffer allocation for output failed");
             out_bufs.push_back(out_buf);
 
-            NSArray<NSNumber*>* ns_shape =
-                detail::shape_to_nsarray(realized_output_shapes[j]);
+            NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(realized_output_shapes[j]);
             MPSDataType ns_dt = detail::to_mps_dtype(exe->output_dtypes[j]);
-            MPSGraphTensorData* td =
-                [[MPSGraphTensorData alloc] initWithMTLBuffer:out_buf
-                                                        shape:ns_shape
-                                                     dataType:ns_dt];
+            MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:out_buf
+                                                                             shape:ns_shape
+                                                                          dataType:ns_dt];
             [results addObject:td];
         }
 
@@ -345,8 +332,7 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
         }();
         if (force_async) {
             desc.waitUntilCompleted = NO;
-            MPSCommandBuffer* mps_cb =
-                [MPSCommandBuffer commandBufferFromCommandQueue:queue];
+            MPSCommandBuffer* mps_cb = [MPSCommandBuffer commandBufferFromCommandQueue:queue];
             (void)[exe->executable encodeToCommandBuffer:mps_cb
                                              inputsArray:feeds
                                             resultsArray:results
@@ -372,23 +358,21 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
             void* raw = (__bridge_retained void*)out_bufs[j];
             const Shape& wrap_shape = realized_output_shapes[j];
             std::vector<int> mlx_shape(wrap_shape.begin(), wrap_shape.end());
-            ::mlx::core::array arr = lucid::gpu::mps::buffer_to_array(
-                raw, std::move(mlx_shape), exe->output_dtypes[j]);
+            ::mlx::core::array arr =
+                lucid::gpu::mps::buffer_to_array(raw, std::move(mlx_shape), exe->output_dtypes[j]);
             GpuStorage gs;
             gs.arr = std::make_shared<::mlx::core::array>(std::move(arr));
             outputs.push_back(std::make_shared<TensorImpl>(
-                Storage{std::move(gs)}, wrap_shape, exe->output_dtypes[j],
-                Device::GPU, false));
+                Storage{std::move(gs)}, wrap_shape, exe->output_dtypes[j], Device::GPU, false));
         }
     }
 
     return outputs;
 }
 
-LUCID_API void run_executable_inplace(
-        CompiledExecutable* exe,
-        const std::vector<TensorImplPtr>& input_feeds,
-        const std::vector<TensorImplPtr>& output_targets) {
+LUCID_API void run_executable_inplace(CompiledExecutable* exe,
+                                      const std::vector<TensorImplPtr>& input_feeds,
+                                      const std::vector<TensorImplPtr>& output_targets) {
     // Swap-buffer variant: instead of allocating fresh MTLBuffers per
     // output and returning new TensorImpls, allocate one fresh
     // MTLBuffer per output target and then *replace* the target's
@@ -421,46 +405,38 @@ LUCID_API void run_executable_inplace(
     if (exe == nullptr)
         throw std::invalid_argument("run_executable_inplace: null executable");
     if (input_feeds.size() != exe->input_ids.size())
-        throw std::invalid_argument(
-            "run_executable_inplace: input count mismatch");
-    const std::size_t total_outs =
-        exe->output_ids.size() + exe->grad_output_ids.size();
+        throw std::invalid_argument("run_executable_inplace: input count mismatch");
+    const std::size_t total_outs = exe->output_ids.size() + exe->grad_output_ids.size();
     if (output_targets.size() != total_outs)
         throw std::invalid_argument(
             "run_executable_inplace: output_targets count mismatch (expected " +
-            std::to_string(total_outs) + ", got " +
-            std::to_string(output_targets.size()) + ")");
+            std::to_string(total_outs) + ", got " + std::to_string(output_targets.size()) + ")");
     if (exe->dynamic_batch)
-        throw std::runtime_error(
-            "run_executable_inplace: dynamic-batch executables are not "
-            "supported (output shapes resolved at run time, no stable "
-            "target buffers).");
+        throw std::runtime_error("run_executable_inplace: dynamic-batch executables are not "
+                                 "supported (output shapes resolved at run time, no stable "
+                                 "target buffers).");
 
-    id<MTLDevice> device =
-        (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
-    id<MTLCommandQueue> queue =
-        (__bridge id<MTLCommandQueue>)lucid::gpu::mps::shared_mtl_queue();
+    id<MTLDevice> device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
+    id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)lucid::gpu::mps::shared_mtl_queue();
 
     // Pre-validate every target's shape/dtype — fails the whole call
     // early instead of mid-MPS-dispatch.
     for (std::size_t j = 0; j < total_outs; ++j) {
         const auto& target = output_targets[j];
         if (!target)
-            throw std::invalid_argument(
-                "run_executable_inplace: null output target at slot " +
-                std::to_string(j));
+            throw std::invalid_argument("run_executable_inplace: null output target at slot " +
+                                        std::to_string(j));
         if (target->device() != Device::GPU)
             throw std::invalid_argument(
-                "run_executable_inplace: output target not on GPU at slot " +
-                std::to_string(j));
+                "run_executable_inplace: output target not on GPU at slot " + std::to_string(j));
         if (target->shape() != exe->output_shapes[j])
-            throw std::invalid_argument(
-                "run_executable_inplace: output target shape mismatch at "
-                "slot " + std::to_string(j));
+            throw std::invalid_argument("run_executable_inplace: output target shape mismatch at "
+                                        "slot " +
+                                        std::to_string(j));
         if (target->dtype() != exe->output_dtypes[j])
-            throw std::invalid_argument(
-                "run_executable_inplace: output target dtype mismatch at "
-                "slot " + std::to_string(j));
+            throw std::invalid_argument("run_executable_inplace: output target dtype mismatch at "
+                                        "slot " +
+                                        std::to_string(j));
     }
 
     std::vector<id<MTLBuffer>> fresh_out_bufs;
@@ -472,11 +448,9 @@ LUCID_API void run_executable_inplace(
         for (std::size_t i = 0; i < input_feeds.size(); ++i) {
             const auto& impl = input_feeds[i];
             if (!impl)
-                throw std::invalid_argument(
-                    "run_executable_inplace: null input feed");
+                throw std::invalid_argument("run_executable_inplace: null input feed");
             if (impl->device() != Device::GPU)
-                throw std::invalid_argument(
-                    "run_executable_inplace: input feed not on GPU");
+                throw std::invalid_argument("run_executable_inplace: input feed not on GPU");
             // Phase 1.6 follow-up: ``run_executable_inplace`` only
             // supports static-batch executables (caller must rebuild
             // when the per-call shape changes), so any feed whose
@@ -487,7 +461,8 @@ LUCID_API void run_executable_inplace(
             if (impl->shape() != exe->input_shapes[i])
                 throw std::invalid_argument(
                     "run_executable_inplace: input feed shape mismatch at "
-                    "slot " + std::to_string(i) +
+                    "slot " +
+                    std::to_string(i) +
                     " (expected the trace-time shape; got a different shape "
                     "— recompile the executable for the new shape, or use "
                     "the dynamic forward path).");
@@ -495,16 +470,13 @@ LUCID_API void run_executable_inplace(
             if (!gs.arr)
                 throw std::runtime_error(
                     "run_executable_inplace: input GpuStorage has no MLX array");
-            lucid::gpu::mps::BufferView view =
-                lucid::gpu::mps::array_to_buffer(*gs.arr);
+            lucid::gpu::mps::BufferView view = lucid::gpu::mps::array_to_buffer(*gs.arr);
             id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)view.mtl_buffer;
-            NSArray<NSNumber*>* ns_shape =
-                detail::shape_to_nsarray(exe->input_shapes[i]);
+            NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(exe->input_shapes[i]);
             MPSDataType ns_dt = detail::to_mps_dtype(exe->input_dtypes[i]);
-            MPSGraphTensorData* td =
-                [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
-                                                        shape:ns_shape
-                                                     dataType:ns_dt];
+            MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
+                                                                             shape:ns_shape
+                                                                          dataType:ns_dt];
             [feeds addObject:td];
         }
 
@@ -524,11 +496,25 @@ LUCID_API void run_executable_inplace(
             return s && std::string(s) == "1";
         }();
 
+        // Destination ndarrays are built at the executable's NATURAL output
+        // rank (``targetTensors[j].shape``), not the squeezed ``output_shapes``.
+        // A keepdim loss reduce emits e.g. ``(1,1)`` while the recorded loss
+        // shape is the squeezed ``(1,)``; writing the rank-2 output into a
+        // rank-1 destination forces an MPSNDArrayIdentity reshape that ASSERTS
+        // under F16 (``New rank: 2 should match destination ... : 1``). Matching
+        // the natural rank sidesteps the reshape entirely. Same numel ⟹ same
+        // buffer bytes, so the post-run swap into the squeezed-shape
+        // ``output_target`` stays valid. Falls back to the recorded shape if the
+        // executable doesn't expose a usable target-tensor shape.
+        NSArray<MPSGraphTensor*>* tgt_tensors = exe->executable.targetTensors;
         NSMutableArray<MPSGraphTensorData*>* results =
             [NSMutableArray arrayWithCapacity:total_outs];
         for (std::size_t j = 0; j < total_outs; ++j) {
-            NSArray<NSNumber*>* ns_shape =
-                detail::shape_to_nsarray(exe->output_shapes[j]);
+            NSArray<NSNumber*>* ns_shape = nil;
+            if (tgt_tensors != nil && j < tgt_tensors.count && tgt_tensors[j].shape != nil)
+                ns_shape = tgt_tensors[j].shape;
+            else
+                ns_shape = detail::shape_to_nsarray(exe->output_shapes[j]);
             MPSDataType ns_dt = detail::to_mps_dtype(exe->output_dtypes[j]);
 
             id<MTLBuffer> out_buf;
@@ -537,26 +523,21 @@ LUCID_API void run_executable_inplace(
                 // slot.  No allocation, no swap.
                 const auto& target = output_targets[j];
                 const auto& gs = std::get<GpuStorage>(target->storage());
-                lucid::gpu::mps::BufferView v =
-                    lucid::gpu::mps::array_to_buffer(*gs.arr);
+                lucid::gpu::mps::BufferView v = lucid::gpu::mps::array_to_buffer(*gs.arr);
                 out_buf = (__bridge id<MTLBuffer>)v.mtl_buffer;
                 fresh_out_bufs.push_back(nil);  // sentinel: no swap needed
             } else {
-                const std::size_t nbytes = detail::shape_nbytes(
-                    exe->output_shapes[j], exe->output_dtypes[j]);
-                out_buf =
-                    [device newBufferWithLength:nbytes
-                                        options:MTLResourceStorageModeShared];
+                const std::size_t nbytes =
+                    detail::shape_nbytes(exe->output_shapes[j], exe->output_dtypes[j]);
+                out_buf = [device newBufferWithLength:nbytes options:MTLResourceStorageModeShared];
                 if (!out_buf)
-                    throw std::runtime_error(
-                        "run_executable_inplace: MTLBuffer allocation failed");
+                    throw std::runtime_error("run_executable_inplace: MTLBuffer allocation failed");
                 fresh_out_bufs.push_back(out_buf);
             }
 
-            MPSGraphTensorData* td =
-                [[MPSGraphTensorData alloc] initWithMTLBuffer:out_buf
-                                                        shape:ns_shape
-                                                     dataType:ns_dt];
+            MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:out_buf
+                                                                             shape:ns_shape
+                                                                          dataType:ns_dt];
             [results addObject:td];
         }
 
@@ -591,10 +572,9 @@ LUCID_API void run_executable_inplace(
             if (buf != nil) {
                 auto& gs = std::get<GpuStorage>(target->mutable_storage());
                 void* raw = (__bridge_retained void*)buf;
-                std::vector<int> mlx_shape(target->shape().begin(),
-                                           target->shape().end());
-                ::mlx::core::array fresh = lucid::gpu::mps::buffer_to_array(
-                    raw, std::move(mlx_shape), target->dtype());
+                std::vector<int> mlx_shape(target->shape().begin(), target->shape().end());
+                ::mlx::core::array fresh =
+                    lucid::gpu::mps::buffer_to_array(raw, std::move(mlx_shape), target->dtype());
                 gs.arr = std::make_shared<::mlx::core::array>(std::move(fresh));
             }
             target->bump_version();
@@ -638,70 +618,78 @@ inline void write_pod(std::vector<uint8_t>& out, T v) {
 template <typename T>
 inline void write_vec(std::vector<uint8_t>& out, const std::vector<T>& v) {
     write_pod<uint32_t>(out, static_cast<uint32_t>(v.size()));
-    for (const T& x : v) write_pod<T>(out, x);
+    for (const T& x : v)
+        write_pod<T>(out, x);
 }
 
-inline void write_vec_vec_i64(std::vector<uint8_t>& out,
-                              const std::vector<Shape>& vv) {
+inline void write_vec_vec_i64(std::vector<uint8_t>& out, const std::vector<Shape>& vv) {
     write_pod<uint32_t>(out, static_cast<uint32_t>(vv.size()));
     for (const auto& v : vv) {
         write_pod<uint32_t>(out, static_cast<uint32_t>(v.size()));
-        for (std::int64_t x : v) write_pod<std::int64_t>(out, x);
+        for (std::int64_t x : v)
+            write_pod<std::int64_t>(out, x);
     }
 }
 
 template <typename T>
 inline bool read_pod(const uint8_t*& p, const uint8_t* end, T& out) {
-    if (end - p < (ptrdiff_t)sizeof(T)) return false;
+    if (end - p < (ptrdiff_t)sizeof(T))
+        return false;
     std::memcpy(&out, p, sizeof(T));
     p += sizeof(T);
     return true;
 }
 
 template <typename T>
-inline bool read_vec(const uint8_t*& p, const uint8_t* end,
-                     std::vector<T>& v) {
+inline bool read_vec(const uint8_t*& p, const uint8_t* end, std::vector<T>& v) {
     uint32_t n;
-    if (!read_pod(p, end, n)) return false;
+    if (!read_pod(p, end, n))
+        return false;
     v.resize(n);
     for (uint32_t i = 0; i < n; ++i)
-        if (!read_pod(p, end, v[i])) return false;
+        if (!read_pod(p, end, v[i]))
+            return false;
     return true;
 }
 
-inline bool read_vec_vec_i64(const uint8_t*& p, const uint8_t* end,
-                             std::vector<Shape>& vv) {
+inline bool read_vec_vec_i64(const uint8_t*& p, const uint8_t* end, std::vector<Shape>& vv) {
     uint32_t n;
-    if (!read_pod(p, end, n)) return false;
+    if (!read_pod(p, end, n))
+        return false;
     vv.resize(n);
     for (uint32_t i = 0; i < n; ++i) {
         uint32_t m;
-        if (!read_pod(p, end, m)) return false;
+        if (!read_pod(p, end, m))
+            return false;
         vv[i].resize(m);
         for (uint32_t j = 0; j < m; ++j)
-            if (!read_pod(p, end, vv[i][j])) return false;
+            if (!read_pod(p, end, vv[i][j]))
+                return false;
     }
     return true;
 }
 
-inline bool atomic_write(const std::string& path,
-                         const std::vector<uint8_t>& data) {
+inline bool atomic_write(const std::string& path, const std::vector<uint8_t>& data) {
     const std::string tmp = path + ".tmp";
     {
         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
-        if (!f) return false;
+        if (!f)
+            return false;
         f.write(reinterpret_cast<const char*>(data.data()),
                 static_cast<std::streamsize>(data.size()));
-        if (!f) return false;
+        if (!f)
+            return false;
     }
     return std::rename(tmp.c_str(), path.c_str()) == 0;
 }
 
 inline bool read_all(const std::string& path, std::vector<uint8_t>& out) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) return false;
+    if (!f)
+        return false;
     std::streamsize size = f.tellg();
-    if (size < 0) return false;
+    if (size < 0)
+        return false;
     f.seekg(0, std::ios::beg);
     out.resize(static_cast<std::size_t>(size));
     f.read(reinterpret_cast<char*>(out.data()), size);
@@ -710,12 +698,12 @@ inline bool read_all(const std::string& path, std::vector<uint8_t>& out) {
 }  // namespace
 
 bool save_executable(const CompiledExecutable* exe, const std::string& path) {
-    if (exe == nullptr || exe->executable == nil) return false;
+    if (exe == nullptr || exe->executable == nil)
+        return false;
 
     @autoreleasepool {
         const std::string pkg_path = path + ".mpsgraphpackage";
-        NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:
-                                                            pkg_path.c_str()]];
+        NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:pkg_path.c_str()]];
         // Apple's ``serializeToMPSGraphPackageAtURL:descriptor:``
         // returns ``void`` and offers no error signal (macOS 14+,
         // SDK header confirms).  Wrap in ``@try`` so a fatal ObjC
@@ -724,8 +712,7 @@ bool save_executable(const CompiledExecutable* exe, const std::string& path) {
         // the meta write below or the subsequent ``load_executable``
         // will catch it as a cache miss.
         @try {
-            [exe->executable serializeToMPSGraphPackageAtURL:url
-                                                  descriptor:nil];
+            [exe->executable serializeToMPSGraphPackageAtURL:url descriptor:nil];
         } @catch (NSException* e) {
             (void)e;
             return false;
@@ -744,7 +731,8 @@ bool save_executable(const CompiledExecutable* exe, const std::string& path) {
         auto to_int64 = [](const std::vector<TensorId>& v) {
             std::vector<std::int64_t> out;
             out.reserve(v.size());
-            for (const auto& id : v) out.push_back(id.v);
+            for (const auto& id : v)
+                out.push_back(id.v);
             return out;
         };
         write_vec<std::int64_t>(meta, to_int64(exe->input_ids));
@@ -763,7 +751,7 @@ bool save_executable(const CompiledExecutable* exe, const std::string& path) {
             out_dt[i] = static_cast<uint8_t>(exe->output_dtypes[i]);
         write_vec<uint8_t>(meta, out_dt);
         std::vector<uint64_t> static_slots(exe->static_feed_slots.begin(),
-                                            exe->static_feed_slots.end());
+                                           exe->static_feed_slots.end());
         write_vec<uint64_t>(meta, static_slots);
 
         const std::string meta_path = path + ".meta";
@@ -771,10 +759,10 @@ bool save_executable(const CompiledExecutable* exe, const std::string& path) {
     }
 }
 
-CompiledExecutable* load_executable(const std::string& path,
-                                    std::string* error_msg) {
+CompiledExecutable* load_executable(const std::string& path, std::string* error_msg) {
     auto fail = [&](std::string msg) -> CompiledExecutable* {
-        if (error_msg) *error_msg = std::move(msg);
+        if (error_msg)
+            *error_msg = std::move(msg);
         return nullptr;
     };
 
@@ -787,25 +775,32 @@ CompiledExecutable* load_executable(const std::string& path,
     const uint8_t* end = p + meta.size();
 
     // Magic + version + flags
-    if ((end - p) < 8) return fail("load_executable: truncated header");
+    if ((end - p) < 8)
+        return fail("load_executable: truncated header");
     if (std::memcmp(p, kMetaMagic, 4) != 0)
         return fail("load_executable: bad magic — not a Lucid meta file");
     p += 4;
     uint8_t version, device_byte, dynamic_byte, pad;
-    if (!read_pod(p, end, version)) return fail("truncated version");
+    if (!read_pod(p, end, version))
+        return fail("truncated version");
     if (version != kMetaFormatVersion)
         return fail("load_executable: meta format version mismatch");
-    if (!read_pod(p, end, device_byte)) return fail("truncated device");
-    if (!read_pod(p, end, dynamic_byte)) return fail("truncated dynamic flag");
-    if (!read_pod(p, end, pad)) return fail("truncated padding");
+    if (!read_pod(p, end, device_byte))
+        return fail("truncated device");
+    if (!read_pod(p, end, dynamic_byte))
+        return fail("truncated dynamic flag");
+    if (!read_pod(p, end, pad))
+        return fail("truncated padding");
 
     std::vector<std::int64_t> input_ids, output_ids, grad_output_ids;
     std::vector<Shape> input_shapes, output_shapes;
     std::vector<uint8_t> input_dt_raw, output_dt_raw;
     std::vector<uint64_t> static_slots;
 
-    if (!read_vec(p, end, input_ids)) return fail("truncated input_ids");
-    if (!read_vec(p, end, output_ids)) return fail("truncated output_ids");
+    if (!read_vec(p, end, input_ids))
+        return fail("truncated input_ids");
+    if (!read_vec(p, end, output_ids))
+        return fail("truncated output_ids");
     if (!read_vec(p, end, grad_output_ids))
         return fail("truncated grad_output_ids");
     if (!read_vec_vec_i64(p, end, input_shapes))
@@ -821,16 +816,14 @@ CompiledExecutable* load_executable(const std::string& path,
 
     @autoreleasepool {
         const std::string pkg_path = path + ".mpsgraphpackage";
-        NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:
-                                                            pkg_path.c_str()]];
+        NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:pkg_path.c_str()]];
         MPSGraphCompilationDescriptor* cdesc = nil;
         if (::lucid::Determinism::is_enabled()) {
             cdesc = [[MPSGraphCompilationDescriptor alloc] init];
             cdesc.optimizationLevel = MPSGraphOptimizationLevel0;
         }
-        MPSGraphExecutable* exec = [[MPSGraphExecutable alloc]
-            initWithMPSGraphPackageAtURL:url
-                   compilationDescriptor:cdesc];
+        MPSGraphExecutable* exec = [[MPSGraphExecutable alloc] initWithMPSGraphPackageAtURL:url
+                                                                      compilationDescriptor:cdesc];
         if (exec == nil)
             return fail("load_executable: MPSGraphExecutable load returned nil");
 
@@ -843,7 +836,8 @@ CompiledExecutable* load_executable(const std::string& path,
         auto wrap_ids = [](std::vector<std::int64_t>&& v) {
             std::vector<TensorId> out;
             out.reserve(v.size());
-            for (std::int64_t x : v) out.push_back(TensorId{x});
+            for (std::int64_t x : v)
+                out.push_back(TensorId{x});
             return out;
         };
         result->input_ids = wrap_ids(std::move(input_ids));
