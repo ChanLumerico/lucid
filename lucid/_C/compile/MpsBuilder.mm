@@ -274,24 +274,65 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
         // op uses.  Without this filter, dead pieces would silently
         // appear as additional graph outputs (a single ``a, _ = x.split``
         // becomes a 2-output executable returning ``_`` to the user).
+        // Liveness set for multi-output emitters (split / split_at / unbind /
+        // topk / lstm): an id is "consumed" iff it is needed to produce a graph
+        // output.  When the caller supplied ``explicit_outputs`` we compute
+        // TRUE liveness by walking backward from those outputs through each
+        // producing op's inputs.  This (a) marks a *returned* piece live even
+        // when no later op consumes it (``return x[1:2]``), and (b) recognises
+        // a piece that flows only into a discarded result as DEAD — e.g. an
+        // LSTM's ``c_n`` that feeds a ``cat`` the user threw away — so the
+        // emitter can skip / bail on it.  Without explicit outputs (legacy
+        // single-output path) fall back to the looser "consumed by some op".
         std::unordered_set<TensorId> trace_consumed;
-        for (const auto& n : graph.ops)
-            for (TensorId iid : n.inputs)
-                if (iid >= 0)
-                    trace_consumed.insert(iid);
-        // A graph output that is *returned* but not consumed by any later op
-        // (e.g. ``return x[1:2]`` — a middle ``split_at`` piece) must also count
-        // as "consumed" so multi-output emitters (split / split_at / unbind /
-        // topk) bind it; otherwise the piece is never emitted and the explicit
-        // output can't be resolved → eager fallback.
-        for (TensorId oid : explicit_outputs)
-            if (oid >= 0)
-                trace_consumed.insert(oid);
+        if (!explicit_outputs.empty()) {
+            std::unordered_map<TensorId, const OpNode*> producer;
+            for (const auto& n : graph.ops)
+                for (const auto& meta : n.outputs)
+                    producer.emplace(meta.id, &n);
+            std::vector<TensorId> work;
+            for (TensorId oid : explicit_outputs)
+                if (oid >= 0 && trace_consumed.insert(oid).second)
+                    work.push_back(oid);
+            while (!work.empty()) {
+                const TensorId t = work.back();
+                work.pop_back();
+                const auto it = producer.find(t);
+                if (it == producer.end())
+                    continue;  // external feed / placeholder — no producer
+                for (TensorId iid : it->second->inputs)
+                    if (iid >= 0 && trace_consumed.insert(iid).second)
+                        work.push_back(iid);
+            }
+        } else {
+            for (const auto& n : graph.ops)
+                for (TensorId iid : n.inputs)
+                    if (iid >= 0)
+                        trace_consumed.insert(iid);
+        }
         ctx.set_consumed_inputs(trace_consumed);
 
         // Emit ops in dispatch order.
         std::size_t op_idx = 0;
         for (const auto& node : graph.ops) {
+            // Dead-op elimination (liveness known ⇒ explicit_outputs given):
+            // skip an op whose every output is dead.  It can't reach a graph
+            // output, and emitting it can force a crash-prone kernel — e.g. an
+            // LSTM cell trajectory (``produceCell``) feeding a discarded
+            // ``cat`` aborts the Metal LSTM kernel on some drivers.
+            if (!explicit_outputs.empty() && !node.outputs.empty()) {
+                bool any_live = false;
+                for (const auto& meta : node.outputs)
+                    if (trace_consumed.count(meta.id) != 0) {
+                        any_live = true;
+                        break;
+                    }
+                if (!any_live) {
+                    ++op_idx;
+                    continue;
+                }
+            }
+
             OpEmitter* emitter = find_emitter(node.name);
             if (emitter == nullptr) {
                 if (node.inputs.empty()) {

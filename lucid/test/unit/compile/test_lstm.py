@@ -93,7 +93,10 @@ def test_lstm_consumes_hidden_state_compiles() -> None:
     _compile_and_check(M(), metal_tensor(6, 3, 8), should_compile=True)
 
 
-def test_lstm_consumes_cell_state_compiles() -> None:
+def test_lstm_consumes_cell_state_falls_back() -> None:
+    # Consuming c_n needs MPSGraph's produceCell trajectory, which crashes the
+    # LSTM kernel on some Metal drivers — the emitter bails to eager (correct
+    # result) when the cell state is read.
     class M(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -103,7 +106,7 @@ def test_lstm_consumes_cell_state_compiles() -> None:
             _, (_hn, cn) = self.lstm(x)
             return cn.sum() + cn.flatten().mean()
 
-    _compile_and_check(M(), metal_tensor(6, 3, 8), should_compile=True)
+    _compile_and_check(M(), metal_tensor(6, 3, 8), should_compile=False)
 
 
 def test_lstm_proj_size_falls_back_cleanly() -> None:

@@ -94,6 +94,15 @@ public:
         if (node.outputs.size() != 3)
             return false;
 
+        // The cell-state trajectory (``produceCell``) crashes the MPSGraph
+        // LSTM kernel on some Metal drivers when its output is actually
+        // consumed — CI aborts inside ``GPU::LSTMOpHandler::encodeNDArrayOp``
+        // (the hidden output / h_n path, which slices the always-produced
+        // hidden trajectory, is fine).  Bail to eager when ``c_n`` is read so
+        // the common hidden-output LSTM stays compiled.
+        if (ctx.is_consumed(node.outputs[2].id))
+            return false;
+
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         if (g == nil)
             return false;
