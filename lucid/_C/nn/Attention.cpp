@@ -165,6 +165,18 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
     bwd->orig_v_shape_ = v->shape();
     kernel::NaryKernel<ScaledDotProductAttentionBackward, 3>::wire_autograd(std::move(bwd),
                                                                             {q, k, v}, core.output);
+
+    // The autograd wiring above records only {q, k, v} as trace inputs
+    // (attn_mask is a non-differentiable auxiliary tensor, not an autograd
+    // input).  The compile path needs the mask too, so the sdpa emitter can
+    // add it before the softmax instead of falling back to eager — re-record
+    // the full input list (Tracer::on_op_io is last-write-wins).  Mirrors the
+    // embedding op's handling of its non-diff ``indices`` input.
+    if (attn_mask) {
+        if (auto* trc = ::lucid::compile::current_tracer()) {
+            trc->on_op_io({q, k, v, attn_mask}, core.output);
+        }
+    }
     return core.output;
 }
 

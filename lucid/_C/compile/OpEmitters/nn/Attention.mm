@@ -96,12 +96,17 @@ public:
             TensorId m_id = node.inputs[3];
             if (m_id >= 0) {
                 MPSGraphTensor* m = (__bridge MPSGraphTensor*)ctx.resolve(m_id);
-                if (m != nil) {
-                    if (m.dataType != scores.dataType) {
-                        m = [g castTensor:m toType:scores.dataType name:nil];
-                    }
-                    scores = [g additionWithPrimaryTensor:scores secondaryTensor:m name:nil];
+                if (m == nil)
+                    return false;  // mask wired but unresolved → can't honor it
+                // Only a floating (additive) mask is reproducible by an add:
+                // the eager backend treats a bool mask as a *set*-mask (−inf
+                // where false), so route those to eager instead.
+                if ((m.dataType & MPSDataTypeFloatBit) == 0)
+                    return false;
+                if (m.dataType != scores.dataType) {
+                    m = [g castTensor:m toType:scores.dataType name:nil];
                 }
+                scores = [g additionWithPrimaryTensor:scores secondaryTensor:m name:nil];
             }
         }
         // Causal masking — applied only when no explicit additive mask is
