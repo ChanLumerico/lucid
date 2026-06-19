@@ -15,16 +15,17 @@
 //     attn    = softmax(scores, axis=-1)
 //     out     = attn @ V
 //
-// ``is_causal=True`` adds a lower-triangular large-negative mask before the
-// softmax (a finite value, not −∞ — the MPSGraph specializer can crash on inf
-// constants on some drivers).  The mask is built in-graph from O(Lq+Lk) host
-// index vectors (an iota per axis) compared with ``lessThanOrEqualTo`` +
-// ``select`` — cheaper than a baked O(Lq·Lk) constant per layer.  It uses the
-// bottom-right alignment
+// ``is_causal=True`` adds a lower-triangular large-negative additive mask
+// before the softmax.  The (Lq, Lk) mask is precomputed on the host and baked
+// as a ``constantWithData`` tensor (the proven RoPE-table path) rather than
+// built in-graph with ``select`` / compare / ``bandPart`` — those crash the
+// MPSGraph graph compiler on some Metal drivers.  The masked value is a large
+// *finite* negative (−inf likewise crashes the compiler) whose exp() underflows
+// to 0, so it is softmax-equivalent.  The mask uses the bottom-right alignment
 // ``j ≤ i + (Lk − Lq)`` so the non-square (cached-decode) case matches the
-// eager fused-causal convention.  An explicit additive mask takes
-// precedence over ``is_causal`` (mirrors the eager backend, which ignores
-// ``is_causal`` once a float ``attn_mask`` is supplied).
+// eager fused-causal convention.  An explicit additive mask takes precedence
+// over ``is_causal`` (mirrors the eager backend, which ignores ``is_causal``
+// once a float ``attn_mask`` is supplied).
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -105,8 +106,12 @@ public:
         }
         // Causal masking — applied only when no explicit additive mask is
         // wired (the eager backend lets a float ``attn_mask`` win over
-        // ``is_causal``).  Build a lower-triangular −∞ additive mask over the
-        // trailing (Lq, Lk) score axes and broadcast it across batch/head.
+        // ``is_causal``).  The (Lq, Lk) additive mask is fully precomputed on
+        // the host and baked as a ``constantWithData`` tensor (the same proven
+        // path the RoPE table uses) — deliberately NOT built in-graph with
+        // ``select`` / compare / ``bandPart``, which crash the MPSGraph graph
+        // compiler on some Metal drivers.  Only ``constantWithData`` + cast +
+        // add reach the executable; those are exercised CI-wide.
         if (is_causal && !has_mask) {
             NSUInteger nd_c = scores.shape.count;
             if (nd_c < 2)
@@ -115,44 +120,28 @@ public:
             const long long Lk = scores.shape[nd_c - 1].longLongValue;
             if (Lq <= 0 || Lk <= 0)
                 return false;
-            // Per-axis index vectors (host iota, O(Lq+Lk)).
-            std::vector<float> row_data((std::size_t)Lq), col_data((std::size_t)Lk);
-            for (long long i = 0; i < Lq; ++i)
-                row_data[(std::size_t)i] = (float)i;
-            for (long long j = 0; j < Lk; ++j)
-                col_data[(std::size_t)j] = (float)j;
-            NSData* row_nsd = [NSData dataWithBytes:row_data.data()
-                                             length:row_data.size() * sizeof(float)];
-            NSData* col_nsd = [NSData dataWithBytes:col_data.data()
-                                             length:col_data.size() * sizeof(float)];
-            MPSGraphTensor* rows = [g constantWithData:row_nsd
-                                                 shape:@[ [NSNumber numberWithLongLong:Lq], @1 ]
-                                              dataType:MPSDataTypeFloat32];
-            MPSGraphTensor* cols = [g constantWithData:col_nsd
-                                                 shape:@[ @1, [NSNumber numberWithLongLong:Lk] ]
-                                              dataType:MPSDataTypeFloat32];
+            // Disallowed positions get a large *finite* negative (NOT −inf,
+            // which can crash the graph compiler) whose exp() underflows to 0,
+            // so it is softmax-equivalent.  f16 saturates at 65504, so the
+            // half-precision score path uses a smaller magnitude.
+            const float neg_big = (scores.dataType == MPSDataTypeFloat16) ? -6.0e4f : -1.0e30f;
             // Keep key j for query i iff  j ≤ i + (Lk − Lq)  (bottom-right
             // aligned; reduces to lower-triangular when Lq == Lk).
-            MPSGraphTensor* offset_c = [g constantWithScalar:(double)(Lk - Lq)
-                                                    dataType:MPSDataTypeFloat32];
-            MPSGraphTensor* rows_off = [g additionWithPrimaryTensor:rows
-                                                    secondaryTensor:offset_c
-                                                               name:nil];
-            MPSGraphTensor* keep = [g lessThanOrEqualToWithPrimaryTensor:cols
-                                                         secondaryTensor:rows_off
-                                                                    name:nil];
-            MPSGraphTensor* zero_c = [g constantWithScalar:0.0 dataType:scores.dataType];
-            // Disallowed positions get a large *finite* negative (NOT −inf):
-            // the MPSGraph executable specializer can crash on inf constants on
-            // some Metal drivers, and a value whose exp() underflows to 0 is
-            // softmax-equivalent anyway.  f16 saturates at 65504, so cap the
-            // magnitude well under that for the half-precision score path.
-            const double neg_big = (scores.dataType == MPSDataTypeFloat16) ? -6.0e4 : -1.0e30;
-            MPSGraphTensor* neg_big_c = [g constantWithScalar:neg_big dataType:scores.dataType];
-            MPSGraphTensor* causal_mask = [g selectWithPredicateTensor:keep
-                                                   truePredicateTensor:zero_c
-                                                  falsePredicateTensor:neg_big_c
-                                                                  name:@"sdpa_causal_mask"];
+            const long long offset = Lk - Lq;
+            std::vector<float> mask_data((std::size_t)(Lq * Lk));
+            for (long long i = 0; i < Lq; ++i)
+                for (long long j = 0; j < Lk; ++j)
+                    mask_data[(std::size_t)(i * Lk + j)] = (j <= i + offset) ? 0.0f : neg_big;
+            NSData* mask_nsd = [NSData dataWithBytes:mask_data.data()
+                                              length:mask_data.size() * sizeof(float)];
+            MPSGraphTensor* causal_mask =
+                [g constantWithData:mask_nsd
+                              shape:@[
+                                  [NSNumber numberWithLongLong:Lq], [NSNumber numberWithLongLong:Lk]
+                              ]
+                           dataType:MPSDataTypeFloat32];
+            if (causal_mask.dataType != scores.dataType)
+                causal_mask = [g castTensor:causal_mask toType:scores.dataType name:nil];
             scores = [g additionWithPrimaryTensor:scores secondaryTensor:causal_mask name:nil];
         }
         NSUInteger nd_s = scores.shape.count;
