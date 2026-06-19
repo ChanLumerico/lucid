@@ -183,6 +183,10 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
         (diff * step <= 0) ? 0 : static_cast<std::int64_t>(std::ceil(diff / step));
     Shape shape{n};
     OpScopeFull scope{"arange", device, dt, shape};
+    // Record the generator parameters so the compile emitter can bake the
+    // sequence as a constant (start / step are static; n is the output len).
+    scope.set_attr("start", start);
+    scope.set_attr("step", step);
 
     // Fill p[i] = start + i * step, cast to the target element type.
     auto compute_cpu = [&](auto* p) {

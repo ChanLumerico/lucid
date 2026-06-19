@@ -12,9 +12,11 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <cstdint>
 #include <memory>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 #include "../OpEmitter.h"
 
@@ -24,17 +26,17 @@ namespace {
 
 inline MPSDataType to_mps_dtype_local(Dtype dt) {
     switch (dt) {
-        case Dtype::F16:
-            return MPSDataTypeFloat16;
-        case Dtype::I32:
-            return MPSDataTypeInt32;
-        case Dtype::I64:
-            return MPSDataTypeInt64;
-        case Dtype::Bool:
-            return MPSDataTypeBool;
-        case Dtype::F32:
-        default:
-            return MPSDataTypeFloat32;
+    case Dtype::F16:
+        return MPSDataTypeFloat16;
+    case Dtype::I32:
+        return MPSDataTypeInt32;
+    case Dtype::I64:
+        return MPSDataTypeInt64;
+    case Dtype::Bool:
+        return MPSDataTypeBool;
+    case Dtype::F32:
+    default:
+        return MPSDataTypeFloat32;
     }
 }
 
@@ -70,9 +72,7 @@ public:
         const TensorMeta& meta = node.outputs[0];
         NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
         MPSDataType ns_dt = to_mps_dtype_local(meta.dtype);
-        MPSGraphTensor* y = [graph constantWithScalar:*v
-                                                 shape:ns_shape
-                                              dataType:ns_dt];
+        MPSGraphTensor* y = [graph constantWithScalar:*v shape:ns_shape dataType:ns_dt];
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
@@ -103,8 +103,8 @@ public:
         NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
         MPSDataType ns_dt = to_mps_dtype_local(meta.dtype);
         MPSGraphTensor* y = [graph constantWithScalar:(double)FILL_VALUE
-                                                 shape:ns_shape
-                                              dataType:ns_dt];
+                                                shape:ns_shape
+                                             dataType:ns_dt];
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
@@ -113,11 +113,90 @@ private:
     std::string name_;
 };
 
+// ── arange — bake the sequence ``start + i*step`` as a constant.  The
+// generator parameters are static (recorded as ``start`` / ``step`` attrs by
+// ``ops/gfunc/Gfunc.cpp::arange_op``; the length is the output dim), so the
+// whole 1-D tensor is known at compile time.  This is what unblocks strided
+// slicing (``x[..., ::2]`` lowers to ``gather`` over an ``arange`` index), so
+// e.g. RoFormer's interleaved RoPE compiles instead of falling back to eager.
+class ArangeEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "arange"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (!node.inputs.empty())
+            return false;
+        if (node.outputs.empty())
+            return false;
+        const TensorMeta& meta = node.outputs[0];
+        if (meta.shape.size() != 1)
+            return false;
+        const std::int64_t n = meta.shape[0];
+        if (n <= 0)
+            return false;  // empty arange — let the rare case fall back
+
+        auto its = node.attrs.find("start");
+        auto itp = node.attrs.find("step");
+        if (its == node.attrs.end() || itp == node.attrs.end())
+            return false;
+        const double* startp = std::get_if<double>(&its->second);
+        const double* stepp = std::get_if<double>(&itp->second);
+        if (startp == nullptr || stepp == nullptr)
+            return false;
+        const double start = *startp;
+        const double step = *stepp;
+
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        if (graph == nil)
+            return false;
+        NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
+
+        MPSGraphTensor* y = nil;
+        switch (meta.dtype) {
+        case Dtype::I32: {
+            std::vector<std::int32_t> buf(static_cast<std::size_t>(n));
+            for (std::int64_t i = 0; i < n; ++i)
+                buf[static_cast<std::size_t>(i)] =
+                    static_cast<std::int32_t>(start + static_cast<double>(i) * step);
+            NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(std::int32_t)];
+            y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeInt32];
+            break;
+        }
+        case Dtype::I64: {
+            std::vector<std::int64_t> buf(static_cast<std::size_t>(n));
+            for (std::int64_t i = 0; i < n; ++i)
+                buf[static_cast<std::size_t>(i)] =
+                    static_cast<std::int64_t>(start + static_cast<double>(i) * step);
+            NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(std::int64_t)];
+            y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeInt64];
+            break;
+        }
+        default: {
+            // F16 / F32 / F64 — bake float32 and cast to the target type
+            // (Metal has no f64; F32 is the highest-precision graph type).
+            std::vector<float> buf(static_cast<std::size_t>(n));
+            for (std::int64_t i = 0; i < n; ++i)
+                buf[static_cast<std::size_t>(i)] =
+                    static_cast<float>(start + static_cast<double>(i) * step);
+            NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(float)];
+            y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeFloat32];
+            MPSDataType mdt = to_mps_dtype_local(meta.dtype);
+            if (mdt != MPSDataTypeFloat32)
+                y = [graph castTensor:y toType:mdt name:nil];
+            break;
+        }
+        }
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
+    }
+};
+
 struct FactoryEmitterRegistrar {
     FactoryEmitterRegistrar() {
         register_emitter(std::make_unique<FullEmitter>());
         register_emitter(std::make_unique<FixedFillEmitterT<0>>("zeros"));
         register_emitter(std::make_unique<FixedFillEmitterT<1>>("ones"));
+        register_emitter(std::make_unique<ArangeEmitter>());
     }
 };
 

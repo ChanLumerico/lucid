@@ -56,33 +56,56 @@ struct StubsRegistrar {
     StubsRegistrar() {
         for (const char* name : {
                  // ── linalg long tail (iterative algorithms) ─────────
-                 "cholesky", "eig", "eigh", "pinv",
-                 "qr", "solve", "svd", "erfinv",
+                 "cholesky",
+                 "eig",
+                 "eigh",
+                 "pinv",
+                 "qr",
+                 "solve",
+                 "svd",
+                 "erfinv",
                  // ── multi-output / dynamic shape ────────────────────
                  // ``split`` / ``split_at`` / ``topk`` moved to real-emit
                  // (OpEmitters/shape/Split.mm) via manual multi-output
                  // bind through BuilderContext::bind.  ``nonzero`` and
                  // ``unique`` remain stubbed (dynamic output shape).
-                 "nonzero", "unique",
+                 "nonzero",
+                 "unique",
                  // ── FFT (no MPSGraph primitive) ─────────────────────
-                 "fftn", "ifftn", "rfftn", "irfftn",
+                 "fftn",
+                 "ifftn",
+                 "rfftn",
+                 "irfftn",
                  // ── histogram (no MPSGraph primitive) ───────────────
-                 "histogram", "histogram2d", "histogramdd",
+                 "histogram",
+                 "histogram2d",
+                 "histogramdd",
                  // ── 3D pool / conv-transpose (SDK 2-D only) ─────────
-                 "conv_transpose3d", "max_pool3d", "avg_pool3d",
+                 "conv_transpose3d",
+                 "max_pool3d",
+                 "avg_pool3d",
                  // ── 3D interpolate (resize is 2-D only) ─────────────
-                 "interpolate_nearest_3d", "interpolate_trilinear",
+                 "interpolate_nearest_3d",
+                 "interpolate_trilinear",
                  // ── spatial sampling / segment-reduce (dyn. gather) ─
-                 "grid_sample", "rotate", "embedding_bag",
+                 "grid_sample",
+                 "rotate",
+                 "embedding_bag",
                  // ── complex / 2-storage path ────────────────────────
                  "complex",
                  // ── host-precomputed factory headers ────────────────
                  // (already factory-skipped by the builder when inputs
                  // are empty; stubbed for find_emitter completeness).
-                 // ``zeros`` / ``ones`` moved to real-emit
-                 // (OpEmitters/misc/Factory.mm) because they appear
-                 // mid-trace in RNN-style code (default ``hx = zeros``).
-                 "arange", "eye", "linspace", "logspace", "meshgrid",
+                 // ``zeros`` / ``ones`` / ``arange`` moved to real-emit
+                 // (OpEmitters/special/Factory.mm) — ``zeros`` / ``ones``
+                 // appear mid-trace in RNN-style code (default ``hx =
+                 // zeros``); ``arange`` backs strided slicing (``x[..., ::2]``
+                 // lowers to gather over an arange index), so baking it as a
+                 // constant unblocks e.g. RoFormer's interleaved RoPE.
+                 "eye",
+                 "linspace",
+                 "logspace",
+                 "meshgrid",
                  "empty",
                  // ``rand`` / ``uniform`` / ``randn`` / ``normal`` /
                  // ``randint`` / ``bernoulli`` moved to real-emit in
