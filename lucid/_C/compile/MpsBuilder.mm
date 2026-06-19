@@ -7,9 +7,9 @@
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
-#include <cstddef>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -34,19 +34,19 @@ namespace {
 
 inline MPSDataType to_mps_dtype(Dtype dt) {
     switch (dt) {
-        case Dtype::F32:
-            return MPSDataTypeFloat32;
-        case Dtype::F16:
-            return MPSDataTypeFloat16;
-        case Dtype::I32:
-            return MPSDataTypeInt32;
-        case Dtype::I64:
-            return MPSDataTypeInt64;
-        case Dtype::Bool:
-            return MPSDataTypeBool;
-        default:
-            throw std::runtime_error(
-                "lucid::compile: dtype not supported on the MPSGraph compile path");
+    case Dtype::F32:
+        return MPSDataTypeFloat32;
+    case Dtype::F16:
+        return MPSDataTypeFloat16;
+    case Dtype::I32:
+        return MPSDataTypeInt32;
+    case Dtype::I64:
+        return MPSDataTypeInt64;
+    case Dtype::Bool:
+        return MPSDataTypeBool;
+    default:
+        throw std::runtime_error(
+            "lucid::compile: dtype not supported on the MPSGraph compile path");
     }
 }
 
@@ -67,8 +67,7 @@ inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
 //     behind Level1; the cost is a one-time ~5-20ms compile-time
 //     increase per signature, amortised over every subsequent run.
 inline MPSGraphCompilationDescriptor* make_compile_descriptor() {
-    MPSGraphCompilationDescriptor* desc =
-        [[MPSGraphCompilationDescriptor alloc] init];
+    MPSGraphCompilationDescriptor* desc = [[MPSGraphCompilationDescriptor alloc] init];
     if (::lucid::Determinism::is_enabled())
         desc.optimizationLevel = MPSGraphOptimizationLevel0;
     else
@@ -104,8 +103,8 @@ public:
     std::vector<Shape> output_shapes;
     std::vector<Dtype> output_dtypes;
     Device device = Device::GPU;
-    std::vector<TensorId> grad_output_ids;  // Phase 1.3
-    bool dynamic_batch = false;             // Phase 1.6
+    std::vector<TensorId> grad_output_ids;              // Phase 1.3
+    bool dynamic_batch = false;                         // Phase 1.6
     std::unordered_set<std::size_t> static_feed_slots;  // Phase 1.6
 
     ~CompiledExecutable() {
@@ -127,7 +126,6 @@ public:
 
 namespace lucid::compile {
 
-
 // ────────────────────────────────────────────────────────────────────
 // MpsBuilder lifecycle (Phase B of compile OOP refactor)
 // ────────────────────────────────────────────────────────────────────
@@ -138,14 +136,12 @@ MpsBuilder::MpsBuilder(const TraceGraph& graph,
 
 MpsBuilder::~MpsBuilder() = default;
 
-CompiledExecutable* MpsBuilder::compile_trace(
-        bool dynamic_batch,
-        const std::vector<TensorId>& param_ids,
-        const std::vector<TensorId>& explicit_outputs) {
+CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
+                                              const std::vector<TensorId>& param_ids,
+                                              const std::vector<TensorId>& explicit_outputs) {
     auto& graph = graph_;
     const auto& external_feeds = external_feeds_;
     auto* error_msg = error_msg_;
-
 
     // ``dynamic_batch`` (Phase 1.6): leading dim of every non-parameter
     // feed becomes a symbolic placeholder (-1) so a single executable
@@ -156,8 +152,7 @@ CompiledExecutable* MpsBuilder::compile_trace(
     // which currently refuses to build gradients for dynamic-shape
     // primaries.  ``make_step`` / the backward-aware path therefore
     // continues to compile a separate executable per batch size.
-    const std::unordered_set<TensorId> param_id_set(
-        param_ids.begin(), param_ids.end());
+    const std::unordered_set<TensorId> param_id_set(param_ids.begin(), param_ids.end());
     auto fail = [&](std::string msg) -> CompiledExecutable* {
         if (error_msg)
             *error_msg = std::move(msg);
@@ -229,15 +224,14 @@ CompiledExecutable* MpsBuilder::compile_trace(
         for (TensorId tid : ordered_feed_ids) {
             const auto& impl = external_feeds.at(tid);
             if (!impl)
-                return fail("compile_trace: external feed for id " +
-                            std::to_string(tid) + " is null");
+                return fail("compile_trace: external feed for id " + std::to_string(tid) +
+                            " is null");
             if (impl->device() != device)
                 return fail("compile_trace: external feed device mismatch");
 
             const Shape feed_shape = impl->shape();
             const Dtype feed_dtype = impl->dtype();
-            const bool is_user_input_ct =
-                (param_id_set.find(tid) == param_id_set.end());
+            const bool is_user_input_ct = (param_id_set.find(tid) == param_id_set.end());
             NSArray<NSNumber*>* ns_shape;
             if (dynamic_batch && is_user_input_ct && !feed_shape.empty()) {
                 NSMutableArray<NSNumber*>* dyn =
@@ -256,11 +250,10 @@ CompiledExecutable* MpsBuilder::compile_trace(
                 return fail(std::string("compile_trace: ") + e.what());
             }
 
-            MPSGraphTensor* ph =
-                [graph_obj placeholderWithShape:ns_shape
-                                       dataType:ns_dt
-                                           name:[NSString stringWithFormat:@"feed_%lld",
-                                                                            (long long)tid]];
+            MPSGraphTensor* ph = [graph_obj
+                placeholderWithShape:ns_shape
+                            dataType:ns_dt
+                                name:[NSString stringWithFormat:@"feed_%lld", (long long)tid]];
             ctx.bind(tid, (__bridge void*)ph);
             feed_tensors.push_back(ph);
             input_shapes.push_back(feed_shape);
@@ -286,6 +279,14 @@ CompiledExecutable* MpsBuilder::compile_trace(
             for (TensorId iid : n.inputs)
                 if (iid >= 0)
                     trace_consumed.insert(iid);
+        // A graph output that is *returned* but not consumed by any later op
+        // (e.g. ``return x[1:2]`` — a middle ``split_at`` piece) must also count
+        // as "consumed" so multi-output emitters (split / split_at / unbind /
+        // topk) bind it; otherwise the piece is never emitted and the explicit
+        // output can't be resolved → eager fallback.
+        for (TensorId oid : explicit_outputs)
+            if (oid >= 0)
+                trace_consumed.insert(oid);
         ctx.set_consumed_inputs(trace_consumed);
 
         // Emit ops in dispatch order.
@@ -308,15 +309,23 @@ CompiledExecutable* MpsBuilder::compile_trace(
             if (verbose) {
                 fprintf(stderr, "[compile] op[%zu] %s  inputs=[", op_idx, node.name.c_str());
                 for (std::size_t i = 0; i < node.inputs.size(); ++i) {
-                    if (i) fputc(',', stderr);
+                    if (i)
+                        fputc(',', stderr);
                     TensorId iid = node.inputs[i];
-                    if (iid < 0) { fputs("none", stderr); continue; }
+                    if (iid < 0) {
+                        fputs("none", stderr);
+                        continue;
+                    }
                     MPSGraphTensor* t = (__bridge MPSGraphTensor*)ctx.resolve(iid);
-                    if (t == nil) { fprintf(stderr, "id%lld[unresolved]", (long long)iid); continue; }
+                    if (t == nil) {
+                        fprintf(stderr, "id%lld[unresolved]", (long long)iid);
+                        continue;
+                    }
                     fputc('(', stderr);
                     NSArray<NSNumber*>* sh = t.shape;
                     for (NSUInteger k = 0; k < sh.count; ++k) {
-                        if (k) fputc(',', stderr);
+                        if (k)
+                            fputc(',', stderr);
                         fprintf(stderr, "%lld", [sh[k] longLongValue]);
                     }
                     fputc(')', stderr);
@@ -325,7 +334,8 @@ CompiledExecutable* MpsBuilder::compile_trace(
                 if (!node.outputs.empty()) {
                     const auto& sh = node.outputs[0].shape;
                     for (std::size_t k = 0; k < sh.size(); ++k) {
-                        if (k) fputc(',', stderr);
+                        if (k)
+                            fputc(',', stderr);
                         fprintf(stderr, "%lld", (long long)sh[k]);
                     }
                 }
@@ -341,7 +351,8 @@ CompiledExecutable* MpsBuilder::compile_trace(
                 fprintf(stderr, "[compile]   → emitted (");
                 const auto& sh = node.outputs[0].shape;
                 for (std::size_t k = 0; k < sh.size(); ++k) {
-                    if (k) fputc(',', stderr);
+                    if (k)
+                        fputc(',', stderr);
                     fprintf(stderr, "%lld", (long long)sh[k]);
                 }
                 fputs(")\n", stderr);
@@ -366,7 +377,8 @@ CompiledExecutable* MpsBuilder::compile_trace(
 
         auto add_target = [&](TensorId id, const Shape& shape, Dtype dtype) -> bool {
             void* t_void = ctx.resolve(id);
-            if (t_void == nullptr) return false;
+            if (t_void == nullptr)
+                return false;
             target_ids.push_back(id);
             target_tensors.push_back((__bridge MPSGraphTensor*)t_void);
             output_shapes.push_back(shape);
@@ -392,17 +404,17 @@ CompiledExecutable* MpsBuilder::compile_trace(
                 auto it = id_to_meta.find(tid);
                 if (it != id_to_meta.end()) {
                     if (!add_target(tid, it->second.first, it->second.second))
-                        return fail("compile_trace: explicit_output id " +
-                                    std::to_string(tid) + " has no MPSGraph binding");
+                        return fail("compile_trace: explicit_output id " + std::to_string(tid) +
+                                    " has no MPSGraph binding");
                 } else {
                     // Try external feed.
                     auto fit = external_feeds.find(tid);
                     if (fit == external_feeds.end() || !fit->second)
-                        return fail("compile_trace: explicit_output id " +
-                                    std::to_string(tid) + " not in trace");
+                        return fail("compile_trace: explicit_output id " + std::to_string(tid) +
+                                    " not in trace");
                     if (!add_target(tid, fit->second->shape(), fit->second->dtype()))
-                        return fail("compile_trace: explicit_output id " +
-                                    std::to_string(tid) + " external feed not bound");
+                        return fail("compile_trace: explicit_output id " + std::to_string(tid) +
+                                    " external feed not bound");
                 }
             }
         } else {
@@ -433,8 +445,8 @@ CompiledExecutable* MpsBuilder::compile_trace(
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
             MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
-            MPSGraphShapedType* st =
-                [[MPSGraphShapedType alloc] initWithShape:ns_shape dataType:ns_dt];
+            MPSGraphShapedType* st = [[MPSGraphShapedType alloc] initWithShape:ns_shape
+                                                                      dataType:ns_dt];
             feed_dict[feed_tensors[i]] = st;
         }
         NSMutableArray<MPSGraphTensor*>* target_arr =
@@ -442,15 +454,13 @@ CompiledExecutable* MpsBuilder::compile_trace(
         for (MPSGraphTensor* t : target_tensors)
             [target_arr addObject:t];
 
-        id<MTLDevice> mtl_device =
-            (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
+        id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
         MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
         MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
                                                               feeds:feed_dict
                                                       targetTensors:target_arr
                                                    targetOperations:nil
-                                              compilationDescriptor:
-                                                  make_compile_descriptor()];
+                                              compilationDescriptor:make_compile_descriptor()];
         if (compiled == nil)
             return fail("compile_trace: MPSGraph compilation returned nil");
 
@@ -468,11 +478,10 @@ CompiledExecutable* MpsBuilder::compile_trace(
         // only rewrites the leading axis for non-parameter slots.
         if (dynamic_batch) {
             exe->dynamic_batch = true;
-            const std::unordered_set<TensorId> param_id_set_for_exe(
-                param_ids.begin(), param_ids.end());
+            const std::unordered_set<TensorId> param_id_set_for_exe(param_ids.begin(),
+                                                                    param_ids.end());
             for (std::size_t i = 0; i < exe->input_ids.size(); ++i) {
-                if (param_id_set_for_exe.find(exe->input_ids[i]) !=
-                    param_id_set_for_exe.end()) {
+                if (param_id_set_for_exe.find(exe->input_ids[i]) != param_id_set_for_exe.end()) {
                     exe->static_feed_slots.insert(i);
                 }
             }
@@ -483,15 +492,14 @@ CompiledExecutable* MpsBuilder::compile_trace(
 
 // ── Phase 1.3 ────────────────────────────────────────────────────────────────
 
-CompiledExecutable* MpsBuilder::compile_trace_with_backward(
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        bool dynamic_batch,
-        const std::vector<TensorId>& extra_output_ids) {
+CompiledExecutable*
+MpsBuilder::compile_trace_with_backward(TensorId loss_id,
+                                        const std::vector<TensorId>& param_ids,
+                                        bool dynamic_batch,
+                                        const std::vector<TensorId>& extra_output_ids) {
     auto& graph = graph_;
     const auto& external_feeds = external_feeds_;
     auto* error_msg = error_msg_;
-
 
     auto fail = [&](std::string msg) -> CompiledExecutable* {
         if (error_msg)
@@ -615,9 +623,8 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
 
             const Shape feed_shape = impl->shape();
             const Dtype feed_dtype = impl->dtype();
-            const bool is_user_input =
-                (param_id_set.find(tid) == param_id_set.end()) &&
-                (static_feed_ids.find(tid) == static_feed_ids.end());
+            const bool is_user_input = (param_id_set.find(tid) == param_id_set.end()) &&
+                                       (static_feed_ids.find(tid) == static_feed_ids.end());
             NSArray<NSNumber*>* ns_shape;
             if (dynamic_batch && is_user_input && !feed_shape.empty()) {
                 NSMutableArray<NSNumber*>* dyn =
@@ -635,11 +642,10 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
             } catch (const std::exception& e) {
                 return fail(std::string("compile_trace_with_backward: ") + e.what());
             }
-            MPSGraphTensor* ph =
-                [graph_obj placeholderWithShape:ns_shape
-                                       dataType:ns_dt
-                                           name:[NSString stringWithFormat:@"feed_%lld",
-                                                                            (long long)tid]];
+            MPSGraphTensor* ph = [graph_obj
+                placeholderWithShape:ns_shape
+                            dataType:ns_dt
+                                name:[NSString stringWithFormat:@"feed_%lld", (long long)tid]];
             ctx.bind(tid, (__bridge void*)ph);
             feed_tensors.push_back(ph);
             input_shapes.push_back(feed_shape);
@@ -671,8 +677,8 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
             if (emitter == nullptr) {
                 if (node.inputs.empty())
                     continue;  // dead-code host-factory header
-                return fail("compile_trace_with_backward: emitter vanished for op '" +
-                            node.name + "'");
+                return fail("compile_trace_with_backward: emitter vanished for op '" + node.name +
+                            "'");
             }
             if (!emitter->emit(ctx, node))
                 return fail("compile_trace_with_backward: emitter for op '" + node.name +
@@ -720,23 +726,24 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         {
             std::vector<void*> grads_void;
             std::string vjp_err;
-            switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
-                                          loss_id, param_ids, grads_void, &vjp_err)) {
-                case ManualVjpStatus::Success:
-                    for (std::size_t i = 0; i < param_ids.size(); ++i) {
-                        grad_tensors.push_back((__bridge MPSGraphTensor*)grads_void[i]);
-                        const auto& p_impl = external_feeds.at(param_ids[i]);
-                        grad_shapes.push_back(p_impl->shape());
-                        grad_dtypes.push_back(p_impl->dtype());
-                    }
-                    grads_done = true;
-                    break;
-                case ManualVjpStatus::HardFail:
-                    return fail("compile_trace_with_backward: "
-                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err);
-                case ManualVjpStatus::FellBack:
-                case ManualVjpStatus::Disabled:
-                    break;  // → MPSGraph autograd below
+            switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id, param_ids,
+                                         grads_void, &vjp_err)) {
+            case ManualVjpStatus::Success:
+                for (std::size_t i = 0; i < param_ids.size(); ++i) {
+                    grad_tensors.push_back((__bridge MPSGraphTensor*)grads_void[i]);
+                    const auto& p_impl = external_feeds.at(param_ids[i]);
+                    grad_shapes.push_back(p_impl->shape());
+                    grad_dtypes.push_back(p_impl->dtype());
+                }
+                grads_done = true;
+                break;
+            case ManualVjpStatus::HardFail:
+                return fail("compile_trace_with_backward: "
+                            "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " +
+                            vjp_err);
+            case ManualVjpStatus::FellBack:
+            case ManualVjpStatus::Disabled:
+                break;  // → MPSGraph autograd below
             }
         }
 
@@ -801,19 +808,17 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
             MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
-            feed_dict[feed_tensors[i]] =
-                [[MPSGraphShapedType alloc] initWithShape:ns_shape dataType:ns_dt];
+            feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
+                                                                          dataType:ns_dt];
         }
 
-        id<MTLDevice> mtl_device =
-            (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
+        id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
         MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
         MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
                                                               feeds:feed_dict
                                                       targetTensors:target_arr
                                                    targetOperations:nil
-                                              compilationDescriptor:
-                                                  make_compile_descriptor()];
+                                              compilationDescriptor:make_compile_descriptor()];
         if (compiled == nil)
             return fail("compile_trace_with_backward: MPSGraph compilation returned nil");
 
@@ -907,48 +912,46 @@ SgdOutputs emit_sgd_update(MPSGraph* g,
     if (s.weight_decay != 0.0) {
         MPSGraphTensor* wd = scalar_const(g, s.weight_decay, dt);
         g_eff = [g additionWithPrimaryTensor:g_eff
-                              secondaryTensor:[g multiplicationWithPrimaryTensor:wd
-                                                                   secondaryTensor:param
-                                                                              name:nil]
-                                         name:nil];
+                             secondaryTensor:[g multiplicationWithPrimaryTensor:wd
+                                                                secondaryTensor:param
+                                                                           name:nil]
+                                        name:nil];
     }
     MPSGraphTensor* lr_c = scalar_const(g, s.lr, dt);
     if (s.momentum != 0.0) {
         MPSGraphTensor* mu = scalar_const(g, s.momentum, dt);
-        MPSGraphTensor* one_minus_damp =
-            scalar_const(g, 1.0 - s.dampening, dt);
-        MPSGraphTensor* new_m = [g
-            additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:mu
-                                                          secondaryTensor:mom
-                                                                     name:nil]
-                      secondaryTensor:[g multiplicationWithPrimaryTensor:one_minus_damp
-                                                          secondaryTensor:g_eff
-                                                                     name:nil]
-                                 name:nil];
+        MPSGraphTensor* one_minus_damp = scalar_const(g, 1.0 - s.dampening, dt);
+        MPSGraphTensor* new_m =
+            [g additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:mu
+                                                            secondaryTensor:mom
+                                                                       name:nil]
+                         secondaryTensor:[g multiplicationWithPrimaryTensor:one_minus_damp
+                                                            secondaryTensor:g_eff
+                                                                       name:nil]
+                                    name:nil];
         MPSGraphTensor* eff_g;
         if (s.nesterov) {
             eff_g = [g additionWithPrimaryTensor:g_eff
-                                  secondaryTensor:[g multiplicationWithPrimaryTensor:mu
-                                                                       secondaryTensor:new_m
-                                                                                  name:nil]
-                                             name:nil];
+                                 secondaryTensor:[g multiplicationWithPrimaryTensor:mu
+                                                                    secondaryTensor:new_m
+                                                                               name:nil]
+                                            name:nil];
         } else {
             eff_g = new_m;
         }
         MPSGraphTensor* new_p =
             [g subtractionWithPrimaryTensor:param
                             secondaryTensor:[g multiplicationWithPrimaryTensor:lr_c
-                                                                 secondaryTensor:eff_g
-                                                                            name:nil]
+                                                               secondaryTensor:eff_g
+                                                                          name:nil]
                                        name:nil];
         return {new_p, new_m};
     }
-    MPSGraphTensor* new_p =
-        [g subtractionWithPrimaryTensor:param
-                        secondaryTensor:[g multiplicationWithPrimaryTensor:lr_c
-                                                             secondaryTensor:g_eff
-                                                                        name:nil]
-                                   name:nil];
+    MPSGraphTensor* new_p = [g subtractionWithPrimaryTensor:param
+                                            secondaryTensor:[g multiplicationWithPrimaryTensor:lr_c
+                                                                               secondaryTensor:g_eff
+                                                                                          name:nil]
+                                                       name:nil];
     return {new_p, nil};
 }
 
@@ -975,10 +978,10 @@ AdamOutputs emit_adam_update(MPSGraph* g,
     if (!decoupled_wd && s.weight_decay != 0.0) {
         MPSGraphTensor* wd = scalar_const(g, s.weight_decay, dt);
         g_eff = [g additionWithPrimaryTensor:g_eff
-                              secondaryTensor:[g multiplicationWithPrimaryTensor:wd
-                                                                   secondaryTensor:param
-                                                                              name:nil]
-                                         name:nil];
+                             secondaryTensor:[g multiplicationWithPrimaryTensor:wd
+                                                                secondaryTensor:param
+                                                                           name:nil]
+                                        name:nil];
     }
     MPSGraphTensor* beta1_c = scalar_const(g, s.beta1, dt);
     MPSGraphTensor* beta2_c = scalar_const(g, s.beta2, dt);
@@ -987,68 +990,60 @@ AdamOutputs emit_adam_update(MPSGraph* g,
     MPSGraphTensor* eps_c = scalar_const(g, s.eps, dt);
     MPSGraphTensor* lr_c = scalar_const(g, s.lr, dt);
 
-    MPSGraphTensor* g_sq =
-        [g multiplicationWithPrimaryTensor:g_eff secondaryTensor:g_eff name:nil];
+    MPSGraphTensor* g_sq = [g multiplicationWithPrimaryTensor:g_eff secondaryTensor:g_eff name:nil];
 
-    MPSGraphTensor* new_m = [g
-        additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:beta1_c
-                                                      secondaryTensor:m_buf
-                                                                 name:nil]
-                  secondaryTensor:[g multiplicationWithPrimaryTensor:one_minus_b1
-                                                      secondaryTensor:g_eff
-                                                                 name:nil]
-                             name:nil];
-    MPSGraphTensor* new_v = [g
-        additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:beta2_c
-                                                      secondaryTensor:v_buf
-                                                                 name:nil]
-                  secondaryTensor:[g multiplicationWithPrimaryTensor:one_minus_b2
-                                                      secondaryTensor:g_sq
-                                                                 name:nil]
-                             name:nil];
-    MPSGraphTensor* m_hat = [g divisionWithPrimaryTensor:new_m
-                                          secondaryTensor:bias1
-                                                     name:nil];
-    MPSGraphTensor* v_hat = [g divisionWithPrimaryTensor:new_v
-                                          secondaryTensor:bias2
-                                                     name:nil];
+    MPSGraphTensor* new_m =
+        [g additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:beta1_c
+                                                        secondaryTensor:m_buf
+                                                                   name:nil]
+                     secondaryTensor:[g multiplicationWithPrimaryTensor:one_minus_b1
+                                                        secondaryTensor:g_eff
+                                                                   name:nil]
+                                name:nil];
+    MPSGraphTensor* new_v =
+        [g additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:beta2_c
+                                                        secondaryTensor:v_buf
+                                                                   name:nil]
+                     secondaryTensor:[g multiplicationWithPrimaryTensor:one_minus_b2
+                                                        secondaryTensor:g_sq
+                                                                   name:nil]
+                                name:nil];
+    MPSGraphTensor* m_hat = [g divisionWithPrimaryTensor:new_m secondaryTensor:bias1 name:nil];
+    MPSGraphTensor* v_hat = [g divisionWithPrimaryTensor:new_v secondaryTensor:bias2 name:nil];
     MPSGraphTensor* v_sqrt = [g squareRootWithTensor:v_hat name:nil];
-    MPSGraphTensor* denom =
-        [g additionWithPrimaryTensor:v_sqrt secondaryTensor:eps_c name:nil];
-    MPSGraphTensor* step =
-        [g divisionWithPrimaryTensor:m_hat secondaryTensor:denom name:nil];
+    MPSGraphTensor* denom = [g additionWithPrimaryTensor:v_sqrt secondaryTensor:eps_c name:nil];
+    MPSGraphTensor* step = [g divisionWithPrimaryTensor:m_hat secondaryTensor:denom name:nil];
     if (decoupled_wd && s.weight_decay != 0.0) {
         MPSGraphTensor* wd = scalar_const(g, s.weight_decay, dt);
         step = [g additionWithPrimaryTensor:step
                             secondaryTensor:[g multiplicationWithPrimaryTensor:wd
-                                                                 secondaryTensor:param
-                                                                            name:nil]
+                                                               secondaryTensor:param
+                                                                          name:nil]
                                        name:nil];
     }
-    MPSGraphTensor* new_p =
-        [g subtractionWithPrimaryTensor:param
-                        secondaryTensor:[g multiplicationWithPrimaryTensor:lr_c
-                                                             secondaryTensor:step
-                                                                        name:nil]
-                                   name:nil];
+    MPSGraphTensor* new_p = [g subtractionWithPrimaryTensor:param
+                                            secondaryTensor:[g multiplicationWithPrimaryTensor:lr_c
+                                                                               secondaryTensor:step
+                                                                                          name:nil]
+                                                       name:nil];
     return {new_p, new_m, new_v};
 }
 
 }  // namespace
 
 CompiledExecutable* MpsBuilder::compile_fused_training_step(
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const OptimizerSpec& opt_spec,
-        const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
-        const std::vector<TensorId>& scalar_input_ids) {
+    TensorId loss_id,
+    const std::vector<TensorId>& param_ids,
+    const OptimizerSpec& opt_spec,
+    const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
+    const std::vector<TensorId>& scalar_input_ids) {
     auto& graph = graph_;
     const auto& external_feeds = external_feeds_;
     auto* error_msg = error_msg_;
 
-
     auto fail = [&](std::string msg) -> CompiledExecutable* {
-        if (error_msg) *error_msg = std::move(msg);
+        if (error_msg)
+            *error_msg = std::move(msg);
         return nullptr;
     };
 
@@ -1078,8 +1073,7 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
                 return fail("compile_fused_training_step: op '" + op.name +
                             "' has an unresolved input slot");
         if (find_emitter(op.name) == nullptr && !op.inputs.empty())
-            return fail("compile_fused_training_step: no emitter for op '" +
-                        op.name + "'");
+            return fail("compile_fused_training_step: no emitter for op '" + op.name + "'");
     }
 
     @autoreleasepool {
@@ -1103,8 +1097,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         for (TensorId tid : ordered_feed_ids) {
             const auto& impl = external_feeds.at(tid);
             if (!impl)
-                return fail("compile_fused_training_step: feed " +
-                            std::to_string(tid) + " is null");
+                return fail("compile_fused_training_step: feed " + std::to_string(tid) +
+                            " is null");
             const Shape& feed_shape = impl->shape();
             const Dtype feed_dtype = impl->dtype();
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(feed_shape);
@@ -1112,15 +1106,12 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
             try {
                 ns_dt = to_mps_dtype(feed_dtype);
             } catch (const std::exception& e) {
-                return fail(std::string(
-                    "compile_fused_training_step: ") + e.what());
+                return fail(std::string("compile_fused_training_step: ") + e.what());
             }
-            MPSGraphTensor* ph =
-                [graph_obj placeholderWithShape:ns_shape
-                                       dataType:ns_dt
-                                           name:[NSString stringWithFormat:
-                                                                @"feed_%lld",
-                                                                (long long)tid]];
+            MPSGraphTensor* ph = [graph_obj
+                placeholderWithShape:ns_shape
+                            dataType:ns_dt
+                                name:[NSString stringWithFormat:@"feed_%lld", (long long)tid]];
             ctx.bind(tid, (__bridge void*)ph);
             feed_tensors.push_back(ph);
             input_shapes.push_back(feed_shape);
@@ -1131,13 +1122,15 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         for (const auto& node : graph.ops) {
             OpEmitter* emitter = find_emitter(node.name);
             if (emitter == nullptr) {
-                if (node.inputs.empty()) continue;  // dead-code header
+                if (node.inputs.empty())
+                    continue;  // dead-code header
                 return fail("compile_fused_training_step: emitter vanished "
-                            "for op '" + node.name + "'");
+                            "for op '" +
+                            node.name + "'");
             }
             if (!emitter->emit(ctx, node))
-                return fail("compile_fused_training_step: emitter '" +
-                            node.name + "' returned false");
+                return fail("compile_fused_training_step: emitter '" + node.name +
+                            "' returned false");
             // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
@@ -1155,8 +1148,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         for (TensorId pid : param_ids) {
             void* p_void = ctx.resolve(pid);
             if (p_void == nullptr)
-                return fail("compile_fused_training_step: param id " +
-                            std::to_string(pid) + " has no placeholder");
+                return fail("compile_fused_training_step: param id " + std::to_string(pid) +
+                            " has no placeholder");
             [param_arr addObject:(__bridge MPSGraphTensor*)p_void];
             const auto& p_impl = external_feeds.at(pid);
             param_shapes.push_back(p_impl->shape());
@@ -1171,19 +1164,20 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         {
             std::vector<void*> grads_void;
             std::string vjp_err;
-            switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
-                                          loss_id, param_ids, grads_void, &vjp_err)) {
-                case ManualVjpStatus::Success:
-                    for (std::size_t i = 0; i < param_ids.size(); ++i)
-                        param_grads[i] = (__bridge MPSGraphTensor*)grads_void[i];
-                    grads_done = true;
-                    break;
-                case ManualVjpStatus::HardFail:
-                    return fail("compile_fused_training_step: "
-                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err);
-                case ManualVjpStatus::FellBack:
-                case ManualVjpStatus::Disabled:
-                    break;
+            switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id, param_ids,
+                                         grads_void, &vjp_err)) {
+            case ManualVjpStatus::Success:
+                for (std::size_t i = 0; i < param_ids.size(); ++i)
+                    param_grads[i] = (__bridge MPSGraphTensor*)grads_void[i];
+                grads_done = true;
+                break;
+            case ManualVjpStatus::HardFail:
+                return fail("compile_fused_training_step: "
+                            "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " +
+                            vjp_err);
+            case ManualVjpStatus::FellBack:
+            case ManualVjpStatus::Disabled:
+                break;
             }
         }
         if (!grads_done) {
@@ -1204,8 +1198,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         for (TensorId sid : scalar_input_ids) {
             void* s_void = ctx.resolve(sid);
             if (s_void == nullptr)
-                return fail("compile_fused_training_step: scalar id " +
-                            std::to_string(sid) + " has no placeholder");
+                return fail("compile_fused_training_step: scalar id " + std::to_string(sid) +
+                            " has no placeholder");
             scalar_tensors.push_back((__bridge MPSGraphTensor*)s_void);
         }
 
@@ -1221,7 +1215,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
             MPSGraphTensor* grad = param_grads[i];
             if (grad == nil)
                 return fail("compile_fused_training_step: no gradient for "
-                            "param " + std::to_string(param_ids[i]));
+                            "param " +
+                            std::to_string(param_ids[i]));
             MPSDataType dt = p.dataType;
 
             if (opt_spec.kind == OptimizerSpec::Kind::SGD) {
@@ -1236,8 +1231,7 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
                                     "buffer placeholder missing");
                     mom = (__bridge MPSGraphTensor*)m_void;
                 }
-                SgdOutputs out =
-                    emit_sgd_update(graph_obj, p, grad, mom, opt_spec, dt);
+                SgdOutputs out = emit_sgd_update(graph_obj, p, grad, mom, opt_spec, dt);
                 [new_param_tensors addObject:out.new_param];
                 if (out.new_mom != nil)
                     new_state_tensors[i].push_back(out.new_mom);
@@ -1256,12 +1250,10 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
                                 "buffer placeholders missing");
                 MPSGraphTensor* m_buf = (__bridge MPSGraphTensor*)m_void;
                 MPSGraphTensor* v_buf = (__bridge MPSGraphTensor*)v_void;
-                bool decoupled =
-                    (opt_spec.kind == OptimizerSpec::Kind::ADAMW);
-                AdamOutputs out = emit_adam_update(
-                    graph_obj, p, grad, m_buf, v_buf,
-                    scalar_tensors[0], scalar_tensors[1],
-                    opt_spec, dt, decoupled);
+                bool decoupled = (opt_spec.kind == OptimizerSpec::Kind::ADAMW);
+                AdamOutputs out =
+                    emit_adam_update(graph_obj, p, grad, m_buf, v_buf, scalar_tensors[0],
+                                     scalar_tensors[1], opt_spec, dt, decoupled);
                 [new_param_tensors addObject:out.new_param];
                 new_state_tensors[i].push_back(out.new_m);
                 new_state_tensors[i].push_back(out.new_v);
@@ -1270,8 +1262,7 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
 
         // Assemble target list in declared output order:
         // [loss, new_p_0, ..., new_p_N-1, new_state[0][0], new_state[0][1], ...]
-        NSMutableArray<MPSGraphTensor*>* target_arr =
-            [NSMutableArray array];
+        NSMutableArray<MPSGraphTensor*>* target_arr = [NSMutableArray array];
         [target_arr addObject:loss_t];
         for (NSUInteger i = 0; i < [new_param_tensors count]; ++i)
             [target_arr addObject:new_param_tensors[i]];
@@ -1285,20 +1276,17 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
             MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
-            feed_dict[feed_tensors[i]] =
-                [[MPSGraphShapedType alloc] initWithShape:ns_shape
-                                                  dataType:ns_dt];
+            feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
+                                                                          dataType:ns_dt];
         }
 
-        id<MTLDevice> mtl_device =
-            (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
+        id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
         MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
-        MPSGraphExecutable* compiled = [graph_obj
-            compileWithDevice:mps_device
-                        feeds:feed_dict
-                targetTensors:target_arr
-             targetOperations:nil
-        compilationDescriptor:make_compile_descriptor()];
+        MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
+                                                              feeds:feed_dict
+                                                      targetTensors:target_arr
+                                                   targetOperations:nil
+                                              compilationDescriptor:make_compile_descriptor()];
         if (compiled == nil)
             return fail("compile_fused_training_step: MPSGraph compile "
                         "returned nil");
@@ -1312,7 +1300,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         // can't trust ``graph.next_id + 1`` alone.
         TensorId max_id = graph.next_id;
         for (const auto& [tid, _] : external_feeds)
-            if (tid > max_id) max_id = tid;
+            if (tid > max_id)
+                max_id = tid;
         std::vector<TensorId> aux_output_ids;
         TensorId next_id = max_id + 1;
         for (std::size_t i = 0; i < param_ids.size(); ++i)
@@ -1372,18 +1361,18 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
 
 // ── Generic fused step (Phase 1.8) ──────────────────────────────────
 
-CompiledExecutable* MpsBuilder::compile_generic_fused_step(
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const std::vector<TensorId>& ghost_grad_ids,
-        const std::vector<TensorId>& output_target_ids) {
+CompiledExecutable*
+MpsBuilder::compile_generic_fused_step(TensorId loss_id,
+                                       const std::vector<TensorId>& param_ids,
+                                       const std::vector<TensorId>& ghost_grad_ids,
+                                       const std::vector<TensorId>& output_target_ids) {
     auto& graph = graph_;
     const auto& external_feeds = external_feeds_;
     auto* error_msg = error_msg_;
 
-
     auto fail = [&](std::string msg) -> CompiledExecutable* {
-        if (error_msg) *error_msg = std::move(msg);
+        if (error_msg)
+            *error_msg = std::move(msg);
         return nullptr;
     };
 
@@ -1394,8 +1383,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
     if (ghost_grad_ids.size() != param_ids.size())
         return fail("compile_generic_fused_step: ghost_grad_ids size != param_ids size");
 
-    const std::unordered_set<TensorId> ghost_set(
-        ghost_grad_ids.begin(), ghost_grad_ids.end());
+    const std::unordered_set<TensorId> ghost_set(ghost_grad_ids.begin(), ghost_grad_ids.end());
 
     // Device + emitter precheck.
     Device device = Device::CPU;
@@ -1415,8 +1403,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
                 return fail("compile_generic_fused_step: op '" + op.name +
                             "' has unresolved input slot");
         if (find_emitter(op.name) == nullptr && !op.inputs.empty())
-            return fail("compile_generic_fused_step: no emitter for op '" +
-                        op.name + "'");
+            return fail("compile_generic_fused_step: no emitter for op '" + op.name + "'");
     }
 
     @autoreleasepool {
@@ -1442,8 +1429,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         for (TensorId tid : ordered_feed_ids) {
             const auto& impl = external_feeds.at(tid);
             if (!impl)
-                return fail("compile_generic_fused_step: null feed " +
-                            std::to_string(tid));
+                return fail("compile_generic_fused_step: null feed " + std::to_string(tid));
             const Shape& feed_shape = impl->shape();
             const Dtype feed_dtype = impl->dtype();
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(feed_shape);
@@ -1453,12 +1439,10 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
             } catch (const std::exception& e) {
                 return fail(std::string("compile_generic_fused_step: ") + e.what());
             }
-            MPSGraphTensor* ph =
-                [graph_obj placeholderWithShape:ns_shape
-                                       dataType:ns_dt
-                                           name:[NSString stringWithFormat:
-                                                                @"feed_%lld",
-                                                                (long long)tid]];
+            MPSGraphTensor* ph = [graph_obj
+                placeholderWithShape:ns_shape
+                            dataType:ns_dt
+                                name:[NSString stringWithFormat:@"feed_%lld", (long long)tid]];
             ctx.bind(tid, (__bridge void*)ph);
             feed_tensors.push_back(ph);
             input_shapes.push_back(feed_shape);
@@ -1471,8 +1455,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         for (TensorId pid : param_ids) {
             void* p_void = ctx.resolve(pid);
             if (p_void == nullptr)
-                return fail("compile_generic_fused_step: param id " +
-                            std::to_string(pid) +
+                return fail("compile_generic_fused_step: param id " + std::to_string(pid) +
                             " has no placeholder (not in external_feeds?)");
             [param_arr addObject:(__bridge MPSGraphTensor*)p_void];
         }
@@ -1509,13 +1492,13 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         bool grads_derived = false;
 
         auto derive_grads_now = [&]() -> bool {
-            if (grads_derived) return true;
+            if (grads_derived)
+                return true;
             void* loss_void = ctx.resolve(loss_id);
             if (loss_void == nullptr) {
                 if (error_msg)
-                    *error_msg =
-                        "compile_generic_fused_step: loss id has no "
-                        "MPSGraph binding when reaching opt phase";
+                    *error_msg = "compile_generic_fused_step: loss id has no "
+                                 "MPSGraph binding when reaching opt phase";
                 return false;
             }
             MPSGraphTensor* loss_t = (__bridge MPSGraphTensor*)loss_void;
@@ -1527,22 +1510,22 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
             {
                 std::vector<void*> grads;
                 std::string vjp_err;
-                switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
-                                              loss_id, param_ids, grads, &vjp_err)) {
-                    case ManualVjpStatus::Success:
-                        for (std::size_t i = 0; i < param_ids.size(); ++i)
-                            ctx.bind(ghost_grad_ids[i], grads[i]);
-                        grads_derived = true;
-                        return true;
-                    case ManualVjpStatus::HardFail:
-                        if (error_msg)
-                            *error_msg =
-                                "compile_generic_fused_step: "
-                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err;
-                        return false;
-                    case ManualVjpStatus::FellBack:
-                    case ManualVjpStatus::Disabled:
-                        break;
+                switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id,
+                                             param_ids, grads, &vjp_err)) {
+                case ManualVjpStatus::Success:
+                    for (std::size_t i = 0; i < param_ids.size(); ++i)
+                        ctx.bind(ghost_grad_ids[i], grads[i]);
+                    grads_derived = true;
+                    return true;
+                case ManualVjpStatus::HardFail:
+                    if (error_msg)
+                        *error_msg = "compile_generic_fused_step: "
+                                     "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " +
+                                     vjp_err;
+                    return false;
+                case ManualVjpStatus::FellBack:
+                case ManualVjpStatus::Disabled:
+                    break;
                 }
             }
 
@@ -1552,18 +1535,17 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
                                                name:@"lucid_generic_grads"];
             if (grad_map == nil) {
                 if (error_msg)
-                    *error_msg =
-                        "compile_generic_fused_step: gradientForPrimaryTensor "
-                        "returned nil";
+                    *error_msg = "compile_generic_fused_step: gradientForPrimaryTensor "
+                                 "returned nil";
                 return false;
             }
             for (std::size_t i = 0; i < param_ids.size(); ++i) {
                 MPSGraphTensor* g_t = grad_map[param_arr[i]];
                 if (g_t == nil) {
                     if (error_msg)
-                        *error_msg =
-                            "compile_generic_fused_step: no gradient for "
-                            "param " + std::to_string(param_ids[i]);
+                        *error_msg = "compile_generic_fused_step: no gradient for "
+                                     "param " +
+                                     std::to_string(param_ids[i]);
                     return false;
                 }
                 ctx.bind(ghost_grad_ids[i], (__bridge void*)g_t);
@@ -1589,13 +1571,15 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
 
             OpEmitter* emitter = find_emitter(node.name);
             if (emitter == nullptr) {
-                if (node.inputs.empty()) continue;  // dead-code factory
+                if (node.inputs.empty())
+                    continue;  // dead-code factory
                 return fail("compile_generic_fused_step: emitter vanished "
-                            "for op '" + node.name + "'");
+                            "for op '" +
+                            node.name + "'");
             }
             if (!emitter->emit(ctx, node))
-                return fail("compile_generic_fused_step: emitter '" +
-                            node.name + "' returned false");
+                return fail("compile_generic_fused_step: emitter '" + node.name +
+                            "' returned false");
             // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
@@ -1604,7 +1588,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         // anyway so the output_target_ids can resolve gradient-only
         // outputs.  Cheap when grad map isn't consumed.
         if (!grads_derived && !ghost_grad_ids.empty()) {
-            if (!derive_grads_now()) return nullptr;
+            if (!derive_grads_now())
+                return nullptr;
         }
 
         // Resolve targets: loss + output_target_ids.
@@ -1646,8 +1631,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         for (TensorId tid : output_target_ids) {
             void* t_void = ctx.resolve(tid);
             if (t_void == nullptr)
-                return fail("compile_generic_fused_step: output target id " +
-                            std::to_string(tid) + " has no MPSGraph binding");
+                return fail("compile_generic_fused_step: output target id " + std::to_string(tid) +
+                            " has no MPSGraph binding");
             [target_arr addObject:(__bridge MPSGraphTensor*)t_void];
             auto it = id_to_meta.find(tid);
             if (it == id_to_meta.end()) {
@@ -1656,8 +1641,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
                 auto fit = external_feeds.find(tid);
                 if (fit == external_feeds.end() || !fit->second)
                     return fail("compile_generic_fused_step: output target "
-                                "id " + std::to_string(tid) +
-                                " not in trace");
+                                "id " +
+                                std::to_string(tid) + " not in trace");
                 output_shapes.push_back(fit->second->shape());
                 output_dtypes.push_back(fit->second->dtype());
             } else {
@@ -1672,21 +1657,17 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
             MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
-            feed_dict[feed_tensors[i]] =
-                [[MPSGraphShapedType alloc] initWithShape:ns_shape
-                                                  dataType:ns_dt];
+            feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
+                                                                          dataType:ns_dt];
         }
 
-        id<MTLDevice> mtl_device =
-            (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
-        MPSGraphDevice* mps_device =
-            [MPSGraphDevice deviceWithMTLDevice:mtl_device];
-        MPSGraphExecutable* compiled = [graph_obj
-            compileWithDevice:mps_device
-                        feeds:feed_dict
-                targetTensors:target_arr
-             targetOperations:nil
-        compilationDescriptor:make_compile_descriptor()];
+        id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
+        MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
+        MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
+                                                              feeds:feed_dict
+                                                      targetTensors:target_arr
+                                                   targetOperations:nil
+                                              compilationDescriptor:make_compile_descriptor()];
         if (compiled == nil)
             return fail("compile_generic_fused_step: MPSGraph compile returned nil");
 
@@ -1733,18 +1714,18 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step(
 //      ``grad_output_ids`` (same slot index — caller is unaffected).
 // ─────────────────────────────────────────────────────────────────────
 CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const std::vector<TensorId>& ghost_grad_ids,
-        const std::vector<TensorId>& output_target_ids,
-        const std::vector<std::pair<TensorId, TensorId>>& variable_pairs) {
+    TensorId loss_id,
+    const std::vector<TensorId>& param_ids,
+    const std::vector<TensorId>& ghost_grad_ids,
+    const std::vector<TensorId>& output_target_ids,
+    const std::vector<std::pair<TensorId, TensorId>>& variable_pairs) {
     auto& graph = graph_;
     const auto& external_feeds = external_feeds_;
     auto* error_msg = error_msg_;
 
-
     auto fail = [&](std::string msg) -> CompiledExecutable* {
-        if (error_msg) *error_msg = std::move(msg);
+        if (error_msg)
+            *error_msg = std::move(msg);
         return nullptr;
     };
 
@@ -1753,18 +1734,16 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
     if (param_ids.empty())
         return fail("compile_generic_fused_step_with_vars: param_ids must be non-empty");
     if (ghost_grad_ids.size() != param_ids.size())
-        return fail(
-            "compile_generic_fused_step_with_vars: ghost_grad_ids size != param_ids size");
+        return fail("compile_generic_fused_step_with_vars: ghost_grad_ids size != param_ids size");
 
     // If no variables requested, defer to the non-vars path on this
     // same MpsBuilder instance — no need to reconstruct.
     if (variable_pairs.empty()) {
-        return this->compile_generic_fused_step(
-            loss_id, param_ids, ghost_grad_ids, output_target_ids);
+        return this->compile_generic_fused_step(loss_id, param_ids, ghost_grad_ids,
+                                                output_target_ids);
     }
 
-    const std::unordered_set<TensorId> ghost_set(
-        ghost_grad_ids.begin(), ghost_grad_ids.end());
+    const std::unordered_set<TensorId> ghost_set(ghost_grad_ids.begin(), ghost_grad_ids.end());
 
     // Set of feed ids that are promoted to variables, and a map from
     // each var-feed-id to its corresponding write_id (the new value
@@ -1774,9 +1753,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
     std::unordered_set<TensorId> var_write_set;
     for (const auto& [f, w] : variable_pairs) {
         if (external_feeds.find(f) == external_feeds.end())
-            return fail(
-                "compile_generic_fused_step_with_vars: variable feed id " +
-                std::to_string(f) + " not in external_feeds");
+            return fail("compile_generic_fused_step_with_vars: variable feed id " +
+                        std::to_string(f) + " not in external_feeds");
         var_feed_set.insert(f);
         feed_to_write[f] = w;
         var_write_set.insert(w);
@@ -1795,11 +1773,11 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
             return fail("compile_generic_fused_step_with_vars: mixed-device trace");
         for (TensorId iid : op.inputs)
             if (iid < 0)
-                return fail("compile_generic_fused_step_with_vars: op '" +
-                            op.name + "' has unresolved input slot");
+                return fail("compile_generic_fused_step_with_vars: op '" + op.name +
+                            "' has unresolved input slot");
         if (find_emitter(op.name) == nullptr && !op.inputs.empty())
-            return fail("compile_generic_fused_step_with_vars: no emitter for op '" +
-                        op.name + "'");
+            return fail("compile_generic_fused_step_with_vars: no emitter for op '" + op.name +
+                        "'");
     }
 
     @autoreleasepool {
@@ -1842,8 +1820,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
             try {
                 ns_dt = to_mps_dtype(feed_dtype);
             } catch (const std::exception& e) {
-                return fail(std::string("compile_generic_fused_step_with_vars: ") +
-                            e.what());
+                return fail(std::string("compile_generic_fused_step_with_vars: ") + e.what());
             }
 
             if (var_feed_set.find(tid) != var_feed_set.end()) {
@@ -1852,14 +1829,12 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                 // copied into MPSGraph's own internal storage; we can
                 // safely free the NSData after.
                 if (impl->device() != Device::GPU)
-                    return fail(
-                        "compile_generic_fused_step_with_vars: variable feed not on GPU");
+                    return fail("compile_generic_fused_step_with_vars: variable feed not on GPU");
                 const auto& gs = std::get<GpuStorage>(impl->storage());
                 if (!gs.arr)
                     return fail(
                         "compile_generic_fused_step_with_vars: variable feed has no MLX array");
-                lucid::gpu::mps::BufferView v =
-                    lucid::gpu::mps::array_to_buffer(*gs.arr);
+                lucid::gpu::mps::BufferView v = lucid::gpu::mps::array_to_buffer(*gs.arr);
                 id<MTLBuffer> src_buf = (__bridge id<MTLBuffer>)v.mtl_buffer;
                 // Inline shape_nbytes — same formula as
                 // CompiledExecutable.mm's detail::shape_nbytes (anon
@@ -1869,24 +1844,19 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                     nelem *= static_cast<std::size_t>(d);
                 const std::size_t itemsize = (feed_dtype == Dtype::F16) ? 2 : 4;
                 const std::size_t nbytes = nelem * itemsize;
-                NSData* init_data =
-                    [NSData dataWithBytes:[src_buf contents] length:nbytes];
-                MPSGraphTensor* var =
-                    [graph_obj variableWithData:init_data
-                                          shape:ns_shape
-                                       dataType:ns_dt
-                                           name:[NSString stringWithFormat:
-                                                              @"var_%lld",
-                                                              (long long)tid]];
+                NSData* init_data = [NSData dataWithBytes:[src_buf contents] length:nbytes];
+                MPSGraphTensor* var = [graph_obj
+                    variableWithData:init_data
+                               shape:ns_shape
+                            dataType:ns_dt
+                                name:[NSString stringWithFormat:@"var_%lld", (long long)tid]];
                 ctx.bind(tid, (__bridge void*)var);
                 // NOTE: var feeds NOT added to feed_tensors / input_shapes.
             } else {
-                MPSGraphTensor* ph =
-                    [graph_obj placeholderWithShape:ns_shape
-                                           dataType:ns_dt
-                                               name:[NSString stringWithFormat:
-                                                                    @"feed_%lld",
-                                                                    (long long)tid]];
+                MPSGraphTensor* ph = [graph_obj
+                    placeholderWithShape:ns_shape
+                                dataType:ns_dt
+                                    name:[NSString stringWithFormat:@"feed_%lld", (long long)tid]];
                 ctx.bind(tid, (__bridge void*)ph);
                 feed_tensors.push_back(ph);
                 input_shapes.push_back(feed_shape);
@@ -1928,12 +1898,12 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         // the non-variables path.
         bool grads_derived = false;
         auto derive_grads_now = [&]() -> bool {
-            if (grads_derived) return true;
+            if (grads_derived)
+                return true;
             void* loss_void = ctx.resolve(loss_id);
             if (loss_void == nullptr) {
                 if (error_msg)
-                    *error_msg =
-                        "compile_generic_fused_step_with_vars: loss id has no binding";
+                    *error_msg = "compile_generic_fused_step_with_vars: loss id has no binding";
                 return false;
             }
             MPSGraphTensor* loss_t = (__bridge MPSGraphTensor*)loss_void;
@@ -1943,22 +1913,22 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
             {
                 std::vector<void*> grads;
                 std::string vjp_err;
-                switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
-                                              loss_id, param_ids, grads, &vjp_err)) {
-                    case ManualVjpStatus::Success:
-                        for (std::size_t i = 0; i < param_ids.size(); ++i)
-                            ctx.bind(ghost_grad_ids[i], grads[i]);
-                        grads_derived = true;
-                        return true;
-                    case ManualVjpStatus::HardFail:
-                        if (error_msg)
-                            *error_msg =
-                                "compile_generic_fused_step_with_vars: "
-                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err;
-                        return false;
-                    case ManualVjpStatus::FellBack:
-                    case ManualVjpStatus::Disabled:
-                        break;
+                switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id,
+                                             param_ids, grads, &vjp_err)) {
+                case ManualVjpStatus::Success:
+                    for (std::size_t i = 0; i < param_ids.size(); ++i)
+                        ctx.bind(ghost_grad_ids[i], grads[i]);
+                    grads_derived = true;
+                    return true;
+                case ManualVjpStatus::HardFail:
+                    if (error_msg)
+                        *error_msg = "compile_generic_fused_step_with_vars: "
+                                     "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " +
+                                     vjp_err;
+                    return false;
+                case ManualVjpStatus::FellBack:
+                case ManualVjpStatus::Disabled:
+                    break;
                 }
             }
 
@@ -1995,21 +1965,24 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                     break;
                 }
             if (uses_ghost && !grads_derived)
-                if (!derive_grads_now()) return nullptr;
+                if (!derive_grads_now())
+                    return nullptr;
 
             OpEmitter* emitter = find_emitter(node.name);
             if (emitter == nullptr) {
-                if (node.inputs.empty()) continue;
+                if (node.inputs.empty())
+                    continue;
                 return fail("compile_generic_fused_step_with_vars: emitter vanished for op '" +
                             node.name + "'");
             }
             if (!emitter->emit(ctx, node))
-                return fail("compile_generic_fused_step_with_vars: emitter '" +
-                            node.name + "' returned false");
+                return fail("compile_generic_fused_step_with_vars: emitter '" + node.name +
+                            "' returned false");
             // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
         if (!grads_derived && !ghost_grad_ids.empty()) {
-            if (!derive_grads_now()) return nullptr;
+            if (!derive_grads_now())
+                return nullptr;
         }
 
         // Step 4: emit assignVariable for each (feed, write) pair +
@@ -2058,9 +2031,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         for (TensorId tid : output_target_ids) {
             void* new_value_void = ctx.resolve(tid);
             if (new_value_void == nullptr)
-                return fail(
-                    "compile_generic_fused_step_with_vars: output target id " +
-                    std::to_string(tid) + " has no binding");
+                return fail("compile_generic_fused_step_with_vars: output target id " +
+                            std::to_string(tid) + " has no binding");
             MPSGraphTensor* new_value_t = (__bridge MPSGraphTensor*)new_value_void;
 
             // Is this id a "write" for any variable?
@@ -2090,12 +2062,10 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                 // verbatim — so we lose nothing semantically.
                 void* var_void = ctx.resolve(var_feed_for_write);
                 MPSGraphTensor* var_t = (__bridge MPSGraphTensor*)var_void;
-                MPSGraphOperation* assign_op =
-                    [graph_obj assignVariable:var_t
-                            withValueOfTensor:new_value_t
-                                         name:[NSString stringWithFormat:
-                                                            @"assign_%lld",
-                                                            (long long)tid]];
+                MPSGraphOperation* assign_op = [graph_obj
+                       assignVariable:var_t
+                    withValueOfTensor:new_value_t
+                                 name:[NSString stringWithFormat:@"assign_%lld", (long long)tid]];
                 [target_ops_arr addObject:assign_op];
                 [target_arr addObject:new_value_t];
             } else {
@@ -2124,24 +2094,20 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
             MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
-            feed_dict[feed_tensors[i]] =
-                [[MPSGraphShapedType alloc] initWithShape:ns_shape
-                                                  dataType:ns_dt];
+            feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
+                                                                          dataType:ns_dt];
         }
 
-        id<MTLDevice> mtl_device =
-            (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
-        MPSGraphDevice* mps_device =
-            [MPSGraphDevice deviceWithMTLDevice:mtl_device];
-        MPSGraphExecutable* compiled = [graph_obj
-            compileWithDevice:mps_device
-                        feeds:feed_dict
-                targetTensors:target_arr
-             targetOperations:[target_ops_arr count] > 0 ? target_ops_arr : nil
-        compilationDescriptor:make_compile_descriptor()];
+        id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
+        MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
+        MPSGraphExecutable* compiled =
+            [graph_obj compileWithDevice:mps_device
+                                   feeds:feed_dict
+                           targetTensors:target_arr
+                        targetOperations:[target_ops_arr count] > 0 ? target_ops_arr : nil
+                   compilationDescriptor:make_compile_descriptor()];
         if (compiled == nil)
-            return fail(
-                "compile_generic_fused_step_with_vars: MPSGraph compile returned nil");
+            return fail("compile_generic_fused_step_with_vars: MPSGraph compile returned nil");
 
         auto exe = std::make_unique<CompiledExecutable>();
         exe->executable = compiled;
@@ -2165,7 +2131,6 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
     }
 }
 
-
 // ────────────────────────────────────────────────────────────────────
 // Free-function forwarders — preserve the pre-class API.
 // Every existing caller (Python bindings, ExecutableCache, tests)
@@ -2174,68 +2139,66 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
 // class design rationale.
 // ────────────────────────────────────────────────────────────────────
 
-CompiledExecutable* compile_trace(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-        std::string* error_msg,
-        bool dynamic_batch,
-        const std::vector<TensorId>& param_ids,
-        const std::vector<TensorId>& explicit_outputs) {
+CompiledExecutable* compile_trace(const TraceGraph& graph,
+                                  const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                                  std::string* error_msg,
+                                  bool dynamic_batch,
+                                  const std::vector<TensorId>& param_ids,
+                                  const std::vector<TensorId>& explicit_outputs) {
     return MpsBuilder(graph, external_feeds, error_msg)
         .compile_trace(dynamic_batch, param_ids, explicit_outputs);
 }
 
-CompiledExecutable* compile_trace_with_backward(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        std::string* error_msg,
-        bool dynamic_batch,
-        const std::vector<TensorId>& extra_output_ids) {
+CompiledExecutable*
+compile_trace_with_backward(const TraceGraph& graph,
+                            const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                            TensorId loss_id,
+                            const std::vector<TensorId>& param_ids,
+                            std::string* error_msg,
+                            bool dynamic_batch,
+                            const std::vector<TensorId>& extra_output_ids) {
     return MpsBuilder(graph, external_feeds, error_msg)
         .compile_trace_with_backward(loss_id, param_ids, dynamic_batch, extra_output_ids);
 }
 
-CompiledExecutable* compile_fused_training_step(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const OptimizerSpec& opt_spec,
-        const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
-        const std::vector<TensorId>& scalar_input_ids,
-        std::string* error_msg) {
+CompiledExecutable*
+compile_fused_training_step(const TraceGraph& graph,
+                            const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                            TensorId loss_id,
+                            const std::vector<TensorId>& param_ids,
+                            const OptimizerSpec& opt_spec,
+                            const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
+                            const std::vector<TensorId>& scalar_input_ids,
+                            std::string* error_msg) {
     return MpsBuilder(graph, external_feeds, error_msg)
-        .compile_fused_training_step(loss_id, param_ids, opt_spec,
-                                     state_buf_ids_per_param, scalar_input_ids);
+        .compile_fused_training_step(loss_id, param_ids, opt_spec, state_buf_ids_per_param,
+                                     scalar_input_ids);
 }
 
-CompiledExecutable* compile_generic_fused_step(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const std::vector<TensorId>& ghost_grad_ids,
-        const std::vector<TensorId>& output_target_ids,
-        std::string* error_msg) {
+CompiledExecutable*
+compile_generic_fused_step(const TraceGraph& graph,
+                           const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                           TensorId loss_id,
+                           const std::vector<TensorId>& param_ids,
+                           const std::vector<TensorId>& ghost_grad_ids,
+                           const std::vector<TensorId>& output_target_ids,
+                           std::string* error_msg) {
     return MpsBuilder(graph, external_feeds, error_msg)
-        .compile_generic_fused_step(loss_id, param_ids, ghost_grad_ids,
-                                    output_target_ids);
+        .compile_generic_fused_step(loss_id, param_ids, ghost_grad_ids, output_target_ids);
 }
 
 CompiledExecutable* compile_generic_fused_step_with_vars(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const std::vector<TensorId>& ghost_grad_ids,
-        const std::vector<TensorId>& output_target_ids,
-        const std::vector<std::pair<TensorId, TensorId>>& variable_pairs,
-        std::string* error_msg) {
+    const TraceGraph& graph,
+    const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+    TensorId loss_id,
+    const std::vector<TensorId>& param_ids,
+    const std::vector<TensorId>& ghost_grad_ids,
+    const std::vector<TensorId>& output_target_ids,
+    const std::vector<std::pair<TensorId, TensorId>>& variable_pairs,
+    std::string* error_msg) {
     return MpsBuilder(graph, external_feeds, error_msg)
-        .compile_generic_fused_step_with_vars(loss_id, param_ids, ghost_grad_ids,
-                                              output_target_ids, variable_pairs);
+        .compile_generic_fused_step_with_vars(loss_id, param_ids, ghost_grad_ids, output_target_ids,
+                                              variable_pairs);
 }
 
 }  // namespace lucid::compile

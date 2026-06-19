@@ -86,22 +86,33 @@ void Tracer::on_op_io(const std::vector<TensorImplPtr>& inputs, const TensorImpl
     // fill in the full graph-level input list.  Clear here so the
     // most recent call is authoritative; append would otherwise
     // duplicate ids and confuse the emitter's resolve step.
-    node.inputs.clear();
-    node.inputs.reserve(inputs.size());
-    for (const auto& inp : inputs) {
-        TensorImpl* raw = inp.get();
-        if (raw == nullptr) {
-            node.inputs.push_back(-1);
-            continue;
-        }
-        const auto it = impl_to_id_.find(raw);
-        if (it != impl_to_id_.end()) {
-            node.inputs.push_back(it->second);
-        } else {
-            const TensorId fresh = graph_.next_id++;
-            impl_to_id_[raw] = fresh;
-            external_feeds_[fresh] = inp;  // owning ref
-            node.inputs.push_back(fresh);
+    //
+    // BUT only when this call actually carries inputs.  A multi-output op
+    // (``lstm`` returns out / h_n / c_n) registers its extra outputs with
+    // *follow-up* ``on_op_io({}, piece)`` calls that pass an empty input
+    // list — those are output-only registrations, not a re-record of the
+    // inputs.  Clearing on them would wipe the inputs recorded by the first
+    // call and leave the emitter with a zero-input node (eager fallback).
+    // Genuine zero-input ops (factories) record their single empty call and
+    // their inputs stay empty regardless.
+    if (!inputs.empty()) {
+        node.inputs.clear();
+        node.inputs.reserve(inputs.size());
+        for (const auto& inp : inputs) {
+            TensorImpl* raw = inp.get();
+            if (raw == nullptr) {
+                node.inputs.push_back(-1);
+                continue;
+            }
+            const auto it = impl_to_id_.find(raw);
+            if (it != impl_to_id_.end()) {
+                node.inputs.push_back(it->second);
+            } else {
+                const TensorId fresh = graph_.next_id++;
+                impl_to_id_[raw] = fresh;
+                external_feeds_[fresh] = inp;  // owning ref
+                node.inputs.push_back(fresh);
+            }
         }
     }
 

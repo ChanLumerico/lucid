@@ -1,11 +1,12 @@
 // lucid/_C/compile/OpEmitters/nn/Rnn.mm
 //
-// Recurrent-layer emitters for the trace IR.  Currently covers the
-// single-layer, unidirectional, F32, no-projection LSTM — the same
-// surface the MLX fused backend supports.  Configurations outside that
-// envelope (multi-layer, bidirectional, projected LSTMP, non-F32) make
-// the emitter return ``nullptr`` so the builder aborts and Lucid falls
-// back to the (still-fast) MLX eager path.
+// Recurrent-layer emitters for the trace IR.  The ``lstm`` *op* is always
+// single-layer / unidirectional (nn.LSTM orchestrates multi-layer and
+// bidirectional stacks in Python as a sequence of single-layer engine calls
+// plus reverse / concat glue — so those stacks compile too, as a chain of
+// these ops).  This emitter handles the F32 / no-projection envelope; a
+// projected LSTMP (``proj_size > 0``) or non-F32 op returns ``false`` so the
+// builder aborts and that op falls back to the (still-fast) MLX eager path.
 //
 // Trace contract (set by :file:`lucid/_C/nn/LSTM.cpp`):
 //
@@ -128,8 +129,9 @@ public:
         MPSGraphTensor* c0_2d = [g reshapeTensor:c0 withShape:twoD_shape name:@"lstm_c0"];
 
         // Combined bias for the descriptor.
-        MPSGraphTensor* bias =
-            [g additionWithPrimaryTensor:bih secondaryTensor:bhh name:@"lstm_bias"];
+        MPSGraphTensor* bias = [g additionWithPrimaryTensor:bih
+                                            secondaryTensor:bhh
+                                                       name:@"lstm_bias"];
 
         // MPSGraph LSTM expects recurrent weight (4H, H) and input
         // weight (4H, I), with the leading axis grouping the four
@@ -138,27 +140,30 @@ public:
         MPSGraphLSTMDescriptor* d = [MPSGraphLSTMDescriptor descriptor];
         d.reverse = NO;
         d.bidirectional = NO;
-        d.training = NO;          // eager path saves gates separately for BPTT
+        d.training = NO;  // eager path saves gates separately for BPTT
         d.produceCell = YES;
-        d.forgetGateLast = NO;    // ⇒ (i, f, g, o) — matches Lucid
+        d.forgetGateLast = NO;  // ⇒ (i, f, g, o) — matches Lucid
         // Activations default to (sigmoid, sigmoid, tanh, sigmoid)
         // with tanh on the cell output — that matches the standard
         // LSTM equations the engine implements.
 
-        NSArray<MPSGraphTensor*>* outs =
-            [g LSTMWithSourceTensor:x
-                    recurrentWeight:Whh
-                        inputWeight:Wih
-                               bias:bias
-                          initState:h0_2d
-                           initCell:c0_2d
-                         descriptor:d
-                               name:@"lstm"];
-        if (outs == nil || outs.count < 3)
+        NSArray<MPSGraphTensor*>* outs = [g LSTMWithSourceTensor:x
+                                                 recurrentWeight:Whh
+                                                     inputWeight:Wih
+                                                            bias:bias
+                                                       initState:h0_2d
+                                                        initCell:c0_2d
+                                                      descriptor:d
+                                                            name:@"lstm"];
+        // MPSGraph returns [hidden, cell] with ``produceCell=YES`` and
+        // ``training=NO`` (2 tensors); the extra ``zState`` only appears in
+        // training mode (3 tensors).  We run inference-mode here, so the cell
+        // trajectory is the last returned tensor either way.
+        if (outs == nil || outs.count < 2)
             return false;
 
-        MPSGraphTensor* Y_full = outs[0];      // (T, B, H) — every step's hidden
-        MPSGraphTensor* C_full = outs[2];      // (T, B, H) — every step's cell
+        MPSGraphTensor* Y_full = outs[0];                        // (T, B, H) — hidden
+        MPSGraphTensor* C_full = outs[outs.count >= 3 ? 2 : 1];  // (T, B, H) — cell
 
         // Final-step slice for h_n / c_n.  MPSGraph returns the full
         // hidden / cell trajectories; the eager engine exposes only
@@ -171,12 +176,11 @@ public:
             return false;
 
         auto slice_last_step = [&](MPSGraphTensor* full, NSString* nm) -> MPSGraphTensor* {
-            MPSGraphTensor* last =
-                [g sliceTensor:full
-                    dimension:0
-                        start:(NSInteger)(T - 1)
-                       length:1
-                         name:nm];
+            MPSGraphTensor* last = [g sliceTensor:full
+                                        dimension:0
+                                            start:(NSInteger)(T - 1)
+                                           length:1
+                                             name:nm];
             // Reshape (1, B, H) — already (1, B, H) from the slice, so
             // the reshape is just a sanity-stable view.  Use the meta
             // shape so MPSGraph sees the same (num_layers=1, B, H)
@@ -211,9 +215,7 @@ public:
 };
 
 struct RnnEmitterRegistrar {
-    RnnEmitterRegistrar() {
-        register_emitter(std::make_unique<LstmEmitter>());
-    }
+    RnnEmitterRegistrar() { register_emitter(std::make_unique<LstmEmitter>()); }
 };
 
 [[maybe_unused]] static const RnnEmitterRegistrar g_rnn_registrar;

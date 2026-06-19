@@ -64,6 +64,31 @@ def test_strided_slice_compiles() -> None:
     assert _maxdiff(eager, out) == 0.0
 
 
+class _ReturnedSlice(nn.Module):
+    """``return x[a:b]`` — a non-zero split_at piece as the graph output."""
+
+    def __init__(self, lo: int, hi: int) -> None:
+        super().__init__()
+        self._lo, self._hi = lo, hi
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return x[self._lo : self._hi]
+
+
+def test_returned_middle_slice_compiles() -> None:
+    # A returned split_at piece that isn't piece-0 used to go unbound (it was
+    # never marked "consumed"), forcing eager fallback.  Now it compiles.
+    for lo, hi in ((1, 2), (2, 4), (1, 3)):
+        m = _ReturnedSlice(lo, hi).to(COMPILE_DEVICE).eval()
+        x = metal_tensor(4, 4, 8)
+        eager = m(x)
+        cm = lucid.compile(m)
+        out = cm(x)
+        info = cm.cache_info()
+        assert info["entries"] == 1 and not info["eager_only"], (lo, hi, info)
+        assert _maxdiff(eager, out) == 0.0
+
+
 def test_interleaved_rope_compiles() -> None:
     # RoFormer's RoPE layout: _rotate_interleaved slices x[..., 0::2] / [1::2].
     m = _RopeInterleaved().to(COMPILE_DEVICE).eval()
