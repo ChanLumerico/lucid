@@ -15,10 +15,12 @@
 //     attn    = softmax(scores, axis=-1)
 //     out     = attn @ V
 //
-// ``is_causal=True`` adds a lower-triangular −∞ mask before the softmax.
-// The mask is built in-graph from O(Lq+Lk) host index vectors (an iota per
-// axis) compared with ``lessThanOrEqualTo`` + ``select`` — cheaper than a
-// baked O(Lq·Lk) constant per layer.  It uses the bottom-right alignment
+// ``is_causal=True`` adds a lower-triangular large-negative mask before the
+// softmax (a finite value, not −∞ — the MPSGraph specializer can crash on inf
+// constants on some drivers).  The mask is built in-graph from O(Lq+Lk) host
+// index vectors (an iota per axis) compared with ``lessThanOrEqualTo`` +
+// ``select`` — cheaper than a baked O(Lq·Lk) constant per layer.  It uses the
+// bottom-right alignment
 // ``j ≤ i + (Lk − Lq)`` so the non-square (cached-decode) case matches the
 // eager fused-causal convention.  An explicit additive mask takes
 // precedence over ``is_causal`` (mirrors the eager backend, which ignores
@@ -28,7 +30,6 @@
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
 #include <cmath>
-#include <limits>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -141,12 +142,16 @@ public:
                                                          secondaryTensor:rows_off
                                                                     name:nil];
             MPSGraphTensor* zero_c = [g constantWithScalar:0.0 dataType:scores.dataType];
-            MPSGraphTensor* neg_inf_c =
-                [g constantWithScalar:-std::numeric_limits<double>::infinity()
-                             dataType:scores.dataType];
+            // Disallowed positions get a large *finite* negative (NOT −inf):
+            // the MPSGraph executable specializer can crash on inf constants on
+            // some Metal drivers, and a value whose exp() underflows to 0 is
+            // softmax-equivalent anyway.  f16 saturates at 65504, so cap the
+            // magnitude well under that for the half-precision score path.
+            const double neg_big = (scores.dataType == MPSDataTypeFloat16) ? -6.0e4 : -1.0e30;
+            MPSGraphTensor* neg_big_c = [g constantWithScalar:neg_big dataType:scores.dataType];
             MPSGraphTensor* causal_mask = [g selectWithPredicateTensor:keep
                                                    truePredicateTensor:zero_c
-                                                  falsePredicateTensor:neg_inf_c
+                                                  falsePredicateTensor:neg_big_c
                                                                   name:@"sdpa_causal_mask"];
             scores = [g additionWithPrimaryTensor:scores secondaryTensor:causal_mask name:nil];
         }
