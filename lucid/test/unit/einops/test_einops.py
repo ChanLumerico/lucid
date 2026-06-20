@@ -65,7 +65,9 @@ class TestEinsum:
         a = np.random.randn(*sa).astype(np.float32)
         b = np.random.randn(*sb).astype(np.float32)
         out = lucid.einops.einsum(
-            eq, lucid.tensor(a.copy(), device=device), lucid.tensor(b.copy(), device=device)
+            eq,
+            lucid.tensor(a.copy(), device=device),
+            lucid.tensor(b.copy(), device=device),
         )
         ref = np.einsum(eq, a, b)
         assert out.shape == ref.shape
@@ -88,7 +90,9 @@ class TestEinsum:
             lucid.tensor(y.copy(), device=device),
             lucid.tensor(z.copy(), device=device),
         )
-        np.testing.assert_allclose(out.numpy(), np.einsum("ij,jk,kl->il", x, y, z), atol=1e-4)
+        np.testing.assert_allclose(
+            out.numpy(), np.einsum("ij,jk,kl->il", x, y, z), atol=1e-4
+        )
 
     def test_integer_is_exact(self, device: str) -> None:
         # Integer einsum must stay on the exact mul+sum path (GEMM is
@@ -96,7 +100,9 @@ class TestEinsum:
         a = np.arange(12).reshape(3, 4).astype(np.int64)
         b = np.arange(20).reshape(4, 5).astype(np.int64)
         out = lucid.einops.einsum(
-            "ij,jk->ik", lucid.tensor(a.copy(), device=device), lucid.tensor(b.copy(), device=device)
+            "ij,jk->ik",
+            lucid.tensor(a.copy(), device=device),
+            lucid.tensor(b.copy(), device=device),
         )
         np.testing.assert_array_equal(out.numpy(), np.einsum("ij,jk->ik", a, b))
         assert out.dtype == lucid.int64

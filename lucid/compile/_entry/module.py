@@ -391,7 +391,9 @@ class CompiledModule[**P, R]:
         # the attempt never crashes a real model; it just shares one executable
         # where provably safe and recompiles per shape otherwise.  Escape hatch:
         # ``LUCID_COMPILE_DYNAMIC=0`` forces pure static (no symbolic attempt).
-        _symbolic = bool(dynamic) and _os.environ.get("LUCID_COMPILE_DYNAMIC", "1") != "0"
+        _symbolic = (
+            bool(dynamic) and _os.environ.get("LUCID_COMPILE_DYNAMIC", "1") != "0"
+        )
         object.__setattr__(self, "_model", model)
         object.__setattr__(self, "_dynamic", bool(dynamic))  # requested (intent / repr)
         object.__setattr__(self, "_symbolic", _symbolic)  # attempt symbolic?

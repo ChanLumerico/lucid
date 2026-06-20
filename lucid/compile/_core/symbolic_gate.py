@@ -24,9 +24,7 @@ the up-front gate.
 """
 
 # Ops whose target shape carries the batch dimension verbatim.
-_BROADCAST_OPS: frozenset[str] = frozenset(
-    {"broadcast_to", "expand", "repeat", "tile"}
-)
+_BROADCAST_OPS: frozenset[str] = frozenset({"broadcast_to", "expand", "repeat", "tile"})
 # Concatenate / stack: unsafe only when the join axis IS the batch axis (dim 0).
 _JOIN_OPS: frozenset[str] = frozenset({"concatenate", "concat", "cat", "stack"})
 # Factory ops: unsafe only when the produced shape's leading dim is the batch.

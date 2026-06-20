@@ -135,7 +135,9 @@ class TestMatmul:
         out = (a @ b).numpy()
         assert out.shape == (0, 3)
         # empty inner dim too
-        c = (lucid.zeros(2, 0, device=device) @ lucid.zeros(0, 3, device=device)).numpy()
+        c = (
+            lucid.zeros(2, 0, device=device) @ lucid.zeros(0, 3, device=device)
+        ).numpy()
         assert c.shape == (2, 3)
 
 
@@ -150,14 +152,14 @@ class TestIntegerRemainder:
         np.testing.assert_array_equal(r.numpy(), [2, -2, -1, 1])
         assert r.dtype == lucid.int32  # input dtype preserved
         # invariant: (a // b) * b + remainder == a
-        np.testing.assert_array_equal(
-            ((a // b) * b + r).numpy(), a.numpy()
-        )
+        np.testing.assert_array_equal(((a // b) * b + r).numpy(), a.numpy())
 
     def test_float_unchanged(self, device: str) -> None:
         a = lucid.tensor([-7.0, 7.0], device=device)
         b = lucid.tensor([3.0, -3.0], device=device)
-        np.testing.assert_allclose(lucid.remainder(a, b).numpy(), [2.0, -2.0], atol=1e-6)
+        np.testing.assert_allclose(
+            lucid.remainder(a, b).numpy(), [2.0, -2.0], atol=1e-6
+        )
 
 
 # ── backward sanity ──────────────────────────────────────────────────────

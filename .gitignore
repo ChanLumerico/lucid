@@ -64,6 +64,7 @@ compile_commands.json
 *.dSYM/
 
 # Tool caches
+.benchmarks/
 .ruff_cache/
 .pyre/
 .pytype/

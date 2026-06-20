@@ -104,9 +104,7 @@ class TestOptimizerGpuMemory:
         mx = pytest.importorskip("mlx.core")
         import lucid.nn as nn
 
-        m = nn.Sequential(
-            nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 64)
-        ).to("metal")
+        m = nn.Sequential(nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 64)).to("metal")
         opt = optim.Adam(m.parameters(), lr=1e-3)
         x = lucid.randn(16, 64).to("metal")
         t = lucid.randn(16, 64).to("metal")

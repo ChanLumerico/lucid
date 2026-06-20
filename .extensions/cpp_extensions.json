@@ -153,7 +153,6 @@
     }
   ],
   "stub_modules": [
-    "lucid._C.tokenizers.core",
     "lucid._C.engine"
   ]
 }
