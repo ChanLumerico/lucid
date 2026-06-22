@@ -10,21 +10,21 @@
 //
 // FAST PATH — Apple's *fused* SDPA kernel.  For the universal 4-D
 // ``[B, H, L, D]`` case (every transformer) we emit a single
-// ``scaledDotProductAttentionWithQueryTensor:...descriptor:`` op
-// (``MPSGraphSDPADescriptor`` on macOS 26: ``scale`` + additive ``maskTensor``
-// + ``isCausal``).  This computes ``softmax(scale·QKᵀ + M)V`` in one fused
-// flash-style kernel — matching the eager MLX fused SDPA — instead of the
-// decomposed ``matmul + scale + (mask) + softmax + matmul`` below, which is
-// measurably *slower* than eager (1.1–1.4× at L≥128) and was dragging down
-// compiled-transformer speedup.
+// ``scaledDotProductAttentionWithQueryTensor:keyTensor:valueTensor:maskTensor:
+// scale:`` op (macOS 15) — ``softmax(scale·QKᵀ + M)V`` in one fused flash-style
+// kernel, matching the eager MLX fused SDPA — instead of the decomposed
+// ``matmul + scale + (mask) + softmax + matmul`` below, which is measurably
+// *slower* than eager (1.1–1.4× at L≥128) and was dragging compiled-transformer
+// speedup.  (The macOS-26 ``descriptor:``/``isCausal`` variant is deliberately
+// avoided — it is absent from some build SDKs, e.g. the CI Xcode image.)
 //
-// DECOMPOSED FALLBACK — kept for non-4-D inputs and for non-square causal
-// (where the fused ``isCausal`` alignment for ``Lq != Lk`` is unspecified; the
-// host-baked mask below uses the bottom-right alignment ``j ≤ i + (Lk − Lq)``
-// that matches eager).  ``is_causal`` is realised as a host-baked
-// large-finite-negative ``constantWithData`` mask (NOT in-graph select / −inf,
-// which crash the MPSGraph compiler on some drivers).  An explicit additive
-// mask takes precedence over ``is_causal`` in both paths (mirrors eager).
+// Causal is realised by passing a host-baked lower-triangular −big additive
+// mask as ``maskTensor`` (``make_causal_mask`` — a ``constantWithData``, NOT
+// in-graph select / −inf, which crash the MPSGraph compiler on some drivers),
+// so it fuses for square AND non-square (bottom-right ``j ≤ i + (Lk − Lq)``,
+// matching eager).  An explicit additive mask takes precedence over causal.
+//
+// DECOMPOSED FALLBACK — kept only for non-4-D inputs (rare).
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -39,6 +39,28 @@
 namespace lucid::compile {
 
 namespace {
+
+// Host-baked causal additive mask of shape [Lq, Lk]: 0 where key j is
+// attendable by query i (bottom-right aligned, j ≤ i + (Lk − Lq) — matches
+// eager for non-square), a large *finite* negative otherwise (−inf crashes the
+// MPSGraph compiler) whose exp() underflows to 0.  Baked as ``constantWithData``
+// (the CI-proven path), then cast to ``dtype``.
+MPSGraphTensor* make_causal_mask(MPSGraph* g, long long Lq, long long Lk, MPSDataType dtype) {
+    const float neg_big = (dtype == MPSDataTypeFloat16) ? -6.0e4f : -1.0e30f;
+    const long long offset = Lk - Lq;
+    std::vector<float> data(static_cast<std::size_t>(Lq * Lk));
+    for (long long i = 0; i < Lq; ++i)
+        for (long long j = 0; j < Lk; ++j)
+            data[static_cast<std::size_t>(i * Lk + j)] = (j <= i + offset) ? 0.0f : neg_big;
+    NSData* nsd = [NSData dataWithBytes:data.data() length:data.size() * sizeof(float)];
+    MPSGraphTensor* m =
+        [g constantWithData:nsd
+                      shape:@[ [NSNumber numberWithLongLong:Lq], [NSNumber numberWithLongLong:Lk] ]
+                   dataType:MPSDataTypeFloat32];
+    if (dtype != MPSDataTypeFloat32)
+        m = [g castTensor:m toType:dtype name:nil];
+    return m;
+}
 
 class SdpaEmitter final : public OpEmitter {
 public:
@@ -101,34 +123,27 @@ public:
         }
 
         // ── Fused fast path: 4-D q/k/v (every transformer).  One Apple flash-
-        // style SDPA kernel instead of the decomposed graph below.  isCausal is
-        // used only for the square (Lq == Lk) case — the fused op's alignment
-        // for Lq != Lk is unspecified, so non-square causal falls through to the
-        // host-baked bottom-right mask that provably matches eager.  An additive
-        // mask takes precedence over causal (mirrors eager + the descriptor's
-        // mutually-exclusive contract).
-        bool can_fuse = (nd_q == 4 && nd_k == 4 && nd_v == 4);
-        if (can_fuse && is_causal && mask == nil) {
-            const long long Lq = q.shape[2].longLongValue;
-            const long long Lk = k.shape[2].longLongValue;
-            if (Lq != Lk)
-                can_fuse = false;
-        }
-        if (can_fuse) {
-            MPSGraphSDPADescriptor* desc =
-                [MPSGraphSDPADescriptor descriptorWithScale:(float)scale_val];
+        // style SDPA kernel instead of the decomposed graph below.  The
+        // effective additive mask is: the explicit mask (wins over causal,
+        // mirrors eager), else a host-baked causal mask, else none (nil).
+        if (nd_q == 4 && nd_k == 4 && nd_v == 4) {
+            MPSGraphTensor* eff_mask = nil;
             if (mask != nil) {
-                MPSGraphTensor* mm = mask;
-                if (mm.dataType != q.dataType)
-                    mm = [g castTensor:mm toType:q.dataType name:nil];
-                desc.maskTensor = mm;
+                eff_mask = (mask.dataType != q.dataType)
+                               ? [g castTensor:mask toType:q.dataType name:nil]
+                               : mask;
             } else if (is_causal) {
-                desc.isCausal = YES;
+                const long long Lq = q.shape[2].longLongValue;
+                const long long Lk = k.shape[2].longLongValue;
+                if (Lq <= 0 || Lk <= 0)
+                    return false;
+                eff_mask = make_causal_mask(g, Lq, Lk, q.dataType);
             }
             MPSGraphTensor* out = [g scaledDotProductAttentionWithQueryTensor:q
                                                                     keyTensor:k
                                                                   valueTensor:v
-                                                                   descriptor:desc
+                                                                   maskTensor:eff_mask
+                                                                        scale:(float)scale_val
                                                                          name:@"sdpa_fused"];
             if (out == nil)
                 return false;
@@ -136,7 +151,7 @@ public:
             return true;
         }
 
-        // ── Decomposed fallback (non-4-D / non-square causal). ──
+        // ── Decomposed fallback (non-4-D inputs only). ──
         MPSGraphTensor* k_t = [g transposeTensor:k
                                        dimension:(NSInteger)(nd_k - 1)
                                    withDimension:(NSInteger)(nd_k - 2)
@@ -152,44 +167,18 @@ public:
                 m = [g castTensor:m toType:scores.dataType name:nil];
             scores = [g additionWithPrimaryTensor:scores secondaryTensor:m name:nil];
         }
-        // Causal masking — applied only when no explicit additive mask is
-        // wired (the eager backend lets a float ``attn_mask`` win over
-        // ``is_causal``).  The (Lq, Lk) additive mask is fully precomputed on
-        // the host and baked as a ``constantWithData`` tensor (the same proven
-        // path the RoPE table uses) — deliberately NOT built in-graph with
-        // ``select`` / compare / ``bandPart``, which crash the MPSGraph graph
-        // compiler on some Metal drivers.  Only ``constantWithData`` + cast +
-        // add reach the executable; those are exercised CI-wide.
+        // Causal masking — only when no explicit additive mask is wired (eager
+        // lets a float ``attn_mask`` win over ``is_causal``).  Reuses the
+        // host-baked bottom-right mask helper.
         if (is_causal && !has_mask) {
-            NSUInteger nd_c = scores.shape.count;
+            const NSUInteger nd_c = scores.shape.count;
             if (nd_c < 2)
                 return false;
             const long long Lq = scores.shape[nd_c - 2].longLongValue;
             const long long Lk = scores.shape[nd_c - 1].longLongValue;
             if (Lq <= 0 || Lk <= 0)
                 return false;
-            // Disallowed positions get a large *finite* negative (NOT −inf,
-            // which can crash the graph compiler) whose exp() underflows to 0,
-            // so it is softmax-equivalent.  f16 saturates at 65504, so the
-            // half-precision score path uses a smaller magnitude.
-            const float neg_big = (scores.dataType == MPSDataTypeFloat16) ? -6.0e4f : -1.0e30f;
-            // Keep key j for query i iff  j ≤ i + (Lk − Lq)  (bottom-right
-            // aligned; reduces to lower-triangular when Lq == Lk).
-            const long long offset = Lk - Lq;
-            std::vector<float> mask_data((std::size_t)(Lq * Lk));
-            for (long long i = 0; i < Lq; ++i)
-                for (long long j = 0; j < Lk; ++j)
-                    mask_data[(std::size_t)(i * Lk + j)] = (j <= i + offset) ? 0.0f : neg_big;
-            NSData* mask_nsd = [NSData dataWithBytes:mask_data.data()
-                                              length:mask_data.size() * sizeof(float)];
-            MPSGraphTensor* causal_mask =
-                [g constantWithData:mask_nsd
-                              shape:@[
-                                  [NSNumber numberWithLongLong:Lq], [NSNumber numberWithLongLong:Lk]
-                              ]
-                           dataType:MPSDataTypeFloat32];
-            if (causal_mask.dataType != scores.dataType)
-                causal_mask = [g castTensor:causal_mask toType:scores.dataType name:nil];
+            MPSGraphTensor* causal_mask = make_causal_mask(g, Lq, Lk, scores.dataType);
             scores = [g additionWithPrimaryTensor:scores secondaryTensor:causal_mask name:nil];
         }
         NSUInteger nd_s = scores.shape.count;
