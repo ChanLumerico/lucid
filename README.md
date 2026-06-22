@@ -42,9 +42,9 @@ The engine now contains **260+ ops** across unary, binary, reduction, shape, ind
 | `lucid.linalg` | 38 | Decompositions (QR, SVD, Cholesky, Eigh, LU), norms, solvers, `matrix_exp` |
 | `lucid.metal` | — | `lucid.metal.run_kernel` — Metal shader escape hatch for custom GPU kernels |
 
-### 🔌 NumPy independence
+### 🔌 NumPy-free core (NumPy bundled for convenience)
 
-Lucid's core is now a standalone binary. `import lucid` and the full forward + backward + optimizer + save/load lifecycle work without NumPy installed. NumPy is an optional extra (`pip install lucid[numpy]`) used only at six explicit bridge boundaries: tensor conversion, `.numpy()`, `_repr.py`, `_types.py`, serialization state_dict, and the DataLoader ingest path.
+Lucid's **engine is a standalone binary**: no compute path imports NumPy (Hard Rule H4), so `import lucid` and the full forward + backward + optimizer + native `save`/`load` lifecycle run without NumPy in the loop. NumPy is nonetheless **bundled as a default dependency** so `pip install lucid-dl` gives you the full training + interop experience out of the box — it backs only the explicit user-facing bridge boundaries: tensor conversion, `.numpy()`, `from_numpy`, DLPack interop, bf16/complex tensor construction, portable optimizer-state checkpoints, and the DataLoader array-ingest path. The engine still runs without it; the dependency is a UX convenience, not an architectural one.
 
 ### 🏛️ Production pillars
 
@@ -125,8 +125,11 @@ View ops — `reshape`, `permute`, `transpose`, `slice` — are metadata-only. T
 ### 📥 Stable release
 
 ```bash
-pip install lucid-dl
+pip install lucid-dl            # core + NumPy bundled — full training & interop
+pip install lucid-dl[models]    # + safetensors, for pretrained-weight download
 ```
+
+`pip install lucid-dl` already pulls in NumPy, so tensor↔NumPy conversion, DLPack interop, bf16 tensors, optimizer checkpoints, and the DataLoader all work out of the box. Add the `[models]` extra only if you want to load pretrained weights (the `.safetensors` format).
 
 ### 🛠️ Development install (from source)
 
@@ -141,7 +144,8 @@ The C++ engine is compiled automatically via `scikit-build-core` + CMake + Ninja
 ### 🔧 Optional extras
 
 ```bash
-pip install lucid-dl[numpy]   # numpy bridge (tensor(), .numpy(), from_numpy())
+pip install lucid-dl[models]  # safetensors — pretrained weights / .safetensors
+pip install lucid-dl[numpy]   # no-op alias (numpy is already a base dependency)
 pip install lucid-dl[test]    # pytest + pytest-benchmark + numpy + safetensors
 pip install lucid-dl[dev]     # ruff + mypy + numpy (contributor tooling)
 ```

@@ -20,7 +20,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lucid-dl"
-version = "3.5.0"
+version = "3.5.1"
 description = "Apple Silicon ML framework"
 readme = "README.md"
 license = "MIT"
@@ -43,11 +43,15 @@ classifiers = [
     # `License :: OSI Approved :: MIT License` classifier (PEP 639).
 ]
 
-# Lucid is self-contained: ``import lucid`` and the full forward + backward +
-# optimizer + save/load lifecycle work without numpy installed.  NumPy is
-# only needed at the explicit user-facing bridge surface (``tensor(np_arr)``,
-# ``.numpy()``, ``from_numpy``, DLPack interop) and inside the test tier.
-# Declare it as an optional extra rather than a hard runtime dep.
+# Lucid's *code* stays numpy-free: the C++ engine is a standalone binary and no
+# compute path imports numpy (Hard Rule H4 — the engine still runs without it).
+# numpy is nonetheless bundled as a runtime dependency so a plain
+# ``pip install lucid-dl`` gives a new user the full training + interop
+# experience out of the box: it backs the user-facing bridge surface
+# (``tensor(np_arr)`` / ``.numpy()`` / ``from_numpy`` / DLPack), bf16/complex
+# tensor construction, portable optimizer-state checkpoints, and DataLoader
+# array ingest.  (safetensors stays optional — it gates only the
+# ``.safetensors`` format + pretrained-weight download; see [models] below.)
 #
 # MLX *is* a hard runtime dep — engine.so links against libmlx.dylib and the
 # CMake RPATH is baked in at build time. Mirror it in [build-system].requires
@@ -55,6 +59,7 @@ classifiers = [
 # the runtime path.
 dependencies = [
     "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "numpy>=1.24",
 ]
 
 [project.urls]
@@ -64,7 +69,12 @@ Changelog = "https://github.com/ChanLumerico/lucid/blob/main/CHANGELOG.md"
 Issues = "https://github.com/ChanLumerico/lucid/issues"
 
 [project.optional-dependencies]
+# numpy is now a hard runtime dependency; this extra is kept as a no-op alias
+# so existing ``pip install lucid-dl[numpy]`` commands keep working.
 numpy = ["numpy>=1.24"]
+# Everything needed to load pretrained weights / the ``.safetensors`` format
+# (numpy is already in the base deps).  ``pip install lucid-dl[models]``.
+models = ["safetensors>=0.4"]
 dev = [
     "pytest>=7",
     "ruff>=0.4",
