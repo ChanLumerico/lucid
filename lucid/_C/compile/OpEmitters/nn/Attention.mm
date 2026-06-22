@@ -1,6 +1,6 @@
 // lucid/_C/compile/OpEmitters/nn/Attention.mm
 //
-// scaled_dot_product_attention emitter.
+// scaled_dot_product_attention emitter — matmul + softmax + matmul.
 //
 // Inputs: ``{q, k, v}`` plus an optional ``{attn_mask}``.  Attrs:
 //   - ``scale``     (double) — multiplier on Q·Kᵀ; 0.0 means "use
@@ -8,23 +8,24 @@
 //   - ``is_causal`` (bool)   — lower-triangular causal masking
 //   - ``has_mask``  (bool)   — whether an additive mask is wired
 //
-// FAST PATH — Apple's *fused* SDPA kernel.  For the universal 4-D
-// ``[B, H, L, D]`` case (every transformer) we emit a single
-// ``scaledDotProductAttentionWithQueryTensor:keyTensor:valueTensor:maskTensor:
-// scale:`` op (macOS 15) — ``softmax(scale·QKᵀ + M)V`` in one fused flash-style
-// kernel, matching the eager MLX fused SDPA — instead of the decomposed
-// ``matmul + scale + (mask) + softmax + matmul`` below, which is measurably
-// *slower* than eager (1.1–1.4× at L≥128) and was dragging compiled-transformer
-// speedup.  (The macOS-26 ``descriptor:``/``isCausal`` variant is deliberately
-// avoided — it is absent from some build SDKs, e.g. the CI Xcode image.)
+// Decomposition::
 //
-// Causal is realised by passing a host-baked lower-triangular −big additive
-// mask as ``maskTensor`` (``make_causal_mask`` — a ``constantWithData``, NOT
-// in-graph select / −inf, which crash the MPSGraph compiler on some drivers),
-// so it fuses for square AND non-square (bottom-right ``j ≤ i + (Lk − Lq)``,
-// matching eager).  An explicit additive mask takes precedence over causal.
+//     scores  = (Q @ Kᵀ) * scale
+//     scores += attn_mask   (when has_mask)
+//     attn    = softmax(scores, axis=-1)
+//     out     = attn @ V
 //
-// DECOMPOSED FALLBACK — kept only for non-4-D inputs (rare).
+// ``is_causal=True`` adds a lower-triangular large-negative additive mask
+// before the softmax.  The (Lq, Lk) mask is precomputed on the host and baked
+// as a ``constantWithData`` tensor (the proven RoPE-table path) rather than
+// built in-graph with ``select`` / compare / ``bandPart`` — those crash the
+// MPSGraph graph compiler on some Metal drivers.  The masked value is a large
+// *finite* negative (−inf likewise crashes the compiler) whose exp() underflows
+// to 0, so it is softmax-equivalent.  The mask uses the bottom-right alignment
+// ``j ≤ i + (Lk − Lq)`` so the non-square (cached-decode) case matches the
+// eager fused-causal convention.  An explicit additive mask takes precedence
+// over ``is_causal`` (mirrors the eager backend, which ignores ``is_causal``
+// once a float ``attn_mask`` is supplied).
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -39,28 +40,6 @@
 namespace lucid::compile {
 
 namespace {
-
-// Host-baked causal additive mask of shape [Lq, Lk]: 0 where key j is
-// attendable by query i (bottom-right aligned, j ≤ i + (Lk − Lq) — matches
-// eager for non-square), a large *finite* negative otherwise (−inf crashes the
-// MPSGraph compiler) whose exp() underflows to 0.  Baked as ``constantWithData``
-// (the CI-proven path), then cast to ``dtype``.
-MPSGraphTensor* make_causal_mask(MPSGraph* g, long long Lq, long long Lk, MPSDataType dtype) {
-    const float neg_big = (dtype == MPSDataTypeFloat16) ? -6.0e4f : -1.0e30f;
-    const long long offset = Lk - Lq;
-    std::vector<float> data(static_cast<std::size_t>(Lq * Lk));
-    for (long long i = 0; i < Lq; ++i)
-        for (long long j = 0; j < Lk; ++j)
-            data[static_cast<std::size_t>(i * Lk + j)] = (j <= i + offset) ? 0.0f : neg_big;
-    NSData* nsd = [NSData dataWithBytes:data.data() length:data.size() * sizeof(float)];
-    MPSGraphTensor* m =
-        [g constantWithData:nsd
-                      shape:@[ [NSNumber numberWithLongLong:Lq], [NSNumber numberWithLongLong:Lk] ]
-                   dataType:MPSDataTypeFloat32];
-    if (dtype != MPSDataTypeFloat32)
-        m = [g castTensor:m toType:dtype name:nil];
-    return m;
-}
 
 class SdpaEmitter final : public OpEmitter {
 public:
@@ -91,67 +70,9 @@ public:
         MPSGraphTensor* v = (__bridge MPSGraphTensor*)ctx.resolve(v_id);
         if (g == nil || q == nil || k == nil || v == nil)
             return false;
-        const NSUInteger nd_q = q.shape.count;
-        const NSUInteger nd_k = k.shape.count;
-        const NSUInteger nd_v = v.shape.count;
+        NSUInteger nd_k = k.shape.count;
         if (nd_k < 2)
             return false;
-
-        // Effective scale: 0.0 ⇒ 1/√D_k per Lucid convention.
-        double scale_val = scale;
-        if (scale_val == 0.0) {
-            if (nd_q < 1)
-                return false;
-            const double Dk = (double)q.shape[nd_q - 1].longLongValue;
-            if (Dk <= 0.0)
-                return false;
-            scale_val = 1.0 / std::sqrt(Dk);
-        }
-
-        // Resolve the additive mask once (float only — the eager backend treats
-        // a bool mask as a set-mask, not an add, so those route to eager).
-        MPSGraphTensor* mask = nil;
-        if (has_mask && node.inputs.size() >= 4) {
-            const TensorId m_id = node.inputs[3];
-            if (m_id < 0)
-                return false;
-            mask = (__bridge MPSGraphTensor*)ctx.resolve(m_id);
-            if (mask == nil)
-                return false;
-            if ((mask.dataType & MPSDataTypeFloatBit) == 0)
-                return false;
-        }
-
-        // ── Fused fast path: 4-D q/k/v (every transformer).  One Apple flash-
-        // style SDPA kernel instead of the decomposed graph below.  The
-        // effective additive mask is: the explicit mask (wins over causal,
-        // mirrors eager), else a host-baked causal mask, else none (nil).
-        if (nd_q == 4 && nd_k == 4 && nd_v == 4) {
-            MPSGraphTensor* eff_mask = nil;
-            if (mask != nil) {
-                eff_mask = (mask.dataType != q.dataType)
-                               ? [g castTensor:mask toType:q.dataType name:nil]
-                               : mask;
-            } else if (is_causal) {
-                const long long Lq = q.shape[2].longLongValue;
-                const long long Lk = k.shape[2].longLongValue;
-                if (Lq <= 0 || Lk <= 0)
-                    return false;
-                eff_mask = make_causal_mask(g, Lq, Lk, q.dataType);
-            }
-            MPSGraphTensor* out = [g scaledDotProductAttentionWithQueryTensor:q
-                                                                    keyTensor:k
-                                                                  valueTensor:v
-                                                                   maskTensor:eff_mask
-                                                                        scale:(float)scale_val
-                                                                         name:@"sdpa_fused"];
-            if (out == nil)
-                return false;
-            ctx.bind(node.outputs[0].id, (__bridge void*)out);
-            return true;
-        }
-
-        // ── Decomposed fallback (non-4-D inputs only). ──
         MPSGraphTensor* k_t = [g transposeTensor:k
                                        dimension:(NSInteger)(nd_k - 1)
                                    withDimension:(NSInteger)(nd_k - 2)
@@ -159,26 +80,73 @@ public:
         MPSGraphTensor* scores = [g matrixMultiplicationWithPrimaryTensor:q
                                                           secondaryTensor:k_t
                                                                      name:@"sdpa_qk"];
+        double scale_val = scale;
+        if (scale_val == 0.0) {
+            NSUInteger nd_q = q.shape.count;
+            if (nd_q < 1)
+                return false;
+            double Dk = (double)q.shape[nd_q - 1].longLongValue;
+            if (Dk <= 0.0)
+                return false;
+            scale_val = 1.0 / std::sqrt(Dk);
+        }
         MPSGraphTensor* scale_c = [g constantWithScalar:scale_val dataType:scores.dataType];
         scores = [g multiplicationWithPrimaryTensor:scores secondaryTensor:scale_c name:nil];
-        if (mask != nil) {
-            MPSGraphTensor* m = mask;
-            if (m.dataType != scores.dataType)
-                m = [g castTensor:m toType:scores.dataType name:nil];
-            scores = [g additionWithPrimaryTensor:scores secondaryTensor:m name:nil];
+        if (has_mask && node.inputs.size() >= 4) {
+            TensorId m_id = node.inputs[3];
+            if (m_id >= 0) {
+                MPSGraphTensor* m = (__bridge MPSGraphTensor*)ctx.resolve(m_id);
+                if (m == nil)
+                    return false;  // mask wired but unresolved → can't honor it
+                // Only a floating (additive) mask is reproducible by an add:
+                // the eager backend treats a bool mask as a *set*-mask (−inf
+                // where false), so route those to eager instead.
+                if ((m.dataType & MPSDataTypeFloatBit) == 0)
+                    return false;
+                if (m.dataType != scores.dataType) {
+                    m = [g castTensor:m toType:scores.dataType name:nil];
+                }
+                scores = [g additionWithPrimaryTensor:scores secondaryTensor:m name:nil];
+            }
         }
-        // Causal masking — only when no explicit additive mask is wired (eager
-        // lets a float ``attn_mask`` win over ``is_causal``).  Reuses the
-        // host-baked bottom-right mask helper.
+        // Causal masking — applied only when no explicit additive mask is
+        // wired (the eager backend lets a float ``attn_mask`` win over
+        // ``is_causal``).  The (Lq, Lk) additive mask is fully precomputed on
+        // the host and baked as a ``constantWithData`` tensor (the same proven
+        // path the RoPE table uses) — deliberately NOT built in-graph with
+        // ``select`` / compare / ``bandPart``, which crash the MPSGraph graph
+        // compiler on some Metal drivers.  Only ``constantWithData`` + cast +
+        // add reach the executable; those are exercised CI-wide.
         if (is_causal && !has_mask) {
-            const NSUInteger nd_c = scores.shape.count;
+            NSUInteger nd_c = scores.shape.count;
             if (nd_c < 2)
                 return false;
             const long long Lq = scores.shape[nd_c - 2].longLongValue;
             const long long Lk = scores.shape[nd_c - 1].longLongValue;
             if (Lq <= 0 || Lk <= 0)
                 return false;
-            MPSGraphTensor* causal_mask = make_causal_mask(g, Lq, Lk, scores.dataType);
+            // Disallowed positions get a large *finite* negative (NOT −inf,
+            // which can crash the graph compiler) whose exp() underflows to 0,
+            // so it is softmax-equivalent.  f16 saturates at 65504, so the
+            // half-precision score path uses a smaller magnitude.
+            const float neg_big = (scores.dataType == MPSDataTypeFloat16) ? -6.0e4f : -1.0e30f;
+            // Keep key j for query i iff  j ≤ i + (Lk − Lq)  (bottom-right
+            // aligned; reduces to lower-triangular when Lq == Lk).
+            const long long offset = Lk - Lq;
+            std::vector<float> mask_data((std::size_t)(Lq * Lk));
+            for (long long i = 0; i < Lq; ++i)
+                for (long long j = 0; j < Lk; ++j)
+                    mask_data[(std::size_t)(i * Lk + j)] = (j <= i + offset) ? 0.0f : neg_big;
+            NSData* mask_nsd = [NSData dataWithBytes:mask_data.data()
+                                              length:mask_data.size() * sizeof(float)];
+            MPSGraphTensor* causal_mask =
+                [g constantWithData:mask_nsd
+                              shape:@[
+                                  [NSNumber numberWithLongLong:Lq], [NSNumber numberWithLongLong:Lk]
+                              ]
+                           dataType:MPSDataTypeFloat32];
+            if (causal_mask.dataType != scores.dataType)
+                causal_mask = [g castTensor:causal_mask toType:scores.dataType name:nil];
             scores = [g additionWithPrimaryTensor:scores secondaryTensor:causal_mask name:nil];
         }
         NSUInteger nd_s = scores.shape.count;
