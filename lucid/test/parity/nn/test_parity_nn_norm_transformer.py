@@ -384,7 +384,7 @@ class TestMultiheadAttentionParity:
                 ref.tensor(v.copy()),
                 enable_gqa=True,
             )
-        except TypeError, RuntimeError:
+        except (TypeError, RuntimeError):
             pytest.skip("reference SDPA has no enable_gqa")
         kl = nn.functional.repeat_kv(lucid.tensor(k.copy()), H // KV)
         vl = nn.functional.repeat_kv(lucid.tensor(v.copy()), H // KV)

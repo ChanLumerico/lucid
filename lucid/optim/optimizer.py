@@ -197,7 +197,7 @@ class Optimizer:
                     continue
                 try:
                     setattr(eng, k, v)
-                except AttributeError, TypeError:
+                except (AttributeError, TypeError):
                     pass
 
     def zero_grad(self, set_to_none: bool = True) -> None:

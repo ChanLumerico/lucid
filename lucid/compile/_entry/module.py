@@ -822,7 +822,7 @@ class CompiledModule[**P, R]:
                 dynamic=eff,
                 param_fingerprint=fp,
             )
-        except TypeError, AttributeError:
+        except (TypeError, AttributeError):
             return run_eager(self._model, args, kwargs)
 
         self._call_counter[key] = self._call_counter.get(key, 0) + 1

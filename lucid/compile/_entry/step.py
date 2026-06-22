@@ -417,7 +417,7 @@ def make_step(
         # signature so each distinct shape gets its own fwd+bwd executable.
         try:
             key = signature_of(model, x_args, {}, dynamic=use_dynamic)
-        except TypeError, AttributeError:
+        except (TypeError, AttributeError):
             key = None  # un-hashable → fresh per-call compile only
 
         if key is not None and key in eager_only:
