@@ -122,6 +122,39 @@ def assert_cache_hit(compiled_model: object, expected_entries: int = 1) -> None:
     )
 
 
+def assert_compiles(
+    model: nn.Module,
+    *inputs: Tensor,
+    atol: float = 1e-4,
+) -> None:
+    """Assert ``model`` actually COMPILES (no eager fallback) and matches eager.
+
+    The plain :func:`assert_compile_parity` only checks the *output* — which
+    passes even when the model silently falls back to eager (the eager-vs-eager
+    diff is then trivially 0).  That blind spot is exactly how single-layer
+    LSTM compile stayed broken for months.  This helper additionally asserts
+    the executable was built and nothing was blacklisted as ``eager_only``, so
+    a regression that pushes a model back to eager is caught.
+    """
+    model.eval()
+    to_metal(model)
+    inputs = tuple(x.to(COMPILE_DEVICE) for x in inputs)
+    eager = unwrap(model(*inputs))
+
+    cm = lucid.compile(model)
+    compiled = unwrap(cm(*inputs))
+    compiled.eval()
+
+    info = cm.cache_info()
+    assert info["entries"] >= 1 and not info["eager_only"], (
+        f"{type(model).__name__} did not compile cleanly: "
+        f"entries={info['entries']}, eager_only={info['eager_only']}"
+    )
+
+    diff = float((eager - compiled).abs().max().item())
+    assert diff <= atol, f"{type(model).__name__} compile parity broken: {diff:.3e}"
+
+
 def assert_no_eager_fallback(compiled_model: object) -> None:
     """Assert no signature was blacklisted as eager-only.
 
