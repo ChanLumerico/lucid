@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def clip_grad_norm_(
-    parameters: Iterable["Parameter"],
+    parameters: Iterable[Parameter],
     max_norm: float,
     norm_type: float = 2.0,
     error_if_nonfinite: bool = False,
@@ -130,7 +130,7 @@ def clip_grad_norm_(
 
 
 def clip_grad_value_(
-    parameters: Iterable["Parameter"],
+    parameters: Iterable[Parameter],
     clip_value: float,
 ) -> None:
     r"""Clamp every gradient element to :math:`[-\text{clip\_value}, \text{clip\_value}]` in place.
@@ -182,7 +182,7 @@ def clip_grad_value_(
 
 
 def get_total_norm(
-    parameters: Iterable["Parameter"],
+    parameters: Iterable[Parameter],
     norm_type: float = 2.0,
     error_if_nonfinite: bool = False,
     foreach: bool | None = None,

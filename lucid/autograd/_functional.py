@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 def jacobian(
-    func: Callable[..., "Tensor"],
+    func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
@@ -161,7 +161,7 @@ def jacobian(
 
 
 def hessian(
-    func: Callable[..., "Tensor"],
+    func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
@@ -244,7 +244,7 @@ def hessian(
     from lucid._tensor.tensor import Tensor as _T
 
     n_inputs = len(inputs_rg)
-    blocks: list[list["Tensor"]] = [[None] * n_inputs for _ in range(n_inputs)]  # type: ignore[list-item]
+    blocks: list[list[Tensor]] = [[None] * n_inputs for _ in range(n_inputs)]  # type: ignore[list-item]
 
     for i, xi in enumerate(inputs_rg):
         ni = xi.numel()
@@ -293,12 +293,12 @@ def hessian(
 
 
 def vjp(
-    func: Callable[..., "Tensor"],
+    func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
     v: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
-) -> tuple["Tensor", tuple["Tensor | None", ...]]:
+) -> tuple[Tensor, tuple[Tensor | None, ...]]:
     r"""Vector-Jacobian product :math:`v^\top J` (reverse-mode AD).
 
     Given :math:`f : \mathbb{R}^n \to \mathbb{R}^m` with Jacobian
@@ -407,12 +407,12 @@ def vjp(
 
 
 def jvp(
-    func: Callable[..., "Tensor"],
+    func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
     v: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
-) -> tuple["Tensor", "Tensor"]:
+) -> tuple[Tensor, Tensor]:
     r"""Jacobian-vector product :math:`J v` (forward-mode directional derivative).
 
     Given :math:`f : \mathbb{R}^n \to \mathbb{R}^m` with Jacobian

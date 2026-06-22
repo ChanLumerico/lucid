@@ -247,8 +247,8 @@ class TensorDataset(Dataset):
             idx = cpu_idx if first_dev.name == "CPU" else cpu_idx.to(device=first_dev)
             return tuple(t[idx] for t in self.tensors)
         # Mixed-device fallback: cache one index tensor per device
-        idx_cache: dict[object, "Tensor"] = {}
-        out: list["Tensor"] = []
+        idx_cache: dict[object, Tensor] = {}
+        out: list[Tensor] = []
         for t in self.tensors:
             dev = t._impl.device
             cached = idx_cache.get(dev)
