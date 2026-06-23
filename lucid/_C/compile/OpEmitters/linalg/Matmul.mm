@@ -34,19 +34,48 @@ public:
         MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         if (graph == nil || a_t == nil || b_t == nil)
             return false;
-        MPSGraphTensor* y =
-            [graph matrixMultiplicationWithPrimaryTensor:a_t
-                                          secondaryTensor:b_t
-                                                     name:@"matmul"];
+
+        // Attention value-projection workaround.  A matmul whose operand is a
+        // softmax output is the ``softmax(QKᵀ) @ V`` half of attention, which
+        // MPSGraph pattern-matches onto a fused-attention kernel that silently
+        // miscompiles for some shapes (sequence length in [17,24], batch >= 3,
+        // on macOS 26).  Emit it transposed — ``a @ b == (bᵀ @ aᵀ)ᵀ`` — so the
+        // matmul's direct operands are transposes, not the raw softmax output,
+        // and the buggy pass does not fire.  Mathematically identical; the only
+        // cost is two metadata transposes, and only on attention matmuls.
+        const NSUInteger nda = a_t.shape.count;
+        const NSUInteger ndb = b_t.shape.count;
+        if ((ctx.is_softmax_output(a_id) || ctx.is_softmax_output(b_id)) && nda >= 2 && ndb >= 2) {
+            MPSGraphTensor* a_tr = [graph transposeTensor:a_t
+                                                dimension:(NSInteger)(nda - 1)
+                                            withDimension:(NSInteger)(nda - 2)
+                                                     name:nil];
+            MPSGraphTensor* b_tr = [graph transposeTensor:b_t
+                                                dimension:(NSInteger)(ndb - 1)
+                                            withDimension:(NSInteger)(ndb - 2)
+                                                     name:nil];
+            MPSGraphTensor* prod = [graph matrixMultiplicationWithPrimaryTensor:b_tr
+                                                                secondaryTensor:a_tr
+                                                                           name:@"matmul_attn"];
+            const NSUInteger ndp = prod.shape.count;
+            MPSGraphTensor* y = [graph transposeTensor:prod
+                                             dimension:(NSInteger)(ndp - 1)
+                                         withDimension:(NSInteger)(ndp - 2)
+                                                  name:@"matmul"];
+            ctx.bind(node.outputs[0].id, (__bridge void*)y);
+            return true;
+        }
+
+        MPSGraphTensor* y = [graph matrixMultiplicationWithPrimaryTensor:a_t
+                                                         secondaryTensor:b_t
+                                                                    name:@"matmul"];
         ctx.bind(node.outputs[0].id, (__bridge void*)y);
         return true;
     }
 };
 
 struct MatmulEmitterRegistrar {
-    MatmulEmitterRegistrar() {
-        register_emitter(std::make_unique<MatmulEmitter>());
-    }
+    MatmulEmitterRegistrar() { register_emitter(std::make_unique<MatmulEmitter>()); }
 };
 
 [[maybe_unused]] static const MatmulEmitterRegistrar g_matmul_registrar;

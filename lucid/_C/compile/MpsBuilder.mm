@@ -75,6 +75,35 @@ inline MPSGraphCompilationDescriptor* make_compile_descriptor() {
     return desc;
 }
 
+// Collect the trace ids that carry attention weights — a ``softmax`` output,
+// or a value transitively derived from one through an (inference-mode identity)
+// ``dropout`` (the ``softmax → attn_drop → @V`` pattern of ViT / GPT-2).  A
+// matmul that reads such an id is an attention value-projection; the
+// MatmulEmitter emits those transposed so MPSGraph does not pattern-match
+// ``softmax(...) @ V`` onto its fused-attention kernel, which silently
+// miscompiles for some shapes (sequence length in [17,24] with batch>=3 on
+// macOS 26 — see the engine note).  Ops are in topological order, so one
+// forward pass propagates the marker correctly.
+inline std::unordered_set<TensorId> collect_softmax_outputs(const TraceGraph& graph) {
+    std::unordered_set<TensorId> derived;
+    auto input_is_derived = [&](const OpNode& n) {
+        for (TensorId iid : n.inputs)
+            if (iid >= 0 && derived.count(iid) != 0)
+                return true;
+        return false;
+    };
+    for (const auto& n : graph.ops) {
+        if (n.name == "softmax") {
+            for (const auto& meta : n.outputs)
+                derived.insert(meta.id);
+        } else if (n.name == "dropout" && input_is_derived(n)) {
+            for (const auto& meta : n.outputs)
+                derived.insert(meta.id);
+        }
+    }
+    return derived;
+}
+
 }  // namespace
 
 }  // namespace lucid::compile
@@ -311,6 +340,7 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
                         trace_consumed.insert(iid);
         }
         ctx.set_consumed_inputs(trace_consumed);
+        ctx.set_softmax_outputs(collect_softmax_outputs(graph));
 
         // Emit ops in dispatch order.
         std::size_t op_idx = 0;
@@ -710,6 +740,7 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
                 if (tid >= 0)
                     trace_consumed.insert(tid);
             ctx.set_consumed_inputs(trace_consumed);
+            ctx.set_softmax_outputs(collect_softmax_outputs(graph));
         }
 
         // Emit forward ops.
@@ -1523,6 +1554,7 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
                 if (tid >= 0)
                     trace_consumed.insert(tid);
             ctx.set_consumed_inputs(trace_consumed);
+            ctx.set_softmax_outputs(collect_softmax_outputs(graph));
         }
 
         // Emit ops in trace order.  Before reaching the first op that
@@ -1933,6 +1965,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                 if (tid >= 0)
                     trace_consumed.insert(tid);
             ctx.set_consumed_inputs(trace_consumed);
+            ctx.set_softmax_outputs(collect_softmax_outputs(graph));
         }
 
         // Step 3: emit trace ops with ghost-grad derivation, same as

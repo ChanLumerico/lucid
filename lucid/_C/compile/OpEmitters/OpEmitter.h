@@ -82,6 +82,16 @@ public:
     }
     void set_consumed_inputs(const std::unordered_set<TensorId>& s) { consumed_inputs_ = s; }
 
+    // Trace ids that are the output of a ``softmax`` op.  A matmul that reads
+    // one is the value-projection of an attention block; the MatmulEmitter
+    // emits it transposed to dodge a buggy MPSGraph fused-attention pass (it
+    // miscompiles ``softmax(...) @ V`` for some shapes — N in [17,24], B>=3 on
+    // macOS 26).  Populated by :class:`MpsBuilder` before the emit loop.
+    bool is_softmax_output(TensorId id) const {
+        return softmax_outputs_.find(id) != softmax_outputs_.end();
+    }
+    void set_softmax_outputs(const std::unordered_set<TensorId>& s) { softmax_outputs_ = s; }
+
     // Saved-state side-table.
     //
     // Used by ops whose backward needs an intermediate tensor computed
@@ -115,6 +125,7 @@ private:
     Device device_;
     std::unordered_map<TensorId, void*> tensors_;
     std::unordered_set<TensorId> consumed_inputs_;
+    std::unordered_set<TensorId> softmax_outputs_;
     // Saved tensors keyed by (forward output id, slot name).  Owned
     // for the duration of this BuilderContext (== one compile call).
     std::unordered_map<TensorId, std::unordered_map<std::string, void*>> saved_;
