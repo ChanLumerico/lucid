@@ -28,7 +28,7 @@ the rolled-forward value.
 
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Protocol, cast, final
 
 from lucid._C import engine as _C_engine
@@ -63,16 +63,24 @@ class _ExecutableLike(Protocol):
 @final
 @dataclass(slots=True)
 class _DecodeEntry:
-    """One compiled decode executable + the plan to invoke / write back."""
+    """One compiled decode executable + the plan to invoke / roll forward.
+
+    The cache buffers are fed PER-CALL (not pinned) and the executable's updated
+    buffers are rebound onto ``static_cache`` — a pointer swap, no data copy.  So
+    the only per-step write-back cost is a Python rebind, not ``copy_``-ing every
+    ``(B,H,max_cache_len,D)`` buffer back (24 dispatches ≈ 0.6 ms on a 12-layer
+    model).
+    """
 
     exe: object
     external_feeds: dict[int, object]
     # Per ``exe.input_ids[i]``: 0 → input_ids arg, 1 → cache_position arg,
-    # None → a pinned param / cache buffer in ``external_feeds``.
-    input_source: tuple[int | None, ...]
-    # The model output is exe output[0]; the remaining outputs are updated cache
-    # buffers to copy back into these live buffer Tensors (same order).
-    writeback_buffers: list[Tensor] = field(default_factory=list)
+    # ("buf", slot) → the current cache buffer at flat slot (2*layer + {0:key,
+    # 1:value}), None → a pinned param/constant in ``external_feeds``.
+    input_source: tuple[object, ...]
+    # Number of trailing executable outputs that are updated cache buffers
+    # (== 2 * n_layers); they follow the model output at outs[1:].
+    n_buffers: int = 0
     n_hits: int = 0
     compile_ms: float = 0.0
     last_run_ms: float = 0.0
@@ -113,15 +121,6 @@ def compiled_decode_step(
 
     cache: dict[Any, _DecodeEntry] = {}
     eager_sigs: set[Any] = set()
-
-    def _buffer_impls() -> list[object]:
-        """Flat list of the cache's live key/value buffer impls (key then value,
-        per layer) — the write-back targets + pinned feeds."""
-        impls: list[object] = []
-        for i in range(len(static_cache.key_cache)):
-            impls.append(_unwrap(static_cache.key_cache[i]))
-            impls.append(_unwrap(static_cache.value_cache[i]))
-        return impls
 
     def _restore(snap: tuple[Any, ...]) -> None:
         """Undo every cache mutation the trace caused (buffer rebinds + counters),
@@ -166,25 +165,30 @@ def compiled_decode_step(
         ext = tracer.external_feeds
 
         # The decode output + every cache buffer's post-write id become the
-        # executable's explicit outputs (output first, then key/value per layer).
+        # executable's explicit outputs (output first, then key/value per layer,
+        # flat slot 2*i + {0:key, 1:value}).  Also map each ORIGINAL buffer's feed
+        # impl id → its flat slot so the run feeds the current buffer and rebinds
+        # the matching output.
         out_id = tracer.lookup_id(_unwrap(out))
         if out_id is None:
             _restore(snap)
             return None
         write_ids: list[int] = [int(out_id)]
-        writeback_buffers: list[Tensor] = []
+        buf_slot: dict[int, int] = {}
         ok = True
         for i in range(n_layers):
-            for buf_after, buf_before in (
-                (static_cache.key_cache[i], orig_key[i]),
-                (static_cache.value_cache[i], orig_val[i]),
+            for slot_kv, (buf_after, buf_before) in enumerate(
+                (
+                    (static_cache.key_cache[i], orig_key[i]),
+                    (static_cache.value_cache[i], orig_val[i]),
+                )
             ):
                 wid = tracer.lookup_id(_unwrap(buf_after))
                 if wid is None:
                     ok = False
                     break
                 write_ids.append(int(wid))
-                writeback_buffers.append(buf_before)
+                buf_slot[id(_unwrap(buf_before))] = 2 * i + slot_kv
             if not ok:
                 break
 
@@ -201,19 +205,22 @@ def compiled_decode_step(
         if exe is None:
             return None
 
-        # Feed plan: input_ids → slot 0, cache_position → slot 1, everything
-        # else (model params + pinned cache buffers) → None (from external_feeds).
+        # Feed plan: input_ids → 0, cache_position → 1, a cache buffer →
+        # ("buf", slot) (fed per-call, rebound after), else → None (pinned param).
         ids_impl = id(_unwrap(input_ids))
         cp_impl = id(_unwrap(cache_position))
-        input_source: list[int | None] = []
+        input_source: list[object] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
             if impl is None:
                 return None
-            if id(impl) == ids_impl:
+            iid = id(impl)
+            if iid == ids_impl:
                 input_source.append(0)
-            elif id(impl) == cp_impl:
+            elif iid == cp_impl:
                 input_source.append(1)
+            elif iid in buf_slot:
+                input_source.append(("buf", buf_slot[iid]))
             else:
                 input_source.append(None)
 
@@ -221,34 +228,53 @@ def compiled_decode_step(
             exe=exe,
             external_feeds=dict(ext),
             input_source=tuple(input_source),
-            writeback_buffers=writeback_buffers,
+            n_buffers=2 * n_layers,
             compile_ms=(time.perf_counter() - t0) * 1000.0,
         )
 
     def _run(entry: _DecodeEntry, input_ids: Tensor, cache_position: Tensor) -> Tensor:
-        """Run one cached decode step + write the rolled buffers back."""
-        feed_impls: list[object] = []
+        """Run one cached decode step + roll the cache forward (rebind, no copy)."""
         exe = cast(_ExecutableLike, entry.exe)
-        runtime = (_unwrap(input_ids), _unwrap(cache_position))
+        ids_impl, cp_impl = _unwrap(input_ids), _unwrap(cache_position)
+        feed_impls: list[object] = []
         for tid, src in zip(exe.input_ids, entry.input_source):
-            feed_impls.append(runtime[src] if src is not None else entry.external_feeds[tid])
+            if src == 0:
+                feed_impls.append(ids_impl)
+            elif src == 1:
+                feed_impls.append(cp_impl)
+            elif isinstance(src, tuple):  # ("buf", slot) — current cache buffer
+                layer, kv = divmod(src[1], 2)
+                buf = static_cache.key_cache[layer] if kv == 0 else static_cache.value_cache[layer]
+                feed_impls.append(_unwrap(buf))
+            else:  # pinned param / constant
+                feed_impls.append(entry.external_feeds[tid])
 
         t0 = time.perf_counter()
         outs = _C_engine.compile.run_executable(entry.exe, feed_impls)
         entry.last_run_ms = (time.perf_counter() - t0) * 1000.0
         entry.n_hits += 1
 
-        n_expected = 1 + len(entry.writeback_buffers)
+        n_expected = 1 + entry.n_buffers
         if len(outs) != n_expected:
             raise RuntimeError(
                 f"compiled_decode_step: executable returned {len(outs)} outputs, "
-                f"expected {n_expected} (1 output + {len(entry.writeback_buffers)} "
-                f"cache buffers)"
+                f"expected {n_expected} (1 output + {entry.n_buffers} cache buffers)"
             )
-        # Roll each cache buffer forward in place; the live buffer is also the
-        # pinned feed, so the next step reads the updated value.
-        for buf, new_impl in zip(entry.writeback_buffers, outs[1:]):
-            buf.copy_(_wrap(cast(Any, new_impl)))
+        # Roll the cache forward by REBINDING each buffer onto the executable's
+        # updated output (a pointer swap) — the next step feeds it.  No copy_.
+        for slot in range(entry.n_buffers):
+            layer, kv = divmod(slot, 2)
+            new_buf = _wrap(cast(Any, outs[1 + slot]))
+            if kv == 0:
+                static_cache.key_cache[layer] = new_buf
+            else:
+                static_cache.value_cache[layer] = new_buf
+        # Keep the length counter coherent for get_seq_length() queries (the
+        # compiled run drives positions off cache_position, not the counter).
+        t_new = int(input_ids.shape[1])
+        for layer in range(len(static_cache._cumulative_length)):
+            static_cache._cumulative_length[layer] += t_new
+        static_cache._seen_tokens += t_new
         return _wrap(cast(Any, outs[0]))
 
     def step(input_ids: Tensor, cache_position: Tensor) -> Tensor:
