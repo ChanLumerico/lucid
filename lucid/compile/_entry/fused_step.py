@@ -699,6 +699,12 @@ class _FusedStep:
         if not graph.ops:
             raise RuntimeError("fused_step: empty trace")
 
+        # Resolve the fused-attention workaround capability flag before the
+        # emitters run, if this step's graph contains attention (probes once).
+        from lucid.compile._core.attention_probe import maybe_probe_for_graph
+
+        maybe_probe_for_graph(graph)
+
         # ``loss_id`` is BOTH the backward source for autograd AND the
         # tid bound to output[0].  Under GradScaler, both purposes
         # need the SCALED loss (so grads come out scaled).  We unscale

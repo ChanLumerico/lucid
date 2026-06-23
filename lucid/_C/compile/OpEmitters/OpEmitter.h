@@ -28,6 +28,27 @@
 
 namespace lucid::compile {
 
+// Attention fused-pass workaround — process-global capability state.
+//
+// MPSGraph (on some GPU/OS combinations — observed on M1 Pro / macOS 26,
+// NOT on M4 Max / macOS 27) pattern-matches ``softmax(QKᵀ) @ V`` onto a
+// fused-attention kernel that silently miscompiles for a window of shapes.
+// The emitters dodge it by emitting the value-matmul transposed, but that
+// costs ~+70% on the attention path — pure waste on unaffected hardware.
+//
+// A one-time Python probe (``lucid.compile._core.attention_probe``) compiles
+// a known-bad envelope against an eager reference and sets this state, so the
+// (expensive) transpose only fires where the defect actually exists:
+//   -1 = unprobed → default to applying the transpose (always-correct);
+//    0 = this GPU is unaffected → skip the transpose (fast path);
+//    1 = this GPU is affected → apply the transpose (correct).
+// ``apply_attention_workaround()`` is the predicate the emitters call.
+LUCID_API int attention_workaround_state();
+LUCID_API void set_attention_workaround_state(int s);
+inline bool apply_attention_workaround() {
+    return attention_workaround_state() != 0;
+}
+
 // Builder-side state threaded through each emitter call.
 //
 // Holds the active :class:`MPSGraph` plus the id → tensor map that

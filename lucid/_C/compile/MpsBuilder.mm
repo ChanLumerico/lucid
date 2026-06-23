@@ -106,6 +106,20 @@ inline std::unordered_set<TensorId> collect_softmax_outputs(const TraceGraph& gr
 
 }  // namespace
 
+// Attention fused-pass workaround capability flag (declared in OpEmitter.h).
+// Plain int: written once by the Python probe before real attention compiles,
+// then only read by the emitters — a benign relaxed access, no lock needed.
+// Defaults to -1 (unprobed) so the emitters apply the always-correct transpose
+// until the probe affirmatively clears this GPU.
+static int g_attention_workaround_state = -1;
+
+int attention_workaround_state() {
+    return g_attention_workaround_state;
+}
+void set_attention_workaround_state(int s) {
+    g_attention_workaround_state = s;
+}
+
 }  // namespace lucid::compile
 
 // Bring the .mm-only class definition into scope.  CompiledExecutable

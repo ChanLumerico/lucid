@@ -206,6 +206,13 @@ def make_step(
         graph = tracer.graph
         if not graph.ops:
             return None
+
+        # Resolve the fused-attention workaround capability flag before the
+        # emitters run, if this step's graph contains attention (probes once).
+        from lucid.compile._core.attention_probe import maybe_probe_for_graph
+
+        maybe_probe_for_graph(graph)
+
         ext = tracer.external_feeds
         loss_id = graph.ops[-1].outputs[0].id
 

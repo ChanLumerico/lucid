@@ -971,6 +971,12 @@ class CompiledModule[**P, R]:
         if not graph.ops:
             return None
 
+        # If this graph has attention, make sure the fused-attention workaround
+        # capability flag is resolved before the emitters run (probes once).
+        from lucid.compile._core.attention_probe import maybe_probe_for_graph
+
+        maybe_probe_for_graph(graph)
+
         ext = tracer.external_feeds
 
         # Extract the user's return value structure into:

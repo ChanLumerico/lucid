@@ -285,6 +285,14 @@ void register_compile(py::module_& m) {
     m.def("session_cache_size", [] { return lucid::compile::ExecutableCache::session().size(); });
     m.def("session_cache_clear", [] { lucid::compile::ExecutableCache::session().clear(); });
 
+    // Attention fused-pass workaround capability flag (see OpEmitter.h +
+    // lucid.compile._core.attention_probe).  -1 unprobed / 0 unaffected /
+    // 1 affected.  The Python probe sets it before the first real attention
+    // compile so the expensive transpose only fires on affected GPUs.
+    m.def("attention_workaround_state", &lucid::compile::attention_workaround_state);
+    m.def("set_attention_workaround_state", &lucid::compile::set_attention_workaround_state,
+          py::arg("state"));
+
     // Phase 1.2 secondary acceptance gate: cache-aware compile.  On the
     // first call with a given structural signature the trace is compiled
     // and inserted into the session-global cache; subsequent calls with

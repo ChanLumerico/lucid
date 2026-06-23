@@ -153,30 +153,40 @@ public:
         MPSGraphTensor* attn = [g softMaxWithTensor:scores
                                                axis:(NSInteger)(nd_s - 1)
                                                name:@"sdpa_softmax"];
-        // ``attn @ v`` is the attention value-projection — MPSGraph would
-        // pattern-match it onto its buggy fused-attention kernel (wrong for
-        // some shapes: seq len in [17,24], batch >= 3, macOS 26).  Emit it
-        // transposed (``attn @ v == (vᵀ @ attnᵀ)ᵀ``) so the buggy pass does not
-        // fire; identical result, two metadata transposes of cost.  (Mirrors
-        // the MatmulEmitter's softmax-output handling for manual attention.)
-        const NSUInteger nd_a = attn.shape.count;
-        const NSUInteger nd_v2 = v.shape.count;
-        MPSGraphTensor* attn_tr = [g transposeTensor:attn
-                                           dimension:(NSInteger)(nd_a - 1)
-                                       withDimension:(NSInteger)(nd_a - 2)
-                                                name:nil];
-        MPSGraphTensor* v_tr = [g transposeTensor:v
-                                        dimension:(NSInteger)(nd_v2 - 1)
-                                    withDimension:(NSInteger)(nd_v2 - 2)
-                                             name:nil];
-        MPSGraphTensor* av = [g matrixMultiplicationWithPrimaryTensor:v_tr
-                                                      secondaryTensor:attn_tr
-                                                                 name:@"sdpa_av"];
-        const NSUInteger nd_av = av.shape.count;
-        MPSGraphTensor* out = [g transposeTensor:av
-                                       dimension:(NSInteger)(nd_av - 1)
-                                   withDimension:(NSInteger)(nd_av - 2)
-                                            name:@"sdpa_out"];
+        // ``attn @ v`` is the attention value-projection.  On GPUs affected by
+        // the MPSGraph fused-attention bug (seq len in [17,24], batch >= 3 —
+        // e.g. M1 Pro / macOS 26) MPSGraph pattern-matches it onto a kernel
+        // that silently miscompiles, so emit it transposed
+        // (``attn @ v == (vᵀ @ attnᵀ)ᵀ``) to break the match.  That costs
+        // ~+70% on the attention path, so the capability probe gates it: on
+        // unaffected hardware ``apply_attention_workaround()`` is false and we
+        // emit the plain (fast) matmul.  (Mirrors MatmulEmitter for manual
+        // attention.)
+        if (apply_attention_workaround()) {
+            const NSUInteger nd_a = attn.shape.count;
+            const NSUInteger nd_v2 = v.shape.count;
+            MPSGraphTensor* attn_tr = [g transposeTensor:attn
+                                               dimension:(NSInteger)(nd_a - 1)
+                                           withDimension:(NSInteger)(nd_a - 2)
+                                                    name:nil];
+            MPSGraphTensor* v_tr = [g transposeTensor:v
+                                            dimension:(NSInteger)(nd_v2 - 1)
+                                        withDimension:(NSInteger)(nd_v2 - 2)
+                                                 name:nil];
+            MPSGraphTensor* av = [g matrixMultiplicationWithPrimaryTensor:v_tr
+                                                          secondaryTensor:attn_tr
+                                                                     name:@"sdpa_av"];
+            const NSUInteger nd_av = av.shape.count;
+            MPSGraphTensor* out = [g transposeTensor:av
+                                           dimension:(NSInteger)(nd_av - 1)
+                                       withDimension:(NSInteger)(nd_av - 2)
+                                                name:@"sdpa_out"];
+            ctx.bind(node.outputs[0].id, (__bridge void*)out);
+            return true;
+        }
+        MPSGraphTensor* out = [g matrixMultiplicationWithPrimaryTensor:attn
+                                                       secondaryTensor:v
+                                                                  name:@"sdpa_av"];
         ctx.bind(node.outputs[0].id, (__bridge void*)out);
         return true;
     }

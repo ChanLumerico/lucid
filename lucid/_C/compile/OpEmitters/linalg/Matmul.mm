@@ -45,7 +45,8 @@ public:
         // cost is two metadata transposes, and only on attention matmuls.
         const NSUInteger nda = a_t.shape.count;
         const NSUInteger ndb = b_t.shape.count;
-        if ((ctx.is_softmax_output(a_id) || ctx.is_softmax_output(b_id)) && nda >= 2 && ndb >= 2) {
+        if (apply_attention_workaround() &&
+            (ctx.is_softmax_output(a_id) || ctx.is_softmax_output(b_id)) && nda >= 2 && ndb >= 2) {
             MPSGraphTensor* a_tr = [graph transposeTensor:a_t
                                                 dimension:(NSInteger)(nda - 1)
                                             withDimension:(NSInteger)(nda - 2)
