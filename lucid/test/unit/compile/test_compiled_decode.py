@@ -1,0 +1,94 @@
+"""Compiled single-token decode over a StaticCache.
+
+``compiled_decode_step`` compiles the decode forward ONCE into a reused
+executable and rolls the StaticCache buffers forward in place.  These tests use a
+minimal masked self-attention decoder (the same full-buffer + cache_position-mask
+shape a real GPT-2 decode compiles into) and assert:
+
+* the compiled decode is token-identical to the eager decode, and
+* a single executable serves every decode step (stable signature — the
+  ``cache_position`` is a fixed-shape ``(1,)`` int64 runtime feed).
+"""
+
+import math
+
+import lucid
+import lucid.nn as nn
+import lucid.nn.functional as F
+from lucid.compile._entry.decode_step import compiled_decode_step
+from lucid.utils.cache import StaticCache
+
+from lucid.test.unit.compile._helpers import COMPILE_DEVICE
+
+_B, _H, _DH, _L = 1, 2, 4, 8
+_D = _H * _DH
+
+
+class _MaskedDecoder(nn.Module):
+    """One masked self-attention layer that reads/writes a StaticCache.
+
+    Attends a single query over the FULL fixed-shape buffer with a
+    ``cache_position``-derived mask (future slots set to -inf) — the
+    compile-friendly shape (constant every step), not a growing narrowed view.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.q = nn.Linear(_D, _D)
+        self.k = nn.Linear(_D, _D)
+        self.v = nn.Linear(_D, _D)
+        self.o = nn.Linear(_D, _D)
+
+    def forward(
+        self, hidden: lucid.Tensor, cache: StaticCache, cache_position: lucid.Tensor
+    ) -> lucid.Tensor:
+        bsz = hidden.shape[0]
+
+        def split(x: lucid.Tensor) -> lucid.Tensor:
+            return x.reshape(bsz, 1, _H, _DH).permute(0, 2, 1, 3)
+
+        q, k, v = split(self.q(hidden)), split(self.k(hidden)), split(self.v(hidden))
+        kk, vv = cache.update(k, v, 0, {"cache_position": cache_position})
+        scores = (q @ kk.permute(0, 1, 3, 2)) / math.sqrt(_DH)
+        idx = lucid.arange(_L, device=hidden.device.type).long().reshape(1, 1, 1, _L)
+        valid = idx <= cache_position.reshape(1, 1, 1, 1)
+        neg = lucid.tensor(-1e30, device=hidden.device.type)
+        scores = lucid.where(valid, scores, neg)
+        ctx = F.softmax(scores, dim=-1) @ vv
+        return self.o(ctx.permute(0, 2, 1, 3).reshape(bsz, 1, _D))
+
+
+def _decode(model: _MaskedDecoder, compiled: bool, n_steps: int) -> tuple[list[lucid.Tensor], int]:
+    cache = StaticCache(_L)
+
+    def fwd(h: lucid.Tensor, cp: lucid.Tensor) -> lucid.Tensor:
+        return model(h, cache, cp)
+
+    step = compiled_decode_step(fwd, cache) if compiled else fwd
+    outs: list[lucid.Tensor] = []
+    for pos in range(n_steps):
+        h = lucid.ones(_B, 1, _D, device=COMPILE_DEVICE) * ((pos + 1) * 0.1)
+        cp = lucid.tensor([pos], device=COMPILE_DEVICE).long()
+        out = step(h, cp)
+        out.eval()
+        outs.append(out)
+    n_exe = len(getattr(step, "cache", {})) if compiled else 0
+    return outs, n_exe
+
+
+def test_compiled_decode_token_identical() -> None:
+    lucid.manual_seed(0)
+    model = _MaskedDecoder().to(COMPILE_DEVICE).eval()
+    eager, _ = _decode(model, compiled=False, n_steps=8)
+    comp, n_exe = _decode(model, compiled=True, n_steps=8)
+    worst = max(float((e - c).abs().max().item()) for e, c in zip(eager, comp))
+    assert worst < 1e-4, f"compiled decode diverged from eager: {worst:.3e}"
+
+
+def test_compiled_decode_single_executable() -> None:
+    # The prefill step (empty cache) runs eager to allocate the buffers; every
+    # subsequent decode step shares ONE compiled executable (fixed signature).
+    lucid.manual_seed(0)
+    model = _MaskedDecoder().to(COMPILE_DEVICE).eval()
+    _, n_exe = _decode(model, compiled=True, n_steps=8)
+    assert n_exe == 1, f"expected 1 cached decode executable, got {n_exe}"
