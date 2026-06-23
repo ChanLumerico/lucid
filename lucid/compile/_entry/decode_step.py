@@ -48,7 +48,12 @@ _tls = threading.local()
 
 
 def is_compiled_decode_tracing() -> bool:
-    """True while a compiled decode graph is being traced (see module doc)."""
+    """Return ``True`` while ``compiled_decode_step`` is tracing the decode graph.
+
+    A StaticCache-aware attention checks this to attend over the full fixed-shape
+    ``max_cache_len`` buffer (so the decode compiles once) instead of its eager
+    ``read_len``-narrowed view (which grows each step).  See the module docstring.
+    """
     return bool(getattr(_tls, "tracing", False))
 
 
