@@ -95,10 +95,18 @@ class _GPT2SelfAttention(nn.Module):
             # location); DynamicCache ignores it and simply appends.
             cache_kwargs: dict[str, object] = {"cache_position": cache_position}
             if isinstance(past_key_value, StaticCache):
-                # Attend over only the filled prefix (``past_len + T``), not the
-                # full max_cache_len buffer — the latter is max_cache_len/(filled+1)×
-                # wasted q·kᵀ.  StaticCache.update narrows its returned view to it.
-                cache_kwargs["read_len"] = past_len + T
+                from lucid.compile._entry.decode_step import is_compiled_decode_tracing
+
+                # Eager: attend over only the filled prefix (``past_len + T``), not
+                # the full max_cache_len buffer — the latter is
+                # max_cache_len/(filled+1)× wasted q·kᵀ.  StaticCache.update
+                # narrows its returned view to it.  BUT when tracing a compiled
+                # decode the narrowed width grows each step → a new signature →
+                # recompile every token; there we take the full fixed-shape buffer
+                # (the unwritten tail is masked out below), so the decode compiles
+                # ONCE and is reused.
+                if not is_compiled_decode_tracing():
+                    cache_kwargs["read_len"] = past_len + T
             k, v = past_key_value.update(k, v, layer_idx, cache_kwargs=cache_kwargs)
         t_total = int(
             k.shape[2]

@@ -26,6 +26,7 @@ Because the live buffer is also the executable's pinned feed, the next step read
 the rolled-forward value.
 """
 
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Protocol, cast, final
@@ -36,7 +37,19 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.utils.cache import StaticCache
 
-__all__ = ["compiled_decode_step"]
+__all__ = ["compiled_decode_step", "is_compiled_decode_tracing"]
+
+# Thread-local flag set while ``compiled_decode_step`` is tracing the decode
+# graph.  A StaticCache-aware attention (GPT-2, …) checks it to attend over the
+# FULL fixed-shape ``max_cache_len`` buffer (so the signature is constant and the
+# decode compiles once) instead of its eager ``read_len``-narrowed view (which
+# grows each step and would recompile).  Off → eager → the fast narrowed path.
+_tls = threading.local()
+
+
+def is_compiled_decode_tracing() -> bool:
+    """True while a compiled decode graph is being traced (see module doc)."""
+    return bool(getattr(_tls, "tracing", False))
 
 
 class _ExecutableLike(Protocol):
@@ -136,9 +149,13 @@ def compiled_decode_step(
         )
         orig_key, orig_val = snap[0], snap[1]
 
-        with no_grad():
-            with _tracing() as tracer:
-                out = forward_fn(input_ids, cache_position)
+        _tls.tracing = True
+        try:
+            with no_grad():
+                with _tracing() as tracer:
+                    out = forward_fn(input_ids, cache_position)
+        finally:
+            _tls.tracing = False
 
         graph = tracer.graph
         if not graph.ops or not isinstance(out, Tensor):

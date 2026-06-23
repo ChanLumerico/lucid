@@ -13,10 +13,11 @@ shape a real GPT-2 decode compiles into) and assert:
 import math
 
 import lucid
+import lucid.models as M
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid.compile._entry.decode_step import compiled_decode_step
-from lucid.utils.cache import StaticCache
+from lucid.utils.cache import DynamicCache, StaticCache
 
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 
@@ -92,3 +93,51 @@ def test_compiled_decode_single_executable() -> None:
     model = _MaskedDecoder().to(COMPILE_DEVICE).eval()
     _, n_exe = _decode(model, compiled=True, n_steps=8)
     assert n_exe == 1, f"expected 1 cached decode executable, got {n_exe}"
+
+
+def test_gpt2_compiled_decode_matches_eager() -> None:
+    # Real-model end-to-end: a GPT-2 LM decoded one token at a time through the
+    # compiled StaticCache path must produce logits token-identical to the eager
+    # DynamicCache path, with a single reused executable across all steps.
+    lucid.manual_seed(3)
+    cfg = M.GPT2Config(
+        vocab_size=64,
+        hidden_size=32,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=64,
+        max_position_embeddings=64,
+    )
+    gpt = M.GPT2LMHeadModel(cfg).to(COMPILE_DEVICE).eval()
+    prompt = lucid.tensor([[5, 9, 2, 7]], device=COMPILE_DEVICE).long()
+    t_prompt, max_len = 4, 32
+    feed = [11, 3, 40, 22, 8, 1, 55, 17]
+
+    # Eager reference (DynamicCache).
+    ce = DynamicCache()
+    gpt(prompt, past_key_values=ce, use_cache=True)
+    ref = []
+    for t in feed:
+        tok = lucid.tensor([[t]], device=COMPILE_DEVICE).long()
+        ref.append(gpt(tok, past_key_values=ce, use_cache=True).logits[:, -1])
+
+    # Compiled (StaticCache prefill + compiled decode), same feed.
+    cs = StaticCache(max_len)
+    cp0 = lucid.arange(0, t_prompt, device=COMPILE_DEVICE).long()
+    gpt(prompt, past_key_values=cs, use_cache=True, cache_position=cp0)
+
+    def fwd(ids: lucid.Tensor, cp: lucid.Tensor) -> lucid.Tensor:
+        return gpt(ids, past_key_values=cs, use_cache=True, cache_position=cp).logits
+
+    step = compiled_decode_step(fwd, cs)
+    comp = []
+    pos = t_prompt
+    for t in feed:
+        tok = lucid.tensor([[t]], device=COMPILE_DEVICE).long()
+        cp = lucid.tensor([pos], device=COMPILE_DEVICE).long()
+        comp.append(step(tok, cp)[:, -1])
+        pos += 1
+
+    worst = max(float((r - c).abs().max().item()) for r, c in zip(ref, comp))
+    assert worst < 1e-4, f"GPT-2 compiled decode diverged from eager: {worst:.3e}"
+    assert len(getattr(step, "cache", {})) == 1
