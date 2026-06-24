@@ -29,9 +29,11 @@ void init_bridge_once() {
         // returns the same object MLX uses internally.  Going through Apple's
         // API directly avoids depending on MLX's metal-cpp include path.
         g_device = MTLCreateSystemDefaultDevice();
-        if (!g_device) return;
+        if (!g_device)
+            return;
         g_queue = [g_device newCommandQueue];
-        if (!g_queue) return;
+        if (!g_queue)
+            return;
         [g_queue setLabel:@"lucid-mps-dispatch"];
         g_bridge_ok.store(true, std::memory_order_release);
     });
@@ -47,6 +49,15 @@ void* shared_mtl_device() {
 void* shared_mtl_queue() {
     init_bridge_once();
     return (__bridge void*)g_queue;
+}
+
+std::size_t metal_device_allocated_bytes() {
+    // Total GPU memory the Metal device currently holds — captures MLX, the
+    // compiled MPSGraph executable's internal activations, and run_executable's
+    // output buffers alike (unlike MLX's allocator-only peak, which is blind to
+    // MPSGraph).  Used to measure the compiled training step's true footprint.
+    init_bridge_once();
+    return (std::size_t)[g_device currentAllocatedSize];
 }
 
 BufferView array_to_buffer(const ::mlx::core::array& arr) {
@@ -87,10 +98,8 @@ BufferView array_to_buffer(const ::mlx::core::array& arr) {
     return BufferView{mtl_buffer_raw, offset_bytes, nbytes};
 }
 
-::mlx::core::array buffer_to_array(void* mtl_buffer,
-                                   std::vector<int> shape,
-                                   Dtype dt,
-                                   std::size_t offset_bytes) {
+::mlx::core::array
+buffer_to_array(void* mtl_buffer, std::vector<int> shape, Dtype dt, std::size_t offset_bytes) {
     // Wrap as an allocator::Buffer with a deleter that transfers ownership
     // back to ARC.  We don't go through MetalAllocator::make_buffer because
     // that path is for buffers MLX itself allocates — ours came from
@@ -108,21 +117,32 @@ BufferView array_to_buffer(const ::mlx::core::array& arr) {
 
     ::mlx::core::Shape mlx_shape;
     mlx_shape.reserve(shape.size());
-    for (int d : shape) mlx_shape.push_back(d);
+    for (int d : shape)
+        mlx_shape.push_back(d);
 
     // Map Lucid Dtype → mlx::core::Dtype.  Reuse the existing helper from
     // MlxBridge but without pulling its full header (which would create a
     // dependency cycle).  The mapping is small and stable.
     ::mlx::core::Dtype mlx_dt = ::mlx::core::float32;
     switch (dt) {
-        case Dtype::F32: mlx_dt = ::mlx::core::float32; break;
-        case Dtype::F16: mlx_dt = ::mlx::core::float16; break;
-        case Dtype::F64: mlx_dt = ::mlx::core::float64; break;
-        case Dtype::I32: mlx_dt = ::mlx::core::int32; break;
-        case Dtype::I64: mlx_dt = ::mlx::core::int64; break;
-        default:
-            throw std::runtime_error(
-                "lucid::gpu::mps::buffer_to_array: unsupported Dtype for MPSGraph");
+    case Dtype::F32:
+        mlx_dt = ::mlx::core::float32;
+        break;
+    case Dtype::F16:
+        mlx_dt = ::mlx::core::float16;
+        break;
+    case Dtype::F64:
+        mlx_dt = ::mlx::core::float64;
+        break;
+    case Dtype::I32:
+        mlx_dt = ::mlx::core::int32;
+        break;
+    case Dtype::I64:
+        mlx_dt = ::mlx::core::int64;
+        break;
+    default:
+        throw std::runtime_error(
+            "lucid::gpu::mps::buffer_to_array: unsupported Dtype for MPSGraph");
     }
 
     ::mlx::core::array out(wrapped, std::move(mlx_shape), mlx_dt, deleter);
@@ -137,7 +157,8 @@ BufferView array_to_buffer(const ::mlx::core::array& arr) {
 
 void wait_all() {
     init_bridge_once();
-    if (!g_bridge_ok.load(std::memory_order_acquire)) return;
+    if (!g_bridge_ok.load(std::memory_order_acquire))
+        return;
     // Issue an empty command buffer + waitUntilCompleted.  This drains
     // the queue without inspecting individual ops.
     id<MTLCommandBuffer> cb = [g_queue commandBuffer];

@@ -63,6 +63,13 @@ void* shared_mtl_device();
 // Thread-safe.
 void* shared_mtl_queue();
 
+// Total bytes the Metal device currently has allocated (``MTLDevice
+// currentAllocatedSize``).  Unlike MLX's allocator peak this includes the
+// compiled MPSGraph executable's internal activations + run_executable output
+// buffers — the metric needed to measure a compiled training step's true GPU
+// footprint (e.g. the deep-backward memory-pressure investigation).
+std::size_t metal_device_allocated_bytes();
+
 // Non-owning view of an MLX-array's underlying ``MTLBuffer``.
 //
 // Returned by :func:`array_to_buffer` after the array has been

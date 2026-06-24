@@ -24,6 +24,7 @@
 #include "../backend/Dispatcher.h"
 #include "../backend/gpu/MetalAllocator.h"
 #include "../backend/gpu/MlxBridge.h"
+#include "../backend/gpu/mps/MpsBridge.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
 #include "../core/GradMode.h"
@@ -92,6 +93,9 @@ void register_core(py::module_& m) {
         });
     m.def("memory_stats", &MemoryTracker::get_stats, py::arg("device"));
     m.def("reset_peak_memory_stats", &MemoryTracker::reset_peak, py::arg("device"));
+    // Total Metal-device allocation (includes MPSGraph executable internals,
+    // which MLX's allocator peak does not see) — for compiled-step footprint.
+    m.def("metal_device_allocated_bytes", &lucid::gpu::mps::metal_device_allocated_bytes);
 }
 
 // Registers TensorImpl as the Python-visible `TensorImpl` type and the
