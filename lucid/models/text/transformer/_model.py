@@ -35,7 +35,7 @@ from lucid.models._output import (
     Seq2SeqLMOutput,
 )
 from lucid.models.text.transformer._config import TransformerConfig
-from lucid.models._sampling import _SamplingParams, _select_and_append_next
+from lucid.models._sampling import _SamplingParams, _select_next_ondevice
 from lucid.utils.cache import DynamicCache, EncoderDecoderCache
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -491,7 +491,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
         dev = input_ids.device.type
         memory = self.transformer.encode(input_ids, attention_mask)
 
-        finished: list[bool] = [False] * B
+        finished: Tensor = lucid.zeros((B,), device=dev).bool()
         out_tokens: list[Tensor] = [lucid.tensor([bos] * B, device=dev).long()]
         sampling = _SamplingParams(
             do_sample=do_sample,
@@ -529,7 +529,10 @@ class TransformerForSeq2SeqLM(PretrainedModel):
                     memory_attention_mask=attention_mask,
                 )
             next_logits = cast(Tensor, self.lm_head(decoded[:, -1, :]))  # (B, V)
-            if _select_and_append_next(next_logits, out_tokens, finished, sampling):
+            finished = _select_next_ondevice(
+                next_logits, out_tokens, finished, sampling
+            )
+            if sampling.eos_token_id is not None and bool(lucid.all(finished).item()):
                 break
 
             # With a cache the next step only needs the freshly produced token.

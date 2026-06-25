@@ -7,10 +7,14 @@ selection through :func:`_select_and_append_next`, so greedy / temperature /
 top-k / top-p / repetition-penalty sampling behaves identically regardless of
 model family or cache implementation.
 
-Every primitive is fully vectorised (no per-element CPU round-trip): the logit
-filters and the multinomial draw are single fused tensor expressions, so
-``do_sample`` generation costs a few tensor ops per step rather than an
-``O(B x vocab)`` Python loop.
+Every primitive is fully on-device (no per-element CPU round-trip): the logit
+filters, the multinomial draw, AND the finish/EOS/pad bookkeeping are single
+fused tensor expressions.  :func:`_select_next_ondevice` keeps the running
+``finished`` flags as a ``(B,)`` GPU bool tensor and emits the next token row
+without ever pulling a scalar to the host — so a decode step costs a few tensor
+ops and (only when an EOS id is set) a single all-finished reduction per step,
+not ``B`` ``.item()`` syncs.  This matters most for batched generation, where the
+old per-row ``.item()`` loop drained the GPU ``B`` times every token.
 """
 
 from dataclasses import dataclass
@@ -35,37 +39,29 @@ class _SamplingParams:
     dev: str
 
 
-def _select_and_append_next(
-    next_logits: Tensor,
-    out_tokens: list[Tensor],
-    finished: list[bool],
-    params: _SamplingParams,
-) -> bool:
-    r"""Choose the next token row, append it, and report whether decoding is done.
+def _next_token(
+    next_logits: Tensor, out_tokens: list[Tensor], params: _SamplingParams
+) -> Tensor:
+    r"""Compute the ``(B,)`` next-token ids (before finish/pad masking), on device.
 
-    Applies the repetition penalty (over the running prefix), then greedy
-    ``argmax`` or temperature / top-k / top-p sampling; substitutes
-    ``pad_token_id`` for already-finished rows and flips ``finished`` on EOS.
-    Mutates ``out_tokens`` (appends the new ``(B,)`` row) and ``finished`` in
-    place.
+    Applies the repetition penalty over the running prefix, then greedy
+    ``argmax`` or temperature / top-k / top-p sampling.  Returns a ``(B,)`` long
+    tensor; no host round-trip.
 
     Parameters
     ----------
     next_logits : Tensor
         ``(B, vocab)`` logits at the current step.
     out_tokens : list[Tensor]
-        Running list of ``(B,)`` token rows; the chosen row is appended.
-    finished : list[bool]
-        Per-row completion flags, updated in place.
+        Running list of ``(B,)`` token rows (read for the repetition penalty).
     params : _SamplingParams
         Shared sampling configuration.
 
     Returns
     -------
-    bool
-        ``True`` once every row has emitted EOS (caller breaks the loop).
+    Tensor
+        ``(B,)`` sampled / argmaxed token ids on ``params.dev``.
     """
-    B = int(next_logits.shape[0])
     if params.repetition_penalty != 1.0:
         prefix = lucid.stack(out_tokens, dim=1)
         next_logits = _apply_repetition_penalty(
@@ -73,25 +69,63 @@ def _select_and_append_next(
         )
 
     if not params.do_sample:
-        next_tok = lucid.argmax(next_logits, dim=-1)  # (B,)
-    else:
-        if params.temperature != 1.0:
-            next_logits = next_logits / params.temperature
-        if params.top_k is not None:
-            next_logits = _top_k_filter(next_logits, params.top_k)
-        if params.top_p is not None:
-            next_logits = _top_p_filter(next_logits, params.top_p)
-        probs = F.softmax(next_logits, dim=-1)  # (B, vocab)
-        next_tok = _multinomial_one(probs, device=params.dev)
+        return lucid.argmax(next_logits, dim=-1)  # (B,)
 
-    next_list: list[int] = [int(next_tok[b].item()) for b in range(B)]
-    for b in range(B):
-        if finished[b]:
-            next_list[b] = params.pad_token_id
-        elif params.eos_token_id is not None and next_list[b] == params.eos_token_id:
-            finished[b] = True
-    out_tokens.append(lucid.tensor(next_list, device=params.dev).long())
-    return all(finished)
+    if params.temperature != 1.0:
+        next_logits = next_logits / params.temperature
+    if params.top_k is not None:
+        next_logits = _top_k_filter(next_logits, params.top_k)
+    if params.top_p is not None:
+        next_logits = _top_p_filter(next_logits, params.top_p)
+    probs = F.softmax(next_logits, dim=-1)  # (B, vocab)
+    return _multinomial_one(probs, device=params.dev)
+
+
+def _select_next_ondevice(
+    next_logits: Tensor,
+    out_tokens: list[Tensor],
+    finished: Tensor,
+    params: _SamplingParams,
+) -> Tensor:
+    r"""On-device next-token selection — append the row, return updated finished.
+
+    Replaces the old per-row ``int(next_tok[b].item())`` loop with pure tensor
+    ops: already-finished rows emit ``pad_token_id``; a row that newly draws
+    ``eos_token_id`` keeps that EOS token and is marked finished for the *next*
+    step.  Appends the emitted ``(B,)`` row (a GPU tensor) to ``out_tokens`` and
+    returns the updated ``(B,)`` bool ``finished`` tensor — no host sync.
+
+    Parameters
+    ----------
+    next_logits : Tensor
+        ``(B, vocab)`` logits at the current step.
+    out_tokens : list[Tensor]
+        Running list of ``(B,)`` token rows; the emitted row is appended.
+    finished : Tensor
+        ``(B,)`` bool tensor of per-row completion flags (before this step).
+    params : _SamplingParams
+        Shared sampling configuration.
+
+    Returns
+    -------
+    Tensor
+        Updated ``(B,)`` bool ``finished`` tensor.  The caller decides when to
+        reduce it to a host bool for early-stop (only needed when an EOS id is
+        set; otherwise generation runs the full length with zero per-step syncs).
+    """
+    next_tok = _next_token(next_logits, out_tokens, params)
+    # Mask via integer arithmetic, not ``where``: a bool-condition ``where`` with
+    # int64 branches is unsupported on the CPU backend, whereas int mul/add work
+    # on both CPU and Metal.  ``keep`` is 1 on live rows, ``drop`` 1 on finished
+    # rows ⇒ finished rows emit ``pad_token_id``, others emit their token.
+    keep = (~finished).long()
+    drop = finished.long()
+    emit = next_tok * keep + params.pad_token_id * drop
+    if params.eos_token_id is not None:
+        is_new_eos = (next_tok == params.eos_token_id) & (~finished)
+        finished = finished | is_new_eos
+    out_tokens.append(emit)
+    return finished
 
 
 def _apply_repetition_penalty(logits: Tensor, prefix: Tensor, penalty: float) -> Tensor:

@@ -16,7 +16,7 @@ import lucid.nn.functional as F
 
 from lucid._tensor.tensor import Tensor
 from lucid.utils.cache import Cache, DynamicCache, StaticCache
-from lucid.models._sampling import _SamplingParams, _select_and_append_next
+from lucid.models._sampling import _SamplingParams, _select_next_ondevice
 
 if TYPE_CHECKING:
     from lucid.models._output import GenerationOutput
@@ -505,8 +505,11 @@ class CausalLMMixin:
                 )
 
         dev = input_ids.device.type
-        # Per-row "is finished" flag — once True, future tokens are pad.
-        finished: list[bool] = [False] * B
+        # Per-row "is finished" flag (on device) — once True, future tokens are
+        # pad.  Kept as a (B,) bool tensor so the per-step finish/EOS/pad update
+        # stays on the GPU (no per-row .item() drain); reduced to a host bool for
+        # early-stop only when an EOS id is set.
+        finished: Tensor = lucid.zeros((B,), device=dev).bool()
         # We grow a Python list of (B,) int rows then stack at the end so
         # we don't repeatedly re-allocate the full prefix tensor.
         out_tokens: list[Tensor] = [input_ids[:, t] for t in range(T_prompt)]
@@ -553,9 +556,10 @@ class CausalLMMixin:
             logits = cast(
                 Tensor, outputs.logits if hasattr(outputs, "logits") else outputs
             )
-            if _select_and_append_next(
+            finished = _select_next_ondevice(
                 logits[:, -1, :], out_tokens, finished, sampling
-            ):
+            )
+            if sampling.eos_token_id is not None and bool(lucid.all(finished).item()):
                 break
 
             # With a cache the next step only needs the freshly produced token.
