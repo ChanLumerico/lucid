@@ -249,7 +249,11 @@ def compiled_decode_step(
                 feed_impls.append(cp_impl)
             elif isinstance(src, tuple):  # ("buf", slot) — current cache buffer
                 layer, kv = divmod(src[1], 2)
-                buf = static_cache.key_cache[layer] if kv == 0 else static_cache.value_cache[layer]
+                buf = (
+                    static_cache.key_cache[layer]
+                    if kv == 0
+                    else static_cache.value_cache[layer]
+                )
                 feed_impls.append(_unwrap(buf))
             else:  # pinned param / constant
                 feed_impls.append(entry.external_feeds[tid])
@@ -303,7 +307,7 @@ def compiled_decode_step(
                 dynamic=False,
                 param_fingerprint=(),
             )
-        except (TypeError, AttributeError):
+        except TypeError, AttributeError:
             key = None
 
         if key is not None and key in eager_sigs:

@@ -59,7 +59,9 @@ class _MaskedDecoder(nn.Module):
         return self.o(ctx.permute(0, 2, 1, 3).reshape(bsz, 1, _D))
 
 
-def _decode(model: _MaskedDecoder, compiled: bool, n_steps: int) -> tuple[list[lucid.Tensor], int]:
+def _decode(
+    model: _MaskedDecoder, compiled: bool, n_steps: int
+) -> tuple[list[lucid.Tensor], int]:
     cache = StaticCache(_L)
 
     def fwd(h: lucid.Tensor, cp: lucid.Tensor) -> lucid.Tensor:
