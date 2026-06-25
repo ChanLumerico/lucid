@@ -82,6 +82,7 @@ def make_step(
     loss_fn: Callable[..., Tensor],
     *,
     dynamic: bool = False,
+    segments: int | str = 1,
 ) -> Callable[..., Tensor]:
     """Return a callable that runs one compiled training step.
 
@@ -115,6 +116,24 @@ def make_step(
         assertion — and training batch size is fixed across a run anyway, so the
         per-shape compile happens once.  The forward-only :func:`lucid.compile`
         path *does* offer symbolic-batch for non-conv graphs.
+    segments : int or {"auto"}, optional
+        Number of executable segments (default ``1`` — the monolithic single
+        executable described above).  When ``> 1`` and ``model`` is an
+        :class:`nn.Sequential`, the model is split into that many contiguous
+        groups of children, each compiled into its own forward + backward
+        executable and stitched with eager autograd
+        (:func:`make_segmented_step`).  ``"auto"`` probes a few candidate counts
+        on the first batch and keeps the fastest (:func:`make_autoseg_step`).
+        This bounds peak memory on deep models:
+        a monolithic executable holds every forward activation until its
+        backward consumes it (peak grows with depth), whereas split executables
+        each hold only one segment's activations (MPSGraph cannot CSE / retain
+        memory across executable boundaries) — the standard checkpointing
+        memory↔recompute trade.  Measured on a deep bottleneck stack (M4 Max):
+        a moderate split is a both-axes win (``1.08x`` faster + ``9%`` less
+        peak), a fine split saves the most memory (``17%``) at a slight time
+        cost.  Parameter gradients stay token-identical to ``segments=1``.
+        Raises for non-Sequential models.
 
     Returns
     -------
@@ -143,7 +162,22 @@ def make_step(
         the optimizer update into the same MPSGraph executable.
     lucid.compile._entry.module.CompiledModule.step : per-instance
         cached version of the same dispatch.
+    make_segmented_step : the ``segments > 1`` implementation (executable
+        splitting for memory-bounded deep training).
     """
+    if segments == "auto":
+        from lucid.compile._entry.segmented_step import make_autoseg_step
+
+        return make_autoseg_step(model, loss_fn, dynamic=dynamic)
+    if isinstance(segments, str):
+        raise ValueError(
+            f"make_step: segments must be an int or 'auto', got {segments!r}"
+        )
+    if segments > 1:
+        from lucid.compile._entry.segmented_step import make_segmented_step
+
+        return make_segmented_step(model, loss_fn, segments=segments, dynamic=dynamic)
+
     from lucid._dispatch import _unwrap, _wrap
     from lucid._tensor.tensor import Tensor
     from lucid.autograd._grad_mode import no_grad
