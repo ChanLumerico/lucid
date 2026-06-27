@@ -307,7 +307,7 @@ def compiled_decode_step(
                 dynamic=False,
                 param_fingerprint=(),
             )
-        except TypeError, AttributeError:
+        except (TypeError, AttributeError):
             key = None
 
         if key is not None and key in eager_sigs:
