@@ -37,11 +37,17 @@ class QuantizedLinearMLX(nn.Module):
         self.out_features = out_features
         self.bits = bits
         self.group_size = group_size
-        # Placeholders — real shapes are filled by from_float (packed layout
-        # depends on bits/group_size).
-        self.register_buffer("packed_weight", lucid.zeros((1,), dtype=lucid.int32))
-        self.register_buffer("scales", lucid.zeros((1,)))
-        self.register_buffer("biases", lucid.zeros((1,)))
+        # Buffers sized to MLX's group-wise packed layout so a fresh module can
+        # ``load_state_dict`` (strict) without a shape mismatch: the packed
+        # weight is ``(out, in·bits/32)`` uint32 (tagged I32) and there is one
+        # scale + bias per ``group_size`` block along the input dim.
+        packed_cols = in_features * bits // 32
+        num_groups = in_features // group_size
+        self.register_buffer(
+            "packed_weight", lucid.zeros((out_features, packed_cols), dtype=lucid.int32)
+        )
+        self.register_buffer("scales", lucid.zeros((out_features, num_groups)))
+        self.register_buffer("biases", lucid.zeros((out_features, num_groups)))
         if bias:
             self.register_buffer("bias", lucid.zeros(out_features))
         else:

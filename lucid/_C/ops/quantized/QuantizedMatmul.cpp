@@ -53,9 +53,17 @@ std::vector<TensorImplPtr> quantize_op(const TensorImplPtr& w, int group_size, i
     };
 }
 
+// The packed weight is uint32 but Lucid tags it I32 (no uint32 dtype).  After a
+// serialize / reload round-trip it comes back as a genuine int32 array, which
+// MLX's quantized kernels reject.  A zero-cost bitcast to uint32 makes the op
+// robust whether the tensor is still uint32 (in-memory) or int32 (reloaded).
+::mlx::core::array as_packed_u32(const ::mlx::core::array& w) {
+    return ::mlx::core::view(w, ::mlx::core::uint32);
+}
+
 TensorImplPtr dequantize_op(const TensorImplPtr& w, const TensorImplPtr& scales,
                             const TensorImplPtr& biases, int group_size, int bits) {
-    ::mlx::core::array wa = gpu_array(w, "dequantize");
+    ::mlx::core::array wa = as_packed_u32(gpu_array(w, "dequantize"));
     ::mlx::core::array sa = gpu_array(scales, "dequantize");
     std::optional<::mlx::core::array> ba =
         biases ? std::optional<::mlx::core::array>(gpu_array(biases, "dequantize"))
@@ -68,7 +76,7 @@ TensorImplPtr quantized_matmul_op(const TensorImplPtr& x, const TensorImplPtr& w
                                   const TensorImplPtr& scales, const TensorImplPtr& biases,
                                   bool transpose, int group_size, int bits) {
     ::mlx::core::array xa = gpu_array(x, "quantized_matmul");
-    ::mlx::core::array wa = gpu_array(w, "quantized_matmul");
+    ::mlx::core::array wa = as_packed_u32(gpu_array(w, "quantized_matmul"));
     ::mlx::core::array sa = gpu_array(scales, "quantized_matmul");
     std::optional<::mlx::core::array> ba =
         biases ? std::optional<::mlx::core::array>(gpu_array(biases, "quantized_matmul"))

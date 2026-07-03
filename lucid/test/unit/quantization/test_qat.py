@@ -96,7 +96,9 @@ class TestConvBnReLUQAT:
             loss.backward()
             opt.step()
         cbr.eval()
-        qc = nniqat.convbnrelu2d_to_quantized(cbr)
+        from lucid.nn.intrinsic.qat.modules import convbnrelu2d_to_quantized
+
+        qc = convbnrelu2d_to_quantized(cbr)
         assert isinstance(qc, nnq.ConvReLU2d)
         assert qc.weight_int8.dtype is lucid.int8
         assert qc(lucid.randn(2, 3, 8, 8)).shape == (2, 8, 8, 8)

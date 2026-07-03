@@ -10,3 +10,8 @@ from lucid.nn.qat.conv import Conv1d, Conv2d, Conv3d
 from lucid.nn.qat.linear import Linear
 
 __all__ = ["Linear", "Conv1d", "Conv2d", "Conv3d"]
+
+
+def __dir__() -> list[str]:
+    """Restrict introspection to the public modules."""
+    return list(__all__)

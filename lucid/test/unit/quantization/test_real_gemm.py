@@ -58,6 +58,23 @@ class TestRealGEMM:
         )
         assert packed_bytes < float_bytes / 2  # meaningfully smaller
 
+    def test_state_dict_round_trip(self, tmp_path: object) -> None:
+        # Packed weight is uint32 tagged I32; must survive save→reload→to(metal)
+        # (the engine bitcasts int32→uint32 for the kernel).
+        for bits in (8, 4):
+            lucid.manual_seed(10 + bits)
+            lin = nn.Linear(128, 64)
+            lin.eval()
+            x = lucid.randn(8, 128).to("metal")
+            q = nnq.QuantizedLinearMLX.from_float(lin, bits=bits)
+            y_before = q(x).numpy()
+
+            path = str(tmp_path) + f"/mlxq{bits}.lucid"  # type: ignore[operator]
+            lucid.save(q.state_dict(), path)
+            q2 = nnq.QuantizedLinearMLX(128, 64, bits=bits).to("metal")
+            q2.load_state_dict(lucid.load(path))
+            assert np.allclose(y_before, q2(x).numpy(), atol=1e-4)
+
     def test_engine_op_matches_dequant_path(self) -> None:
         # The real GEMM should agree with the reference dequant→float path.
         from lucid.quantization import _qgemm

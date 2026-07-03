@@ -107,3 +107,9 @@ __all__ = [
     "prepare_fx",
     "convert_fx",
 ]
+
+
+def __dir__() -> list[str]:
+    """Restrict introspection to the public API — private ``_*`` implementation
+    modules (``_functional`` / ``_qscheme`` / …) stay out of autocomplete."""
+    return list(__all__)

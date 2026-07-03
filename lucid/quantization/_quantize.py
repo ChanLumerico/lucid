@@ -58,9 +58,10 @@ def _quant_mapping() -> dict[type, _FromFloat]:
     import lucid.nn.intrinsic.qat as nniqat
     import lucid.nn.qat as nnqat
     import lucid.nn.quantized as nnq
+    from lucid.nn.intrinsic.qat.modules import convbnrelu2d_to_quantized
 
     return {
-        nniqat.ConvBnReLU2d: nniqat.convbnrelu2d_to_quantized,
+        nniqat.ConvBnReLU2d: convbnrelu2d_to_quantized,
         nn.Linear: nnq.Linear.from_float,
         nn.Conv1d: nnq.Conv1d.from_float,
         nn.Conv2d: nnq.Conv2d.from_float,

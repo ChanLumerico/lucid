@@ -45,3 +45,8 @@ __all__ = [
     "DeQuantize",
     "QuantWrapper",
 ]
+
+
+def __dir__() -> list[str]:
+    """Restrict introspection to the public modules (hide ``_utils`` etc.)."""
+    return list(__all__)

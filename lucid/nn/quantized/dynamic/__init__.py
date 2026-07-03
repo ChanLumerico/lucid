@@ -10,3 +10,8 @@ from lucid.nn.quantized.dynamic.linear import Linear
 from lucid.nn.quantized.dynamic.rnn import LSTM
 
 __all__ = ["Linear", "LSTM"]
+
+
+def __dir__() -> list[str]:
+    """Restrict introspection to the public modules."""
+    return list(__all__)
