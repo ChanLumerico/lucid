@@ -350,4 +350,24 @@ __all__ = [
     "TransformerDecoderLayer",
     "TransformerDecoder",
     "Transformer",
+    "quantized",
+    "qat",
+    "intrinsic",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazily import the quantization module namespaces on first access.
+
+    ``quantized`` / ``qat`` / ``intrinsic`` are deferred so that importing
+    ``lucid.nn`` never eagerly pulls in ``lucid.quantization`` (whose
+    observers import ``lucid.nn`` back).  Loading them only on first access
+    guarantees both packages are fully initialised, breaking the cycle.
+    """
+    if name in ("quantized", "qat", "intrinsic"):
+        import importlib
+
+        mod = importlib.import_module(f"lucid.nn.{name}")
+        globals()[name] = mod
+        return mod
+    raise AttributeError(f"module 'lucid.nn' has no attribute {name!r}")

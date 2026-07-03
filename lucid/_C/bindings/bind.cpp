@@ -45,6 +45,7 @@ void register_composite(py::module_& m);
 void register_linalg(py::module_& m);
 void register_einops(py::module_& m);
 void register_fft(py::module_& m);
+void register_quantized(py::module_& m);
 void register_complex(py::module_& m);
 void register_compile(py::module_& m);
 // 3.5+ tokenizer surface — lives under ``utils.tokenizer`` to mirror
@@ -97,6 +98,9 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_einops(einops);
     auto fft = m.def_submodule("fft", "Discrete Fourier transform ops (mlx::core::fft wrappers).");
     lucid::bindings::register_fft(fft);
+    // Low-precision (int4/int8) GEMM primitives (mlx::core quantized kernels).
+    auto quantized = m.def_submodule("quantized", "MLX quantized GEMM ops (GPU only).");
+    lucid::bindings::register_quantized(quantized);
 
     // Complex viewing ops (real / imag / complex / conj) live at the
     // top level — they're general-purpose, not under any sub-module.

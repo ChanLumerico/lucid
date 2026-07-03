@@ -54,7 +54,50 @@ class _MetalBackend:
         self._benchmark = value
 
 
+@final
+class _QuantizedBackend:
+    """Low-precision (int4/int8) GEMM backend selection.
+
+    ``engine`` chooses how quantized modules run their matmul:
+
+    * ``"auto"`` (default) — use the MLX group-wise quantized kernel when the
+      engine exposes it (``available`` is True) and the tensors are on Metal;
+      otherwise fall back to the dequantize-to-float path.
+    * ``"mlx_group"`` — force the MLX quantized kernel (errors if unavailable).
+    * ``"reference"`` — always dequantize-to-float (portable, slower).
+    """
+
+    _engine: str = "auto"
+
+    @property
+    def available(self) -> bool:
+        """True if the engine was built with the MLX quantized-GEMM ops."""
+        return hasattr(_C_engine, "quantized")
+
+    @property
+    def engine(self) -> str:
+        """Selected quantized-GEMM path (``"auto"`` / ``"mlx_group"`` / ``"reference"``)."""
+        return self._engine
+
+    @engine.setter
+    def engine(self, value: str) -> None:
+        if value not in ("auto", "mlx_group", "reference"):
+            raise ValueError(
+                f"quantized.engine must be 'auto'/'mlx_group'/'reference', got {value!r}"
+            )
+        self._engine = value
+
+    def use_mlx(self) -> bool:
+        """Whether the MLX quantized kernel should run given the current mode."""
+        if self._engine == "reference":
+            return False
+        if self._engine == "mlx_group":
+            return True
+        return self.available  # "auto"
+
+
 accelerate = _AccelerateBackend()
 metal = _MetalBackend()
+quantized = _QuantizedBackend()
 
-__all__ = ["accelerate", "metal"]
+__all__ = ["accelerate", "metal", "quantized"]
