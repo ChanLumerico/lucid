@@ -53,9 +53,9 @@ class Linear(nn.Linear):
             bias=lin.bias is not None,
             qconfig=cast("QConfig", mod.qconfig),  # set by prepare_qat
         )
-        # Re-wrap as Parameter: deep-copying a module (prepare_qat) demotes its
-        # Parameters to plain Tensors, which would silently make them untrainable.
-        qat.weight = nn.Parameter(lin.weight)
+        # Adopt the trained float weight/bias directly — the prepare_qat
+        # deep-copy already gave this module tree independent Parameters.
+        qat.weight = lin.weight
         if lin.bias is not None:
-            qat.bias = nn.Parameter(lin.bias)
+            qat.bias = lin.bias
         return qat

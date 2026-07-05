@@ -128,6 +128,28 @@ class Parameter(Tensor):
         """Initialise the instance.  See the class docstring for parameter semantics."""
         pass
 
+    def __deepcopy__(self, memo: dict[int, object]) -> Parameter:
+        """Deep-copy while preserving the :class:`Parameter` type.
+
+        ``copy.deepcopy`` on a bare ``Tensor`` subclass falls back to the
+        Tensor reconstruction path, which drops the ``Parameter`` marker and
+        silently demotes the result to a plain ``Tensor``.  For a ``Module``
+        that is fatal: ``deepcopy(model)`` turns every entry of
+        ``_parameters`` into a non-Parameter, so the next attribute rebind
+        evicts it from the registry and the copy trains as a no-op.
+
+        Re-wrapping a cloned copy here keeps the subclass (and
+        ``requires_grad``); ``Parameter.__new__`` already clones the storage
+        so the copy owns an independent buffer.  ``memo`` guards shared
+        references and self-cycles exactly as the deepcopy protocol expects.
+        """
+        existing = memo.get(id(self))
+        if existing is not None:
+            return cast(Parameter, existing)
+        result = Parameter(self, requires_grad=self.requires_grad)
+        memo[id(self)] = result
+        return result
+
     @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""

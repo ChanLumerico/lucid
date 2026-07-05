@@ -35,10 +35,11 @@ def _conv_from_float(cls: type, mod: nn.Module) -> nn.Module:
             qconfig=cast("QConfig", mod.qconfig),  # set by prepare_qat
         ),
     )
-    # Re-wrap as Parameter (deep-copy in prepare_qat demotes them to Tensors).
-    qat.weight = nn.Parameter(c.weight)
+    # Adopt the trained kernel/bias directly — the prepare_qat deep-copy
+    # already produced independent Parameters for this module tree.
+    qat.weight = c.weight
     if c.bias is not None:
-        qat.bias = nn.Parameter(c.bias)
+        qat.bias = c.bias
     return qat
 
 
