@@ -198,7 +198,7 @@ class _FftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
         # grad_x = ifft(grad_out, dual(norm)) restricted to the input axis sizes.
         dual = _dual_norm(cast(str, ctx.norm))
         g = _engine_ifftn(grad_out, cast(list[int], ctx.s), cast(list[int], ctx.axes))
@@ -232,7 +232,7 @@ class _IfftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
         dual = _dual_norm(cast(str, ctx.norm))
         g = _engine_fftn(grad_out, cast(list[int], ctx.s), cast(list[int], ctx.axes))
         scale = _scale_after_fft(cast(int, ctx.N), dual)
@@ -266,7 +266,7 @@ class _RfftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
         # rfft backward: the dual transform is irfft restricted to the original
         # full real length along each transformed axis.
         dual = _dual_norm(cast(str, ctx.norm))
@@ -304,7 +304,7 @@ class _IrfftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
         # irfft backward: rfft of the real grad with the same size along the
         # last transformed axis, dual normalisation.
         dual = _dual_norm(cast(str, ctx.norm))

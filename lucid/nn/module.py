@@ -221,7 +221,7 @@ class Module:
             hook_out = hook(self, args, kwargs, output)
         else:
             hook_out = hook(self, args, output)
-        return output if hook_out is None else hook_out  # type: ignore[return-value]  # hook returns object; runtime guarantees _ModuleOutput
+        return output if hook_out is None else hook_out  # type: ignore[return-value]
 
     def _call_always_forward_hooks(
         self,
@@ -270,7 +270,7 @@ class Module:
                     state.input_tensor_indices.append(idx)
             if not entries:
                 return args, state
-            wrapped_impls = _C_engine._wrap_module_backward_inputs(  # type: ignore[attr-defined]  # optional C++ extension method, guarded by hasattr above
+            wrapped_impls = _C_engine._wrap_module_backward_inputs(  # type: ignore[attr-defined]
                 state.C_engine_state, entries
             )
             wrapped_args = list(args)
@@ -332,7 +332,7 @@ class Module:
                     output_idx += 1
             if not entries:
                 return output
-            wrapped_impls = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]  # optional C++ extension method
+            wrapped_impls = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]
                 state.C_engine_state, entries, n_outputs
             )
             wrapped_output = list(output)
@@ -345,7 +345,7 @@ class Module:
         state.n_outputs = 1
         if not output.requires_grad:
             return output
-        wrapped_impl = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]  # optional C++ extension method
+        wrapped_impl = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]
             state.C_engine_state, [(0, _unwrap(output))], 1
         )[
             0
@@ -738,7 +738,7 @@ class Module:
             ):
                 # Integer / bool buffer — leave dtype alone.
                 return t
-            return t.to(*args, **kwargs)  # type: ignore[arg-type]  # Module.to() accepts *object/**object; Tensor.to() has specific types — safe at runtime
+            return t.to(*args, **kwargs)  # type: ignore[arg-type]
 
         return self._apply(_convert)
 
@@ -936,7 +936,7 @@ class Module:
                 destination[f"{prefix}{name}"] = b if keep_vars else b.detach()
         extra = self.get_extra_state()
         if extra is not None:
-            destination[f"{prefix}_extra_state"] = extra  # type: ignore[assignment]  # extra_state is object; caller accepts Tensor | object in practice
+            destination[f"{prefix}_extra_state"] = extra  # type: ignore[assignment]
 
     def _load_from_state_dict(
         self,
@@ -1012,7 +1012,7 @@ class Module:
         """
         key = _next_hook_id()
         self._load_state_dict_pre_hooks[key] = hook
-        return RemovableHandle(self._load_state_dict_pre_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+        return RemovableHandle(self._load_state_dict_pre_hooks, key)  # type: ignore[arg-type]
 
     def register_load_state_dict_post_hook(
         self,
@@ -1024,7 +1024,7 @@ class Module:
         """
         key = _next_hook_id()
         self._load_state_dict_post_hooks[key] = hook
-        return RemovableHandle(self._load_state_dict_post_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+        return RemovableHandle(self._load_state_dict_post_hooks, key)  # type: ignore[arg-type]
 
     # ── hooks ─────────────────────────────────────────────────────────────
 
@@ -1043,7 +1043,7 @@ class Module:
         if prepend:
             self._forward_pre_hooks.move_to_end(key, last=False)
         return RemovableHandle(
-            self._forward_pre_hooks,  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+            self._forward_pre_hooks,  # type: ignore[arg-type]
             key,
             (self._forward_pre_hooks_with_kwargs,),
         )
@@ -1082,7 +1082,7 @@ class Module:
         self._backward_pre_hooks[key] = hook
         if prepend:
             self._backward_pre_hooks.move_to_end(key, last=False)
-        return RemovableHandle(self._backward_pre_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+        return RemovableHandle(self._backward_pre_hooks, key)  # type: ignore[arg-type]
 
     def register_full_backward_hook(
         self,
@@ -1095,7 +1095,7 @@ class Module:
         self._backward_hooks[key] = hook
         if prepend:
             self._backward_hooks.move_to_end(key, last=False)
-        return RemovableHandle(self._backward_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+        return RemovableHandle(self._backward_hooks, key)  # type: ignore[arg-type]
 
     def register_backward_hook(self, hook: _BackwardHook) -> RemovableHandle:
         """Deprecated alias for register_full_backward_hook."""
@@ -1263,14 +1263,14 @@ class _ModuleInputBackwardHookFunction:
         class _InputHook(Function):
             @override
             @staticmethod
-            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific than Function.forward(*args)
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]
                 ctx.state = state
                 ctx.index = index
                 return x
 
             @override
             @staticmethod
-            def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+            def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:  # type: ignore[override]
                 return cast(
                     Tensor,
                     ctx.state.apply_full_backward_hooks_for_input(  # type: ignore[attr-defined]
@@ -1295,14 +1295,14 @@ class _ModuleOutputBackwardHookFunction:
         class _OutputHook(Function):
             @override
             @staticmethod
-            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]
                 ctx.state = state
                 ctx.index = index
                 return x
 
             @override
             @staticmethod
-            def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+            def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:  # type: ignore[override]
                 updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)  # type: ignore[attr-defined]
                 ctx.state.apply_full_backward_hooks_without_inputs()  # type: ignore[attr-defined]
                 return cast(Tensor, updated)

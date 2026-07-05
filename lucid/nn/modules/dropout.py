@@ -110,7 +110,7 @@ class Dropout(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -212,7 +212,7 @@ class Dropout1d(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # The engine's ``dropoutnd`` kernel handles 3-D / 4-D / 5-D inputs by
         # building the mask along the channel axis, so the same call works
         # here as for ``Dropout2d``.
@@ -318,7 +318,7 @@ class Dropout2d(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -437,7 +437,7 @@ class AlphaDropout(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -537,7 +537,7 @@ class Dropout3d(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -658,7 +658,7 @@ class FeatureAlphaDropout(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply dropout to the input tensor.
 
         Parameters

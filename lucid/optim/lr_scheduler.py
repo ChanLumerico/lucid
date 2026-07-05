@@ -71,7 +71,7 @@ class _LRScheduler:
         )  # starts at 0; after N step() calls, last_epoch == N
         self._step_count = 0
         self.verbose = verbose
-        self.base_lrs: list[float] = [float(g["lr"]) for g in optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
+        self.base_lrs: list[float] = [float(g["lr"]) for g in optimizer.param_groups]  # type: ignore[arg-type]
         self._last_lr: list[float] = list(self.base_lrs)
 
     def step(self) -> None:
@@ -132,7 +132,7 @@ class _LRScheduler:
         >>> scheduler.step()
         >>> current_lrs = scheduler.get_last_lr()
         """
-        return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
+        return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
 
     def print_lr(self, is_verbose: bool, epoch: int, lrs: list[float]) -> None:
         """Print the current learning rates to stdout when verbose mode is on.
@@ -234,7 +234,7 @@ class StepLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch == 0 or self.last_epoch % self.step_size != 0:
-            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
+            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
         return [lr * self.gamma for lr in self.get_last_lr()]
 
 
@@ -381,7 +381,7 @@ class MultiStepLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch not in self.milestones:
-            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
+            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
         return [lr * self.gamma for lr in self.get_last_lr()]
 
 
@@ -967,7 +967,7 @@ class MultiplicativeLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch == 0:
-            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
+            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
         factor = self.lr_lambda(self.last_epoch)
         return [g["lr"] * factor for g in self.optimizer.param_groups]
 

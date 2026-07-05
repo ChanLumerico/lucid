@@ -138,11 +138,11 @@ class Optimizer:
         impls: list[object] = [
             p._impl
             for group in self.param_groups
-            for p in group["params"]  # type: ignore[attr-defined]  # params is list[Parameter] at runtime
+            for p in group["params"]  # type: ignore[attr-defined]
             if isinstance(p, Parameter)
         ]
         if impls:
-            _C_engine.eval_tensors(impls)  # type: ignore[arg-type]  # list[object] contains TensorImpl at runtime
+            _C_engine.eval_tensors(impls)  # type: ignore[arg-type]
 
     def __init__(
         self,
@@ -170,7 +170,7 @@ class Optimizer:
     def add_param_group(self, group: dict[str, object]) -> None:
         """Add a parameter group, creating one new engine optimizer for it."""
         merged: dict[str, object] = {**self.defaults, **group}
-        merged["params"] = list(merged["params"])  # type: ignore[call-overload]  # merged["params"] is Iterable at runtime
+        merged["params"] = list(merged["params"])  # type: ignore[call-overload]
         self.param_groups.append(merged)
         self._append_engine_optim(merged)
 
@@ -203,7 +203,7 @@ class Optimizer:
     def zero_grad(self, set_to_none: bool = True) -> None:
         """Zero gradients of all parameters."""
         for group in self.param_groups:
-            for p in group["params"]:  # type: ignore[attr-defined]  # params is list[Parameter] at runtime
+            for p in group["params"]:  # type: ignore[attr-defined]
                 if p.grad is not None:
                     if set_to_none:
                         p.grad = None
@@ -261,7 +261,7 @@ class Optimizer:
             if eng is None:
                 flat_idx += len(params)
                 continue
-            buffers: list[tuple[str, list[object]]] = eng.state_buffers()  # type: ignore[attr-defined]  # _EngineOptimizer has state_buffers
+            buffers: list[tuple[str, list[object]]] = eng.state_buffers()  # type: ignore[attr-defined]
             step_count: int = int(getattr(eng, "step_count", 0) or 0)
             for slot, _ in enumerate(params):
                 snapshot: dict[str, object] = {}
@@ -273,7 +273,7 @@ class Optimizer:
                         import numpy as _np
 
                         snapshot[name] = _np.asarray(
-                            tensors[slot].data_as_python()  # type: ignore[attr-defined]  # tensors[slot] is TensorImpl
+                            tensors[slot].data_as_python()  # type: ignore[attr-defined]
                         ).copy()
                 if step_count != 0:
                     snapshot["step"] = step_count
@@ -299,14 +299,14 @@ class Optimizer:
                 snapshot: dict[str, object] = state.get(flat_idx + slot, {})
                 for k, v in snapshot.items():
                     if k == "step":
-                        step_count = max(step_count, int(v))  # type: ignore[call-overload]  # v is int at runtime
+                        step_count = max(step_count, int(v))  # type: ignore[call-overload]
                         continue
                     by_name.setdefault(k, [None] * len(params))
                     # Wrap as TensorImpl on the param's device so the engine
                     # can copy it back into its buffer slot.
                     by_name[k][slot] = _C_engine.TensorImpl(v, p._impl.device, False)
             if by_name:
-                eng.load_state_buffers([(k, v) for k, v in by_name.items()])  # type: ignore[attr-defined]  # _EngineOptimizer has load_state_buffers
+                eng.load_state_buffers([(k, v) for k, v in by_name.items()])  # type: ignore[attr-defined]
             if step_count and hasattr(eng, "step_count"):
                 eng.step_count = step_count
             flat_idx += len(params)
@@ -316,7 +316,7 @@ class Optimizer:
         out: dict[int, int] = {}
         idx: int = 0
         for group in self.param_groups:
-            for p in group["params"]:  # type: ignore[attr-defined]  # params is list[Parameter] at runtime
+            for p in group["params"]:  # type: ignore[attr-defined]
                 out[id(p)] = idx
                 idx += 1
         return out
@@ -336,7 +336,7 @@ class Optimizer:
         groups_out: list[dict[str, object]] = []
         for group in self.param_groups:
             g: dict[str, object] = {k: v for k, v in group.items() if k != "params"}
-            g["params"] = [id_map[id(p)] for p in group["params"]]  # type: ignore[attr-defined]  # params is list[Parameter] at runtime
+            g["params"] = [id_map[id(p)] for p in group["params"]]  # type: ignore[attr-defined]
             groups_out.append(g)
         self.state = self._save_state()
         return {"state": self.state, "param_groups": groups_out}

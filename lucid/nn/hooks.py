@@ -157,7 +157,7 @@ def register_module_forward_pre_hook(
     """
     key = _next_hook_id()
     _GLOBAL_FORWARD_PRE_HOOKS[key] = (hook, with_kwargs)
-    return RemovableHandle(_GLOBAL_FORWARD_PRE_HOOKS, key)  # type: ignore[arg-type]  # OrderedDict[int, tuple] is safe here — RemovableHandle only pops by key
+    return RemovableHandle(_GLOBAL_FORWARD_PRE_HOOKS, key)  # type: ignore[arg-type]
 
 
 def register_module_forward_hook(
@@ -215,7 +215,7 @@ def register_module_forward_hook(
     """
     key = _next_hook_id()
     _GLOBAL_FORWARD_HOOKS[key] = (hook, with_kwargs, always_call)
-    return RemovableHandle(_GLOBAL_FORWARD_HOOKS, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+    return RemovableHandle(_GLOBAL_FORWARD_HOOKS, key)  # type: ignore[arg-type]
 
 
 def register_module_full_backward_pre_hook(
@@ -257,7 +257,7 @@ def register_module_full_backward_pre_hook(
     """
     key = _next_hook_id()
     _GLOBAL_BACKWARD_PRE_HOOKS[key] = hook
-    return RemovableHandle(_GLOBAL_BACKWARD_PRE_HOOKS, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+    return RemovableHandle(_GLOBAL_BACKWARD_PRE_HOOKS, key)  # type: ignore[arg-type]
 
 
 def register_module_full_backward_hook(
@@ -300,7 +300,7 @@ def register_module_full_backward_hook(
     """
     key = _next_hook_id()
     _GLOBAL_BACKWARD_HOOKS[key] = hook
-    return RemovableHandle(_GLOBAL_BACKWARD_HOOKS, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+    return RemovableHandle(_GLOBAL_BACKWARD_HOOKS, key)  # type: ignore[arg-type]
 
 
 def register_module_load_state_dict_pre_hook(
@@ -350,7 +350,7 @@ def register_module_load_state_dict_pre_hook(
     """
     key = _next_hook_id()
     _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS[key] = hook
-    return RemovableHandle(_GLOBAL_LOAD_STATE_DICT_PRE_HOOKS, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+    return RemovableHandle(_GLOBAL_LOAD_STATE_DICT_PRE_HOOKS, key)  # type: ignore[arg-type]
 
 
 def register_module_load_state_dict_post_hook(
@@ -396,4 +396,4 @@ def register_module_load_state_dict_post_hook(
     """
     key = _next_hook_id()
     _GLOBAL_LOAD_STATE_DICT_POST_HOOKS[key] = hook
-    return RemovableHandle(_GLOBAL_LOAD_STATE_DICT_POST_HOOKS, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+    return RemovableHandle(_GLOBAL_LOAD_STATE_DICT_POST_HOOKS, key)  # type: ignore[arg-type]

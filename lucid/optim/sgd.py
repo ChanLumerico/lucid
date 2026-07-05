@@ -112,7 +112,7 @@ class SGD(Optimizer):
     def _append_engine_optim(self, group: dict[str, object]) -> None:
         from lucid.nn.parameter import Parameter as _P
 
-        params_list: list[_P] = group["params"]  # type: ignore[assignment]  # params is list[Parameter] at runtime
+        params_list: list[_P] = group["params"]  # type: ignore[assignment]
         self._engine_optims.append(
             _C_engine.SGD(
                 [_unwrap(p) for p in params_list],

@@ -374,9 +374,12 @@ def make_step(
         via the first positional argument.
         """
 
+        # forward's 1st positional is a non-Tensor ``entry_holder`` (the _StepEntry
+        # holder), not a Tensor as Function.forward's *args base expects; a
+        # documented exception per CompiledModule's design.
         @override
         @staticmethod
-        def forward(  # type: ignore[override]  # reason: takes a non-Tensor ``entry_holder`` 1st positional (the _StepEntry holder); Function.forward base types *args as Tensor. Documented as an exception per CompiledModule's design.
+        def forward(  # type: ignore[override]
             ctx: FunctionCtx,
             entry_holder: list[_StepEntry],
             *step_args: Tensor,
@@ -407,9 +410,11 @@ def make_step(
             ctx.n_user = n_user
             return _wrap(loss_impl)
 
+        # backward returns tuple[Tensor | None, ...] (one slot per next-edge: None
+        # for user inputs, Tensors for params); the base returns Tensor | tuple.
         @override
         @staticmethod
-        def backward(  # type: ignore[override]  # reason: returns tuple[Tensor|None, ...] (one slot per next-edge: None for user inputs, Tensors for params); base returns Tensor|tuple[Tensor,...].
+        def backward(  # type: ignore[override]
             ctx: FunctionCtx, grad_loss: Tensor
         ) -> tuple[Tensor | None, ...]:
             """Chain ``grad_loss`` into each saved per-parameter gradient.

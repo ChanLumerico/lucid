@@ -268,7 +268,8 @@ class MultivariateNormal(Distribution):
         Tensor
             Log-density values of shape ``batch_shape``.
         """
-        # diff = (value − loc),  M = L⁻¹ diff,  log p = − 0.5 ‖M‖² − sum(log diag(L)) − 0.5 D log(2π)
+        # diff = (value − loc),  M = L⁻¹ diff
+        # log p = − 0.5 ‖M‖² − sum(log diag(L)) − 0.5 D log(2π)
         diff = (value - self.loc).unsqueeze(-1)
         M = lucid.linalg.solve_triangular(self.scale_tril, diff, upper=False)
         sq = (M * M).sum(dim=(-2, -1))

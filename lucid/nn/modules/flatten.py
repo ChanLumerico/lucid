@@ -97,7 +97,7 @@ class Flatten(Module):
         self.end_dim = end_dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters
@@ -197,7 +197,7 @@ class Unflatten(Module):
         self.unflattened_size = unflattened_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters
@@ -324,7 +324,7 @@ class Unfold(Module):
         self.stride = stride
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters
@@ -484,7 +484,7 @@ class Fold(Module):
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters

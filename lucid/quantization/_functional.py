@@ -136,7 +136,7 @@ class _FakeQuantizeAffine(Function):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # intentionally more specific than Function.forward(*args)
+    def forward(  # type: ignore[override]
         ctx: FunctionCtx,
         x: Tensor,
         scale: _ScaleLike,
@@ -164,7 +164,7 @@ class _FakeQuantizeAffine(Function):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
         """Pass gradient through the non-saturated region only.
 
         ``x`` is the only positional (tensor) input to ``forward`` — the

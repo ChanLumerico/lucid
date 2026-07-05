@@ -327,9 +327,11 @@ class _SegmentFunction(Function):
     the Tensor inputs; backward returns one cotangent per Tensor input.
     """
 
+    # forward's 1st positional is a non-Tensor holder list, like
+    # make_step._CompiledStepFunction's.
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # reason: 1st positional is a non-Tensor holder list, like make_step._CompiledStepFunction.
+    def forward(  # type: ignore[override]
         ctx: FunctionCtx,
         holder: list[object],
         x: Tensor,
@@ -350,9 +352,11 @@ class _SegmentFunction(Function):
         ctx.n_params = len(params)
         return _wrap(y_impl)
 
+    # backward returns tuple[Tensor | None, ...], one per Tensor input (x then
+    # params); the base returns Tensor | tuple.
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # reason: returns tuple[Tensor|None, ...], one per Tensor input (x then params); base returns Tensor|tuple.
+    def backward(  # type: ignore[override]
         ctx: FunctionCtx, grad_out: Tensor
     ) -> tuple[Tensor | None, ...]:
         """Run the segment's backward executable; return (grad_x, *grad_params)."""

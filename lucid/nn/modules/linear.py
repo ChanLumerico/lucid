@@ -148,7 +148,7 @@ class Linear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -224,7 +224,7 @@ class Identity(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -379,7 +379,7 @@ class FusedLinear(Module):
             _init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -526,7 +526,7 @@ class Bilinear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -753,7 +753,7 @@ class LazyLinear(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the linear transformation to the input tensor.
 
         Parameters

@@ -96,7 +96,7 @@ class ReLU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -170,7 +170,7 @@ class LeakyReLU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -245,7 +245,7 @@ class ELU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -327,7 +327,7 @@ class SELU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -412,7 +412,7 @@ class GELU(Module):
         self.approximate = approximate
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -485,7 +485,7 @@ class SiLU(Module):
         super().__init__()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -544,7 +544,7 @@ class Mish(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -620,7 +620,7 @@ class Softplus(Module):
         self.threshold = threshold
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -690,7 +690,7 @@ class Hardswish(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -742,7 +742,7 @@ class Hardsigmoid(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -798,7 +798,7 @@ class Sigmoid(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -855,7 +855,7 @@ class Tanh(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -925,7 +925,7 @@ class Softmax(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -997,7 +997,7 @@ class LogSoftmax(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1060,7 +1060,7 @@ class Softmax2d(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1149,7 +1149,7 @@ class RReLU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1218,7 +1218,7 @@ class ReLU6(Module):
         super().__init__()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1316,7 +1316,7 @@ class PReLU(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1393,7 +1393,7 @@ class Threshold(Module):
         self.value = value
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1483,7 +1483,7 @@ class Hardtanh(Module):
         self.max_val = max_val
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1549,7 +1549,7 @@ class LogSigmoid(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1607,7 +1607,7 @@ class Softsign(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1675,7 +1675,7 @@ class Softmin(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1754,7 +1754,7 @@ class GLU(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1828,7 +1828,7 @@ class CELU(Module):
         self.alpha = alpha
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1900,7 +1900,7 @@ class Hardshrink(Module):
         self.lambd = lambd
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1963,7 +1963,7 @@ class Tanhshrink(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -2037,7 +2037,7 @@ class Softshrink(Module):
         self.lambd = lambd
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -2116,7 +2116,7 @@ class CosineSimilarity(Module):
         self.eps = eps
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -2207,7 +2207,7 @@ class PairwiseDistance(Module):
         self.keepdim = keepdim
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the activation function element-wise.
 
         Parameters

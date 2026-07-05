@@ -114,7 +114,7 @@ class RMSprop(Optimizer):
         """Perform a single RMSprop step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -211,7 +211,7 @@ class Adagrad(Optimizer):
         """Perform a single Adagrad step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -305,7 +305,7 @@ class Adadelta(Optimizer):
         """Perform a single Adadelta step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -398,7 +398,7 @@ class Adamax(Optimizer):
         """Perform a single Adamax step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -507,7 +507,7 @@ class RAdam(Optimizer):
         """Perform a single RAdam step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -599,7 +599,7 @@ class NAdam(Optimizer):
         """Perform a single NAdam step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -711,7 +711,7 @@ class ASGD(Optimizer):
         """Perform a single ASGD step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -813,7 +813,7 @@ class Rprop(Optimizer):
         """Perform a single Rprop step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() is correct at runtime
+            optim.step()  # type: ignore[attr-defined]
         return loss
 
 
@@ -941,7 +941,7 @@ class SparseAdam(Optimizer):
             b2: float
             b1, b2 = group["betas"]  # type: ignore[misc]  # betas is tuple[float, float] at runtime
             eps = group["eps"]
-            for p in group["params"]:  # type: ignore[attr-defined]  # params is list[Parameter] at runtime
+            for p in group["params"]:  # type: ignore[attr-defined]
                 if p.grad is None:
                     flat_idx += 1
                     continue

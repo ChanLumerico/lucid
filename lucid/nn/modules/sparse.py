@@ -211,7 +211,7 @@ class Embedding(Module):
         self.weight._impl = new_w._impl
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Look up embeddings for the given indices.
 
         Parameters
@@ -381,7 +381,7 @@ class EmbeddingBag(Module):
         init.normal_(self.weight)
 
     @override
-    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:  # type: ignore[override]
         """Look up embeddings for the given indices.
 
         Parameters

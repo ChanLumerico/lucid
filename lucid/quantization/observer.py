@@ -79,7 +79,7 @@ class ObserverBase(nn.Module):
         a :class:`~lucid.quantization.QConfig` can carry an observer *recipe*
         rather than a live instance.
         """
-        return functools.partial(cls, **kwargs)  # type: ignore[arg-type]  # kwargs forwarded to observer ctor
+        return functools.partial(cls, **kwargs)  # type: ignore[arg-type]
 
 
 class MinMaxObserver(ObserverBase):

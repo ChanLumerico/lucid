@@ -124,6 +124,6 @@ def checkpoint(
                 next(grad_iter) if inp.requires_grad else None
                 for inp in inputs_detached
             )
-            return result  # type: ignore[return-value]  # tuple[Tensor|None,...] is valid backward return
+            return result  # type: ignore[return-value]
 
     return CheckpointFunction.apply(*args)  # type: ignore[return-value]

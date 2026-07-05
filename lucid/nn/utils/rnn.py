@@ -10,7 +10,7 @@ import lucid
 from lucid._tensor.tensor import Tensor as _Tensor
 from lucid._tensor.tensor import Tensor  # public alias for NamedTuple field annotations
 from lucid._C import engine as _C_engine
-from lucid._ops import cat  # type: ignore[attr-defined]  # cat is in _ops.__init__ but not re-exported with __all__
+from lucid._ops import cat  # type: ignore[attr-defined]
 
 # Integer-dtype → struct format-code map, used by _int_tensor_to_list to
 # unpack a 1-D int tensor's raw bytes into a Python list without going
@@ -185,7 +185,7 @@ def pack_padded_sequence(
     # Reorder input along batch dim using engine gather.
     if not enforce_sorted:
         # Build sorted-index TensorImpl from Python list (interop boundary — metadata only).
-        _sorted_t = _Tensor(sorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+        _sorted_t = _Tensor(sorted_idx)  # type: ignore[arg-type]
         si_impl_i32 = _C_engine.astype(_sorted_t._impl, _C_engine.I32)
         bcast_shape = [1, B] + [1] * (input.ndim - 2)
         full_shape = list(input.shape)
@@ -208,7 +208,7 @@ def pack_padded_sequence(
 
     # Build int tensors for batch_sizes, sorted_indices, unsorted_indices.
     # These are metadata (tiny 1-D integer arrays) — construct via Tensor([...]) interop.
-    bs_t = _Tensor(batch_sizes_list)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+    bs_t = _Tensor(batch_sizes_list)  # type: ignore[arg-type]
     si_t = _Tensor(sorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
     ui_t = _Tensor(unsorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
 

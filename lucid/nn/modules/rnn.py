@@ -742,7 +742,7 @@ class RNNCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]
         """Run the recurrent forward pass.
 
         Parameters
@@ -1086,7 +1086,7 @@ class GRUCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]
         """Run the recurrent forward pass.
 
         Parameters

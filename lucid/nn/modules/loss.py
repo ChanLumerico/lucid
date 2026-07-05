@@ -102,7 +102,7 @@ class MSELoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -196,7 +196,7 @@ class L1Loss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -333,7 +333,7 @@ class CrossEntropyLoss(Module):
         self.label_smoothing = label_smoothing
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -456,7 +456,7 @@ class NLLLoss(Module):
         self.reduction: Reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -566,7 +566,7 @@ class BCELoss(Module):
         self.reduction: Reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -689,7 +689,7 @@ class BCEWithLogitsLoss(Module):
         self.pos_weight: Tensor | None = pos_weight
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -799,7 +799,7 @@ class HuberLoss(Module):
         self.delta = delta
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -899,7 +899,7 @@ class SmoothL1Loss(Module):
         self.beta = beta
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1011,7 +1011,7 @@ class KLDivLoss(Module):
         self.log_target = log_target
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1142,7 +1142,7 @@ class TripletMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1256,7 +1256,7 @@ class CosineEmbeddingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1358,7 +1358,7 @@ class MarginRankingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1463,7 +1463,7 @@ class HingeEmbeddingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1587,7 +1587,7 @@ class PoissonNLLLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1708,7 +1708,7 @@ class GaussianNLLLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor, var: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor, var: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1970,7 +1970,7 @@ class MultiMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2071,7 +2071,7 @@ class MultilabelMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2215,7 +2215,7 @@ class SoftMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2321,7 +2321,7 @@ class MultiLabelSoftMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2461,7 +2461,7 @@ class TripletMarginWithDistanceLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]
         # Delegate to the functional implementation so the F. and nn.
         # surfaces stay byte-equivalent.
         """Compute the loss between predictions and targets.

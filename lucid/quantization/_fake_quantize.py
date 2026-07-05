@@ -47,7 +47,7 @@ class FakeQuantize(nn.Module):
         **observer_kwargs: object,
     ) -> None:
         super().__init__()
-        self.activation_post_process: ObserverBase = observer(**observer_kwargs)  # type: ignore[arg-type]  # kwargs forwarded to observer ctor
+        self.activation_post_process: ObserverBase = observer(**observer_kwargs)  # type: ignore[arg-type]
         self.qdtype: QDtype = self.activation_post_process.qdtype
         self.qscheme: QScheme = self.activation_post_process.qscheme
         self.ch_axis: int | None = self.activation_post_process.ch_axis
@@ -100,4 +100,4 @@ class FakeQuantize(nn.Module):
     @classmethod
     def with_args(cls, **kwargs: object) -> functools.partial[FakeQuantize]:
         """Return a zero-arg factory building this module with ``kwargs``."""
-        return functools.partial(cls, **kwargs)  # type: ignore[arg-type]  # kwargs forwarded to ctor
+        return functools.partial(cls, **kwargs)  # type: ignore[arg-type]

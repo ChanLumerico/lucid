@@ -46,7 +46,7 @@ class _ConstantPadNd(Module):
         self.value = value
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -496,7 +496,7 @@ class ReflectionPad1d(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -586,7 +586,7 @@ class ReflectionPad2d(Module):
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -674,7 +674,7 @@ class ReplicationPad1d(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -763,7 +763,7 @@ class ReplicationPad2d(Module):
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -834,7 +834,7 @@ class ReplicationPad3d(Module):
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -914,7 +914,7 @@ class ReflectionPad3d(Module):
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -1002,7 +1002,7 @@ class CircularPad1d(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -1091,7 +1091,7 @@ class CircularPad2d(Module):
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters
@@ -1176,7 +1176,7 @@ class CircularPad3d(Module):
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Pad the input tensor according to the configured padding.
 
         Parameters

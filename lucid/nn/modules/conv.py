@@ -354,7 +354,7 @@ class Conv1d(Module):
         return (self.padding,), (self.padding,)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -615,7 +615,7 @@ class Conv2d(Module):
         return self.padding, self.padding
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -850,7 +850,7 @@ class Conv3d(Module):
         return self.padding, self.padding
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -1056,7 +1056,7 @@ class ConvTranspose1d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -1245,7 +1245,7 @@ class ConvTranspose2d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -1431,7 +1431,7 @@ class ConvTranspose3d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -1691,7 +1691,7 @@ class LazyConv1d(Conv1d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -1919,7 +1919,7 @@ class LazyConv2d(Conv2d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -2144,7 +2144,7 @@ class LazyConv3d(Conv3d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -2363,7 +2363,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -2578,7 +2578,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -2796,7 +2796,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the convolution to the input tensor.
 
         Parameters

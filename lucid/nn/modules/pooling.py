@@ -140,7 +140,7 @@ class MaxPool1d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -281,7 +281,7 @@ class MaxPool2d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -413,7 +413,7 @@ class AvgPool1d(Module):
         self.count_include_pad = count_include_pad
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -541,7 +541,7 @@ class AvgPool2d(Module):
         self.count_include_pad = count_include_pad
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -636,7 +636,7 @@ class AdaptiveAvgPool1d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -727,7 +727,7 @@ class AdaptiveAvgPool2d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -818,7 +818,7 @@ class AdaptiveMaxPool2d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -951,7 +951,7 @@ class MaxPool3d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1073,7 +1073,7 @@ class AvgPool3d(Module):
         self.count_include_pad = count_include_pad
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1162,7 +1162,7 @@ class AdaptiveAvgPool3d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1259,7 +1259,7 @@ class AdaptiveMaxPool1d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1353,7 +1353,7 @@ class AdaptiveMaxPool3d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1467,7 +1467,7 @@ class LPPool1d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1606,7 +1606,7 @@ class LPPool2d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1730,7 +1730,7 @@ class LPPool3d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -2201,7 +2201,7 @@ class FractionalMaxPool2d(Module):
         self.return_indices = return_indices
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -2315,7 +2315,7 @@ class FractionalMaxPool3d(Module):
         self.return_indices = return_indices
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
