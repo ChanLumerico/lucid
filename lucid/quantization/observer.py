@@ -21,7 +21,7 @@ external libraries (H4); the :class:`HistogramObserver` uses the engine
 """
 
 import functools
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -257,7 +257,8 @@ class HistogramObserver(ObserverBase):
     def _search_clip_range(self) -> tuple[float, float]:
         """Scan candidate clip ranges; return the L2-error-minimising one."""
         lo, hi = float(self.min_val.item()), float(self.max_val.item())
-        counts: list[float] = [float(c) for c in self.histogram.numpy().tolist()]
+        # ``histogram`` is a 1-D float buffer, so ``tolist`` yields ``list[float]``.
+        counts: list[float] = cast(list[float], self.histogram.tolist())
         total = sum(counts)
         if total <= 0.0 or hi <= lo:
             return lo, hi
