@@ -216,7 +216,20 @@ class _nn_namespace:
     @staticmethod
     def interpolate_trilinear(x: TensorImpl, od: int, oh: int, ow: int, align_corners: bool) -> TensorImpl: ...
 
+
+class _quantized_namespace:
+    # Stub for the optional ``_C_engine.quantized`` sub-namespace (MLX group-wise
+    # low-precision GEMM ops).  Present only when the engine was built with the
+    # E1 quantized kernels — guard access with ``hasattr`` at runtime.
+    @staticmethod
+    def quantize(w: TensorImpl, group_size: int = ..., bits: int = ...) -> list[TensorImpl]: ...
+    @staticmethod
+    def dequantize(w: TensorImpl, scales: TensorImpl, biases: TensorImpl | None = ..., group_size: int = ..., bits: int = ...) -> TensorImpl: ...
+    @staticmethod
+    def quantized_matmul(x: TensorImpl, w: TensorImpl, scales: TensorImpl, biases: TensorImpl | None = ..., transpose: bool = ..., group_size: int = ..., bits: int = ...) -> TensorImpl: ...
+
 nn: _nn_namespace
+quantized: _quantized_namespace
 
 class AutocastGuard:
     def __init__(self, dtype: Dtype) -> None: ...

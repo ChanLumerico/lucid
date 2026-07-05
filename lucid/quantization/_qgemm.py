@@ -15,10 +15,10 @@ from lucid._dispatch import _unwrap, _wrap
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
-# ``_C_engine.quantized`` is a C++ submodule present only when the engine was
-# built with the E1 ops and is not declared in engine.pyi — hence the
-# ``attr-defined`` ignores below.  Accessing it inside the functions (not at
-# import) keeps this module importable against an engine that lacks it.
+# ``_C_engine.quantized`` is an optional C++ submodule — present only when the
+# engine was built with the E1 ops.  It is declared in ``engine.pyi`` (so the
+# calls type-check), but accessed inside the functions (not at import) so this
+# module stays importable against an engine that lacks it.
 
 
 def is_available() -> bool:
@@ -30,9 +30,7 @@ def quantize(
     w: Tensor, group_size: int = 64, bits: int = 8
 ) -> tuple[Tensor, Tensor, Tensor]:
     """Group-wise quantize a weight → ``(packed_weight, scales, biases)``."""
-    wq, scales, biases = _C_engine.quantized.quantize(  # type: ignore[attr-defined]
-        _unwrap(w), group_size, bits
-    )
+    wq, scales, biases = _C_engine.quantized.quantize(_unwrap(w), group_size, bits)
     return _wrap(wq), _wrap(scales), _wrap(biases)
 
 
@@ -40,7 +38,7 @@ def dequantize(
     wq: Tensor, scales: Tensor, biases: Tensor, group_size: int = 64, bits: int = 8
 ) -> Tensor:
     """Reconstruct the float weight from its packed form."""
-    out = _C_engine.quantized.dequantize(  # type: ignore[attr-defined]
+    out = _C_engine.quantized.dequantize(
         _unwrap(wq), _unwrap(scales), _unwrap(biases), group_size, bits
     )
     return _wrap(out)
@@ -56,7 +54,7 @@ def quantized_matmul(
     bits: int = 8,
 ) -> Tensor:
     """``x @ packed_w`` via MLX's low-precision GEMM (Metal only)."""
-    out = _C_engine.quantized.quantized_matmul(  # type: ignore[attr-defined]
+    out = _C_engine.quantized.quantized_matmul(
         _unwrap(x),
         _unwrap(wq),
         _unwrap(scales),
