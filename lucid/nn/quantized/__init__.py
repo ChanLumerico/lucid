@@ -11,6 +11,7 @@ float model and their runtime forms ``Quantize`` / ``DeQuantize``.
 """
 
 from lucid.nn.quantized.conv import Conv1d, Conv2d, Conv3d
+from lucid.nn.quantized.functional_module import FloatFunctional, QFunctional
 from lucid.nn.quantized.intrinsic import (
     ConvReLU1d,
     ConvReLU2d,
@@ -44,6 +45,8 @@ __all__ = [
     "Quantize",
     "DeQuantize",
     "QuantWrapper",
+    "FloatFunctional",
+    "QFunctional",
 ]
 
 

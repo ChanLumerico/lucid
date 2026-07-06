@@ -58,11 +58,16 @@ class QuantizedLinearMLX(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary layer
-        """Run the MLX low-precision GEMM ``x @ packed_wᵀ`` (+ bias, +ReLU)."""
-        # The kernel is Metal-only; move a CPU-carried activation onto the GPU
-        # so this layer works inside an otherwise-CPU model without the caller
-        # having to pre-move inputs.
-        if not x.is_metal:
+        """Run the MLX low-precision GEMM ``x @ packed_wᵀ`` (+ bias, +ReLU).
+
+        The kernel is Metal-only, so a CPU-carried activation is moved onto the
+        GPU for the GEMM and the result is moved **back to the input's device**.
+        That keeps this layer device-transparent — it accelerates inside an
+        otherwise-CPU model without forcing the whole model (or residual skip
+        branches) onto Metal.
+        """
+        on_metal = x.is_metal
+        if not on_metal:
             x = x.to("metal")
         y = quantized_matmul(
             x,
@@ -77,7 +82,7 @@ class QuantizedLinearMLX(nn.Module):
             y = y + self.bias
         if self.relu:
             y = F.relu(y)
-        return y
+        return y if on_metal else y.to("cpu")
 
     @classmethod
     def from_float(

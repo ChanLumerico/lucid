@@ -50,6 +50,7 @@ def _observed_types() -> tuple[type, ...]:
         nni.ConvReLU3d,
         nni.LinearReLU,
         nnq.QuantStub,
+        nnq.FloatFunctional,
     )
 
 
@@ -79,6 +80,7 @@ def _quant_mapping() -> dict[type, _FromFloat]:
         nnqat.Conv3d: nnq.Conv3d.from_float,
         nnq.QuantStub: nnq.Quantize.from_float,
         nnq.DeQuantStub: nnq.DeQuantize.from_float,
+        nnq.FloatFunctional: nnq.QFunctional.from_float,
     }
 
 
