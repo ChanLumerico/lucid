@@ -38,22 +38,32 @@ foreach(required_var
 endforeach()
 
 if(_lucid_need_derive)
-    # Pick the interpreter that actually has pybind11 + mlx: an explicit
-    # ``-DPython3_EXECUTABLE=`` (IDEs can inject the selected interpreter) or
-    # ``-DLUCID_PYTHON=`` wins; otherwise the first ``python3`` on PATH — NOT
-    # CMake's ``find_package(Python3)`` heuristic, which happily picks a bare
-    # system Python without the build packages.
-    if(DEFINED Python3_EXECUTABLE AND Python3_EXECUTABLE)
-        set(_lucid_py "${Python3_EXECUTABLE}")
-    elseif(DEFINED LUCID_PYTHON AND LUCID_PYTHON)
-        set(_lucid_py "${LUCID_PYTHON}")
-    else()
-        find_program(_lucid_py NAMES python3 python)
+    # Try candidate interpreters in priority order and keep the first that can
+    # actually import pybind11 + mlx: an explicit ``-DPython3_EXECUTABLE=`` /
+    # ``-DLUCID_PYTHON=`` (an IDE may inject the selected interpreter), then the
+    # first ``python3`` on PATH.  CMake's ``find_package(Python3)`` heuristic is
+    # avoided (it picks a bare system Python without the build packages), and a
+    # candidate that can't run — e.g. an IDE macro like ``${command:...}`` that
+    # never expanded, so it still contains a ``$`` — is skipped, not fatal.
+    set(_lucid_candidates "")
+    if(DEFINED Python3_EXECUTABLE AND Python3_EXECUTABLE
+       AND NOT "${Python3_EXECUTABLE}" MATCHES "[$]")
+        list(APPEND _lucid_candidates "${Python3_EXECUTABLE}")
     endif()
+    if(DEFINED LUCID_PYTHON AND LUCID_PYTHON
+       AND NOT "${LUCID_PYTHON}" MATCHES "[$]")
+        list(APPEND _lucid_candidates "${LUCID_PYTHON}")
+    endif()
+    find_program(_lucid_path_py NAMES python3 python)
+    if(_lucid_path_py)
+        list(APPEND _lucid_candidates "${_lucid_path_py}")
+    endif()
+
     set(_lucid_py_res 1)
-    if(_lucid_py)
+    set(_lucid_py "")
+    foreach(_cand IN LISTS _lucid_candidates)
         execute_process(
-            COMMAND "${_lucid_py}" -c [==[
+            COMMAND "${_cand}" -c [==[
 import sysconfig, os
 import pybind11, mlx.core
 mp = os.path.dirname(mlx.core.__file__)
@@ -67,8 +77,13 @@ print(sysconfig.get_config_var('EXT_SUFFIX'))
             RESULT_VARIABLE _lucid_py_res
             ERROR_VARIABLE _lucid_py_err
             OUTPUT_STRIP_TRAILING_WHITESPACE)
-    endif()
-    if(_lucid_py AND _lucid_py_res EQUAL 0)
+        if(_lucid_py_res EQUAL 0)
+            set(_lucid_py "${_cand}")
+            break()
+        endif()
+    endforeach()
+
+    if(_lucid_py_res EQUAL 0)
         string(REPLACE "\n" ";" _lucid_paths "${_lucid_py_out}")
         list(GET _lucid_paths 0 _lucid_py_inc)
         list(GET _lucid_paths 1 _lucid_pybind_inc)
