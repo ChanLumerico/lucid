@@ -10,7 +10,20 @@ Also holds the boundary markers ``QuantStub`` / ``DeQuantStub`` placed in a
 float model and their runtime forms ``Quantize`` / ``DeQuantize``.
 """
 
+from lucid.nn.quantized.activation import (
+    ELU,
+    Hardsigmoid,
+    Hardswish,
+    LeakyReLU,
+    Sigmoid,
+    Tanh,
+)
 from lucid.nn.quantized.conv import Conv1d, Conv2d, Conv3d
+from lucid.nn.quantized.conv_transpose import (
+    ConvTranspose1d,
+    ConvTranspose2d,
+    ConvTranspose3d,
+)
 from lucid.nn.quantized.functional_module import FloatFunctional, QFunctional
 from lucid.nn.quantized.intrinsic import (
     ConvReLU1d,
@@ -35,6 +48,9 @@ __all__ = [
     "Conv1d",
     "Conv2d",
     "Conv3d",
+    "ConvTranspose1d",
+    "ConvTranspose2d",
+    "ConvTranspose3d",
     "Embedding",
     "LinearReLU",
     "ConvReLU1d",
@@ -47,6 +63,12 @@ __all__ = [
     "QuantWrapper",
     "FloatFunctional",
     "QFunctional",
+    "Sigmoid",
+    "Hardswish",
+    "Hardsigmoid",
+    "Tanh",
+    "ELU",
+    "LeakyReLU",
 ]
 
 
