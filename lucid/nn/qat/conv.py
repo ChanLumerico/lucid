@@ -128,3 +128,61 @@ class Conv3d(nn.Conv3d):
     @classmethod
     def from_float(cls, mod: nn.Module) -> Conv3d:
         return cast("Conv3d", _conv_from_float(cls, mod))
+
+
+def _fused_conv_from_float(cls: type, mod: nn.Module) -> nn.Module:
+    """Build a QAT conv-relu from a fused float ``nni.ConvReLU`` (its inner conv)."""
+    inner = cast("nn.Sequential", mod)[0]
+    inner.qconfig = mod.qconfig
+    return _conv_from_float(cls, inner)
+
+
+class ConvReLU1d(Conv1d):
+    """QAT fused 1-D conv + ReLU (fake-quant on the post-ReLU output)."""
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
+        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+        y = F.conv1d(
+            x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
+        )
+        return cast("Tensor", self.activation_post_process(F.relu(y)))
+
+    @classmethod
+    @override
+    def from_float(cls, mod: nn.Module) -> "ConvReLU1d":
+        return cast("ConvReLU1d", _fused_conv_from_float(cls, mod))
+
+
+class ConvReLU2d(Conv2d):
+    """QAT fused 2-D conv + ReLU (fake-quant on the post-ReLU output)."""
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
+        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+        y = F.conv2d(
+            x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
+        )
+        return cast("Tensor", self.activation_post_process(F.relu(y)))
+
+    @classmethod
+    @override
+    def from_float(cls, mod: nn.Module) -> "ConvReLU2d":
+        return cast("ConvReLU2d", _fused_conv_from_float(cls, mod))
+
+
+class ConvReLU3d(Conv3d):
+    """QAT fused 3-D conv + ReLU (fake-quant on the post-ReLU output)."""
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
+        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+        y = F.conv3d(
+            x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
+        )
+        return cast("Tensor", self.activation_post_process(F.relu(y)))
+
+    @classmethod
+    @override
+    def from_float(cls, mod: nn.Module) -> "ConvReLU3d":
+        return cast("ConvReLU3d", _fused_conv_from_float(cls, mod))

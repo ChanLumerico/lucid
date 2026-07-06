@@ -21,9 +21,17 @@ if TYPE_CHECKING:
 
 
 def _wire_inner(mod: nn.Module) -> nn.Module:
-    """Copy the fused module's qconfig + observer onto its inner weighted child."""
-    seq = cast("nn.Sequential", mod)
-    inner = seq[0]
+    """Return the weighted child carrying the qparams.
+
+    A **float** fused module is an ``nn.Sequential`` — copy its qconfig +
+    observer onto ``seq[0]`` and return that.  A **QAT** fused module
+    (``nn.qat.ConvReLU`` / ``LinearReLU``) is already a single weighted layer
+    carrying ``weight_fake_quant`` + ``activation_post_process`` directly, so it
+    is returned unchanged.
+    """
+    if not isinstance(mod, nn.Sequential):
+        return mod
+    inner = mod[0]
     inner.qconfig = mod.qconfig
     inner.activation_post_process = mod.activation_post_process
     return inner

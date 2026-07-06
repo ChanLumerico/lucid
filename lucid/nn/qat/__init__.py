@@ -6,10 +6,28 @@ inference.  Produced by :func:`lucid.quantization.prepare_qat`; turned into
 real quantized inference layers by :func:`lucid.quantization.convert`.
 """
 
-from lucid.nn.qat.conv import Conv1d, Conv2d, Conv3d
-from lucid.nn.qat.linear import Linear
+from lucid.nn.qat.conv import (
+    Conv1d,
+    Conv2d,
+    Conv3d,
+    ConvReLU1d,
+    ConvReLU2d,
+    ConvReLU3d,
+)
+from lucid.nn.qat.linear import Linear, LinearReLU
+from lucid.nn.qat.sparse import Embedding
 
-__all__ = ["Linear", "Conv1d", "Conv2d", "Conv3d"]
+__all__ = [
+    "Linear",
+    "LinearReLU",
+    "Conv1d",
+    "Conv2d",
+    "Conv3d",
+    "ConvReLU1d",
+    "ConvReLU2d",
+    "ConvReLU3d",
+    "Embedding",
+]
 
 
 def __dir__() -> list[str]:

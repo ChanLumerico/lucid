@@ -60,3 +60,22 @@ class Linear(nn.Linear):
         if lin.bias is not None:
             qat.bias = lin.bias
         return qat
+
+
+class LinearReLU(Linear):
+    """QAT fused ``Linear`` + ``ReLU`` (fake-quant on the post-ReLU output)."""
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary linear layer
+        """Fake-quantize the weight, run linear, ReLU, fake-quantize the output."""
+        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+        y = F.relu(F.linear(x, w_q, self.bias))
+        return cast("Tensor", self.activation_post_process(y))
+
+    @classmethod
+    @override
+    def from_float(cls, mod: nn.Module) -> "LinearReLU":
+        """Build from a fused float ``nni.LinearReLU`` (its inner linear)."""
+        inner = cast("nn.Sequential", mod)[0]
+        inner.qconfig = mod.qconfig
+        return cast("LinearReLU", super().from_float(inner))

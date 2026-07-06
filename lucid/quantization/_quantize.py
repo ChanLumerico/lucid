@@ -101,6 +101,11 @@ def _quant_mapping() -> dict[type, _FromFloat]:
         nnqat.Conv1d: nnq.Conv1d.from_float,
         nnqat.Conv2d: nnq.Conv2d.from_float,
         nnqat.Conv3d: nnq.Conv3d.from_float,
+        nnqat.LinearReLU: nnq.LinearReLU.from_float,
+        nnqat.ConvReLU1d: nnq.ConvReLU1d.from_float,
+        nnqat.ConvReLU2d: nnq.ConvReLU2d.from_float,
+        nnqat.ConvReLU3d: nnq.ConvReLU3d.from_float,
+        nnqat.Embedding: nnq.Embedding.from_float,
         nnq.QuantStub: nnq.Quantize.from_float,
         nnq.DeQuantStub: nnq.DeQuantize.from_float,
         nnq.FloatFunctional: nnq.QFunctional.from_float,
@@ -338,6 +343,7 @@ def _swap_dynamic(
 
 def _qat_mapping() -> dict[type, _FromFloat]:
     """Map each float module type to its QAT (fake-quant, trainable) form."""
+    import lucid.nn.intrinsic as nni
     import lucid.nn.qat as nnqat
 
     return {
@@ -345,6 +351,11 @@ def _qat_mapping() -> dict[type, _FromFloat]:
         nn.Conv1d: nnqat.Conv1d.from_float,
         nn.Conv2d: nnqat.Conv2d.from_float,
         nn.Conv3d: nnqat.Conv3d.from_float,
+        nn.Embedding: nnqat.Embedding.from_float,
+        nni.LinearReLU: nnqat.LinearReLU.from_float,
+        nni.ConvReLU1d: nnqat.ConvReLU1d.from_float,
+        nni.ConvReLU2d: nnqat.ConvReLU2d.from_float,
+        nni.ConvReLU3d: nnqat.ConvReLU3d.from_float,
     }
 
 
