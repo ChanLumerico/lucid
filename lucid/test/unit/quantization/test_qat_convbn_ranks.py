@@ -27,19 +27,29 @@ def _reference_engine() -> Iterator[None]:
 
 def _build(rank: int, relu: bool):
     qc = Q.get_default_qat_qconfig()
-    conv = {1: nn.Conv1d, 2: nn.Conv2d, 3: nn.Conv3d}[rank](3, 8, 3, padding=1, bias=False)
+    conv = {1: nn.Conv1d, 2: nn.Conv2d, 3: nn.Conv3d}[rank](
+        3, 8, 3, padding=1, bias=False
+    )
     bn = {1: nn.BatchNorm1d, 2: nn.BatchNorm2d, 3: nn.BatchNorm3d}[rank](8)
     cls = {
-        (1, False): nniqat.ConvBn1d, (2, False): nniqat.ConvBn2d, (3, False): nniqat.ConvBn3d,
-        (1, True): nniqat.ConvBnReLU1d, (2, True): nniqat.ConvBnReLU2d, (3, True): nniqat.ConvBnReLU3d,
+        (1, False): nniqat.ConvBn1d,
+        (2, False): nniqat.ConvBn2d,
+        (3, False): nniqat.ConvBn3d,
+        (1, True): nniqat.ConvBnReLU1d,
+        (2, True): nniqat.ConvBnReLU2d,
+        (3, True): nniqat.ConvBnReLU3d,
     }[(rank, relu)]
     return cls(conv, bn, qconfig=qc)
 
 
 _SHAPES = {1: (2, 3, 16), 2: (2, 3, 8, 8), 3: (2, 3, 4, 4, 4)}
 _QCONV = {
-    (1, False): nnq.Conv1d, (2, False): nnq.Conv2d, (3, False): nnq.Conv3d,
-    (1, True): nnq.ConvReLU1d, (2, True): nnq.ConvReLU2d, (3, True): nnq.ConvReLU3d,
+    (1, False): nnq.Conv1d,
+    (2, False): nnq.Conv2d,
+    (3, False): nnq.Conv3d,
+    (1, True): nnq.ConvReLU1d,
+    (2, True): nnq.ConvReLU2d,
+    (3, True): nnq.ConvReLU3d,
 }
 
 
