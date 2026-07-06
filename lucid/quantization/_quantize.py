@@ -254,6 +254,21 @@ def convert(model: nn.Module, inplace: bool = False) -> nn.Module:
     ``quantized_matmul`` GEMM — the genuine speed + memory win — instead of the
     dequantize-to-float path.  Set ``backends.quantized.engine = "reference"``
     to force the exact W8A8 dequant numerics on every layer.
+
+    Parameters
+    ----------
+    model : nn.Module
+        A model previously returned by :func:`prepare` and run through
+        calibration, so every quantizable submodule carries frozen activation
+        qparams.
+    inplace : bool, default False
+        Mutate ``model`` in place instead of deep-copying it before conversion.
+
+    Returns
+    -------
+    nn.Module
+        The converted, evaluation-mode model with int8 weights baked in and its
+        float submodules replaced by their quantized counterparts.
     """
     import lucid
     import lucid.nn.intrinsic as nni

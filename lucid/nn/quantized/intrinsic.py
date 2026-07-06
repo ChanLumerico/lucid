@@ -38,7 +38,29 @@ def _wire_inner(mod: nn.Module) -> nn.Module:
 
 
 class LinearReLU(Linear):
-    """Quantized ``Linear`` + ``ReLU``."""
+    """Quantized linear layer with a fused ReLU (int8 weight, float compute).
+
+    Behaves exactly like :class:`~lucid.nn.quantized.Linear` but applies ReLU
+    to the output *before* it is fake-quantized — matching calibration, where
+    the fused module's activation observer saw the post-ReLU range. Produced
+    from a calibrated float / QAT ``LinearReLU`` by
+    :func:`lucid.quantization.convert` / :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample.
+    out_features : int
+        Size of each output sample.
+    bias : bool, optional
+        Whether a (float) bias term is added before the ReLU. Defaults to
+        ``True``.
+
+    Notes
+    -----
+    Constructor is inherited unchanged from :class:`~lucid.nn.quantized.Linear`;
+    only the post-op activation hook differs.
+    """
 
     @override
     def _activation(self, y: Tensor) -> Tensor:
@@ -51,7 +73,38 @@ class LinearReLU(Linear):
 
 
 class ConvReLU1d(Conv1d):
-    """Quantized ``Conv1d`` + ``ReLU``."""
+    """Quantized 1-D convolution with a fused ReLU (int8 weight, float compute).
+
+    Behaves exactly like :class:`~lucid.nn.quantized.Conv1d` but applies ReLU to
+    the output *before* it is fake-quantized — matching calibration, where the
+    fused module's activation observer saw the post-ReLU range. Produced from a
+    calibrated float / QAT ``ConvReLU1d`` by :func:`lucid.quantization.convert`
+    / :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input signal.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the convolution.
+    padding : int or tuple of int
+        Implicit zero-padding added to both sides of the spatial axis.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added before the ReLU.
+
+    Notes
+    -----
+    Constructor is inherited unchanged from :class:`~lucid.nn.quantized.Conv1d`;
+    only the post-op activation hook differs.
+    """
 
     @override
     def _activation(self, y: Tensor) -> Tensor:
@@ -64,7 +117,39 @@ class ConvReLU1d(Conv1d):
 
 
 class ConvReLU2d(Conv2d):
-    """Quantized ``Conv2d`` + ``ReLU``."""
+    """Quantized 2-D convolution with a fused ReLU (int8 weight, float compute).
+
+    The most common fused block in the quantized vision zoo. Behaves exactly
+    like :class:`~lucid.nn.quantized.Conv2d` but applies ReLU to the output
+    *before* it is fake-quantized — matching calibration, where the fused
+    module's activation observer saw the post-ReLU range. Produced from a
+    calibrated float / QAT ``ConvReLU2d`` by :func:`lucid.quantization.convert`
+    / :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input image.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the convolution.
+    padding : int or tuple of int
+        Implicit zero-padding added to both sides of each spatial dim.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added before the ReLU.
+
+    Notes
+    -----
+    Constructor is inherited unchanged from :class:`~lucid.nn.quantized.Conv2d`;
+    only the post-op activation hook differs.
+    """
 
     @override
     def _activation(self, y: Tensor) -> Tensor:
@@ -77,7 +162,38 @@ class ConvReLU2d(Conv2d):
 
 
 class ConvReLU3d(Conv3d):
-    """Quantized ``Conv3d`` + ``ReLU``."""
+    """Quantized 3-D convolution with a fused ReLU (int8 weight, float compute).
+
+    Behaves exactly like :class:`~lucid.nn.quantized.Conv3d` but applies ReLU to
+    the output *before* it is fake-quantized — matching calibration, where the
+    fused module's activation observer saw the post-ReLU range. Produced from a
+    calibrated float / QAT ``ConvReLU3d`` by :func:`lucid.quantization.convert`
+    / :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input volume.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the convolution.
+    padding : int or tuple of int
+        Implicit zero-padding added to both sides of each spatial dim.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added before the ReLU.
+
+    Notes
+    -----
+    Constructor is inherited unchanged from :class:`~lucid.nn.quantized.Conv3d`;
+    only the post-op activation hook differs.
+    """
 
     @override
     def _activation(self, y: Tensor) -> Tensor:

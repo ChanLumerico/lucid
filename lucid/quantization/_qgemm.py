@@ -22,14 +22,47 @@ if TYPE_CHECKING:
 
 
 def is_available() -> bool:
-    """True if the engine exposes the MLX quantized-GEMM ops."""
+    """Report whether the engine exposes the MLX quantized-GEMM ops (Metal only).
+
+    The group-wise low-precision GEMM kernels are an optional C++ submodule
+    (``_C_engine.quantized``) compiled only when the engine is built with the
+    Phase 6 quantized ops.  Callers gate the real int4/int8 fast path on this
+    before dispatching :func:`quantize` / :func:`quantized_matmul`, falling back
+    to the dequantize-to-float path when it is absent.
+
+    Returns
+    -------
+    bool
+        ``True`` if the quantized submodule is present, ``False`` otherwise.
+    """
     return hasattr(_C_engine, "quantized")
 
 
 def quantize(
     w: Tensor, group_size: int = 64, bits: int = 8
 ) -> tuple[Tensor, Tensor, Tensor]:
-    """Group-wise quantize a weight → ``(packed_weight, scales, biases)``."""
+    """Group-wise quantize a weight to MLX's packed int4/int8 form (Metal only).
+
+    Wraps the engine's MLX group-wise affine quantizer: contiguous columns along
+    the quantized axis are grouped, each group gets its own ``(scale, bias)`` pair,
+    and the codes are bit-packed into a uint32 tensor.  The result feeds
+    :func:`quantized_matmul` or is reconstructed by :func:`dequantize`.
+
+    Parameters
+    ----------
+    w : Tensor
+        Float weight residing on a Metal device.
+    group_size : int, default 64
+        Number of columns along the quantized axis sharing one ``(scale, bias)``.
+    bits : int, default 8
+        Bit-width of the packed codes; either ``4`` or ``8``.
+
+    Returns
+    -------
+    tuple of Tensor
+        ``(packed_weight, scales, biases)`` — the bit-packed uint32 (I32-tagged)
+        weight, the per-group scales, and the per-group biases.
+    """
     wq, scales, biases = _C_engine.quantized.quantize(_unwrap(w), group_size, bits)
     return _wrap(wq), _wrap(scales), _wrap(biases)
 
@@ -37,7 +70,30 @@ def quantize(
 def dequantize(
     wq: Tensor, scales: Tensor, biases: Tensor, group_size: int = 64, bits: int = 8
 ) -> Tensor:
-    """Reconstruct the float weight from its packed form."""
+    """Reconstruct a float weight from its packed group-wise form (Metal only).
+
+    Inverse of :func:`quantize`: each packed code is unpacked and mapped back to
+    float via its group's ``scale`` and ``bias``, yielding an approximation of the
+    original weight.  Used by the reference path when the fused GEMM is unavailable.
+
+    Parameters
+    ----------
+    wq : Tensor
+        Bit-packed uint32 (I32-tagged) weight produced by :func:`quantize`.
+    scales : Tensor
+        Per-group scales returned by :func:`quantize`.
+    biases : Tensor
+        Per-group biases returned by :func:`quantize`.
+    group_size : int, default 64
+        Number of columns per group — must match the value used to quantize.
+    bits : int, default 8
+        Bit-width of the packed codes; either ``4`` or ``8``.
+
+    Returns
+    -------
+    Tensor
+        The reconstructed float weight on the same Metal device.
+    """
     out = _C_engine.quantized.dequantize(
         _unwrap(wq), _unwrap(scales), _unwrap(biases), group_size, bits
     )
@@ -53,7 +109,35 @@ def quantized_matmul(
     group_size: int = 64,
     bits: int = 8,
 ) -> Tensor:
-    """``x @ packed_w`` via MLX's low-precision GEMM (Metal only)."""
+    """Multiply a float activation by a packed low-precision weight (Metal only).
+
+    Runs MLX's fused low-precision GEMM: the packed weight is dequantized inside the
+    kernel and multiplied with the float ``x`` in one pass, so no full float weight
+    is ever materialized.  With ``transpose=True`` this computes ``x @ packed_wᵀ``,
+    the layout in which a linear layer stores its weight.
+
+    Parameters
+    ----------
+    x : Tensor
+        Float activation on a Metal device.
+    wq : Tensor
+        Bit-packed uint32 (I32-tagged) weight produced by :func:`quantize`.
+    scales : Tensor
+        Per-group scales returned by :func:`quantize`.
+    biases : Tensor
+        Per-group biases returned by :func:`quantize`.
+    transpose : bool, default True
+        If ``True``, contract against the transposed weight (``x @ packed_wᵀ``).
+    group_size : int, default 64
+        Number of columns per group — must match the value used to quantize.
+    bits : int, default 8
+        Bit-width of the packed codes; either ``4`` or ``8``.
+
+    Returns
+    -------
+    Tensor
+        The float product on the same Metal device.
+    """
     out = _C_engine.quantized.quantized_matmul(
         _unwrap(x),
         _unwrap(wq),

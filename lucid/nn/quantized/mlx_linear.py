@@ -19,7 +19,53 @@ if TYPE_CHECKING:
 
 
 class QuantizedLinearMLX(nn.Module):
-    """int4/int8-weight linear backed by MLX ``quantized_matmul`` (Metal only)."""
+    """Weight-only int4/int8 linear backed by a real Metal low-precision GEMM.
+
+    Unlike :class:`~lucid.nn.quantized.Linear` (which dequantizes the weight to
+    float and runs a float matmul), this layer stores the weight in MLX's
+    group-wise packed format and runs the genuine low-precision kernel
+    (``quantized_matmul``) — the actual compute *and* memory win. Build it from
+    a float :class:`~lucid.nn.Linear` via :meth:`from_float`, choosing ``bits``
+    (4 or 8).
+
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample.
+    out_features : int
+        Size of each output sample.
+    bias : bool, optional
+        Whether a (float) bias term is added after the GEMM. Defaults to
+        ``True``.
+    bits : int, optional
+        Weight bit-width — ``4`` or ``8``. Defaults to ``8``.
+    group_size : int, optional
+        Number of input-dim elements sharing one ``scale`` / ``bias`` block in
+        the packed layout. Defaults to ``64``.
+    relu : bool, optional
+        If ``True``, a ReLU is fused after the GEMM (+ bias). Defaults to
+        ``False``.
+
+    Notes
+    -----
+    The kernel is **Metal-only** but the layer is device-transparent: a
+    CPU-carried activation is moved onto the GPU for the GEMM and the result is
+    moved **back to the input's device**, so this layer accelerates inside an
+    otherwise-CPU model without forcing the whole model onto Metal. The packed
+    weight is ``(out, in·bits/32)`` uint32 (tagged I32), with one ``scale`` +
+    ``bias`` per ``group_size`` block along the input dim.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.quantized import QuantizedLinearMLX
+    >>> lin = nn.Linear(512, 256)
+    >>> qlin = QuantizedLinearMLX.from_float(lin, bits=8)
+    >>> x = lucid.randn(4, 512)
+    >>> y = qlin(x)          # GEMM runs on Metal, y returns on x's device
+    >>> y.shape
+    (4, 256)
+    """
 
     packed_weight: Tensor
     scales: Tensor

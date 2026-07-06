@@ -44,7 +44,32 @@ def _conv_from_float(cls: type, mod: nn.Module) -> nn.Module:
 
 
 class Conv1d(nn.Conv1d):
-    """Quantization-aware 1-D convolution."""
+    """Quantization-aware 1-D convolution (trainable float kernel, fake-quant).
+
+    A trainable float :class:`~lucid.nn.Conv1d` that fake-quantizes both the weight
+    and the output on every forward through a straight-through estimator (STE), so the
+    network adapts its weights to the eventual int8 grid while still training in full
+    precision.  Inserted in place of a float conv by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` later
+    bakes the trained kernel and the observed qparams into an inference
+    :class:`~lucid.nn.quantized.Conv1d`.
+
+    Parameters
+    ----------
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+    *args, **kwargs
+        Remaining arguments are forwarded verbatim to the float
+        :class:`~lucid.nn.Conv1d` constructor (``in_channels``, ``out_channels``,
+        ``kernel_size``, ``stride``, ``padding``, ``dilation``, ``groups``, ``bias``).
+
+    Notes
+    -----
+    The weight fake-quant rounds the kernel while the STE passes gradients straight
+    through, keeping the layer fully differentiable.  String padding (``"same"`` /
+    ``"valid"``) is deferred, matching the quantized conv.
+    """
 
     weight_fake_quant: FakeQuantize
     activation_post_process: FakeQuantize
@@ -73,7 +98,32 @@ class Conv1d(nn.Conv1d):
 
 
 class Conv2d(nn.Conv2d):
-    """Quantization-aware 2-D convolution."""
+    """Quantization-aware 2-D convolution (trainable float kernel, fake-quant).
+
+    A trainable float :class:`~lucid.nn.Conv2d` that fake-quantizes both the weight
+    and the output on every forward through a straight-through estimator (STE), so the
+    network adapts its weights to the eventual int8 grid while still training in full
+    precision.  Inserted in place of a float conv by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` later
+    bakes the trained kernel and the observed qparams into an inference
+    :class:`~lucid.nn.quantized.Conv2d`.
+
+    Parameters
+    ----------
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+    *args, **kwargs
+        Remaining arguments are forwarded verbatim to the float
+        :class:`~lucid.nn.Conv2d` constructor (``in_channels``, ``out_channels``,
+        ``kernel_size``, ``stride``, ``padding``, ``dilation``, ``groups``, ``bias``).
+
+    Notes
+    -----
+    The weight fake-quant rounds the kernel while the STE passes gradients straight
+    through, keeping the layer fully differentiable.  String padding (``"same"`` /
+    ``"valid"``) is deferred, matching the quantized conv.
+    """
 
     weight_fake_quant: FakeQuantize
     activation_post_process: FakeQuantize
@@ -102,7 +152,32 @@ class Conv2d(nn.Conv2d):
 
 
 class Conv3d(nn.Conv3d):
-    """Quantization-aware 3-D convolution."""
+    """Quantization-aware 3-D convolution (trainable float kernel, fake-quant).
+
+    A trainable float :class:`~lucid.nn.Conv3d` that fake-quantizes both the weight
+    and the output on every forward through a straight-through estimator (STE), so the
+    network adapts its weights to the eventual int8 grid while still training in full
+    precision.  Inserted in place of a float conv by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` later
+    bakes the trained kernel and the observed qparams into an inference
+    :class:`~lucid.nn.quantized.Conv3d`.
+
+    Parameters
+    ----------
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+    *args, **kwargs
+        Remaining arguments are forwarded verbatim to the float
+        :class:`~lucid.nn.Conv3d` constructor (``in_channels``, ``out_channels``,
+        ``kernel_size``, ``stride``, ``padding``, ``dilation``, ``groups``, ``bias``).
+
+    Notes
+    -----
+    The weight fake-quant rounds the kernel while the STE passes gradients straight
+    through, keeping the layer fully differentiable.  String padding (``"same"`` /
+    ``"valid"``) is deferred, matching the quantized conv.
+    """
 
     weight_fake_quant: FakeQuantize
     activation_post_process: FakeQuantize
@@ -138,7 +213,29 @@ def _fused_conv_from_float(cls: type, mod: nn.Module) -> nn.Module:
 
 
 class ConvReLU1d(Conv1d):
-    """QAT fused 1-D conv + ReLU (fake-quant on the post-ReLU output)."""
+    """Quantization-aware fused 1-D convolution + ReLU (trainable, fake-quant).
+
+    Behaves like :class:`Conv1d`, but the activation fake-quant observes the range
+    *after* the fused ReLU, so the calibrated output grid reflects the true
+    (non-negative) inference range.  Built from a fused float
+    :class:`~lucid.nn.intrinsic.ConvReLU1d` by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` folds it
+    into a single quantized :class:`~lucid.nn.quantized.ConvReLU1d`.
+
+    Parameters
+    ----------
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+    *args, **kwargs
+        Remaining arguments are forwarded to the float :class:`~lucid.nn.Conv1d`
+        constructor, exactly as for :class:`Conv1d`.
+
+    Notes
+    -----
+    The weight and the post-ReLU output are both fake-quantized every forward via a
+    straight-through estimator, so gradients reach the float kernel unchanged.
+    """
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
@@ -155,7 +252,29 @@ class ConvReLU1d(Conv1d):
 
 
 class ConvReLU2d(Conv2d):
-    """QAT fused 2-D conv + ReLU (fake-quant on the post-ReLU output)."""
+    """Quantization-aware fused 2-D convolution + ReLU (trainable, fake-quant).
+
+    Behaves like :class:`Conv2d`, but the activation fake-quant observes the range
+    *after* the fused ReLU, so the calibrated output grid reflects the true
+    (non-negative) inference range.  Built from a fused float
+    :class:`~lucid.nn.intrinsic.ConvReLU2d` by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` folds it
+    into a single quantized :class:`~lucid.nn.quantized.ConvReLU2d`.
+
+    Parameters
+    ----------
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+    *args, **kwargs
+        Remaining arguments are forwarded to the float :class:`~lucid.nn.Conv2d`
+        constructor, exactly as for :class:`Conv2d`.
+
+    Notes
+    -----
+    The weight and the post-ReLU output are both fake-quantized every forward via a
+    straight-through estimator, so gradients reach the float kernel unchanged.
+    """
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
@@ -172,7 +291,29 @@ class ConvReLU2d(Conv2d):
 
 
 class ConvReLU3d(Conv3d):
-    """QAT fused 3-D conv + ReLU (fake-quant on the post-ReLU output)."""
+    """Quantization-aware fused 3-D convolution + ReLU (trainable, fake-quant).
+
+    Behaves like :class:`Conv3d`, but the activation fake-quant observes the range
+    *after* the fused ReLU, so the calibrated output grid reflects the true
+    (non-negative) inference range.  Built from a fused float
+    :class:`~lucid.nn.intrinsic.ConvReLU3d` by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` folds it
+    into a single quantized :class:`~lucid.nn.quantized.ConvReLU3d`.
+
+    Parameters
+    ----------
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+    *args, **kwargs
+        Remaining arguments are forwarded to the float :class:`~lucid.nn.Conv3d`
+        constructor, exactly as for :class:`Conv3d`.
+
+    Notes
+    -----
+    The weight and the post-ReLU output are both fake-quantized every forward via a
+    straight-through estimator, so gradients reach the float kernel unchanged.
+    """
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer

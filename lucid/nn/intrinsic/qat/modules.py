@@ -61,7 +61,9 @@ class _ConvBnNd(nn.Module):
         scale = gamma * inv_std
         out_channels = conv.weight.shape[0]
         # (C, 1, …) with one trailing 1 per non-output weight axis → 1d/2d/3d.
-        w = conv.weight * scale.reshape((out_channels,) + (1,) * (len(conv.weight.shape) - 1))
+        w = conv.weight * scale.reshape(
+            (out_channels,) + (1,) * (len(conv.weight.shape) - 1)
+        )
         conv_bias = conv.bias if conv.bias is not None else lucid.zeros_like(scale)
         bias = (conv_bias - running_mean) * scale
         if bn.affine:
@@ -88,49 +90,217 @@ class _ConvBnNd(nn.Module):
 
 
 class ConvBn1d(_ConvBnNd):
-    """QAT fused Conv1d + BatchNorm1d (no ReLU)."""
+    """QAT fused ``Conv1d`` + ``BatchNorm1d`` — BN folded into the weight per forward.
 
-    def __init__(self, conv: nn.Module, bn: nn.Module, qconfig: QConfig | None = None) -> None:
+    A trainable fused conv + batch-norm that, on every forward, folds BN's affine into
+    the conv weight, fake-quantizes the *folded* weight, convolves, and fake-quantizes
+    the output — all under a straight-through estimator, so gradients keep flowing to
+    both the conv weight and the BN parameters.  Built by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` bakes the
+    folded int8 weight into an inference :class:`~lucid.nn.quantized.Conv1d`.
+
+    Parameters
+    ----------
+    conv : nn.Conv1d
+        The float 1-D convolution whose weight receives the folded BN affine.
+    bn : nn.BatchNorm1d
+        The batch-norm layer folded into ``conv``; its running stats and affine
+        parameters keep training under the STE.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    Because BN is re-folded on every forward (rather than once up front), the BN
+    parameters stay trainable and the fake-quantized weight always reflects the current
+    running statistics.
+    """
+
+    def __init__(
+        self, conv: nn.Module, bn: nn.Module, qconfig: QConfig | None = None
+    ) -> None:
         super().__init__(conv, bn, False, qconfig)
 
 
 class ConvBn2d(_ConvBnNd):
-    """QAT fused Conv2d + BatchNorm2d (no ReLU)."""
+    """QAT fused ``Conv2d`` + ``BatchNorm2d`` — BN folded into the weight per forward.
 
-    def __init__(self, conv: nn.Module, bn: nn.Module, qconfig: QConfig | None = None) -> None:
+    A trainable fused conv + batch-norm that, on every forward, folds BN's affine into
+    the conv weight, fake-quantizes the *folded* weight, convolves, and fake-quantizes
+    the output — all under a straight-through estimator, so gradients keep flowing to
+    both the conv weight and the BN parameters.  Built by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` bakes the
+    folded int8 weight into an inference :class:`~lucid.nn.quantized.Conv2d`.
+
+    Parameters
+    ----------
+    conv : nn.Conv2d
+        The float 2-D convolution whose weight receives the folded BN affine.
+    bn : nn.BatchNorm2d
+        The batch-norm layer folded into ``conv``; its running stats and affine
+        parameters keep training under the STE.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    Because BN is re-folded on every forward (rather than once up front), the BN
+    parameters stay trainable and the fake-quantized weight always reflects the current
+    running statistics.
+    """
+
+    def __init__(
+        self, conv: nn.Module, bn: nn.Module, qconfig: QConfig | None = None
+    ) -> None:
         super().__init__(conv, bn, False, qconfig)
 
 
 class ConvBn3d(_ConvBnNd):
-    """QAT fused Conv3d + BatchNorm3d (no ReLU)."""
+    """QAT fused ``Conv3d`` + ``BatchNorm3d`` — BN folded into the weight per forward.
 
-    def __init__(self, conv: nn.Module, bn: nn.Module, qconfig: QConfig | None = None) -> None:
+    A trainable fused conv + batch-norm that, on every forward, folds BN's affine into
+    the conv weight, fake-quantizes the *folded* weight, convolves, and fake-quantizes
+    the output — all under a straight-through estimator, so gradients keep flowing to
+    both the conv weight and the BN parameters.  Built by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` bakes the
+    folded int8 weight into an inference :class:`~lucid.nn.quantized.Conv3d`.
+
+    Parameters
+    ----------
+    conv : nn.Conv3d
+        The float 3-D convolution whose weight receives the folded BN affine.
+    bn : nn.BatchNorm3d
+        The batch-norm layer folded into ``conv``; its running stats and affine
+        parameters keep training under the STE.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    Because BN is re-folded on every forward (rather than once up front), the BN
+    parameters stay trainable and the fake-quantized weight always reflects the current
+    running statistics.
+    """
+
+    def __init__(
+        self, conv: nn.Module, bn: nn.Module, qconfig: QConfig | None = None
+    ) -> None:
         super().__init__(conv, bn, False, qconfig)
 
 
 class ConvBnReLU1d(_ConvBnNd):
-    """QAT fused Conv1d + BatchNorm1d + ReLU."""
+    """QAT fused ``Conv1d`` + ``BatchNorm1d`` + ``ReLU`` — BN folded per forward.
+
+    Like :class:`ConvBn1d`, but applies ReLU after the (BN-folded) convolution and
+    fake-quantizes the *post*-ReLU output, so the calibrated activation grid reflects
+    the true non-negative inference range.  Built by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` bakes it
+    into a fused quantized :class:`~lucid.nn.quantized.ConvReLU1d`.
+
+    Parameters
+    ----------
+    conv : nn.Conv1d
+        The float 1-D convolution whose weight receives the folded BN affine.
+    bn : nn.BatchNorm1d
+        The batch-norm layer folded into ``conv``; its running stats and affine
+        parameters keep training under the STE.
+    relu : bool, default=True
+        Whether the fused ReLU is applied before the output fake-quant.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    BN is re-folded every forward, so the BN parameters stay trainable and the
+    fake-quantized weight always reflects the current running statistics.
+    """
 
     def __init__(
-        self, conv: nn.Module, bn: nn.Module, relu: bool = True, qconfig: QConfig | None = None
+        self,
+        conv: nn.Module,
+        bn: nn.Module,
+        relu: bool = True,
+        qconfig: QConfig | None = None,
     ) -> None:
         super().__init__(conv, bn, relu, qconfig)
 
 
 class ConvBnReLU2d(_ConvBnNd):
-    """QAT fused Conv2d + BatchNorm2d + ReLU."""
+    """QAT fused ``Conv2d`` + ``BatchNorm2d`` + ``ReLU`` — BN folded per forward.
+
+    Like :class:`ConvBn2d`, but applies ReLU after the (BN-folded) convolution and
+    fake-quantizes the *post*-ReLU output, so the calibrated activation grid reflects
+    the true non-negative inference range.  Built by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` bakes it
+    into a fused quantized :class:`~lucid.nn.quantized.ConvReLU2d`.
+
+    Parameters
+    ----------
+    conv : nn.Conv2d
+        The float 2-D convolution whose weight receives the folded BN affine.
+    bn : nn.BatchNorm2d
+        The batch-norm layer folded into ``conv``; its running stats and affine
+        parameters keep training under the STE.
+    relu : bool, default=True
+        Whether the fused ReLU is applied before the output fake-quant.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    BN is re-folded every forward, so the BN parameters stay trainable and the
+    fake-quantized weight always reflects the current running statistics.
+    """
 
     def __init__(
-        self, conv: nn.Module, bn: nn.Module, relu: bool = True, qconfig: QConfig | None = None
+        self,
+        conv: nn.Module,
+        bn: nn.Module,
+        relu: bool = True,
+        qconfig: QConfig | None = None,
     ) -> None:
         super().__init__(conv, bn, relu, qconfig)
 
 
 class ConvBnReLU3d(_ConvBnNd):
-    """QAT fused Conv3d + BatchNorm3d + ReLU."""
+    """QAT fused ``Conv3d`` + ``BatchNorm3d`` + ``ReLU`` — BN folded per forward.
+
+    Like :class:`ConvBn3d`, but applies ReLU after the (BN-folded) convolution and
+    fake-quantizes the *post*-ReLU output, so the calibrated activation grid reflects
+    the true non-negative inference range.  Built by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` bakes it
+    into a fused quantized :class:`~lucid.nn.quantized.ConvReLU3d`.
+
+    Parameters
+    ----------
+    conv : nn.Conv3d
+        The float 3-D convolution whose weight receives the folded BN affine.
+    bn : nn.BatchNorm3d
+        The batch-norm layer folded into ``conv``; its running stats and affine
+        parameters keep training under the STE.
+    relu : bool, default=True
+        Whether the fused ReLU is applied before the output fake-quant.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    BN is re-folded every forward, so the BN parameters stay trainable and the
+    fake-quantized weight always reflects the current running statistics.
+    """
 
     def __init__(
-        self, conv: nn.Module, bn: nn.Module, relu: bool = True, qconfig: QConfig | None = None
+        self,
+        conv: nn.Module,
+        bn: nn.Module,
+        relu: bool = True,
+        qconfig: QConfig | None = None,
     ) -> None:
         super().__init__(conv, bn, relu, qconfig)
 

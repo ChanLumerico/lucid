@@ -59,5 +59,23 @@ def prepare_fx(
 
 
 def convert_fx(model: nn.Module, inplace: bool = False) -> nn.Module:
-    """Graph-mode convert — quantize modules; result is ``lucid.compile``-ready."""
+    """Graph-mode convert — bake a calibrated model into quantized modules.
+
+    The graph-mode counterpart of :func:`~lucid.quantization.convert`: it swaps
+    each observed float module for its quantized inference equivalent, folding in
+    the calibrated qparams.  The result is a plain quantized model, ready to run
+    or hand to ``lucid.compile``.
+
+    Parameters
+    ----------
+    model : nn.Module
+        A model returned by :func:`prepare_fx` and then calibrated.
+    inplace : bool, default False
+        Mutate ``model`` in place instead of deep-copying it first.
+
+    Returns
+    -------
+    nn.Module
+        The quantized model.
+    """
     return convert(model, inplace=inplace)

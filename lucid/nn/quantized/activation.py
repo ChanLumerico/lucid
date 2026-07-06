@@ -61,7 +61,12 @@ class _QuantizedActivation(nn.Module):
 
 
 class Sigmoid(_QuantizedActivation):
-    """Quantized ``Sigmoid``."""
+    """Quantized :class:`~lucid.nn.Sigmoid` — ``sigmoid(x)`` then output fake-quant.
+
+    The output is bounded to ``[0, 1]``, so pairing this layer with a
+    :class:`~lucid.quantization.FixedQParamsObserver` (fixed ``1/256`` scale,
+    zero-point 0) in the qconfig skips calibrating a range that is known a priori.
+    """
 
     @override
     def _act(self, x: Tensor) -> Tensor:
@@ -69,7 +74,12 @@ class Sigmoid(_QuantizedActivation):
 
 
 class Hardswish(_QuantizedActivation):
-    """Quantized ``Hardswish``."""
+    """Quantized :class:`~lucid.nn.Hardswish` — ``hardswish(x)`` then output fake-quant.
+
+    The piecewise-linear swish approximation used in MobileNetV3 / EfficientNet-lite;
+    converted from a calibrated float ``nn.Hardswish`` and requantized to the
+    observed output grid.
+    """
 
     @override
     def _act(self, x: Tensor) -> Tensor:
@@ -77,7 +87,11 @@ class Hardswish(_QuantizedActivation):
 
 
 class Hardsigmoid(_QuantizedActivation):
-    """Quantized ``Hardsigmoid``."""
+    """Quantized :class:`~lucid.nn.Hardsigmoid` — ``hardsigmoid(x)`` then fake-quant.
+
+    Like :class:`Sigmoid` its output is bounded to ``[0, 1]``, a natural
+    fixed-qparams range; the piecewise-linear gate of MobileNetV3's SE blocks.
+    """
 
     @override
     def _act(self, x: Tensor) -> Tensor:
@@ -85,7 +99,11 @@ class Hardsigmoid(_QuantizedActivation):
 
 
 class Tanh(_QuantizedActivation):
-    """Quantized ``Tanh``."""
+    """Quantized :class:`~lucid.nn.Tanh` — ``tanh(x)`` then output fake-quant.
+
+    The output is bounded to ``[-1, 1]`` (another fixed-qparams-friendly range);
+    converted from a calibrated float ``nn.Tanh``.
+    """
 
     @override
     def _act(self, x: Tensor) -> Tensor:
@@ -93,7 +111,11 @@ class Tanh(_QuantizedActivation):
 
 
 class ELU(_QuantizedActivation):
-    """Quantized ``ELU`` (carries the float module's ``alpha``)."""
+    """Quantized :class:`~lucid.nn.ELU` — ``elu(x, alpha)`` then output fake-quant.
+
+    Carries the source module's ``alpha`` (the negative-branch scale
+    ``alpha·(exp(x)-1)``), copied from the float ``nn.ELU`` in :meth:`from_float`.
+    """
 
     alpha: float = 1.0
 
@@ -107,7 +129,11 @@ class ELU(_QuantizedActivation):
 
 
 class LeakyReLU(_QuantizedActivation):
-    """Quantized ``LeakyReLU`` (carries the float module's ``negative_slope``)."""
+    """Quantized :class:`~lucid.nn.LeakyReLU` — ``leaky_relu(x, slope)`` then fake-quant.
+
+    Carries the source module's ``negative_slope`` (the slope applied to ``x < 0``),
+    copied from the float ``nn.LeakyReLU`` in :meth:`from_float`.
+    """
 
     negative_slope: float = 0.01
 

@@ -149,7 +149,41 @@ class _QuantizedConvNd(nn.Module):
 
 
 class Conv1d(_QuantizedConvNd):
-    """Quantized 1-D convolution."""
+    """Quantized 1-D convolution (int8 weight, dequantize-to-float compute).
+
+    Each forward dequantizes the per-output-channel int8 kernel, runs the
+    ordinary ``F.conv1d``, then fake-quantizes the output to the calibrated
+    activation grid (the sidecar design-B numerics: int8 weight stored, but the
+    convolution itself runs in float so accuracy matches a real int8 kernel).
+    Produced from a calibrated float :class:`~lucid.nn.Conv1d` by
+    :func:`lucid.quantization.convert` / :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input signal.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the convolution.
+    padding : int or tuple of int
+        Implicit zero-padding added to both sides of the spatial axis.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added after the convolution.
+
+    Notes
+    -----
+    The weight is quantized **per-output-channel on axis 0** (much tighter than
+    per-tensor for wide kernels); the bias stays float. Only integer / tuple
+    padding with ``padding_mode="zeros"`` is supported — string ``"same"`` /
+    ``"valid"`` padding is deferred. See :class:`~lucid.nn.quantized.Conv2d`.
+    """
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
@@ -165,7 +199,42 @@ class Conv1d(_QuantizedConvNd):
 
 
 class Conv2d(_QuantizedConvNd):
-    """Quantized 2-D convolution."""
+    """Quantized 2-D convolution (int8 weight, dequantize-to-float compute).
+
+    The workhorse of the quantized vision zoo. Each forward dequantizes the
+    per-output-channel int8 kernel, runs the ordinary ``F.conv2d``, then
+    fake-quantizes the output to the calibrated activation grid (sidecar
+    design-B: int8 weight stored, but the convolution runs in float so accuracy
+    matches a real int8 kernel). Produced from a calibrated float
+    :class:`~lucid.nn.Conv2d` by :func:`lucid.quantization.convert` /
+    :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input image.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the convolution.
+    padding : int or tuple of int
+        Implicit zero-padding added to both sides of each spatial dim.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added after the convolution.
+
+    Notes
+    -----
+    The weight is quantized **per-output-channel on axis 0** (much tighter than
+    per-tensor for wide kernels); the bias stays float. Only integer / tuple
+    padding with ``padding_mode="zeros"`` is supported — string ``"same"`` /
+    ``"valid"`` padding is deferred.
+    """
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
@@ -181,7 +250,42 @@ class Conv2d(_QuantizedConvNd):
 
 
 class Conv3d(_QuantizedConvNd):
-    """Quantized 3-D convolution."""
+    """Quantized 3-D convolution (int8 weight, dequantize-to-float compute).
+
+    The volumetric member of the quantized conv family (video / 3-D medical
+    models). Each forward dequantizes the per-output-channel int8 kernel, runs
+    the ordinary ``F.conv3d``, then fake-quantizes the output to the calibrated
+    activation grid (sidecar design-B: int8 weight stored, but the convolution
+    runs in float so accuracy matches a real int8 kernel). Produced from a
+    calibrated float :class:`~lucid.nn.Conv3d` by
+    :func:`lucid.quantization.convert` / :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input volume.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the convolution.
+    padding : int or tuple of int
+        Implicit zero-padding added to both sides of each spatial dim.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added after the convolution.
+
+    Notes
+    -----
+    The weight is quantized **per-output-channel on axis 0** (much tighter than
+    per-tensor for wide kernels); the bias stays float. Only integer / tuple
+    padding with ``padding_mode="zeros"`` is supported — string ``"same"`` /
+    ``"valid"`` padding is deferred. See :class:`~lucid.nn.quantized.Conv2d`.
+    """
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:

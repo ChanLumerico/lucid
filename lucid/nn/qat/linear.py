@@ -21,7 +21,32 @@ if TYPE_CHECKING:
 
 
 class Linear(nn.Linear):
-    """Quantization-aware ``Linear`` (weight + output fake-quant)."""
+    """Quantization-aware ``Linear`` (trainable float weight, fake-quant).
+
+    A trainable float :class:`~lucid.nn.Linear` that fake-quantizes both the weight
+    and the output on every forward through a straight-through estimator (STE), letting
+    the network experience quantization rounding and learn to compensate while training
+    in full precision.  Inserted by :func:`lucid.quantization.prepare_qat`;
+    :func:`lucid.quantization.convert` reads the trained weight and the observers' final
+    qparams to build an inference :class:`~lucid.nn.quantized.Linear`.
+
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample.
+    out_features : int
+        Size of each output sample.
+    bias : bool, default=True
+        Whether to add a learnable (float) bias term.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    The STE rounds the weight in the forward pass but passes gradients straight through,
+    so the float weight stays fully trainable.
+    """
 
     def __init__(
         self,
@@ -63,7 +88,32 @@ class Linear(nn.Linear):
 
 
 class LinearReLU(Linear):
-    """QAT fused ``Linear`` + ``ReLU`` (fake-quant on the post-ReLU output)."""
+    """Quantization-aware fused ``Linear`` + ``ReLU`` (trainable, fake-quant).
+
+    Behaves like :class:`Linear`, but the activation fake-quant observes the range
+    *after* the fused ReLU, so the calibrated output grid reflects the true
+    (non-negative) inference range.  Built from a fused float
+    :class:`~lucid.nn.intrinsic.LinearReLU` by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` folds it
+    into a single quantized :class:`~lucid.nn.quantized.LinearReLU`.
+
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample.
+    out_features : int
+        Size of each output sample.
+    bias : bool, default=True
+        Whether to add a learnable (float) bias term.
+    qconfig : QConfig
+        Quantization recipe supplying the weight and activation
+        :class:`~lucid.quantization.FakeQuantize` modules applied during training.
+
+    Notes
+    -----
+    The weight and the post-ReLU output are both fake-quantized every forward via a
+    straight-through estimator, keeping the float weight fully trainable.
+    """
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary linear layer

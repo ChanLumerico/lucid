@@ -83,7 +83,24 @@ class ObserverBase(nn.Module):
 
 
 class MinMaxObserver(ObserverBase):
-    """Per-tensor observer tracking the global running min / max."""
+    """Per-tensor observer tracking the global running min / max of the input.
+
+    The default activation / weight statistic: every batch's overall ``min`` /
+    ``max`` is folded into a running range, from which :meth:`calculate_qparams`
+    derives a single per-tensor ``(scale, zero_point)``.  Simple and robust,
+    though sensitive to outliers — see :class:`MovingAverageMinMaxObserver` and
+    :class:`HistogramObserver` for outlier-tolerant variants.
+
+    Parameters
+    ----------
+    qscheme : QScheme, default ``per_tensor_affine``
+        Target quantization scheme.
+    qdtype : QDtype, default ``quint8``
+        Target quantized dtype.
+    eps : float, default 1e-8
+        Lower floor on the derived ``scale`` (avoids division by zero on a
+        constant input).
+    """
 
     min_val: Tensor
     max_val: Tensor
@@ -148,7 +165,26 @@ class MovingAverageMinMaxObserver(MinMaxObserver):
 
 
 class PerChannelMinMaxObserver(ObserverBase):
-    """Per-channel observer tracking running min / max along ``ch_axis``."""
+    """Per-channel observer tracking a running min / max along ``ch_axis``.
+
+    The standard **weight** observer: it keeps an independent ``[min, max]`` per
+    channel (reducing over every other axis), so :meth:`calculate_qparams`
+    returns a *vector* of ``(scale, zero_point)`` — one per output channel.
+    Per-channel granularity is markedly more accurate than per-tensor for conv /
+    linear kernels whose channels differ in dynamic range.
+
+    Parameters
+    ----------
+    ch_axis : int, default 0
+        Axis whose entries are quantized independently (output channels — axis 0
+        for conv / linear weights).
+    qscheme : QScheme, default ``per_channel_symmetric``
+        Target quantization scheme.
+    qdtype : QDtype, default ``qint8``
+        Target quantized dtype.
+    eps : float, default 1e-8
+        Lower floor on each derived ``scale``.
+    """
 
     min_val: Tensor
     max_val: Tensor
@@ -317,6 +353,19 @@ class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
     The per-channel analogue of :class:`MovingAverageMinMaxObserver` — smooths
     each channel's range across calibration batches (robust to per-batch
     outliers), which the reference framework ships as a distinct observer.
+
+    Parameters
+    ----------
+    ch_axis : int, default 0
+        Axis quantized independently (output channels).
+    qscheme : QScheme, default ``per_channel_symmetric``
+        Target quantization scheme.
+    qdtype : QDtype, default ``qint8``
+        Target quantized dtype.
+    averaging_constant : float, default 0.01
+        EMA weight of each new batch's range; smaller is smoother / slower.
+    eps : float, default 1e-8
+        Lower floor on each derived ``scale``.
     """
 
     def __init__(
@@ -355,7 +404,21 @@ class FixedQParamsObserver(ObserverBase):
 
     For ops whose output range is known a priori (``sigmoid`` → ``[0, 1]``,
     ``tanh`` → ``[-1, 1]``, ``softmax`` → ``[0, 1]``): the grid is fixed, so
-    calibration would be wasted.  ``forward`` is the identity.
+    calibration would be wasted.  ``forward`` is the identity and
+    :meth:`calculate_qparams` returns the constructor-supplied qparams verbatim.
+
+    Parameters
+    ----------
+    scale : float
+        The fixed quantization step size.
+    zero_point : int
+        The fixed integer mapped to real value ``0``.
+    qscheme : QScheme, default ``per_tensor_affine``
+        Target quantization scheme (metadata only; qparams are fixed).
+    qdtype : QDtype, default ``quint8``
+        Target quantized dtype.
+    eps : float, default 1e-8
+        Retained for interface symmetry; unused (the ``scale`` is fixed).
     """
 
     scale: Tensor
@@ -387,7 +450,17 @@ class PlaceholderObserver(ObserverBase):
     """Carries ``qdtype`` metadata but collects no statistics.
 
     Used where activation qparams are produced at *runtime* (dynamic quant) or
-    deliberately absent — the observer only records the target dtype/scheme.
+    deliberately absent — the observer only records the target dtype / scheme,
+    so :meth:`calculate_qparams` raises rather than returning a range.
+
+    Parameters
+    ----------
+    qscheme : QScheme, default ``per_tensor_affine``
+        Target quantization scheme recorded for downstream consumers.
+    qdtype : QDtype, default ``quint8``
+        Target quantized dtype recorded for downstream consumers.
+    eps : float, default 1e-8
+        Retained for interface symmetry; unused (no range is derived).
     """
 
     def __init__(
@@ -412,5 +485,11 @@ class PlaceholderObserver(ObserverBase):
 
 
 class NoopObserver(PlaceholderObserver):
-    """A :class:`PlaceholderObserver` by another name — pure identity, no stats."""
+    """A no-op :class:`PlaceholderObserver` — pure identity, collects no stats.
 
+    Named alias the reference framework uses to mark tensors that should pass
+    through the observed graph **without** any statistic gathering (e.g. an
+    already-quantized input, or a layer deliberately excluded from calibration).
+    Inherits the ``qscheme`` / ``qdtype`` / ``eps`` constructor of
+    :class:`PlaceholderObserver` unchanged.
+    """

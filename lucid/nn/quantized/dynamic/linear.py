@@ -34,7 +34,32 @@ if TYPE_CHECKING:
 
 
 class Linear(nn.Module):
-    """int8-weight linear with per-forward dynamic activation quantization."""
+    """int8-weight linear with per-forward dynamic activation quantization.
+
+    Dynamic quantization keeps the weight permanently in int8 (per-output-channel
+    symmetric) while the activation grid is derived from the *live* input on every
+    forward — the input's min/max are measured, it is fake-quantized to a per-tensor
+    affine grid, and the ordinary linear op then runs in float with the dequantized
+    weight.  Because no representative data is needed to fix the activation range,
+    this layer needs no calibration pass, which makes it the standard choice for
+    Transformer / Linear-heavy inference (BERT and friends).  Instances are produced
+    by :func:`lucid.quantization.quantize_dynamic`, not constructed directly.
+
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample — the weight's input dimension.
+    out_features : int
+        Size of each output sample — the weight's output dimension.
+    bias : bool, default True
+        If ``True``, keep a learned float bias buffer; otherwise no bias is added.
+
+    Notes
+    -----
+    The weight lives in the ``weight_int8`` buffer alongside per-channel
+    ``weight_scale`` / ``weight_zero_point``; only the int8 form is the persistent,
+    device-tracked state, and the float weight is reconstructed on demand.
+    """
 
     weight_int8: Tensor
     weight_scale: Tensor

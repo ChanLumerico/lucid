@@ -54,7 +54,22 @@ class QuantStub(nn.Module):
 
 
 class DeQuantStub(nn.Module):
-    """Marks the quantized→float boundary; replaced by :class:`DeQuantize`."""
+    """Marks the quantized→float boundary in a to-be-quantized model.
+
+    The exit-side counterpart of :class:`QuantStub`: place it where the
+    quantized region ends and float compute resumes. It is an identity at
+    float / calibration time; :func:`lucid.quantization.convert` replaces it
+    with the runtime :class:`DeQuantize` marker. Under Lucid's sidecar
+    representation (design B) activations are carried as (fake-quantized) float
+    throughout, so this marker never changes tensor values.
+
+    Parameters
+    ----------
+    qconfig : object, optional
+        Quantization config attached to this boundary. When ``None`` (the
+        default) no ``qconfig`` attribute is set and the module inherits the
+        surrounding model's config during ``prepare`` / ``convert``.
+    """
 
     def __init__(self, qconfig: object = None) -> None:
         super().__init__()
@@ -68,7 +83,26 @@ class DeQuantStub(nn.Module):
 
 
 class Quantize(nn.Module):
-    """Runtime entry into the quantized region — fake-quantizes the input."""
+    """Runtime entry into the quantized region — fake-quantizes the input.
+
+    The converted form of a calibrated :class:`QuantStub`, produced by
+    :func:`lucid.quantization.convert` / :meth:`from_float`. Each forward
+    quantizes a real-valued activation to the calibrated ``(scale,
+    zero_point)`` grid (integer inputs such as token indices are passed through
+    unchanged). Under the sidecar representation (design B) the result is
+    carried as fake-quantized float, so it has int8 numerics while staying a
+    float tensor.
+
+    Parameters
+    ----------
+    scale : Tensor
+        Per-tensor activation scale from the calibrating observer.
+    zero_point : Tensor
+        Per-tensor activation zero-point from the calibrating observer.
+    qdtype : QDtype, optional
+        Quantized dtype whose ``quant_min`` / ``quant_max`` bound the grid.
+        Defaults to :data:`~lucid.quantization.quint8`.
+    """
 
     scale: Tensor
     zero_point: Tensor
@@ -103,7 +137,20 @@ class Quantize(nn.Module):
 
 
 class DeQuantize(nn.Module):
-    """Runtime exit from the quantized region — identity under design B."""
+    """Runtime exit from the quantized region — identity under design B.
+
+    The converted form of a :class:`DeQuantStub`, produced by
+    :func:`lucid.quantization.convert` / :meth:`from_float`. It marks where the
+    quantized region ends. Because Lucid's sidecar representation (design B)
+    carries activations as (fake-quantized) float throughout, there is nothing
+    to unpack: the forward is a plain identity and the module holds no state.
+
+    Notes
+    -----
+    Takes no constructor arguments. It exists as an explicit boundary marker so
+    the quantized graph is symmetric with :class:`Quantize` — useful for
+    tooling that walks the module tree.
+    """
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary boundary marker

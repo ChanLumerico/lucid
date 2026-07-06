@@ -156,7 +156,40 @@ class _QuantizedConvTransposeNd(nn.Module):
 
 
 class ConvTranspose1d(_QuantizedConvTransposeNd):
-    """Quantized 1-D transposed convolution."""
+    """Quantized 1-D transposed convolution (fractionally-strided conv).
+
+    Each forward dequantizes the per-output-channel int8 kernel, runs
+    ``F.conv_transpose1d``, then fake-quantizes the output to the calibrated
+    activation grid.  Produced from a calibrated float
+    :class:`~lucid.nn.ConvTranspose1d` by :func:`lucid.quantization.convert`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input signal.
+    out_channels : int
+        Number of channels produced by the transposed convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the transposed convolution (the upsampling factor).
+    padding : int or tuple of int
+        Implicit zero-padding subtracted from both sides of the spatial axis.
+    output_padding : int or tuple of int
+        Extra size added to one side of the output to disambiguate its shape.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added after the convolution.
+
+    Notes
+    -----
+    The transposed-weight layout ``(in, out/groups, k)`` makes a per-output-
+    channel axis ambiguous, so the weight is quantized **per-channel on axis 1**
+    (the output-channel axis) — much tighter than per-tensor for wide kernels.
+    """
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
@@ -173,7 +206,42 @@ class ConvTranspose1d(_QuantizedConvTransposeNd):
 
 
 class ConvTranspose2d(_QuantizedConvTransposeNd):
-    """Quantized 2-D transposed convolution."""
+    """Quantized 2-D transposed convolution (fractionally-strided conv).
+
+    The upsampling counterpart of :class:`~lucid.nn.quantized.Conv2d`, common in
+    segmentation decoders and GAN generators.  Each forward dequantizes the
+    per-output-channel int8 kernel, runs ``F.conv_transpose2d``, then
+    fake-quantizes the output to the calibrated activation grid.  Produced from a
+    calibrated float :class:`~lucid.nn.ConvTranspose2d` by
+    :func:`lucid.quantization.convert`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input image.
+    out_channels : int
+        Number of channels produced by the transposed convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the transposed convolution (the upsampling factor).
+    padding : int or tuple of int
+        Implicit zero-padding subtracted from both sides of each spatial dim.
+    output_padding : int or tuple of int
+        Extra size added to one side of each output spatial dim.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added after the convolution.
+
+    Notes
+    -----
+    The weight is quantized **per-channel on axis 1** (output channels of the
+    ``(in, out/groups, kh, kw)`` layout) — the reference default, and much
+    tighter than per-tensor for wide kernels.
+    """
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
@@ -190,7 +258,40 @@ class ConvTranspose2d(_QuantizedConvTransposeNd):
 
 
 class ConvTranspose3d(_QuantizedConvTransposeNd):
-    """Quantized 3-D transposed convolution."""
+    """Quantized 3-D transposed convolution (fractionally-strided conv).
+
+    The volumetric upsampling layer (video / 3-D medical decoders).  Each forward
+    dequantizes the per-output-channel int8 kernel, runs ``F.conv_transpose3d``,
+    then fake-quantizes the output to the calibrated activation grid.  Produced
+    from a calibrated float :class:`~lucid.nn.ConvTranspose3d` by
+    :func:`lucid.quantization.convert`.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input volume.
+    out_channels : int
+        Number of channels produced by the transposed convolution.
+    kernel_size : int or tuple of int
+        Size of the convolving kernel.
+    stride : int or tuple of int
+        Stride of the transposed convolution (the upsampling factor).
+    padding : int or tuple of int
+        Implicit zero-padding subtracted from both sides of each spatial dim.
+    output_padding : int or tuple of int
+        Extra size added to one side of each output spatial dim.
+    dilation : int or tuple of int
+        Spacing between kernel elements.
+    groups : int
+        Number of blocked connections from input to output channels.
+    bias : bool
+        Whether a (float) bias term is added after the convolution.
+
+    Notes
+    -----
+    The weight is quantized **per-channel on axis 1** (output channels of the
+    ``(in, out/groups, kd, kh, kw)`` layout) — much tighter than per-tensor.
+    """
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:

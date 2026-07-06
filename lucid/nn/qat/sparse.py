@@ -19,7 +19,33 @@ if TYPE_CHECKING:
 
 
 class Embedding(nn.Embedding):
-    """Quantization-aware embedding (fake-quant on the table)."""
+    """Quantization-aware embedding (trainable float table, fake-quant).
+
+    A trainable float :class:`~lucid.nn.Embedding` whose lookup table is fake-quantized
+    on every forward through a straight-through estimator (STE), so the learned
+    embeddings survive the eventual int8 storage.  Inserted by
+    :func:`lucid.quantization.prepare_qat`; :func:`lucid.quantization.convert` bakes the
+    trained, fake-quantized table into a quantized
+    :class:`~lucid.nn.quantized.Embedding`.
+
+    Parameters
+    ----------
+    num_embeddings : int
+        Number of rows in the lookup table (vocabulary size).
+    embedding_dim : int
+        Dimensionality of each embedding vector.
+    padding_idx : int or None, optional
+        If given, the embedding at this index stays fixed and does not contribute to
+        the gradient.
+    qconfig : QConfig
+        Quantization recipe (keyword-only) supplying the weight
+        :class:`~lucid.quantization.FakeQuantize` applied to the table during training.
+
+    Notes
+    -----
+    Only the table (weight) is fake-quantized — there is no activation observer, since
+    the output is a gather of already-quantized rows.
+    """
 
     weight_fake_quant: FakeQuantize
 

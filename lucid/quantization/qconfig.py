@@ -33,7 +33,23 @@ _Factory = Callable[..., nn.Module]
 
 
 class QConfig(NamedTuple):
-    """A pair of observer/fake-quant factories for activations and weights."""
+    """A pair of observer / fake-quant factories for activations and weights.
+
+    The atomic quantization recipe: ``prepare`` / ``prepare_qat`` call the two
+    factories to build a fresh observer (PTQ) or :class:`FakeQuantize` (QAT) at
+    every insertion site.  A :class:`QConfigMapping` then decides *which*
+    QConfig applies to *which* module.  Both fields are zero-arg callables —
+    typically produced by ``Observer.with_args(...)`` /
+    ``FakeQuantize.with_args(...)`` — so one recipe instantiates independent
+    modules across the whole network.
+
+    Attributes
+    ----------
+    activation : Callable[..., nn.Module]
+        Factory for the **activation** observer / fake-quant.
+    weight : Callable[..., nn.Module]
+        Factory for the **weight** observer / fake-quant.
+    """
 
     activation: _Factory
     weight: _Factory
@@ -119,10 +135,30 @@ class QConfigMapping:
 
 
 def get_default_qconfig_mapping() -> QConfigMapping:
-    """A :class:`QConfigMapping` with the default PTQ QConfig set globally."""
+    """Build the default **static-PTQ** :class:`QConfigMapping`.
+
+    Sets :func:`get_default_qconfig` as the global fallback, so every eligible
+    module is quantized with the standard histogram-activation /
+    per-channel-weight recipe unless overridden by type or name.
+
+    Returns
+    -------
+    QConfigMapping
+        A mapping whose global QConfig is the default PTQ config.
+    """
     return QConfigMapping().set_global(get_default_qconfig())
 
 
 def get_default_qat_qconfig_mapping() -> QConfigMapping:
-    """A :class:`QConfigMapping` with the default QAT QConfig set globally."""
+    """Build the default **QAT** :class:`QConfigMapping`.
+
+    Sets :func:`get_default_qat_qconfig` as the global fallback, so every
+    eligible module trains with :class:`FakeQuantize` on its activations and
+    weights unless overridden by type or name.
+
+    Returns
+    -------
+    QConfigMapping
+        A mapping whose global QConfig is the default QAT config.
+    """
     return QConfigMapping().set_global(get_default_qat_qconfig())

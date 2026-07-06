@@ -24,7 +24,31 @@ if TYPE_CHECKING:
 
 
 class LSTM(nn.Module):
-    """int8-weight LSTM built from a float :class:`~lucid.nn.LSTM`."""
+    """int8-weight LSTM built from a float :class:`~lucid.nn.LSTM`.
+
+    A dynamically quantized recurrent layer: every recurrent weight matrix
+    (``weight_ih_l*`` / ``weight_hh_l*``) is stored int8 (per-row symmetric) while
+    the biases stay float.  A float ``nn.LSTM`` *shell*, held outside the module
+    registry so its float weights never enter the ``state_dict``, is the actual
+    compute engine — on each forward its weights are overwritten with the values
+    dequantized from the int8 buffers, so only the int8 form is the persistent,
+    device-tracked state.  No calibration is required; the per-timestep activation
+    quantization inside the cell is left to the real low-precision kernel.  Build
+    instances with :func:`lucid.quantization.quantize_dynamic`, the recommended
+    path for LSTM-heavy inference.
+
+    Parameters
+    ----------
+    shell : lucid.nn.LSTM
+        The float LSTM whose configuration and cell arithmetic are reused; it holds
+        the recurrent weights that :meth:`from_float` quantizes to int8.
+
+    Notes
+    -----
+    The shell is stored via ``object.__setattr__`` so it stays out of the module
+    registry, keeping the serialized state limited to the int8 weight buffers, the
+    per-row scales, and the float biases.
+    """
 
     def __init__(self, shell: nn.LSTM) -> None:
         super().__init__()
@@ -61,7 +85,9 @@ class LSTM(nn.Module):
 
         shell = mod
         if not isinstance(shell, nn.LSTM):
-            raise TypeError(f"dynamic LSTM.from_float expects an nn.LSTM, got {type(shell).__name__}")
+            raise TypeError(
+                f"dynamic LSTM.from_float expects an nn.LSTM, got {type(shell).__name__}"
+            )
         qmod = cls(shell)
         for name, param in shell.named_parameters():
             if name.startswith("weight"):

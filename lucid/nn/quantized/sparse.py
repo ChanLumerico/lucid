@@ -26,7 +26,31 @@ if TYPE_CHECKING:
 
 
 class Embedding(nn.Module):
-    """int8 quantized embedding lookup table (built via :meth:`from_float`)."""
+    """Quantized embedding lookup table — per-row int8, dequantize-on-lookup.
+
+    The table is stored as int8 codes with a per-row (per-token) ``scale`` /
+    ``zero_point``, which is the dominant memory win for large-vocabulary
+    embeddings. Each forward dequantizes the table and performs the ordinary
+    :func:`~lucid.nn.functional.embedding` lookup. Produced from a calibrated
+    float :class:`~lucid.nn.Embedding` by :func:`lucid.quantization.convert` /
+    :meth:`from_float`.
+
+    Parameters
+    ----------
+    num_embeddings : int
+        Size of the vocabulary (number of rows in the table).
+    embedding_dim : int
+        Dimensionality of each embedding vector.
+    padding_idx : int or None, optional
+        If given, the embedding at this index is treated as padding (its row is
+        not accumulated into gradients upstream). Defaults to ``None``.
+
+    Notes
+    -----
+    The table is quantized **per-row on axis 0** (one ``scale`` per token) with
+    a symmetric qint8 grid. When the source module carries no ``qconfig``, a
+    default per-channel qint8 observer is used to calibrate the rows.
+    """
 
     weight_int8: Tensor
     weight_scale: Tensor
@@ -88,7 +112,34 @@ class Embedding(nn.Module):
 
 
 class EmbeddingBag(nn.Module):
-    """int8 quantized ``EmbeddingBag`` — pooled lookup on a dequantized table."""
+    """Quantized ``EmbeddingBag`` — per-row int8 table, pooled dequant lookup.
+
+    Like :class:`~lucid.nn.quantized.Embedding`, the table is stored as int8
+    with a per-row (per-token) ``scale``; each forward dequantizes the table
+    and runs the pooled bag lookup, reducing each bag of indices to a single
+    vector by ``mode``. Produced from a calibrated float
+    :class:`~lucid.nn.EmbeddingBag` by :func:`lucid.quantization.convert` /
+    :meth:`from_float`.
+
+    Parameters
+    ----------
+    num_embeddings : int
+        Size of the vocabulary (number of rows in the table).
+    embedding_dim : int
+        Dimensionality of each embedding vector.
+    mode : {"sum", "mean", "max"}, optional
+        Pooling reduction applied over each bag of gathered rows. Defaults to
+        ``"mean"``.
+    padding_idx : int or None, optional
+        If given, the embedding at this index is treated as padding. Defaults
+        to ``None``.
+
+    Notes
+    -----
+    The table is quantized **per-row on axis 0** (one ``scale`` per token) with
+    a symmetric qint8 grid. When the source module carries no ``qconfig``, a
+    default per-channel qint8 observer is used to calibrate the rows.
+    """
 
     weight_int8: Tensor
     weight_scale: Tensor

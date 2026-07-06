@@ -32,7 +32,33 @@ if TYPE_CHECKING:
 
 
 class Linear(nn.Module):
-    """int8-weight quantized linear layer (built via :meth:`from_float`)."""
+    """Quantized linear (fully-connected) layer — int8 weight, float compute.
+
+    Under the sidecar representation (design B) the weight is stored as int8
+    codes plus per-output-channel ``scale`` / ``zero_point`` buffers; each
+    forward dequantizes the weight to float, runs the ordinary ``F.linear``,
+    then fake-quantizes the output to the calibrated activation grid. This
+    yields the *numerics* of int8 inference (accuracy matches a real int8
+    kernel) while the GEMM itself stays in float. Produced from a calibrated
+    float :class:`~lucid.nn.Linear` by :func:`lucid.quantization.convert` /
+    :meth:`from_float`.
+
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample.
+    out_features : int
+        Size of each output sample.
+    bias : bool, optional
+        Whether a (float) bias term is added after the linear map. Defaults to
+        ``True``.
+
+    Notes
+    -----
+    The weight is quantized **per-output-channel on axis 0**; the bias stays
+    float. For the real low-precision Metal GEMM (weight-only int4/int8, no
+    dequantize hop) see :class:`~lucid.nn.quantized.QuantizedLinearMLX`.
+    """
 
     weight_int8: Tensor
     weight_scale: Tensor

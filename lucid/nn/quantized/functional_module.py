@@ -61,7 +61,15 @@ class FloatFunctional(nn.Module):
 
 
 class QFunctional(nn.Module):
-    """Quantized merge ops — fake-quantizes each result to the calibrated grid."""
+    """Quantized element-wise merges — each result fake-quantized to one grid.
+
+    The converted form of :class:`FloatFunctional`, produced by ``convert``.  It
+    exposes the same ``add`` / ``mul`` / ``cat`` / ``add_relu`` / ``*_scalar``
+    methods, but each fake-quantizes its output to the ``(scale, zero_point)``
+    the :class:`FloatFunctional` observed during calibration — so a residual add
+    or concat is requantized to a single consistent grid rather than left at
+    full precision.
+    """
 
     scale: Tensor
     zero_point: Tensor
