@@ -15,6 +15,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] — 2026-07-06
+
+### Added — Torch-grade quantization subsystem (PTQ · dynamic · QAT · graph-mode)
+
+A complete `lucid.quantization` stack lands, matching the reference framework's
+`nn.quantized` / `nn.qat` / `nn.intrinsic` surface and **accelerated end-to-end**:
+
+- **Weight-only int4/int8 acceleration through `convert()`.** `QuantizedLinearMLX`
+  runs MLX's genuine group-wise low-precision GEMM (`quantized_matmul`) on Metal —
+  ~2.5–3.2× faster decode + ~3.55× smaller weights — and is *device-transparent*
+  (the GEMM runs on Metal, the result returns to the input's device), so it
+  accelerates inside an otherwise-CPU model. Wired into `convert` /
+  `quantize_dynamic` when the MLX backend is active; the dequantize-to-float path
+  stays the reference-accurate default.
+- **`QFunctional`** (quantized `add` / `mul` / `cat` / `add_relu`) — residual
+  skip-adds and Transformer residuals now quantize end-to-end (ResNet / BERT).
+- **Full observer suite** — `FixedQParamsObserver`,
+  `MovingAveragePerChannelMinMaxObserver`, `PlaceholderObserver`, `NoopObserver`,
+  alongside the existing min/max, moving-average, per-channel, and histogram observers.
+- **QAT & fusion completeness** — rank-generic `ConvBn{1,2,3}d` /
+  `ConvBnReLU{1,2,3}d` (BN folded in-forward so BN keeps training under the STE),
+  QAT fused `ConvReLU{1,2,3}d` / `LinearReLU` / `Embedding`, and `fuse_modules_qat`.
+- **Quantized module breadth** — `ConvTranspose{1,2,3}d`, `EmbeddingBag`
+  (sum/mean/max), and quantized activations (`Sigmoid` / `Hardswish` /
+  `Hardsigmoid` / `Tanh` / `ELU` / `LeakyReLU`).
+- **Dynamic quantization** — `dynamic.Linear` + `dynamic.LSTM` (int8 weights,
+  runtime activation quant, calibration-free) for Linear-/RNN-heavy inference.
+- **Calibration safety** — `convert` / `prepare` / `quantize_dynamic` now warn on an
+  uncalibrated observer or a zero-match `QConfigMapping` instead of silently
+  collapsing to a `scale = eps` degenerate grid.
+
+### Fixed — quantization correctness (EmbeddingBag kernels, Parameter deepcopy)
+
+- **`EmbeddingBag` CPU kernel** read indices as int32 (the default is int64) and
+  seeded `max` pooling with `0` (masking all-negative bags) — both fixed with a
+  dtype-aware index read, a `lowest()` seed, and an empty-bag → `0` guard.
+- **`EmbeddingBag` GPU kernel** was rewritten scatter-free (segment one-hot →
+  matmul for sum/mean, masked-max for max) after an MLX `scatter_add` rank mismatch.
+- **`Parameter` now survives `deepcopy`** — `prepare` / QAT deep-copy no longer
+  demotes a `Parameter` to a plain tensor (via `Parameter.__deepcopy__`); the
+  quantized `_C.engine` type stub also gained its typed `quantized` submodule.
+
+### Documentation — NumPy-format docstrings across the quantization surface
+
+Every public class / function in `lucid.quantization`, `nn.quantized`, `nn.qat`, and
+`nn.intrinsic` now carries a full NumPy-style docstring (Parameters / Returns /
+Notes / Examples) that renders as per-parameter cards on the docs site — the
+observer suite, `QConfig` mapping, `QuantizedLinearMLX`, the dynamic modules, and
+the low-precision `_qgemm` GEMM wrappers included.
+
 ### Fixed — degenerate matmul crashes, integer remainder, integer cumsum overflow
 
 A batch of small correctness/stability fixes surfaced by an audit:

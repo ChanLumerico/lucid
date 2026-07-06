@@ -20,7 +20,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lucid-dl"
-version = "3.5.1"
+version = "3.6.0"
 description = "Apple Silicon ML framework"
 readme = "README.md"
 license = "MIT"
