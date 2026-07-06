@@ -118,11 +118,19 @@
     },
     {
       "kind": "module",
+      "module": "lucid.compile._core.attention_probe"
+    },
+    {
+      "kind": "module",
       "module": "lucid.compile._core.bn_runstats"
     },
     {
       "kind": "module",
       "module": "lucid.compile._debug.diagnose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.compile._entry.decode_step"
     },
     {
       "kind": "module",
@@ -135,6 +143,10 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.compile._entry.segmented_step"
     },
     {
       "kind": "module",
@@ -286,6 +298,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.quantization._qgemm"
+    },
+    {
+      "kind": "module",
       "module": "lucid.serialization"
     },
     {
@@ -345,6 +361,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._functional"
     },
     {
       "kind": "module",
@@ -478,6 +498,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.compile._entry.decode_step"
+    },
+    {
+      "kind": "module",
       "module": "lucid.compile._entry.function"
     },
     {
@@ -487,6 +511,10 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.compile._entry.segmented_step"
     },
     {
       "kind": "module",
@@ -538,6 +566,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.compile._entry.segmented_step"
+    },
+    {
+      "kind": "module",
       "module": "lucid.compile._entry.step"
     },
     {
@@ -561,6 +593,10 @@
     {
       "kind": "module",
       "module": "lucid.autograd.checkpoint"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.compile._entry.segmented_step"
     },
     {
       "kind": "module",
@@ -602,6 +638,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.compile._entry.decode_step"
+    },
+    {
+      "kind": "module",
       "module": "lucid.compile._entry.function"
     },
     {
@@ -611,6 +651,10 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.compile._entry.segmented_step"
     },
     {
       "kind": "module",
@@ -3618,10 +3662,6 @@
     }
   ],
   "lucid.models.text.transformer._model.TransformerForSeq2SeqLM": [
-    {
-      "kind": "module",
-      "module": "lucid.models._utils._compiled_decode"
-    },
     {
       "kind": "module",
       "module": "lucid.models.text.transformer"
@@ -8332,6 +8372,10 @@
   "lucid.nn": [
     {
       "kind": "module",
+      "module": "lucid.compile._entry.segmented_step"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models._base"
     },
     {
@@ -8345,10 +8389,6 @@
     {
       "kind": "module",
       "module": "lucid.models._utils._classification"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models._utils._compiled_decode"
     },
     {
       "kind": "module",
@@ -8560,7 +8600,99 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.intrinsic.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic.qat.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.activation"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv_transpose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.rnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.functional_module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.intrinsic"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.mlx_linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.sparse"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.utils.skip_init"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._fake_quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize_fx"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.fuse_modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.observer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.qconfig"
     },
     {
       "kind": "module",
@@ -8568,6 +8700,10 @@
     }
   ],
   "lucid.nn.functional": [
+    {
+      "kind": "module",
+      "module": "lucid.compile._core.attention_probe"
+    },
     {
       "kind": "module",
       "module": "lucid.models._mixins"
@@ -8798,7 +8934,59 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.intrinsic.qat.modules"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.modules.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.activation"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv_transpose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.functional_module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.intrinsic"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.mlx_linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.sparse"
     },
     {
       "kind": "module",
@@ -9203,6 +9391,16 @@
     {
       "kind": "module",
       "module": "lucid.nn.functional"
+    }
+  ],
+  "lucid.nn.functional.attention.repeat_kv": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.attention"
     }
   ],
   "lucid.nn.functional.attention.scaled_dot_product_attention": [
@@ -10071,6 +10269,40 @@
       "module": "lucid.nn.modules.sparse"
     }
   ],
+  "lucid.nn.intrinsic": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.fuse_modules"
+    }
+  ],
+  "lucid.nn.intrinsic.modules.ConvReLU1d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic"
+    }
+  ],
+  "lucid.nn.intrinsic.modules.ConvReLU2d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic"
+    }
+  ],
+  "lucid.nn.intrinsic.modules.ConvReLU3d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic"
+    }
+  ],
+  "lucid.nn.intrinsic.modules.LinearReLU": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic"
+    }
+  ],
   "lucid.nn.module.Module": [
     {
       "kind": "module",
@@ -10099,6 +10331,10 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.compile._entry.segmented_step"
     },
     {
       "kind": "module",
@@ -10384,6 +10620,18 @@
     }
   ],
   "lucid.nn.modules.activation.Threshold": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules"
+    }
+  ],
+  "lucid.nn.modules.attention.GroupedQueryAttention": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules"
+    }
+  ],
+  "lucid.nn.modules.attention.MultiQueryAttention": [
     {
       "kind": "module",
       "module": "lucid.nn.modules"
@@ -11266,6 +11514,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.rnn"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.utils.clip_grad"
     },
     {
@@ -11311,6 +11567,258 @@
     {
       "kind": "module",
       "module": "lucid.optim.sgd"
+    }
+  ],
+  "lucid.nn.qat": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    }
+  ],
+  "lucid.nn.qat.conv.Conv1d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.conv.Conv2d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.conv.Conv3d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.conv.ConvReLU1d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.conv.ConvReLU2d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.conv.ConvReLU3d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.linear.Linear": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.linear.LinearReLU": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.qat.sparse.Embedding": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat"
+    }
+  ],
+  "lucid.nn.quantized": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic.qat.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize_fx"
+    }
+  ],
+  "lucid.nn.quantized.activation.ELU": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.activation.Hardsigmoid": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.activation.Hardswish": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.activation.LeakyReLU": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.activation.Sigmoid": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.activation.Tanh": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.conv.Conv1d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.intrinsic"
+    }
+  ],
+  "lucid.nn.quantized.conv.Conv2d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.intrinsic"
+    }
+  ],
+  "lucid.nn.quantized.conv.Conv3d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.intrinsic"
+    }
+  ],
+  "lucid.nn.quantized.conv_transpose.ConvTranspose1d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.conv_transpose.ConvTranspose2d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.conv_transpose.ConvTranspose3d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.functional_module.FloatFunctional": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.functional_module.QFunctional": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.intrinsic.ConvReLU1d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.intrinsic.ConvReLU2d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.intrinsic.ConvReLU3d": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.intrinsic.LinearReLU": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.linear.Linear": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.intrinsic"
+    }
+  ],
+  "lucid.nn.quantized.mlx_linear.QuantizedLinearMLX": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.modules.DeQuantStub": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.modules.DeQuantize": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.modules.QuantStub": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.modules.QuantWrapper": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.modules.Quantize": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.sparse.Embedding": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
+    }
+  ],
+  "lucid.nn.quantized.sparse.EmbeddingBag": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized"
     }
   ],
   "lucid.nn.utils": [
@@ -11359,6 +11867,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.fuse_modules"
     }
   ],
   "lucid.nn.utils.fusion.fuse_conv_bn_weights": [
@@ -11761,6 +12273,476 @@
       "module": "lucid.autograd.profiler"
     }
   ],
+  "lucid.quantization._fake_quantize.FakeQuantize": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic.qat.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.qconfig"
+    }
+  ],
+  "lucid.quantization._functional.dequantize": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv_transpose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.rnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization._functional.fake_quantize": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.activation"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv_transpose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.functional_module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._fake_quantize"
+    }
+  ],
+  "lucid.quantization._functional.quantize": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic.qat.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv_transpose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.rnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization._qparams.QParams": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization._qparams.calculate_qparams": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.observer"
+    }
+  ],
+  "lucid.quantization._qscheme.QDtype": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.activation"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv_transpose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.rnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.functional_module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._fake_quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._qparams"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.observer"
+    }
+  ],
+  "lucid.quantization._qscheme.QScheme": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._fake_quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._qparams"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.observer"
+    }
+  ],
+  "lucid.quantization._quantize.convert": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize_fx"
+    }
+  ],
+  "lucid.quantization._quantize.prepare": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize_fx"
+    }
+  ],
+  "lucid.quantization._quantize.prepare_qat": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization._quantize.quantize_dynamic": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization._quantize_fx.convert_fx": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization._quantize_fx.prepare_fx": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.fuse_modules.fuse_modules": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.fuse_modules.fuse_modules_qat": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.observer.FixedQParamsObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.observer.HistogramObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.qconfig"
+    }
+  ],
+  "lucid.quantization.observer.MinMaxObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.observer.MovingAverageMinMaxObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._fake_quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.qconfig"
+    }
+  ],
+  "lucid.quantization.observer.MovingAveragePerChannelMinMaxObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.observer.NoopObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.observer.ObserverBase": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._fake_quantize"
+    }
+  ],
+  "lucid.quantization.observer.PerChannelMinMaxObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv_transpose"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.rnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.qconfig"
+    }
+  ],
+  "lucid.quantization.observer.PlaceholderObserver": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.qconfig.QConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.intrinsic.qat.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.qat.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize_fx"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization.fuse_modules"
+    }
+  ],
+  "lucid.quantization.qconfig.QConfigMapping": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize_fx"
+    }
+  ],
+  "lucid.quantization.qconfig.get_default_qat_qconfig": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.qconfig.get_default_qat_qconfig_mapping": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    }
+  ],
+  "lucid.quantization.qconfig.get_default_qconfig": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    }
+  ],
+  "lucid.quantization.qconfig.get_default_qconfig_mapping": [
+    {
+      "kind": "module",
+      "module": "lucid.quantization"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.quantization._quantize"
+    }
+  ],
   "lucid.serialization": [
     {
       "kind": "module",
@@ -11796,15 +12778,15 @@
   "lucid.utils.cache": [
     {
       "kind": "module",
+      "module": "lucid.compile._entry.decode_step"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models._mixins"
     },
     {
       "kind": "module",
       "module": "lucid.models._output"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models._utils._compiled_decode"
     },
     {
       "kind": "module",

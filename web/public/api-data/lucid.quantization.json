@@ -1,0 +1,2150 @@
+{
+  "slug": "lucid.quantization",
+  "name": "quantization",
+  "path": "lucid.quantization",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/__init__.py#L1",
+  "members": [
+    {
+      "name": "dequantize",
+      "path": "lucid.quantization._functional.dequantize",
+      "kind": "function",
+      "labels": [],
+      "signature": "dequantize(q: Tensor, scale: _ScaleLike, zero_point: _ZeroPointLike, ch_axis: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_functional.py#L100",
+      "subcategory": "functional",
+      "summary": "Invert `quantize`: $\\hat{x} = (q - z)\\,s$ in `float32`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "q",
+          "annotation": "Tensor",
+          "description": "Integer codes.",
+          "default": null
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor or float",
+          "description": "Quantization step used to produce `q`.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor, float, or int",
+          "description": "Zero-point used to produce `q`.",
+          "default": null
+        },
+        {
+          "name": "ch_axis",
+          "annotation": "int",
+          "description": "Channel axis for per-channel; `None` for per-tensor.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Reconstructed `float32` approximation of the original tensor."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fake_quantize",
+      "path": "lucid.quantization._functional.fake_quantize",
+      "kind": "function",
+      "labels": [],
+      "signature": "fake_quantize(x: Tensor, scale: _ScaleLike, zero_point: _ZeroPointLike, quant_min: int, quant_max: int, ch_axis: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_functional.py#L179",
+      "subcategory": "functional",
+      "summary": "Simulate quantization in the float domain with a straight-through grad.",
+      "extended": "Returns $\\hat{x} = \\text{dequantize}(\\text{quantize}(x))$ as a\n`float32` tensor.  The backward pass is the straight-through\nestimator — identity where the code lands in `[quant_min,\nquant_max]` and zero where it saturates — so `fake_quantize` is\ndifferentiable and usable inside quantization-aware training.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Real-valued input (may require grad).",
+          "default": null
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor or float",
+          "description": "Quantization step.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor, float, or int",
+          "description": "Zero-point offset.",
+          "default": null
+        },
+        {
+          "name": "quant_min",
+          "annotation": "int",
+          "description": "Inclusive integer grid bounds.",
+          "default": null
+        },
+        {
+          "name": "quant_max",
+          "annotation": "int",
+          "description": "Inclusive integer grid bounds.",
+          "default": null
+        },
+        {
+          "name": "ch_axis",
+          "annotation": "int",
+          "description": "Channel axis for per-channel; `None` for per-tensor.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Fake-quantized `float32` tensor with STE gradient."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "quantize",
+      "path": "lucid.quantization._functional.quantize",
+      "kind": "function",
+      "labels": [],
+      "signature": "quantize(x: Tensor, scale: _ScaleLike, zero_point: _ZeroPointLike, qdtype: QDtype, ch_axis: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_functional.py#L57",
+      "subcategory": "functional",
+      "summary": "Map a real tensor to integer codes stored in `qdtype.storage`.",
+      "extended": "Computes $q = \\operatorname{clip}(\\operatorname{round}(x/s)+z, q_\\min, q_\\max)$ in the float domain, then casts to the integer\nstorage dtype.",
+      "parameters": [
+        {
+          "name": "x",
+          "annotation": "Tensor",
+          "description": "Real-valued input.",
+          "default": null
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor or float",
+          "description": "Quantization step `s`.  A length-`C` tensor for per-channel.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor, float, or int",
+          "description": "Integer offset `z` mapping real 0 to a code.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target grid — supplies `quant_min` / `quant_max` / `storage`.",
+          "default": null
+        },
+        {
+          "name": "ch_axis",
+          "annotation": "int",
+          "description": "Channel axis for per-channel quantization; `None` for per-tensor.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Integer codes with dtype `getattr(lucid, qdtype.storage)`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "QParams",
+      "path": "lucid.quantization._qparams.QParams",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [],
+      "labels": [],
+      "signature": "QParams(scale: Tensor, zero_point: Tensor, qscheme: QScheme, qdtype: QDtype, ch_axis: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qparams.py#L22",
+      "subcategory": "qparams",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization._qparams.QParams.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(scale: Tensor, zero_point: Tensor, qscheme: QScheme, qdtype: QDtype, ch_axis: int | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qparams.py#L1",
+          "subcategory": "qparams",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Immutable bundle of the parameters that define a quantized tensor.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Quantization step; scalar for per-tensor, length-`C` for\nper-channel.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Integer offset (stored as an integer-valued float tensor).",
+          "default": null
+        },
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "The mapping family.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "The target integer grid.",
+          "default": null
+        },
+        {
+          "name": "ch_axis",
+          "annotation": "int",
+          "description": "Channel axis for per-channel schemes; `None` for per-tensor.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "calculate_qparams",
+      "path": "lucid.quantization._qparams.calculate_qparams",
+      "kind": "function",
+      "labels": [],
+      "signature": "calculate_qparams(min_val: _RangeLike, max_val: _RangeLike, qscheme: QScheme, qdtype: QDtype, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qparams.py#L48",
+      "subcategory": "qparams",
+      "summary": "Derive `(scale, zero_point)` from an observed value range.",
+      "extended": "Implements the standard affine / symmetric calibration.  The observed\nrange is first extended to include zero (so real 0 is always\nrepresentable), then:\n\n* **affine** — $s = (\\max - \\min)/(q_\\max - q_\\min)$,\n  $z = \\operatorname{clip}(q_\\min - \\operatorname{round}(\\min/s), q_\\min, q_\\max)$;\n* **symmetric** — $s = \\max(|\\min|, |\\max|) / ((q_\\max - q_\\min)/2)$ with `z` pinned to 0 (signed) or mid-range\n  (unsigned).\n\nWorks elementwise, so scalar `min_val` / `max_val` yield per-tensor\nparams and length-`C` inputs yield per-channel params.",
+      "parameters": [
+        {
+          "name": "min_val",
+          "annotation": "Tensor or float",
+          "description": "Observed minimum / maximum (per-tensor scalars or per-channel\nvectors).",
+          "default": null
+        },
+        {
+          "name": "max_val",
+          "annotation": "Tensor or float",
+          "description": "Observed minimum / maximum (per-tensor scalars or per-channel\nvectors).",
+          "default": null
+        },
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "Mapping family.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target grid supplying `quant_min` / `quant_max`.",
+          "default": null
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Lower floor on `scale` to avoid division by zero on a degenerate\n(constant) range.",
+          "default": "1e-8"
+        }
+      ],
+      "returns": {
+        "annotation": "(Tensor, Tensor)",
+        "description": "`scale` and `zero_point` tensors."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "QDtype",
+      "path": "lucid.quantization._qscheme.QDtype",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [],
+      "labels": [],
+      "signature": "QDtype(name: str, bits: int, signed: bool, quant_min: int, quant_max: int, storage: str)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qscheme.py#L69",
+      "subcategory": "qscheme",
+      "methods": [
+        {
+          "name": "__repr__",
+          "path": "lucid.quantization._qscheme.QDtype.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qscheme.py#L102",
+          "subcategory": "qscheme",
+          "summary": "Return `\"lucid.quantization.<name>\"`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.quantization._qscheme.QDtype.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(name: str, bits: int, signed: bool, quant_min: int, quant_max: int, storage: str)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qscheme.py#L1",
+          "subcategory": "qscheme",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Descriptor for a quantized integer grid.",
+      "extended": "Unlike the reference framework, Lucid does not add quantized dtypes\nto the C++ engine enum; a `QDtype` is a pure-Python descriptor\nand the integer codes live in an ordinary `storage` dtype.  This\nkeeps the whole quantization subsystem off the engine's critical\npath until a real low-precision GEMM is wired in.",
+      "parameters": [
+        {
+          "name": "name",
+          "annotation": "str",
+          "description": "Canonical name (`\"qint8\"` …).",
+          "default": null
+        },
+        {
+          "name": "bits",
+          "annotation": "int",
+          "description": "Bit width of the grid.",
+          "default": null
+        },
+        {
+          "name": "signed",
+          "annotation": "bool",
+          "description": "Whether codes are signed.",
+          "default": null
+        },
+        {
+          "name": "quant_min",
+          "annotation": "int",
+          "description": "Inclusive representable integer range.",
+          "default": null
+        },
+        {
+          "name": "quant_max",
+          "annotation": "int",
+          "description": "Inclusive representable integer range.",
+          "default": null
+        },
+        {
+          "name": "storage",
+          "annotation": "str",
+          "description": "Name of the Lucid dtype that physically holds the codes.  `quint8`\nmaps to `int16` for now (the engine has no `uint8`); `qint4`\nmaps to `int8` (unpacked) until 4-bit packing lands.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "QScheme",
+      "path": "lucid.quantization._qscheme.QScheme",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Enum"
+      ],
+      "labels": [],
+      "signature": "QScheme()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qscheme.py#L25",
+      "subcategory": "qscheme",
+      "methods": [
+        {
+          "name": "is_per_channel",
+          "path": "lucid.quantization._qscheme.QScheme.is_per_channel",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "is_per_channel: bool",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qscheme.py#L51",
+          "summary": "Return `True` for the two per-channel schemes.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "bool",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "is_symmetric",
+          "path": "lucid.quantization._qscheme.QScheme.is_symmetric",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "is_symmetric: bool",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_qscheme.py#L56",
+          "summary": "Return `True` when `zero_point` is pinned (symmetric schemes).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "bool",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "How `scale` / `zero_point` map real values onto the integer grid.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "PER_TENSOR_AFFINE\n    One `(scale, zero_point)` for the whole tensor; `zero_point`\n    is free, so asymmetric ranges (e.g. post-ReLU activations) map\n    without wasting codes.\nPER_TENSOR_SYMMETRIC\n    One `scale` for the whole tensor with `zero_point` pinned\n    (0 for signed, mid-range for unsigned); real 0 maps exactly to\n    an integer code.\nPER_CHANNEL_AFFINE\n    One `(scale, zero_point)` per channel along a chosen axis.\nPER_CHANNEL_SYMMETRIC\n    One `scale` per channel with pinned `zero_point` — the usual\n    choice for convolution / linear weights."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "FakeQuantize",
+      "path": "lucid.quantization._fake_quantize.FakeQuantize",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Module"
+      ],
+      "labels": [],
+      "signature": "FakeQuantize(observer: type[ObserverBase] = MovingAverageMinMaxObserver, observer_kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L29",
+      "subcategory": "fake_quantize",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(observer: type[ObserverBase] = MovingAverageMinMaxObserver, observer_kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L44",
+          "subcategory": "fake_quantize",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L59",
+          "subcategory": "fake_quantize",
+          "summary": "Refresh qparams (if observing) then fake-quantize (if enabled).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "enable_observer",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.enable_observer",
+          "kind": "function",
+          "labels": [],
+          "signature": "enable_observer(enabled: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L78",
+          "subcategory": "fake_quantize",
+          "summary": "Enable/disable statistic collection; returns `self` for chaining.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "FakeQuantize",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "disable_observer",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.disable_observer",
+          "kind": "function",
+          "labels": [],
+          "signature": "disable_observer()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L83",
+          "subcategory": "fake_quantize",
+          "summary": "Freeze the observer (stop refreshing `scale` / `zero_point`).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "FakeQuantize",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "enable_fake_quant",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.enable_fake_quant",
+          "kind": "function",
+          "labels": [],
+          "signature": "enable_fake_quant(enabled: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L87",
+          "subcategory": "fake_quantize",
+          "summary": "Enable/disable the fake-quant transform; returns `self`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "FakeQuantize",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "disable_fake_quant",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.disable_fake_quant",
+          "kind": "function",
+          "labels": [],
+          "signature": "disable_fake_quant()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L92",
+          "subcategory": "fake_quantize",
+          "summary": "Pass activations through unchanged (observer may still run).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "FakeQuantize",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "calculate_qparams",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.calculate_qparams",
+          "kind": "function",
+          "labels": [],
+          "signature": "calculate_qparams()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L96",
+          "subcategory": "fake_quantize",
+          "summary": "Delegate to the wrapped observer.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "with_args",
+          "path": "lucid.quantization._fake_quantize.FakeQuantize.with_args",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "with_args(kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_fake_quantize.py#L100",
+          "subcategory": "fake_quantize",
+          "summary": "Return a zero-arg factory building this module with `kwargs`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "functools.partial[FakeQuantize]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Observer + straight-through fake-quantization, toggleable for QAT.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "observer",
+          "annotation": "type[ObserverBase]",
+          "description": "Observer class instantiated to track statistics.",
+          "default": "MovingAverageMinMaxObserver"
+        },
+        {
+          "name": "**observer_kwargs",
+          "annotation": "object",
+          "description": "Forwarded to the observer constructor (`qscheme` / `qdtype` /\n`ch_axis` / …).",
+          "default": "{}"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "FixedQParamsObserver",
+      "path": "lucid.quantization.observer.FixedQParamsObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ObserverBase"
+      ],
+      "labels": [],
+      "signature": "FixedQParamsObserver(scale: float, zero_point: int, qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L402",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.FixedQParamsObserver.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(scale: float, zero_point: int, qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L427",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization.observer.FixedQParamsObserver.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L439",
+          "subcategory": "observer",
+          "summary": "Identity — the qparams are fixed, so no statistics are gathered.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "calculate_qparams",
+          "path": "lucid.quantization.observer.FixedQParamsObserver.calculate_qparams",
+          "kind": "function",
+          "labels": [],
+          "signature": "calculate_qparams()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L444",
+          "subcategory": "observer",
+          "summary": "Return `(scale, zero_point)` from the accumulated statistics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Observer with a fixed `(scale, zero_point)` — no statistics collected.",
+      "extended": "For ops whose output range is known a priori (`sigmoid` → `[0, 1]`,\n`tanh` → `[-1, 1]`, `softmax` → `[0, 1]`): the grid is fixed, so\ncalibration would be wasted.  `forward` is the identity and\n`calculate_qparams` returns the constructor-supplied qparams verbatim.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "float",
+          "description": "The fixed quantization step size.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "int",
+          "description": "The fixed integer mapped to real value `0`.",
+          "default": null
+        },
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "Target quantization scheme (metadata only; qparams are fixed).",
+          "default": "per_tensor_affine"
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target quantized dtype.",
+          "default": "quint8"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Retained for interface symmetry; unused (the `scale` is fixed).",
+          "default": "1e-8"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "HistogramObserver",
+      "path": "lucid.quantization.observer.HistogramObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ObserverBase"
+      ],
+      "labels": [],
+      "signature": "HistogramObserver(bins: int = 2048, qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L224",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.HistogramObserver.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(bins: int = 2048, qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L239",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization.observer.HistogramObserver.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L271",
+          "subcategory": "observer",
+          "summary": "Update the running range and accumulate the histogram.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "calculate_qparams",
+          "path": "lucid.quantization.observer.HistogramObserver.calculate_qparams",
+          "kind": "function",
+          "labels": [],
+          "signature": "calculate_qparams()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L324",
+          "subcategory": "observer",
+          "summary": "Return `(scale, zero_point)` from the accumulated statistics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Per-tensor observer that records a value histogram and picks a clip range.",
+      "extended": "Accumulates a `bins`-bucket histogram (via the engine `histc`\nprimitive) over the running `[min, max]`, rebinning when the range\ngrows.  `calculate_qparams` then selects the `[new_min, new_max]`\nclip that minimises the expected L2 quantization error estimated from\nthe histogram — trading a little clipping for much finer resolution on\nheavy-tailed activations.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MinMaxObserver",
+      "path": "lucid.quantization.observer.MinMaxObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ObserverBase"
+      ],
+      "labels": [],
+      "signature": "MinMaxObserver(qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L85",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.MinMaxObserver.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L108",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization.observer.MinMaxObserver.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L118",
+          "subcategory": "observer",
+          "summary": "Fold `x`'s global min/max into the running statistics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "calculate_qparams",
+          "path": "lucid.quantization.observer.MinMaxObserver.calculate_qparams",
+          "kind": "function",
+          "labels": [],
+          "signature": "calculate_qparams()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L125",
+          "subcategory": "observer",
+          "summary": "Delegate to the wrapped observer.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Per-tensor observer tracking the global running min / max of the input.",
+      "extended": "The default activation / weight statistic: every batch's overall `min` /\n`max` is folded into a running range, from which `calculate_qparams`\nderives a single per-tensor `(scale, zero_point)`.  Simple and robust,\nthough sensitive to outliers — see `MovingAverageMinMaxObserver` and\n`HistogramObserver` for outlier-tolerant variants.",
+      "parameters": [
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "Target quantization scheme.",
+          "default": "per_tensor_affine"
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target quantized dtype.",
+          "default": "quint8"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Lower floor on the derived `scale` (avoids division by zero on a\nconstant input).",
+          "default": "1e-8"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MovingAverageMinMaxObserver",
+      "path": "lucid.quantization.observer.MovingAverageMinMaxObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "MinMaxObserver"
+      ],
+      "labels": [],
+      "signature": "MovingAverageMinMaxObserver(qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, averaging_constant: float = 0.01, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L132",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.MovingAverageMinMaxObserver.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, averaging_constant: float = 0.01, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L139",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization.observer.MovingAverageMinMaxObserver.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L149",
+          "subcategory": "observer",
+          "summary": "EMA-update the running min/max (seeded on the first batch).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Per-tensor observer with an exponential moving average of min / max.",
+      "extended": "Smooths the running range across calibration batches, which is more\nrobust to per-batch outliers than a hard running min/max.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MovingAveragePerChannelMinMaxObserver",
+      "path": "lucid.quantization.observer.MovingAveragePerChannelMinMaxObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PerChannelMinMaxObserver"
+      ],
+      "labels": [],
+      "signature": "MovingAveragePerChannelMinMaxObserver(ch_axis: int = 0, qscheme: QScheme = per_channel_symmetric, qdtype: QDtype = qint8, averaging_constant: float = 0.01, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L350",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.MovingAveragePerChannelMinMaxObserver.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(ch_axis: int = 0, qscheme: QScheme = per_channel_symmetric, qdtype: QDtype = qint8, averaging_constant: float = 0.01, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L371",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization.observer.MovingAveragePerChannelMinMaxObserver.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L382",
+          "subcategory": "observer",
+          "summary": "EMA-update the per-channel min/max (seeded on the first batch).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Per-channel observer with an EMA of the per-channel min / max.",
+      "extended": "The per-channel analogue of `MovingAverageMinMaxObserver` — smooths\neach channel's range across calibration batches (robust to per-batch\noutliers), which the reference framework ships as a distinct observer.",
+      "parameters": [
+        {
+          "name": "ch_axis",
+          "annotation": "int",
+          "description": "Axis quantized independently (output channels).",
+          "default": "0"
+        },
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "Target quantization scheme.",
+          "default": "per_channel_symmetric"
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target quantized dtype.",
+          "default": "qint8"
+        },
+        {
+          "name": "averaging_constant",
+          "annotation": "float",
+          "description": "EMA weight of each new batch's range; smaller is smoother / slower.",
+          "default": "0.01"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Lower floor on each derived `scale`.",
+          "default": "1e-8"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "NoopObserver",
+      "path": "lucid.quantization.observer.NoopObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PlaceholderObserver"
+      ],
+      "labels": [],
+      "signature": "NoopObserver(qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L487",
+      "subcategory": "observer",
+      "methods": [],
+      "summary": "A no-op `PlaceholderObserver` — pure identity, collects no stats.",
+      "extended": "Named alias the reference framework uses to mark tensors that should pass\nthrough the observed graph **without** any statistic gathering (e.g. an\nalready-quantized input, or a layer deliberately excluded from calibration).\nInherits the `qscheme` / `qdtype` / `eps` constructor of\n`PlaceholderObserver` unchanged.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ObserverBase",
+      "path": "lucid.quantization.observer.ObserverBase",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Module"
+      ],
+      "labels": [],
+      "signature": "ObserverBase(qscheme: QScheme, qdtype: QDtype, ch_axis: int | None = None, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L42",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.ObserverBase.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(qscheme: QScheme, qdtype: QDtype, ch_axis: int | None = None, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L57",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "calculate_qparams",
+          "path": "lucid.quantization.observer.ObserverBase.calculate_qparams",
+          "kind": "function",
+          "labels": [],
+          "signature": "calculate_qparams()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L70",
+          "subcategory": "observer",
+          "summary": "Return `(scale, zero_point)` from the accumulated statistics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "with_args",
+          "path": "lucid.quantization.observer.ObserverBase.with_args",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "with_args(kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L74",
+          "subcategory": "observer",
+          "summary": "Return a zero-arg factory that builds this observer with `kwargs`.",
+          "extended": "Mirrors the reference framework's `Observer.with_args` ergonomic so\na `lucid.quantization.QConfig` can carry an observer *recipe*\nrather than a live instance.",
+          "parameters": [],
+          "returns": {
+            "annotation": "functools.partial[ObserverBase]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Base class for statistics collectors that yield `(scale, zero_point)`.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "Target quantization scheme.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target quantized dtype.",
+          "default": null
+        },
+        {
+          "name": "ch_axis",
+          "annotation": "int",
+          "description": "Channel axis; forced to `None` for per-tensor schemes.",
+          "default": "None"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Lower floor on `scale` passed to `calculate_qparams`.",
+          "default": "1e-8"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PerChannelMinMaxObserver",
+      "path": "lucid.quantization.observer.PerChannelMinMaxObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ObserverBase"
+      ],
+      "labels": [],
+      "signature": "PerChannelMinMaxObserver(ch_axis: int = 0, qscheme: QScheme = per_channel_symmetric, qdtype: QDtype = qint8, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L167",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.PerChannelMinMaxObserver.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(ch_axis: int = 0, qscheme: QScheme = per_channel_symmetric, qdtype: QDtype = qint8, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L192",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization.observer.PerChannelMinMaxObserver.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L203",
+          "subcategory": "observer",
+          "summary": "Fold per-channel min/max (reduced over all non-channel axes).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "calculate_qparams",
+          "path": "lucid.quantization.observer.PerChannelMinMaxObserver.calculate_qparams",
+          "kind": "function",
+          "labels": [],
+          "signature": "calculate_qparams()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L217",
+          "subcategory": "observer",
+          "summary": "Return `(scale, zero_point)` from the accumulated statistics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Per-channel observer tracking a running min / max along `ch_axis`.",
+      "extended": "The standard **weight** observer: it keeps an independent `[min, max]` per\nchannel (reducing over every other axis), so `calculate_qparams`\nreturns a *vector* of `(scale, zero_point)` — one per output channel.\nPer-channel granularity is markedly more accurate than per-tensor for conv /\nlinear kernels whose channels differ in dynamic range.",
+      "parameters": [
+        {
+          "name": "ch_axis",
+          "annotation": "int",
+          "description": "Axis whose entries are quantized independently (output channels — axis 0\nfor conv / linear weights).",
+          "default": "0"
+        },
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "Target quantization scheme.",
+          "default": "per_channel_symmetric"
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target quantized dtype.",
+          "default": "qint8"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Lower floor on each derived `scale`.",
+          "default": "1e-8"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PlaceholderObserver",
+      "path": "lucid.quantization.observer.PlaceholderObserver",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ObserverBase"
+      ],
+      "labels": [],
+      "signature": "PlaceholderObserver(qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L449",
+      "subcategory": "observer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.observer.PlaceholderObserver.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(qscheme: QScheme = per_tensor_affine, qdtype: QDtype = quint8, eps: float = 1e-08)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L466",
+          "subcategory": "observer",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.quantization.observer.PlaceholderObserver.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L474",
+          "subcategory": "observer",
+          "summary": "Identity — no statistics are gathered.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "calculate_qparams",
+          "path": "lucid.quantization.observer.PlaceholderObserver.calculate_qparams",
+          "kind": "function",
+          "labels": [],
+          "signature": "calculate_qparams()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/observer.py#L479",
+          "subcategory": "observer",
+          "summary": "Return `(scale, zero_point)` from the accumulated statistics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Carries `qdtype` metadata but collects no statistics.",
+      "extended": "Used where activation qparams are produced at *runtime* (dynamic quant) or\ndeliberately absent — the observer only records the target dtype / scheme,\nso `calculate_qparams` raises rather than returning a range.",
+      "parameters": [
+        {
+          "name": "qscheme",
+          "annotation": "QScheme",
+          "description": "Target quantization scheme recorded for downstream consumers.",
+          "default": "per_tensor_affine"
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Target quantized dtype recorded for downstream consumers.",
+          "default": "quint8"
+        },
+        {
+          "name": "eps",
+          "annotation": "float",
+          "description": "Retained for interface symmetry; unused (no range is derived).",
+          "default": "1e-8"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "QConfig",
+      "path": "lucid.quantization.qconfig.QConfig",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "NamedTuple"
+      ],
+      "labels": [],
+      "signature": "QConfig()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L35",
+      "subcategory": "qconfig",
+      "methods": [],
+      "summary": "A pair of observer / fake-quant factories for activations and weights.",
+      "extended": "The atomic quantization recipe: `prepare` / `prepare_qat` call the two\nfactories to build a fresh observer (PTQ) or `FakeQuantize` (QAT) at\nevery insertion site.  A `QConfigMapping` then decides *which*\nQConfig applies to *which* module.  Both fields are zero-arg callables —\ntypically produced by `Observer.with_args(...)` /\n`FakeQuantize.with_args(...)` — so one recipe instantiates independent\nmodules across the whole network.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "activation",
+          "annotation": "Callable[..., nn.Module]",
+          "description": "Factory for the **activation** observer / fake-quant."
+        },
+        {
+          "name": "weight",
+          "annotation": "Callable[..., nn.Module]",
+          "description": "Factory for the **weight** observer / fake-quant."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "QConfigMapping",
+      "path": "lucid.quantization.qconfig.QConfigMapping",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "QConfigMapping()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L98",
+      "subcategory": "qconfig",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.quantization.qconfig.QConfigMapping.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L106",
+          "subcategory": "qconfig",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "set_global",
+          "path": "lucid.quantization.qconfig.QConfigMapping.set_global",
+          "kind": "function",
+          "labels": [],
+          "signature": "set_global(qconfig: QConfig | None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L111",
+          "subcategory": "qconfig",
+          "summary": "Set the fallback QConfig applied when nothing more specific matches.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "QConfigMapping",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "set_object_type",
+          "path": "lucid.quantization.qconfig.QConfigMapping.set_object_type",
+          "kind": "function",
+          "labels": [],
+          "signature": "set_object_type(module_type: type, qconfig: QConfig | None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L116",
+          "subcategory": "qconfig",
+          "summary": "Bind a QConfig to every module of `module_type`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "QConfigMapping",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "set_module_name",
+          "path": "lucid.quantization.qconfig.QConfigMapping.set_module_name",
+          "kind": "function",
+          "labels": [],
+          "signature": "set_module_name(name: str, qconfig: QConfig | None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L123",
+          "subcategory": "qconfig",
+          "summary": "Bind a QConfig to the module at the qualified `name`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "QConfigMapping",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get_qconfig",
+          "path": "lucid.quantization.qconfig.QConfigMapping.get_qconfig",
+          "kind": "function",
+          "labels": [],
+          "signature": "get_qconfig(module_type: type, module_name: str)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L128",
+          "subcategory": "qconfig",
+          "summary": "Return the QConfig for a module, most-specific match first.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "QConfig | None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Resolves which `QConfig` applies to each module.",
+      "extended": "Resolution order (most specific wins): qualified **module name** →\n**module type** → **global**.  Setters return `self` for fluent\nchaining, mirroring the reference framework.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "get_default_qat_qconfig",
+      "path": "lucid.quantization.qconfig.get_default_qat_qconfig",
+      "kind": "function",
+      "labels": [],
+      "signature": "get_default_qat_qconfig()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L76",
+      "subcategory": "qconfig",
+      "summary": "Default **QAT** config — the same schemes wrapped in `FakeQuantize`.",
+      "extended": "Activations use a moving-average per-tensor-affine `quint8` fake-quant;\nweights use a per-channel-symmetric `qint8` fake-quant so the training\ngraph simulates the eventual quantized inference numerics.",
+      "parameters": [],
+      "returns": {
+        "annotation": "QConfig",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "get_default_qat_qconfig_mapping",
+      "path": "lucid.quantization.qconfig.get_default_qat_qconfig_mapping",
+      "kind": "function",
+      "labels": [],
+      "signature": "get_default_qat_qconfig_mapping()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L152",
+      "subcategory": "qconfig",
+      "summary": "Build the default **QAT** `QConfigMapping`.",
+      "extended": "Sets `get_default_qat_qconfig` as the global fallback, so every\neligible module trains with `FakeQuantize` on its activations and\nweights unless overridden by type or name.",
+      "parameters": [],
+      "returns": {
+        "annotation": "QConfigMapping",
+        "description": "A mapping whose global QConfig is the default QAT config."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "get_default_qconfig",
+      "path": "lucid.quantization.qconfig.get_default_qconfig",
+      "kind": "function",
+      "labels": [],
+      "signature": "get_default_qconfig()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L58",
+      "subcategory": "qconfig",
+      "summary": "Default **static PTQ** config.",
+      "extended": "Activations use a per-tensor-affine `quint8` histogram observer\n(high accuracy on heavy-tailed activations); weights use a\nper-channel-symmetric `qint8` min/max observer — the standard,\naccuracy-preserving combination for convolution / linear layers.",
+      "parameters": [],
+      "returns": {
+        "annotation": "QConfig",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "get_default_qconfig_mapping",
+      "path": "lucid.quantization.qconfig.get_default_qconfig_mapping",
+      "kind": "function",
+      "labels": [],
+      "signature": "get_default_qconfig_mapping()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/qconfig.py#L137",
+      "subcategory": "qconfig",
+      "summary": "Build the default **static-PTQ** `QConfigMapping`.",
+      "extended": "Sets `get_default_qconfig` as the global fallback, so every eligible\nmodule is quantized with the standard histogram-activation /\nper-channel-weight recipe unless overridden by type or name.",
+      "parameters": [],
+      "returns": {
+        "annotation": "QConfigMapping",
+        "description": "A mapping whose global QConfig is the default PTQ config."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "convert",
+      "path": "lucid.quantization._quantize.convert",
+      "kind": "function",
+      "labels": [],
+      "signature": "convert(model: nn.Module, inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_quantize.py#L249",
+      "subcategory": "quantize",
+      "summary": "Swap calibrated float modules for their quantized replacements.",
+      "extended": "When `lucid.backends.quantized.use_mlx()` is true (the MLX quantized\nengine is present), Linear-family layers are routed to the real weight-only\n`quantized_matmul` GEMM — the genuine speed + memory win — instead of the\ndequantize-to-float path.  Set `backends.quantized.engine = \"reference\"`\nto force the exact W8A8 dequant numerics on every layer.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "A model previously returned by `prepare` and run through\ncalibration, so every quantizable submodule carries frozen activation\nqparams.",
+          "default": null
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Mutate `model` in place instead of deep-copying it before conversion.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": "The converted, evaluation-mode model with int8 weights baked in and its\nfloat submodules replaced by their quantized counterparts."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "prepare",
+      "path": "lucid.quantization._quantize.prepare",
+      "kind": "function",
+      "labels": [],
+      "signature": "prepare(model: nn.Module, qconfig: QConfig | QConfigMapping | None = None, inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_quantize.py#L204",
+      "subcategory": "quantize",
+      "summary": "Insert activation observers ahead of calibration.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Float model (with `QuantStub` / `DeQuantStub` boundaries).",
+          "default": null
+        },
+        {
+          "name": "qconfig",
+          "annotation": "QConfig or QConfigMapping",
+          "description": "Quantization recipe; defaults to `get_default_qconfig_mapping`.",
+          "default": "None"
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Mutate `model` in place instead of deep-copying it.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": "The prepared model — run calibration data through it, then\n`convert`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "prepare_qat",
+      "path": "lucid.quantization._quantize.prepare_qat",
+      "kind": "function",
+      "labels": [],
+      "signature": "prepare_qat(model: nn.Module, qconfig: QConfig | QConfigMapping | None = None, inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_quantize.py#L380",
+      "subcategory": "quantize",
+      "summary": "Insert fake-quant modules for quantization-aware training.",
+      "extended": "Swaps weighted layers for their `lucid.nn.qat` counterparts (weight +\noutput fake-quant) and attaches a fake-quant to every `QuantStub`.  The\nreturned model is left in `train` mode — fine-tune it, then\n`convert` to the int8 inference model.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Float model with `QuantStub` / `DeQuantStub` boundaries.",
+          "default": null
+        },
+        {
+          "name": "qconfig",
+          "annotation": "QConfig or QConfigMapping",
+          "description": "QAT recipe; defaults to `get_default_qat_qconfig_mapping`.",
+          "default": "None"
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Mutate in place instead of deep-copying.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "quantize_dynamic",
+      "path": "lucid.quantization._quantize.quantize_dynamic",
+      "kind": "function",
+      "labels": [],
+      "signature": "quantize_dynamic(model: nn.Module, qconfig_spec: set[type] | None = None, dtype: QDtype = qint8, inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_quantize.py#L300",
+      "subcategory": "quantize",
+      "summary": "Dynamically quantize a model — int8 weights, runtime-quantized activations.",
+      "extended": "Unlike static PTQ this needs **no calibration**: every module whose type\nis in `qconfig_spec` (default `{Linear, LSTM}`) is swapped for its\ndynamic counterpart, which measures the activation range per forward.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Float model.",
+          "default": null
+        },
+        {
+          "name": "qconfig_spec",
+          "annotation": "set of module types",
+          "description": "Which module types to quantize; defaults to `{nn.Linear, nn.LSTM}`.",
+          "default": "None"
+        },
+        {
+          "name": "dtype",
+          "annotation": "QDtype",
+          "description": "Weight quantized dtype.",
+          "default": "qint8"
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Mutate in place instead of deep-copying.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "convert_fx",
+      "path": "lucid.quantization._quantize_fx.convert_fx",
+      "kind": "function",
+      "labels": [],
+      "signature": "convert_fx(model: nn.Module, inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_quantize_fx.py#L61",
+      "subcategory": "quantize_fx",
+      "summary": "Graph-mode convert — bake a calibrated model into quantized modules.",
+      "extended": "The graph-mode counterpart of `lucid.quantization.convert`: it swaps\neach observed float module for its quantized inference equivalent, folding in\nthe calibrated qparams.  The result is a plain quantized model, ready to run\nor hand to `lucid.compile`.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "A model returned by `prepare_fx` and then calibrated.",
+          "default": null
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Mutate `model` in place instead of deep-copying it first.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": "The quantized model."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "prepare_fx",
+      "path": "lucid.quantization._quantize_fx.prepare_fx",
+      "kind": "function",
+      "labels": [],
+      "signature": "prepare_fx(model: nn.Module, qconfig_mapping: QConfig | QConfigMapping | None = None, example_inputs: Tensor | None = None, inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/_quantize_fx.py#L30",
+      "subcategory": "quantize_fx",
+      "summary": "Graph-mode prepare — auto-wrap quant boundaries and insert observers.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Float model (no manual `QuantStub` needed).",
+          "default": null
+        },
+        {
+          "name": "qconfig_mapping",
+          "annotation": "QConfig or QConfigMapping",
+          "description": "Quantization recipe; defaults to the static-PTQ default.",
+          "default": "None"
+        },
+        {
+          "name": "example_inputs",
+          "annotation": "Tensor",
+          "description": "Reserved for future trace-time insertion; unused on the composite path.",
+          "default": "None"
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Mutate in place instead of deep-copying.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": "Prepared model — calibrate, then `convert_fx`."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fuse_modules",
+      "path": "lucid.quantization.fuse_modules.fuse_modules",
+      "kind": "function",
+      "labels": [],
+      "signature": "fuse_modules(model: nn.Module, modules_to_fuse: Sequence[Sequence[str]], inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/fuse_modules.py#L92",
+      "subcategory": "fuse_modules",
+      "summary": "Fuse the given groups of modules for quantization.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Model to fuse (put in `eval` mode — BN folding is eval-time).",
+          "default": null
+        },
+        {
+          "name": "modules_to_fuse",
+          "annotation": "sequence of name groups",
+          "description": "Each group is a list of dotted module names to fuse, e.g.\n`[[\"conv1\", \"bn1\"], [\"layer1.0.conv1\", \"layer1.0.bn1\"]]`.  Supported\nruns: `[Conv, BN]`, `[Conv, BN, ReLU]`, `[Conv, ReLU]`,\n`[Linear, ReLU]`.",
+          "default": null
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Fuse in place instead of on a deep copy.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": "The fused model."
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "fuse_modules_qat",
+      "path": "lucid.quantization.fuse_modules.fuse_modules_qat",
+      "kind": "function",
+      "labels": [],
+      "signature": "fuse_modules_qat(model: nn.Module, modules_to_fuse: Sequence[Sequence[str]], qconfig: QConfig, inplace: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/quantization/fuse_modules.py#L156",
+      "subcategory": "fuse_modules",
+      "summary": "Fuse for **QAT** — Conv+BN runs become trainable `nn.intrinsic.qat` modules.",
+      "extended": "Unlike `fuse_modules` (which eval-folds BN into the conv weight),\na `[Conv, BN]` / `[Conv, BN, ReLU]` run becomes a trainable\n`ConvBn*` / `ConvBnReLU*` that folds BN **per forward** so the BN\nparameters keep training under the straight-through estimator.  `[Conv,\nReLU]` / `[Linear, ReLU]` (no BN) become the plain intrinsic fused\nmodule, which `prepare_qat` then swaps to its QAT form.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Model to fuse (kept trainable).",
+          "default": null
+        },
+        {
+          "name": "modules_to_fuse",
+          "annotation": "sequence of name groups",
+          "description": "As in `fuse_modules`.",
+          "default": null
+        },
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "QAT recipe supplied to the fused `ConvBn*` modules (they fake-quant\nat construction, so the qconfig is needed here rather than later).",
+          "default": null
+        },
+        {
+          "name": "inplace",
+          "annotation": "bool",
+          "description": "Fuse in place instead of on a deep copy.",
+          "default": "False"
+        }
+      ],
+      "returns": {
+        "annotation": "nn.Module",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "`lucid.quantization` — post-training quantization, QAT, and quantized inference.",
+  "extended": "This sub-package brings weights and activations from `float32` down to\nlow-precision integer grids (int8 / int4), the top capability lever for\ninference and serving on Apple Silicon.  It mirrors the reference\nframework's quantization surface while keeping a single canonical path\nper name (H8): the *workflow* API lives here (observers, `QConfig`,\n`prepare` / `convert` / `quantize_dynamic` / `prepare_qat`), and\nthe quantized *module* layer lives under `lucid.nn.quantized` /\n`lucid.nn.qat` / `lucid.nn.intrinsic`.\n\nRepresentation follows the *sidecar* design (B): a quantized weight is an\nordinary integer `lucid.Tensor` plus float `scale` /\n`zero_point` buffers held by the owning module — no dedicated quantized\ntensor subtype and no new engine dtype.\n\n**Phase 0 surface (this commit):** the schemes / dtypes / parameter\ncontainer and the three arithmetic primitives (`quantize`,\n`dequantize`, `fake_quantize`).  Observers, `QConfig`, the\neager / dynamic / graph workflows, and the real low-precision GEMM land\nin later phases.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

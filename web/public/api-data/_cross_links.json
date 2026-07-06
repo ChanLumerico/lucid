@@ -172,6 +172,18 @@
         "kind": "backward_node"
       }
     ],
+    "lucid.nn.qat.Conv1d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.Conv1d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
     "lucid.nn.functional.conv1d": [
       {
         "name": "ConvNdBackward",
@@ -183,6 +195,18 @@
       }
     ],
     "lucid.nn.Conv2d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.qat.Conv2d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.Conv2d": [
       {
         "name": "ConvNdBackward",
         "kind": "backward_node"
@@ -204,6 +228,18 @@
         "kind": "backward_node"
       }
     ],
+    "lucid.nn.qat.Conv3d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.Conv3d": [
+      {
+        "name": "ConvNdBackward",
+        "kind": "backward_node"
+      }
+    ],
     "lucid.nn.functional.conv3d": [
       {
         "name": "ConvNdBackward",
@@ -215,6 +251,12 @@
       }
     ],
     "lucid.nn.ConvTranspose1d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.ConvTranspose1d": [
       {
         "name": "ConvTransposeNdBackward",
         "kind": "backward_node"
@@ -236,6 +278,12 @@
         "kind": "backward_node"
       }
     ],
+    "lucid.nn.quantized.ConvTranspose2d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      }
+    ],
     "lucid.nn.functional.conv_transpose2d": [
       {
         "name": "ConvTransposeNdBackward",
@@ -247,6 +295,12 @@
       }
     ],
     "lucid.nn.ConvTranspose3d": [
+      {
+        "name": "ConvTransposeNdBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.ConvTranspose3d": [
       {
         "name": "ConvTransposeNdBackward",
         "kind": "backward_node"
@@ -375,6 +429,18 @@
       }
     ],
     "lucid.nn.Embedding": [
+      {
+        "name": "EmbeddingBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.qat.Embedding": [
+      {
+        "name": "EmbeddingBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.Embedding": [
       {
         "name": "EmbeddingBackward",
         "kind": "backward_node"
@@ -519,6 +585,18 @@
       }
     ],
     "lucid.nn.Linear": [
+      {
+        "name": "LinearBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.qat.Linear": [
+      {
+        "name": "LinearBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.Linear": [
       {
         "name": "LinearBackward",
         "kind": "backward_node"
@@ -872,6 +950,12 @@
         "kind": "backward_node"
       }
     ],
+    "lucid.nn.quantized.Sigmoid": [
+      {
+        "name": "SigmoidBackward",
+        "kind": "backward_node"
+      }
+    ],
     "lucid.nn.functional.sigmoid": [
       {
         "name": "SigmoidBackward",
@@ -1035,6 +1119,12 @@
       }
     ],
     "lucid.nn.Tanh": [
+      {
+        "name": "TanhBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.quantized.Tanh": [
       {
         "name": "TanhBackward",
         "kind": "backward_node"
@@ -2176,6 +2266,16 @@
         "kind": "class"
       },
       {
+        "path": "lucid.nn.qat.Conv1d",
+        "module": "lucid.nn.qat",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.quantized.Conv1d",
+        "module": "lucid.nn.quantized",
+        "kind": "class"
+      },
+      {
         "path": "lucid.nn.functional.conv1d",
         "module": "lucid.nn.functional",
         "kind": "function"
@@ -2186,6 +2286,16 @@
         "kind": "class"
       },
       {
+        "path": "lucid.nn.qat.Conv2d",
+        "module": "lucid.nn.qat",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.quantized.Conv2d",
+        "module": "lucid.nn.quantized",
+        "kind": "class"
+      },
+      {
         "path": "lucid.nn.functional.conv2d",
         "module": "lucid.nn.functional",
         "kind": "function"
@@ -2193,6 +2303,16 @@
       {
         "path": "lucid.nn.Conv3d",
         "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.qat.Conv3d",
+        "module": "lucid.nn.qat",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.quantized.Conv3d",
+        "module": "lucid.nn.quantized",
         "kind": "class"
       },
       {
@@ -2208,6 +2328,11 @@
         "kind": "class"
       },
       {
+        "path": "lucid.nn.quantized.ConvTranspose1d",
+        "module": "lucid.nn.quantized",
+        "kind": "class"
+      },
+      {
         "path": "lucid.nn.functional.conv_transpose1d",
         "module": "lucid.nn.functional",
         "kind": "function"
@@ -2218,6 +2343,11 @@
         "kind": "class"
       },
       {
+        "path": "lucid.nn.quantized.ConvTranspose2d",
+        "module": "lucid.nn.quantized",
+        "kind": "class"
+      },
+      {
         "path": "lucid.nn.functional.conv_transpose2d",
         "module": "lucid.nn.functional",
         "kind": "function"
@@ -2225,6 +2355,11 @@
       {
         "path": "lucid.nn.ConvTranspose3d",
         "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.quantized.ConvTranspose3d",
+        "module": "lucid.nn.quantized",
         "kind": "class"
       },
       {
@@ -2323,6 +2458,16 @@
       {
         "path": "lucid.nn.Embedding",
         "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.qat.Embedding",
+        "module": "lucid.nn.qat",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.quantized.Embedding",
+        "module": "lucid.nn.quantized",
         "kind": "class"
       },
       {
@@ -2427,6 +2572,16 @@
       {
         "path": "lucid.nn.Linear",
         "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.qat.Linear",
+        "module": "lucid.nn.qat",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.quantized.Linear",
+        "module": "lucid.nn.quantized",
         "kind": "class"
       },
       {
@@ -2676,6 +2831,11 @@
         "kind": "class"
       },
       {
+        "path": "lucid.nn.quantized.Sigmoid",
+        "module": "lucid.nn.quantized",
+        "kind": "class"
+      },
+      {
         "path": "lucid.nn.functional.sigmoid",
         "module": "lucid.nn.functional",
         "kind": "function"
@@ -2789,6 +2949,11 @@
       {
         "path": "lucid.nn.Tanh",
         "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.quantized.Tanh",
+        "module": "lucid.nn.quantized",
         "kind": "class"
       },
       {

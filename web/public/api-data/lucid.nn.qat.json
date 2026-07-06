@@ -1,0 +1,1053 @@
+{
+  "slug": "lucid.nn.qat",
+  "name": "qat",
+  "path": "lucid.nn.qat",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/__init__.py#L1",
+  "members": [
+    {
+      "name": "Conv1d",
+      "path": "lucid.nn.qat.conv.Conv1d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Conv1d"
+      ],
+      "labels": [],
+      "signature": "Conv1d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L46",
+      "subcategory": "conv",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.qat.conv.Conv1d.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L77",
+          "subcategory": "conv",
+          "summary": "Initialise the Conv1d module. See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.conv.Conv1d.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L87",
+          "subcategory": "conv",
+          "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.conv.Conv1d.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L95",
+          "subcategory": "conv",
+          "summary": "Quantize a calibrated float convolution module.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Conv1d",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware 1-D convolution (trainable float kernel, fake-quant).",
+      "extended": "A trainable float `lucid.nn.Conv1d` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), so the\nnetwork adapts its weights to the eventual int8 grid while still training in full\nprecision.  Inserted in place of a float conv by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` later\nbakes the trained kernel and the observed qparams into an inference\n`lucid.nn.quantized.Conv1d`.",
+      "parameters": [
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        },
+        {
+          "name": "*args",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv1d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "default": "()"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv1d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "default": "()"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The weight fake-quant rounds the kernel while the STE passes gradients straight\nthrough, keeping the layer fully differentiable.  String padding (`\"same\"` /\n`\"valid\"`) is deferred, matching the quantized conv."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Conv2d",
+      "path": "lucid.nn.qat.conv.Conv2d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Conv2d"
+      ],
+      "labels": [],
+      "signature": "Conv2d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L100",
+      "subcategory": "conv",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.qat.conv.Conv2d.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L131",
+          "subcategory": "conv",
+          "summary": "Initialise the driver; the executable itself is lazy.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "model",
+              "annotation": null,
+              "description": "See `fused_step` for semantics.",
+              "default": null
+            },
+            {
+              "name": "loss_fn",
+              "annotation": null,
+              "description": "See `fused_step` for semantics.",
+              "default": null
+            },
+            {
+              "name": "optimizer",
+              "annotation": null,
+              "description": "See `fused_step` for semantics.",
+              "default": null
+            },
+            {
+              "name": "grad_scaler",
+              "annotation": "GradScaler",
+              "description": "See `fused_step`.  When provided and enabled, the\ntrace records the scale → unscale → found_inf → conditional\nupdate plumbing entirely inside the executable so the\nuser-facing step is identical to a no-scaler call.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If `optimizer` exposes no trainable parameters (every\nparam_group is empty)."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.conv.Conv2d.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L141",
+          "subcategory": "conv",
+          "summary": "Generate anchors for all FPN levels.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "feature_maps",
+              "annotation": null,
+              "description": "One (B, C, H, W) tensor per FPN level.",
+              "default": null
+            },
+            {
+              "name": "image_size",
+              "annotation": null,
+              "description": "(H, W) of the input image (unused here, kept for\n          API symmetry with clip_boxes callers).",
+              "default": null
+            },
+            {
+              "name": "strides",
+              "annotation": null,
+              "description": "(stride_h, stride_w) per level.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "List of (H_l × W_l × A_l, 4) anchor tensors, one per level."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.conv.Conv2d.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L149",
+          "subcategory": "conv",
+          "summary": "Quantize a calibrated float convolution module.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Conv2d",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware 2-D convolution (trainable float kernel, fake-quant).",
+      "extended": "A trainable float `lucid.nn.Conv2d` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), so the\nnetwork adapts its weights to the eventual int8 grid while still training in full\nprecision.  Inserted in place of a float conv by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` later\nbakes the trained kernel and the observed qparams into an inference\n`lucid.nn.quantized.Conv2d`.",
+      "parameters": [
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        },
+        {
+          "name": "*args",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv2d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "default": "()"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv2d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "default": "()"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The weight fake-quant rounds the kernel while the STE passes gradients straight\nthrough, keeping the layer fully differentiable.  String padding (`\"same\"` /\n`\"valid\"`) is deferred, matching the quantized conv."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Conv3d",
+      "path": "lucid.nn.qat.conv.Conv3d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Conv3d"
+      ],
+      "labels": [],
+      "signature": "Conv3d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L154",
+      "subcategory": "conv",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.qat.conv.Conv3d.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L185",
+          "subcategory": "conv",
+          "summary": "Initialise the Conv1d module. See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.conv.Conv3d.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L195",
+          "subcategory": "conv",
+          "summary": "Run U-Net forward pass.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.conv.Conv3d.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L203",
+          "subcategory": "conv",
+          "summary": "Quantize a calibrated float convolution module.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Conv3d",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware 3-D convolution (trainable float kernel, fake-quant).",
+      "extended": "A trainable float `lucid.nn.Conv3d` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), so the\nnetwork adapts its weights to the eventual int8 grid while still training in full\nprecision.  Inserted in place of a float conv by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` later\nbakes the trained kernel and the observed qparams into an inference\n`lucid.nn.quantized.Conv3d`.",
+      "parameters": [
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        },
+        {
+          "name": "*args",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv3d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "default": "()"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv3d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "default": "()"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The weight fake-quant rounds the kernel while the STE passes gradients straight\nthrough, keeping the layer fully differentiable.  String padding (`\"same\"` /\n`\"valid\"`) is deferred, matching the quantized conv."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ConvReLU1d",
+      "path": "lucid.nn.qat.conv.ConvReLU1d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Conv1d"
+      ],
+      "labels": [],
+      "signature": "ConvReLU1d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L215",
+      "subcategory": "conv",
+      "methods": [
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.conv.ConvReLU1d.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L240",
+          "subcategory": "conv",
+          "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.conv.ConvReLU1d.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L248",
+          "subcategory": "conv",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "ConvReLU1d",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware fused 1-D convolution + ReLU (trainable, fake-quant).",
+      "extended": "Behaves like `Conv1d`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.ConvReLU1d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.ConvReLU1d`.",
+      "parameters": [
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        },
+        {
+          "name": "*args",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv1d`\nconstructor, exactly as for `Conv1d`.",
+          "default": "()"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv1d`\nconstructor, exactly as for `Conv1d`.",
+          "default": "()"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, so gradients reach the float kernel unchanged."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ConvReLU2d",
+      "path": "lucid.nn.qat.conv.ConvReLU2d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Conv2d"
+      ],
+      "labels": [],
+      "signature": "ConvReLU2d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L254",
+      "subcategory": "conv",
+      "methods": [
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.conv.ConvReLU2d.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L279",
+          "subcategory": "conv",
+          "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.conv.ConvReLU2d.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L287",
+          "subcategory": "conv",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "ConvReLU2d",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware fused 2-D convolution + ReLU (trainable, fake-quant).",
+      "extended": "Behaves like `Conv2d`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.ConvReLU2d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.ConvReLU2d`.",
+      "parameters": [
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        },
+        {
+          "name": "*args",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv2d`\nconstructor, exactly as for `Conv2d`.",
+          "default": "()"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv2d`\nconstructor, exactly as for `Conv2d`.",
+          "default": "()"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, so gradients reach the float kernel unchanged."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ConvReLU3d",
+      "path": "lucid.nn.qat.conv.ConvReLU3d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Conv3d"
+      ],
+      "labels": [],
+      "signature": "ConvReLU3d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L293",
+      "subcategory": "conv",
+      "methods": [
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.conv.ConvReLU3d.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L318",
+          "subcategory": "conv",
+          "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.conv.ConvReLU3d.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L326",
+          "subcategory": "conv",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "ConvReLU3d",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware fused 3-D convolution + ReLU (trainable, fake-quant).",
+      "extended": "Behaves like `Conv3d`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.ConvReLU3d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.ConvReLU3d`.",
+      "parameters": [
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        },
+        {
+          "name": "*args",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv3d`\nconstructor, exactly as for `Conv3d`.",
+          "default": "()"
+        },
+        {
+          "name": "**kwargs",
+          "annotation": "object",
+          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv3d`\nconstructor, exactly as for `Conv3d`.",
+          "default": "()"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, so gradients reach the float kernel unchanged."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Linear",
+      "path": "lucid.nn.qat.linear.Linear",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Linear"
+      ],
+      "labels": [],
+      "signature": "Linear(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L23",
+      "subcategory": "linear",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.qat.linear.Linear.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L51",
+          "subcategory": "linear",
+          "summary": "Construct a Tensor from Python data, a NumPy array, or another Tensor.",
+          "extended": "The data is funnelled through `lucid._factories.converters._to_impl`,\nthe canonical bridge between the outside world and Lucid's C++\n`TensorImpl`. Python scalars become 0-d tensors; nested lists are\nrecursively flattened with shape inference; NumPy arrays cross the\nsingle sanctioned host-to-engine boundary; and existing `Tensor`\nsources are rewrapped (optionally with cast and/or device transfer).",
+          "parameters": [
+            {
+              "name": "data",
+              "annotation": "ndarray | list | int | float | bool | Tensor",
+              "description": "Source data. Python scalars become 0-d tensors; lists are\nrecursively converted; NumPy arrays use the bridge boundary\ndocumented in `lucid._factories.converters`; another Tensor\nis shallow-copied to a new Tensor with possibly different\n`dtype` / `device` / `requires_grad`.",
+              "default": null
+            },
+            {
+              "name": "dtype",
+              "annotation": "dtype | str | None",
+              "description": "Element type. If `None`, inferred from `data`.",
+              "default": null
+            },
+            {
+              "name": "device",
+              "annotation": "device | str | None",
+              "description": "Target device (`\"cpu\"` or `\"metal\"`). If `None`, defaults\nto the source device or `\"cpu\"` for host data.",
+              "default": null
+            },
+            {
+              "name": "requires_grad",
+              "annotation": "bool",
+              "description": "Whether to record operations on this tensor for autograd.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "A freshly constructed tensor whose storage is owned by the\nengine."
+          },
+          "raises": [],
+          "examples": [
+            ">>> import lucid\n>>> lucid.Tensor([1.0, 2.0, 3.0])\ntensor([1., 2., 3.])\n>>> lucid.Tensor([[1, 2], [3, 4]], dtype=lucid.int64).shape\n(2, 2)\n>>> x = lucid.Tensor(3.14, requires_grad=True)\n>>> x.requires_grad\nTrue"
+          ],
+          "notes": [
+            "Constructor is one of the six sanctioned host-to-engine bridge\nboundaries (rule **H4**). NumPy arrays cross the bridge exactly\nonce here; afterwards the data is owned by Lucid's engine. The\nresulting layout is C-contiguous row-major:\n\n\n\n$$\n\\text{stride}[i] = e \\cdot \\prod_{j=i+1}^{d-1} s_j\n$$\n\nwhere $e$ is the element size in bytes and $s_j$ are\nthe dimension sizes."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.linear.Linear.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L65",
+          "subcategory": "linear",
+          "summary": "Fake-quantize the weight, run linear, fake-quantize the output.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.linear.Linear.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L72",
+          "subcategory": "linear",
+          "summary": "Build a QAT `Linear` from a float one (shares the trained weight).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Linear",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware `Linear` (trainable float weight, fake-quant).",
+      "extended": "A trainable float `lucid.nn.Linear` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), letting\nthe network experience quantization rounding and learn to compensate while training\nin full precision.  Inserted by `lucid.quantization.prepare_qat`;\n`lucid.quantization.convert` reads the trained weight and the observers' final\nqparams to build an inference `lucid.nn.quantized.Linear`.",
+      "parameters": [
+        {
+          "name": "in_features",
+          "annotation": "int",
+          "description": "Size of each input sample.",
+          "default": null
+        },
+        {
+          "name": "out_features",
+          "annotation": "int",
+          "description": "Size of each output sample.",
+          "default": null
+        },
+        {
+          "name": "bias",
+          "annotation": "bool",
+          "description": "Whether to add a learnable (float) bias term.",
+          "default": "True"
+        },
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The STE rounds the weight in the forward pass but passes gradients straight through,\nso the float weight stays fully trainable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "LinearReLU",
+      "path": "lucid.nn.qat.linear.LinearReLU",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Linear"
+      ],
+      "labels": [],
+      "signature": "LinearReLU(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L90",
+      "subcategory": "linear",
+      "methods": [
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.linear.LinearReLU.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L118",
+          "subcategory": "linear",
+          "summary": "Fake-quantize the weight, run linear, ReLU, fake-quantize the output.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.linear.LinearReLU.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L125",
+          "subcategory": "linear",
+          "summary": "Build from a fused float `nni.LinearReLU` (its inner linear).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "LinearReLU",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware fused `Linear` + `ReLU` (trainable, fake-quant).",
+      "extended": "Behaves like `Linear`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.LinearReLU` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.LinearReLU`.",
+      "parameters": [
+        {
+          "name": "in_features",
+          "annotation": "int",
+          "description": "Size of each input sample.",
+          "default": null
+        },
+        {
+          "name": "out_features",
+          "annotation": "int",
+          "description": "Size of each output sample.",
+          "default": null
+        },
+        {
+          "name": "bias",
+          "annotation": "bool",
+          "description": "Whether to add a learnable (float) bias term.",
+          "default": "True"
+        },
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, keeping the float weight fully trainable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Embedding",
+      "path": "lucid.nn.qat.sparse.Embedding",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Embedding"
+      ],
+      "labels": [],
+      "signature": "Embedding(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None, qconfig: QConfig | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L21",
+      "subcategory": "sparse",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.qat.sparse.Embedding.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None, qconfig: QConfig | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L52",
+          "subcategory": "sparse",
+          "summary": "Initialise the MSELoss module. See the class docstring for parameter semantics.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.nn.qat.sparse.Embedding.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L66",
+          "subcategory": "sparse",
+          "summary": "Fake-quantize the table, then look up `x`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_float",
+          "path": "lucid.nn.qat.sparse.Embedding.from_float",
+          "kind": "function",
+          "labels": [
+            "classmethod"
+          ],
+          "signature": "from_float(mod: nn.Module)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L72",
+          "subcategory": "sparse",
+          "summary": "Build a QAT `Embedding` from a float one (shares the trained table).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Embedding",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Quantization-aware embedding (trainable float table, fake-quant).",
+      "extended": "A trainable float `lucid.nn.Embedding` whose lookup table is fake-quantized\non every forward through a straight-through estimator (STE), so the learned\nembeddings survive the eventual int8 storage.  Inserted by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` bakes the\ntrained, fake-quantized table into a quantized\n`lucid.nn.quantized.Embedding`.",
+      "parameters": [
+        {
+          "name": "num_embeddings",
+          "annotation": "int",
+          "description": "Number of rows in the lookup table (vocabulary size).",
+          "default": null
+        },
+        {
+          "name": "embedding_dim",
+          "annotation": "int",
+          "description": "Dimensionality of each embedding vector.",
+          "default": null
+        },
+        {
+          "name": "padding_idx",
+          "annotation": "int or None",
+          "description": "If given, the embedding at this index stays fixed and does not contribute to\nthe gradient.",
+          "default": "None"
+        },
+        {
+          "name": "qconfig",
+          "annotation": "QConfig",
+          "description": "Quantization recipe (keyword-only) supplying the weight\n`lucid.quantization.FakeQuantize` applied to the table during training.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Only the table (weight) is fake-quantized — there is no activation observer, since\nthe output is a gather of already-quantized rows."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "`lucid.nn.qat` — quantization-aware training modules.",
+  "extended": "Float-trainable layers that fake-quantize their weights and outputs (via the\nstraight-through estimator) so a network learns to be robust to int8\ninference.  Produced by `lucid.quantization.prepare_qat`; turned into\nreal quantized inference layers by `lucid.quantization.convert`.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

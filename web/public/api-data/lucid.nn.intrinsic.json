@@ -1,0 +1,267 @@
+{
+  "slug": "lucid.nn.intrinsic",
+  "name": "intrinsic",
+  "path": "lucid.nn.intrinsic",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/__init__.py#L1",
+  "members": [
+    {
+      "name": "ConvReLU1d",
+      "path": "lucid.nn.intrinsic.modules.ConvReLU1d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_FusedModule"
+      ],
+      "labels": [],
+      "signature": "ConvReLU1d(conv: nn.Conv1d, relu: nn.ReLU)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L19",
+      "subcategory": "modules",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.intrinsic.modules.ConvReLU1d.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(conv: nn.Conv1d, relu: nn.ReLU)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L42",
+          "subcategory": "modules",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Fused float `Conv1d` + `ReLU` marker (a `lucid.nn.Sequential`).",
+      "extended": "A thin `lucid.nn.Sequential` of `[conv, relu]` emitted by\n`lucid.quantization.fuse_modules` so that a later activation observer sees the\n*post*-ReLU range, letting the eventual quantized layer pick an output grid for the\ntrue (non-negative) inference range.  It runs as plain float at this stage;\n`lucid.quantization.convert` maps it to a fused quantized\n`lucid.nn.quantized.ConvReLU1d`.",
+      "parameters": [
+        {
+          "name": "conv",
+          "annotation": "nn.Conv1d",
+          "description": "The 1-D convolution to run first.",
+          "default": null
+        },
+        {
+          "name": "relu",
+          "annotation": "nn.ReLU",
+          "description": "The rectifier applied to the convolution output.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "This is a structural tag only — it carries no quantization state; observers are\nattached later by `lucid.quantization.prepare_qat`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ConvReLU2d",
+      "path": "lucid.nn.intrinsic.modules.ConvReLU2d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_FusedModule"
+      ],
+      "labels": [],
+      "signature": "ConvReLU2d(conv: nn.Conv2d, relu: nn.ReLU)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L46",
+      "subcategory": "modules",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.intrinsic.modules.ConvReLU2d.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(conv: nn.Conv2d, relu: nn.ReLU)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L69",
+          "subcategory": "modules",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Fused float `Conv2d` + `ReLU` marker (a `lucid.nn.Sequential`).",
+      "extended": "A thin `lucid.nn.Sequential` of `[conv, relu]` (with any BatchNorm already\nfolded into the conv weight) emitted by `lucid.quantization.fuse_modules` so\nthat a later activation observer sees the *post*-ReLU range, letting the eventual\nquantized layer pick an output grid for the true (non-negative) inference range.  It\nruns as plain float at this stage; `lucid.quantization.convert` maps it to a\nfused quantized `lucid.nn.quantized.ConvReLU2d`.",
+      "parameters": [
+        {
+          "name": "conv",
+          "annotation": "nn.Conv2d",
+          "description": "The 2-D convolution to run first (BatchNorm already folded in).",
+          "default": null
+        },
+        {
+          "name": "relu",
+          "annotation": "nn.ReLU",
+          "description": "The rectifier applied to the convolution output.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "This is a structural tag only — it carries no quantization state; observers are\nattached later by `lucid.quantization.prepare_qat`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ConvReLU3d",
+      "path": "lucid.nn.intrinsic.modules.ConvReLU3d",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_FusedModule"
+      ],
+      "labels": [],
+      "signature": "ConvReLU3d(conv: nn.Conv3d, relu: nn.ReLU)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L73",
+      "subcategory": "modules",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.intrinsic.modules.ConvReLU3d.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(conv: nn.Conv3d, relu: nn.ReLU)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L96",
+          "subcategory": "modules",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Fused float `Conv3d` + `ReLU` marker (a `lucid.nn.Sequential`).",
+      "extended": "A thin `lucid.nn.Sequential` of `[conv, relu]` emitted by\n`lucid.quantization.fuse_modules` so that a later activation observer sees the\n*post*-ReLU range, letting the eventual quantized layer pick an output grid for the\ntrue (non-negative) inference range.  It runs as plain float at this stage;\n`lucid.quantization.convert` maps it to a fused quantized\n`lucid.nn.quantized.ConvReLU3d`.",
+      "parameters": [
+        {
+          "name": "conv",
+          "annotation": "nn.Conv3d",
+          "description": "The 3-D convolution to run first.",
+          "default": null
+        },
+        {
+          "name": "relu",
+          "annotation": "nn.ReLU",
+          "description": "The rectifier applied to the convolution output.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "This is a structural tag only — it carries no quantization state; observers are\nattached later by `lucid.quantization.prepare_qat`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "LinearReLU",
+      "path": "lucid.nn.intrinsic.modules.LinearReLU",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_FusedModule"
+      ],
+      "labels": [],
+      "signature": "LinearReLU(linear: nn.Linear, relu: nn.ReLU)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L100",
+      "subcategory": "modules",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.nn.intrinsic.modules.LinearReLU.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(linear: nn.Linear, relu: nn.ReLU)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/intrinsic/modules.py#L123",
+          "subcategory": "modules",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Fused float `Linear` + `ReLU` marker (a `lucid.nn.Sequential`).",
+      "extended": "A thin `lucid.nn.Sequential` of `[linear, relu]` emitted by\n`lucid.quantization.fuse_modules` so that a later activation observer sees the\n*post*-ReLU range, letting the eventual quantized layer pick an output grid for the\ntrue (non-negative) inference range.  It runs as plain float at this stage;\n`lucid.quantization.convert` maps it to a fused quantized\n`lucid.nn.quantized.LinearReLU`.",
+      "parameters": [
+        {
+          "name": "linear",
+          "annotation": "nn.Linear",
+          "description": "The linear (fully-connected) layer to run first.",
+          "default": null
+        },
+        {
+          "name": "relu",
+          "annotation": "nn.ReLU",
+          "description": "The rectifier applied to the linear output.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "This is a structural tag only — it carries no quantization state; observers are\nattached later by `lucid.quantization.prepare_qat`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "`lucid.nn.intrinsic` — fused (intrinsic) float modules.",
+  "extended": "Produced by `lucid.quantization.fuse_modules` and mapped to their\n`nn.quantized` counterparts during `lucid.quantization.convert`.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}
