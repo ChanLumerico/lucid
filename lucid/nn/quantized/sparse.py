@@ -85,3 +85,78 @@ class Embedding(nn.Module):
         return (
             f"num_embeddings={self.num_embeddings}, embedding_dim={self.embedding_dim}"
         )
+
+
+class EmbeddingBag(nn.Module):
+    """int8 quantized ``EmbeddingBag`` — pooled lookup on a dequantized table."""
+
+    weight_int8: Tensor
+    weight_scale: Tensor
+    weight_zero_point: Tensor
+
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        mode: str = "mean",
+        padding_idx: int | None = None,
+    ) -> None:
+        super().__init__()
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
+        self.mode = mode
+        self.padding_idx = padding_idx
+        self.weight_ch_axis = 0
+        self.register_buffer(
+            "weight_int8",
+            lucid.zeros((num_embeddings, embedding_dim), dtype=lucid.int8),
+        )
+        self.register_buffer("weight_scale", lucid.ones(num_embeddings))
+        self.register_buffer("weight_zero_point", lucid.zeros(num_embeddings))
+
+    @override
+    def forward(  # type: ignore[override]  # (indices, offsets) → pooled bags
+        self, x: Tensor, offsets: Tensor | None = None
+    ) -> Tensor:
+        """Dequantize the table and run the pooled bag lookup."""
+        weight = dequantize(
+            self.weight_int8, self.weight_scale, self.weight_zero_point, ch_axis=0
+        )
+        return F.embedding_bag(
+            x, weight, offsets, mode=self.mode, padding_idx=self.padding_idx
+        )
+
+    @classmethod
+    def from_float(cls, mod: nn.Module) -> EmbeddingBag:
+        """Quantize a float :class:`~lucid.nn.EmbeddingBag`'s table (per-row int8)."""
+        f = cast("_FloatEmbedding", mod)
+        qmod = cls(
+            f.num_embeddings,
+            f.embedding_dim,
+            mode=cast("str", getattr(mod, "mode", "mean")),
+            padding_idx=getattr(mod, "padding_idx", None),
+        )
+        if getattr(mod, "qconfig", None) is None:
+            from lucid.quantization._functional import quantize
+            from lucid.quantization._qscheme import per_channel_symmetric
+            from lucid.quantization.observer import PerChannelMinMaxObserver
+
+            obs = PerChannelMinMaxObserver(
+                ch_axis=0, qscheme=per_channel_symmetric, qdtype=qint8
+            )
+            obs(f.weight)
+            scale, zero_point = obs.calculate_qparams()
+            codes = quantize(f.weight, scale, zero_point, qint8, ch_axis=0)
+        else:
+            codes, scale, zero_point, _ = quantize_weight(mod)
+        qmod.register_buffer("weight_int8", codes)
+        qmod.register_buffer("weight_scale", scale)
+        qmod.register_buffer("weight_zero_point", zero_point)
+        return qmod
+
+    @override
+    def extra_repr(self) -> str:
+        return (
+            f"num_embeddings={self.num_embeddings}, "
+            f"embedding_dim={self.embedding_dim}, mode={self.mode}"
+        )

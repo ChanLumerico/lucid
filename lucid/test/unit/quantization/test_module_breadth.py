@@ -86,3 +86,18 @@ def test_leaky_relu_carries_slope() -> None:
         qm = Q.convert(prepared)
         assert isinstance(qm[1], nnq.LeakyReLU)
         assert qm[1].negative_slope == pytest.approx(0.2)
+
+
+class TestQuantizedEmbeddingBag:
+    def test_converts_and_accurate(self) -> None:
+        with _reference_engine():
+            lucid.manual_seed(0)
+            m = nn.Sequential(nn.EmbeddingBag(50, 16, mode="mean"))
+            idx = lucid.tensor([1, 5, 9, 3, 7, 2, 8], dtype=lucid.int64)
+            off = lucid.tensor([0, 3, 5], dtype=lucid.int64)
+            yf = m[0](idx, off).numpy()
+            qm = Q.convert(m)  # EmbeddingBag converts without calibration
+            assert isinstance(qm[0], nnq.EmbeddingBag)
+            assert qm[0].weight_int8.dtype is lucid.int8
+            yq = qm[0](idx, off).numpy()
+            assert np.abs(yf - yq).max() / (np.abs(yf).max() + 1e-9) < 0.05

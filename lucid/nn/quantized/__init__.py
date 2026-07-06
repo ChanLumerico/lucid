@@ -40,7 +40,7 @@ from lucid.nn.quantized.modules import (
     QuantStub,
     QuantWrapper,
 )
-from lucid.nn.quantized.sparse import Embedding
+from lucid.nn.quantized.sparse import Embedding, EmbeddingBag
 
 __all__ = [
     "Linear",
@@ -52,6 +52,7 @@ __all__ = [
     "ConvTranspose2d",
     "ConvTranspose3d",
     "Embedding",
+    "EmbeddingBag",
     "LinearReLU",
     "ConvReLU1d",
     "ConvReLU2d",

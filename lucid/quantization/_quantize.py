@@ -86,6 +86,7 @@ def _quant_mapping() -> dict[type, _FromFloat]:
         nn.ConvTranspose2d: nnq.ConvTranspose2d.from_float,
         nn.ConvTranspose3d: nnq.ConvTranspose3d.from_float,
         nn.Embedding: nnq.Embedding.from_float,
+        nn.EmbeddingBag: nnq.EmbeddingBag.from_float,
         nn.Sigmoid: nnq.Sigmoid.from_float,
         nn.Hardswish: nnq.Hardswish.from_float,
         nn.Hardsigmoid: nnq.Hardsigmoid.from_float,
@@ -266,8 +267,10 @@ def convert(model: nn.Module, inplace: bool = False) -> nn.Module:
         mapping[nn.Linear] = _mlx_linear_builder(relu=False)
         mapping[nni.LinearReLU] = _mlx_linear_builder(relu=True)
         mapping[nnqat.Linear] = _mlx_linear_builder(relu=False)
-    # DeQuantStub + Embedding convert without calibration (no activation observer).
-    _convert_recursive(model, mapping, always=(nnq.DeQuantStub, nn.Embedding))
+    # DeQuantStub + Embedding(Bag) convert without calibration (no activation obs).
+    _convert_recursive(
+        model, mapping, always=(nnq.DeQuantStub, nn.Embedding, nn.EmbeddingBag)
+    )
     model.eval()
     return model
 
