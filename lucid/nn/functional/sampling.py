@@ -554,7 +554,7 @@ def embedding_bag(
         # Cast offsets to I32 if needed
         off_impl = _unwrap(offsets)
         if off_impl.dtype != _C_engine.I32:
-            off_impl = _C_engine.cast(off_impl, _C_engine.I32)  # type: ignore[attr-defined]
+            off_impl = _C_engine.astype(off_impl, _C_engine.I32)
         impl = _C_engine.nn.embedding_bag(
             w_impl, x_impl, off_impl, mode_int, pad_idx, include_last_offset
         )
