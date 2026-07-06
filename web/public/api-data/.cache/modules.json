@@ -69,7 +69,7 @@
   "lucid.nn.utils": "f2d24b853dd899fe6c97402f6facb915a2d1ff81e0257dc4b36249e13f1dd070",
   "lucid.optim": "e61926945ee925d40cb7bee319b88b73e93e95c0e380b6162410b3d75c8f4227",
   "lucid.profiler": "aedc6090636a726c50cab3d17f06e0c011e28a8e9dc538d5da7dc4149bcf85e6",
-  "lucid.quantization": "c1fd774f7607a69ffe0c97abe338e998ec8c5512aaff5c44e42a1f2735330b24",
+  "lucid.quantization": "89a884215048fcb3e8931e54df16251cf0c4e59b71be2b0c5bbe3c3c883880a6",
   "lucid.serialization": "e7a8adc6ff869ebb7471e56a13587e0331a35333b8dacbdd64f3bda7c844a297",
   "lucid.signal": "130d474d7358a3eb2ed483b4c79f4ab36e6acf63e08417da6caedd4e5bbaf46b",
   "lucid.special": "ccbe86638e62441b28a81e12bef9e3e9bfdc74539a3de12bb947044479a3ffc8",
