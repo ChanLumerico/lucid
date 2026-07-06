@@ -18,6 +18,13 @@ set(LUCID_BUILD_MODE "release" CACHE STRING "Lucid build mode: release, debug, d
 option(LUCID_COVERAGE "Enable LLVM coverage instrumentation" OFF)
 set(LUCID_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 
+# Build paths (Python / pybind11 / MLX include+lib / extension suffix + output
+# dir) are normally injected by setup.py.  When this file is configured directly
+# — e.g. an IDE (VS Code CMake Tools with cmake.sourceDirectory = lucid/_C) —
+# they are absent, which previously aborted with FATAL_ERROR and left the
+# editor's CMake integration red.  Derive them from the active Python instead
+# (mirrors setup.py's _mlx_paths()), so a standalone/IDE configure just works.
+set(_lucid_need_derive FALSE)
 foreach(required_var
         LUCID_PYTHON_INCLUDE_DIR
         LUCID_PYBIND11_INCLUDE_DIR
@@ -26,9 +33,76 @@ foreach(required_var
         LUCID_PYTHON_EXTENSION_SUFFIX
         LUCID_EXTENSION_OUTPUT_DIR)
     if(NOT DEFINED ${required_var} OR "${${required_var}}" STREQUAL "")
-        message(FATAL_ERROR "${required_var} must be provided by setup.py")
+        set(_lucid_need_derive TRUE)
     endif()
 endforeach()
+
+if(_lucid_need_derive)
+    # Pick the interpreter that actually has pybind11 + mlx: an explicit
+    # ``-DPython3_EXECUTABLE=`` (IDEs can inject the selected interpreter) or
+    # ``-DLUCID_PYTHON=`` wins; otherwise the first ``python3`` on PATH — NOT
+    # CMake's ``find_package(Python3)`` heuristic, which happily picks a bare
+    # system Python without the build packages.
+    if(DEFINED Python3_EXECUTABLE AND Python3_EXECUTABLE)
+        set(_lucid_py "${Python3_EXECUTABLE}")
+    elseif(DEFINED LUCID_PYTHON AND LUCID_PYTHON)
+        set(_lucid_py "${LUCID_PYTHON}")
+    else()
+        find_program(_lucid_py NAMES python3 python)
+    endif()
+    set(_lucid_py_res 1)
+    if(_lucid_py)
+        execute_process(
+            COMMAND "${_lucid_py}" -c [==[
+import sysconfig, os
+import pybind11, mlx.core
+mp = os.path.dirname(mlx.core.__file__)
+print(sysconfig.get_paths()['include'])
+print(pybind11.get_include())
+print(os.path.join(mp, 'include'))
+print(os.path.join(mp, 'lib'))
+print(sysconfig.get_config_var('EXT_SUFFIX'))
+]==]
+            OUTPUT_VARIABLE _lucid_py_out
+            RESULT_VARIABLE _lucid_py_res
+            ERROR_VARIABLE _lucid_py_err
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
+    if(_lucid_py AND _lucid_py_res EQUAL 0)
+        string(REPLACE "\n" ";" _lucid_paths "${_lucid_py_out}")
+        list(GET _lucid_paths 0 _lucid_py_inc)
+        list(GET _lucid_paths 1 _lucid_pybind_inc)
+        list(GET _lucid_paths 2 _lucid_mlx_inc)
+        list(GET _lucid_paths 3 _lucid_mlx_lib)
+        list(GET _lucid_paths 4 _lucid_ext_suffix)
+        if(NOT LUCID_PYTHON_INCLUDE_DIR)
+            set(LUCID_PYTHON_INCLUDE_DIR "${_lucid_py_inc}")
+        endif()
+        if(NOT LUCID_PYBIND11_INCLUDE_DIR)
+            set(LUCID_PYBIND11_INCLUDE_DIR "${_lucid_pybind_inc}")
+        endif()
+        if(NOT LUCID_MLX_INCLUDE_DIR)
+            set(LUCID_MLX_INCLUDE_DIR "${_lucid_mlx_inc}")
+        endif()
+        if(NOT LUCID_MLX_LIBRARY_DIR)
+            set(LUCID_MLX_LIBRARY_DIR "${_lucid_mlx_lib}")
+        endif()
+        if(NOT LUCID_PYTHON_EXTENSION_SUFFIX)
+            set(LUCID_PYTHON_EXTENSION_SUFFIX "${_lucid_ext_suffix}")
+        endif()
+        if(NOT LUCID_EXTENSION_OUTPUT_DIR)
+            set(LUCID_EXTENSION_OUTPUT_DIR "${CMAKE_CURRENT_LIST_DIR}")
+        endif()
+        message(STATUS
+            "Lucid: build paths auto-derived from ${_lucid_py} "
+            "(standalone/IDE configure; setup.py injects them for a real build)")
+    else()
+        message(FATAL_ERROR
+            "Lucid build paths were not provided by setup.py and could not be "
+            "auto-derived from Python (need an interpreter with pybind11 + mlx "
+            "installed). Build the engine with `pip install -e .`.\n${_lucid_py_err}")
+    endif()
+endif()
 
 find_library(LUCID_MLX_LIBRARY NAMES mlx PATHS "${LUCID_MLX_LIBRARY_DIR}" NO_DEFAULT_PATH REQUIRED)
 
