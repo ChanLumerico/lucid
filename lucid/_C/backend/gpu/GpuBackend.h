@@ -69,6 +69,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -3034,52 +3035,63 @@ public:
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& go = std::get<GpuStorage>(offsets);
 
-        // Gather all embeddings: (n_idx, D)
-        auto emb = ::mlx::core::take(*gw.arr, *gi.arr, 0);  // (n_idx, D)
-
-        // Determine bag count from offsets
+        // Segment-membership approach (the earlier scatter version misused MLX's
+        // update-shape rule and threw).  Build a one-hot (B, n_idx) of which bag
+        // each gathered row belongs to, then reduce: matmul for sum/mean, a
+        // masked max for max.  Stays on the GPU; correct for all modes.
+        namespace mx = ::mlx::core;
         const int B = static_cast<int>(go.arr->shape(0));
         const int D = static_cast<int>(weight_shape[1]);
+        const int n_idx = static_cast<int>(indices_shape[0]);
+        const auto mdt = gpu::to_mlx_dtype(dt);
 
-        // Compute a segment ID for each index based on offsets → then use scatter_reduce
-        // Build segment IDs from offsets using cumsum-style logic
-        auto off_i32 = ::mlx::core::astype(*go.arr, ::mlx::core::int32);
-        // Compute counts per bag
-        int n_idx = static_cast<int>(indices_shape[0]);
-        auto seg_ids = ::mlx::core::zeros({n_idx}, ::mlx::core::int32);
-        // Simple approach: scatter 1s at each offset position, then cumsum
-        auto ones_off = ::mlx::core::ones_like(off_i32);
-        auto marker = ::mlx::core::zeros({n_idx}, ::mlx::core::int32);
-        std::vector<::mlx::core::array> idx_list = {off_i32};
-        auto updates = ::mlx::core::ones({B}, ::mlx::core::int32);
-        marker = ::mlx::core::scatter_add(marker, idx_list, updates, std::vector<int>{0});
-        seg_ids = ::mlx::core::cumsum(marker, 0) - 1;
+        auto idx_i = mx::astype(*gi.arr, mx::int32);
+        auto emb = mx::take(*gw.arr, idx_i, 0);  // (n_idx, D)
 
-        // scatter_reduce by segment_id
-        auto base = ::mlx::core::zeros({B, D}, gpu::to_mlx_dtype(dt));
-        if (mode == 2) {  // max: use large negative init
-            base = ::mlx::core::full({B, D}, -1e30f, gpu::to_mlx_dtype(dt));
+        // seg[k] = (#offsets <= k) - 1  — the bag position k falls in.
+        auto off_i = mx::astype(*go.arr, mx::int32);
+        auto kcol = mx::reshape(mx::arange(0, n_idx, 1, mx::int32), {n_idx, 1});
+        auto orow = mx::reshape(off_i, {1, B});
+        auto ge = mx::astype(mx::greater_equal(kcol, orow), mx::int32);  // (n_idx, B)
+        auto seg = mx::subtract(mx::sum(ge, std::vector<int>{1}, false),
+                                mx::array(static_cast<std::int32_t>(1), mx::int32));
+
+        // valid[k] (float): 1 unless the index equals padding_idx.
+        mx::array valid = mx::full({n_idx}, 1.0f, mdt);
+        if (padding_idx >= 0) {
+            valid = mx::astype(
+                mx::not_equal(idx_i,
+                              mx::array(static_cast<std::int32_t>(padding_idx), mx::int32)),
+                mdt);
         }
-        // Reshape seg_ids to (n_idx, 1) for scatter
-        auto seg_2d = ::mlx::core::reshape(seg_ids, {n_idx, 1});
-        auto seg_bc = ::mlx::core::broadcast_to(seg_2d, {n_idx, D});
-        std::vector<::mlx::core::array> scatter_idx = {seg_bc};
-        auto out = (mode == 2)
-                       ? ::mlx::core::scatter_max(base, scatter_idx, emb, std::vector<int>{0, 1})
-                       : ::mlx::core::scatter_add(base, scatter_idx, emb, std::vector<int>{0, 1});
-        if (mode == 1) {  // mean: normalize by bag sizes
-            auto bag_sizes = ::mlx::core::zeros({B}, ::mlx::core::float32);
-            auto ones_idx = ::mlx::core::ones({n_idx}, ::mlx::core::float32);
-            auto seg_1d = ::mlx::core::reshape(seg_ids, {n_idx});
-            std::vector<::mlx::core::array> sz_idx = {seg_1d};
-            bag_sizes = ::mlx::core::scatter_add(bag_sizes, sz_idx, ones_idx, std::vector<int>{0});
-            auto bag_sizes_2d = ::mlx::core::reshape(bag_sizes, {B, 1});
-            auto bag_sizes_bc = ::mlx::core::broadcast_to(bag_sizes_2d, {B, D});
-            out = ::mlx::core::divide(
-                out, ::mlx::core::maximum(bag_sizes_bc,
-                                          ::mlx::core::full({B, D}, 1.0f, ::mlx::core::float32)));
+
+        // one-hot membership (B, n_idx): oh[b,k] = (seg[k]==b) * valid[k]
+        auto brow = mx::reshape(mx::arange(0, B, 1, mx::int32), {B, 1});
+        auto srow = mx::reshape(seg, {1, n_idx});
+        auto oh = mx::multiply(mx::astype(mx::equal(brow, srow), mdt),
+                               mx::reshape(valid, {1, n_idx}));  // (B, n_idx)
+
+        mx::array out = mx::zeros({B, D}, mdt);
+        if (mode == 2) {  // max
+            auto keep = mx::broadcast_to(
+                mx::reshape(mx::greater(oh, mx::array(0.0f, mdt)), {B, n_idx, 1}),
+                {B, n_idx, D});
+            auto emb3 = mx::broadcast_to(mx::reshape(emb, {1, n_idx, D}), {B, n_idx, D});
+            auto neg = mx::full({B, n_idx, D}, -std::numeric_limits<float>::infinity(), mdt);
+            out = mx::max(mx::where(keep, emb3, neg), std::vector<int>{1}, false);
+            // empty bag → -inf → 0
+            auto sizes = mx::reshape(mx::sum(oh, std::vector<int>{1}, false), {B, 1});
+            auto empty = mx::broadcast_to(mx::less_equal(sizes, mx::array(0.0f, mdt)), {B, D});
+            out = mx::where(empty, mx::zeros({B, D}, mdt), out);
+        } else {  // sum / mean
+            out = mx::matmul(oh, emb);  // (B, D) weighted sum
+            if (mode == 1) {            // mean
+                auto sizes = mx::reshape(mx::sum(oh, std::vector<int>{1}, false), {B, 1});
+                auto denom = mx::broadcast_to(mx::maximum(sizes, mx::array(1.0f, mdt)), {B, D});
+                out = mx::divide(out, denom);
+            }
         }
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+        return Storage{gpu::wrap_mlx_array(mx::contiguous(out), dt)};
     }
 
     // ── astype ────────────────────────────────────────────────────────────────

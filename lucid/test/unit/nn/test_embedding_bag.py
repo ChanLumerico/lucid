@@ -68,3 +68,29 @@ def test_padding_idx() -> None:
     ).numpy()
     want = _ref(idx, off, W, mode="sum", padding_idx=2)
     assert np.allclose(got, want, atol=1e-5)
+
+
+def _metal_ok() -> bool:
+    try:
+        lucid.zeros((1,)).to("metal")
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _metal_ok(), reason="Metal unavailable")
+@pytest.mark.parametrize("mode", ["sum", "mean", "max"])
+def test_metal_matches_reference(mode: str) -> None:
+    # GPU path uses a segment one-hot (matmul / masked-max), not the CPU loop.
+    rng = np.random.default_rng(4)
+    W = rng.standard_normal((12, 6)).astype(np.float32)
+    idx = np.array([1, 2, 4, 5, 4, 3, 2, 0], dtype=np.int64)
+    off = np.array([0, 3, 5], dtype=np.int64)
+    got = embedding_bag(
+        lucid.from_numpy(idx).to("metal"),
+        lucid.from_numpy(W).to("metal"),
+        offsets=lucid.from_numpy(off).to("metal"),
+        mode=mode,
+    ).numpy()
+    want = _ref(idx, off, W, mode=mode)
+    assert np.allclose(got, want, atol=1e-4)
