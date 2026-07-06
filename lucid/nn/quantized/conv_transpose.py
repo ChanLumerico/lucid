@@ -1,11 +1,12 @@
 """Quantized ``ConvTranspose{1,2,3}d`` — int8 weight, dequant-to-float forward.
 
 Same sidecar design (B) as the quantized :class:`~lucid.nn.quantized.Conv2d`
-family: the transposed-conv kernel is stored int8 (**per-tensor** symmetric —
-the transposed weight layout ``(in, out/groups, *k)`` makes a per-output-channel
-axis ambiguous, so per-tensor matches the reference default), the forward
-dequantizes it, runs the ordinary transposed convolution, then fake-quantizes
-the output to the calibrated activation grid.
+family: the transposed-conv kernel is stored int8 (**per-channel** symmetric on
+the output-channel axis — the transposed weight layout ``(in, out/groups, *k)``
+puts the output channels on axis 1, so the weight is quantized per-channel there,
+matching the reference default), the forward dequantizes it, runs the ordinary
+transposed convolution, then fake-quantizes the output to the calibrated
+activation grid.
 """
 
 from typing import TYPE_CHECKING, Protocol, cast, override
@@ -156,19 +157,63 @@ class _QuantizedConvTransposeNd(nn.Module):
 
 
 class ConvTranspose1d(_QuantizedConvTransposeNd):
-    """Quantized 1-D transposed convolution (fractionally-strided conv).
+    r"""Quantized 1-D transposed (fractionally-strided) convolution.
 
-    Each forward dequantizes the per-output-channel int8 kernel, runs
-    ``F.conv_transpose1d``, then fake-quantizes the output to the calibrated
-    activation grid.  Produced from a calibrated float
-    :class:`~lucid.nn.ConvTranspose1d` by :func:`lucid.quantization.convert`.
+    The int8-weight, dequantize-to-float replacement that
+    :func:`lucid.quantization.convert` installs for a calibrated float
+    :class:`~lucid.nn.ConvTranspose1d`. Transposed convolutions *upsample* — they
+    are the decoder / generator counterpart of :class:`~lucid.nn.quantized.Conv1d`
+    in 1-D signal models — and share the exact sidecar recipe of the quantized
+    :class:`~lucid.nn.quantized.Conv2d` family.
+
+    **Representation (sidecar design B).** The learned float kernel is quantized
+    once, at :meth:`from_float` time, into an ``int8`` code tensor plus a
+    per-output-channel ``scale`` / ``zero_point``; the float kernel is then
+    dropped. Only the int8 codes, the qparams, and the (still-float) bias live in
+    the module. Each forward *dequantizes* the kernel back to float, runs the
+    ordinary ``F.conv_transpose1d``, and finally *fake-quantizes* the output onto
+    the activation grid that calibration observed. Keeping the transposed
+    convolution itself in float means the result matches a genuine int8 kernel to
+    within a rounding step **and** the layer runs unchanged on any device.
+
+    **Per-channel weights (axis 1).** The transposed-weight layout ``(in_channels,
+    out_channels/groups, k)`` places the *output* channels on **axis 1**, not axis
+    0, so the kernel is quantized per-channel along axis 1 — each output channel
+    gets its own scale, far tighter than one per-tensor scale for wide kernels.
+    The scheme is **symmetric** (``qint8``, ``zero_point = 0``), matching the
+    reference default for transposed weights; the bias stays float.
+
+    Encoding happens once (at :meth:`from_float`); decode + transposed-convolve run
+    on every forward:
+
+    .. math::
+
+        w^{q}_{c,o,k} = \operatorname{clamp}\!\bigl(
+            \operatorname{round}(w_{c,o,k}/s_o),\ -128,\ 127\bigr),
+        \qquad
+        \hat{w}_{c,o,k} = w^{q}_{c,o,k}\, s_o
+
+    .. math::
+
+        y = \operatorname{fake\_quant}\!\bigl(
+            \operatorname{convT1d}(x, \hat{w}) + b\bigr),
+        \qquad
+        \operatorname{fake\_quant}(t) = \bigl(
+            \operatorname{clamp}(\operatorname{round}(t/S) + Z,\ q_{\min},\ q_{\max})
+            - Z\bigr)\, S
+
+    where :math:`s_o` is the per-output-channel (axis-1) weight scale — with a zero
+    zero-point because the weight scheme is symmetric — and :math:`S, Z` the scalar
+    calibrated output ``(scale, zero_point)`` with grid bounds
+    :math:`q_{\min}, q_{\max}` (``0, 255`` for the default ``quint8``).
 
     Parameters
     ----------
     in_channels : int
         Number of channels in the input signal.
     out_channels : int
-        Number of channels produced by the transposed convolution.
+        Number of channels produced by the transposed convolution — quantized
+        per-channel (on axis 1 of the transposed weight).
     kernel_size : int or tuple of int
         Size of the convolving kernel.
     stride : int or tuple of int
@@ -182,13 +227,79 @@ class ConvTranspose1d(_QuantizedConvTransposeNd):
     groups : int
         Number of blocked connections from input to output channels.
     bias : bool
-        Whether a (float) bias term is added after the convolution.
+        Whether a learned **float** bias term is added after the convolution.
+
+    Attributes
+    ----------
+    weight_int8 : Tensor
+        The ``int8`` kernel codes, shape ``(in_channels, out_channels/groups, k)``.
+    weight_scale : Tensor
+        Per-output-channel weight scale, shape ``(out_channels/groups,)``.
+    weight_zero_point : Tensor
+        Per-output-channel weight zero-point, shape ``(out_channels/groups,)`` —
+        all zero under the symmetric scheme.
+    scale : Tensor
+        Scalar output-activation scale, set from the calibrated observer.
+    zero_point : Tensor
+        Scalar output-activation zero-point, set from the calibrated observer.
+    bias : Tensor or None
+        The float bias of shape ``(out_channels,)``, or ``None``.
 
     Notes
     -----
-    The transposed-weight layout ``(in, out/groups, k)`` makes a per-output-
-    channel axis ambiguous, so the weight is quantized **per-channel on axis 1**
-    (the output-channel axis) — much tighter than per-tensor for wide kernels.
+    - Instances are normally produced by :func:`lucid.quantization.convert` (or
+      :meth:`from_float`), **not** constructed directly: a freshly constructed
+      layer has identity qparams (``scale = 1``, ``zero_point = 0``) and zeroed
+      kernel codes, and only becomes meaningful once ``from_float`` /
+      ``load_state_dict`` fills the buffers.
+    - Only int8 codes + qparams + float bias enter the ``state_dict``; the float
+      kernel never does — the weight payload shrinks ~``3.55x`` (int8), and a
+      whole conv-heavy checkpoint ~``3.97x`` (measured on ``resnet_18``).
+    - The kernel is quantized **per-channel on axis 1** (the output-channel axis
+      of the ``(in, out/groups, k)`` layout) with a **symmetric** ``qint8`` scheme
+      (``from_float`` runs a fresh ``PerChannelMinMaxObserver`` over the weight);
+      the bias stays float.
+    - This layer wins on **memory**, not compute — the transposed convolution runs
+      in float (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the
+      float layer's; the payoff is the smaller checkpoint and working set.
+    - Device-transparent: because compute stays in float, the layer runs unchanged
+      on CPU or Metal and follows the input tensor's device.
+    - Calibration is required — the output ``(scale, zero_point)`` come from an
+      activation observer that must see representative data between ``prepare`` and
+      ``convert``; an uncalibrated observer keeps its ``±inf`` seed, collapsing the
+      output toward zero (``from_float`` warns).
+    - Only integer / tuple padding is supported; string padding raises
+      ``NotImplementedError`` at ``from_float``.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.ConvTranspose1d(8, 4, 3))
+    >>> model.qconfig = Q.get_default_qconfig()
+    >>> prepared = Q.prepare(model)             # insert activation/weight observers
+    >>> _ = prepared(lucid.randn(2, 8, 16))     # calibrate on representative data
+    >>> qmodel = Q.convert(prepared)            # float -> quantized ConvTranspose1d
+    >>> type(qmodel[0]).__name__
+    'ConvTranspose1d'
+    >>> qmodel(lucid.randn(2, 8, 16)).shape     # int8-weight upsampling
+    (2, 4, 18)
+
+    Constructing the layer directly is **not** a substitute for that workflow — a
+    bare instance carries zeroed codes and identity qparams, so it returns garbage
+    until ``from_float`` / ``load_state_dict`` populates the buffers:
+
+    >>> broken = nn.quantized.ConvTranspose1d(
+    ...     8, 4, (3,), (1,), (0,), (0,), (1,), 1, True
+    ... )
+    >>> bool((broken.weight_int8 == 0).all().item())
+    True
+
+    See Also
+    --------
+    lucid.nn.quantized.ConvTranspose2d : The 2-D upsampling sibling.
+    lucid.nn.quantized.Conv1d : The (down-sampling) 1-D convolution counterpart.
+    lucid.quantization.convert : Installs this layer from a calibrated float model.
     """
 
     @override
@@ -206,21 +317,63 @@ class ConvTranspose1d(_QuantizedConvTransposeNd):
 
 
 class ConvTranspose2d(_QuantizedConvTransposeNd):
-    """Quantized 2-D transposed convolution (fractionally-strided conv).
+    r"""Quantized 2-D transposed (fractionally-strided) convolution.
 
-    The upsampling counterpart of :class:`~lucid.nn.quantized.Conv2d`, common in
-    segmentation decoders and GAN generators.  Each forward dequantizes the
-    per-output-channel int8 kernel, runs ``F.conv_transpose2d``, then
-    fake-quantizes the output to the calibrated activation grid.  Produced from a
-    calibrated float :class:`~lucid.nn.ConvTranspose2d` by
-    :func:`lucid.quantization.convert`.
+    The upsampling counterpart of :class:`~lucid.nn.quantized.Conv2d`, and the
+    int8-weight, dequantize-to-float replacement that
+    :func:`lucid.quantization.convert` installs for a calibrated float
+    :class:`~lucid.nn.ConvTranspose2d`. It is the standard decoder / up-projection
+    layer of segmentation heads and generative up-samplers, and shares the sidecar
+    recipe of the quantized :class:`~lucid.nn.quantized.Conv2d`.
+
+    **Representation (sidecar design B).** The learned float kernel is quantized
+    once, at :meth:`from_float` time, into an ``int8`` code tensor plus a
+    per-output-channel ``scale`` / ``zero_point``; the float kernel is then
+    dropped. Only the int8 codes, the qparams, and the (still-float) bias live in
+    the module. Each forward *dequantizes* the kernel back to float, runs the
+    ordinary ``F.conv_transpose2d``, and finally *fake-quantizes* the output onto
+    the activation grid that calibration observed. Keeping the transposed
+    convolution itself in float means the result matches a genuine int8 kernel to
+    within a rounding step **and** the layer runs unchanged on any device.
+
+    **Per-channel weights (axis 1).** The transposed-weight layout ``(in_channels,
+    out_channels/groups, kh, kw)`` places the *output* channels on **axis 1**, not
+    axis 0, so the kernel is quantized per-channel along axis 1 — each output
+    channel gets its own scale, far tighter than one per-tensor scale for wide
+    kernels. The scheme is **symmetric** (``qint8``, ``zero_point = 0``), matching
+    the reference default for transposed weights; the bias stays float.
+
+    Encoding happens once (at :meth:`from_float`); decode + transposed-convolve run
+    on every forward:
+
+    .. math::
+
+        w^{q}_{c,o,i,j} = \operatorname{clamp}\!\bigl(
+            \operatorname{round}(w_{c,o,i,j}/s_o),\ -128,\ 127\bigr),
+        \qquad
+        \hat{w}_{c,o,i,j} = w^{q}_{c,o,i,j}\, s_o
+
+    .. math::
+
+        y = \operatorname{fake\_quant}\!\bigl(
+            \operatorname{convT2d}(x, \hat{w}) + b\bigr),
+        \qquad
+        \operatorname{fake\_quant}(t) = \bigl(
+            \operatorname{clamp}(\operatorname{round}(t/S) + Z,\ q_{\min},\ q_{\max})
+            - Z\bigr)\, S
+
+    where :math:`s_o` is the per-output-channel (axis-1) weight scale — with a zero
+    zero-point because the weight scheme is symmetric — and :math:`S, Z` the scalar
+    calibrated output ``(scale, zero_point)`` with grid bounds
+    :math:`q_{\min}, q_{\max}` (``0, 255`` for the default ``quint8``).
 
     Parameters
     ----------
     in_channels : int
         Number of channels in the input image.
     out_channels : int
-        Number of channels produced by the transposed convolution.
+        Number of channels produced by the transposed convolution — quantized
+        per-channel (on axis 1 of the transposed weight).
     kernel_size : int or tuple of int
         Size of the convolving kernel.
     stride : int or tuple of int
@@ -234,13 +387,81 @@ class ConvTranspose2d(_QuantizedConvTransposeNd):
     groups : int
         Number of blocked connections from input to output channels.
     bias : bool
-        Whether a (float) bias term is added after the convolution.
+        Whether a learned **float** bias term is added after the convolution.
+
+    Attributes
+    ----------
+    weight_int8 : Tensor
+        The ``int8`` kernel codes, shape
+        ``(in_channels, out_channels/groups, kh, kw)``.
+    weight_scale : Tensor
+        Per-output-channel weight scale, shape ``(out_channels/groups,)``.
+    weight_zero_point : Tensor
+        Per-output-channel weight zero-point, shape ``(out_channels/groups,)`` —
+        all zero under the symmetric scheme.
+    scale : Tensor
+        Scalar output-activation scale, set from the calibrated observer.
+    zero_point : Tensor
+        Scalar output-activation zero-point, set from the calibrated observer.
+    bias : Tensor or None
+        The float bias of shape ``(out_channels,)``, or ``None``.
 
     Notes
     -----
-    The weight is quantized **per-channel on axis 1** (output channels of the
-    ``(in, out/groups, kh, kw)`` layout) — the reference default, and much
-    tighter than per-tensor for wide kernels.
+    - Instances are normally produced by :func:`lucid.quantization.convert` (or
+      :meth:`from_float`), **not** constructed directly: a freshly constructed
+      layer has identity qparams (``scale = 1``, ``zero_point = 0``) and zeroed
+      kernel codes, and only becomes meaningful once ``from_float`` /
+      ``load_state_dict`` fills the buffers.
+    - Only int8 codes + qparams + float bias enter the ``state_dict``; the float
+      kernel never does — the weight payload shrinks ~``3.55x`` (int8), and a
+      whole conv-heavy checkpoint ~``3.97x`` (measured on ``resnet_18``).
+    - The kernel is quantized **per-channel on axis 1** (the output-channel axis
+      of the ``(in, out/groups, kh, kw)`` layout) with a **symmetric** ``qint8``
+      scheme (``from_float`` runs a fresh ``PerChannelMinMaxObserver`` over the
+      weight); the bias stays float.
+    - This layer wins on **memory**, not compute — the transposed convolution runs
+      in float (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the
+      float layer's; the payoff is the smaller checkpoint and working set.
+    - Device-transparent: because compute stays in float, the layer runs unchanged
+      on CPU or Metal and follows the input tensor's device.
+    - Calibration is required — the output ``(scale, zero_point)`` come from an
+      activation observer that must see representative data between ``prepare`` and
+      ``convert``; an uncalibrated observer keeps its ``±inf`` seed, collapsing the
+      output toward zero (``from_float`` warns).
+    - Only integer / tuple padding is supported; string padding raises
+      ``NotImplementedError`` at ``from_float``.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.ConvTranspose2d(16, 8, 2, stride=2))
+    >>> model.qconfig = Q.get_default_qconfig()
+    >>> prepared = Q.prepare(model)                # insert observers
+    >>> _ = prepared(lucid.randn(1, 16, 8, 8))     # calibrate on representative data
+    >>> qmodel = Q.convert(prepared)               # float -> quantized ConvTranspose2d
+    >>> type(qmodel[0]).__name__
+    'ConvTranspose2d'
+    >>> qmodel(lucid.randn(1, 16, 8, 8)).shape     # int8-weight 2x upsampling
+    (1, 8, 16, 16)
+
+    Constructing the layer directly is **not** a substitute for that workflow — a
+    bare instance carries zeroed codes and identity qparams, so it returns garbage
+    until ``from_float`` / ``load_state_dict`` populates the buffers:
+
+    >>> broken = nn.quantized.ConvTranspose2d(
+    ...     16, 8, (2, 2), (2, 2), (0, 0), (0, 0), (1, 1), 1, True
+    ... )
+    >>> bool((broken.weight_int8 == 0).all().item())
+    True
+
+    See Also
+    --------
+    lucid.nn.quantized.ConvTranspose1d : The 1-D upsampling sibling.
+    lucid.nn.quantized.ConvTranspose3d : The volumetric upsampling sibling.
+    lucid.nn.quantized.Conv2d : The (down-sampling) 2-D convolution counterpart.
+    lucid.quantization.convert : Installs this layer from a calibrated float model.
     """
 
     @override
@@ -258,20 +479,63 @@ class ConvTranspose2d(_QuantizedConvTransposeNd):
 
 
 class ConvTranspose3d(_QuantizedConvTransposeNd):
-    """Quantized 3-D transposed convolution (fractionally-strided conv).
+    r"""Quantized 3-D transposed (fractionally-strided) convolution.
 
-    The volumetric upsampling layer (video / 3-D medical decoders).  Each forward
-    dequantizes the per-output-channel int8 kernel, runs ``F.conv_transpose3d``,
-    then fake-quantizes the output to the calibrated activation grid.  Produced
-    from a calibrated float :class:`~lucid.nn.ConvTranspose3d` by
-    :func:`lucid.quantization.convert`.
+    The volumetric upsampling layer (video / 3-D medical decoders), and the
+    int8-weight, dequantize-to-float replacement that
+    :func:`lucid.quantization.convert` installs for a calibrated float
+    :class:`~lucid.nn.ConvTranspose3d`. It is the up-projection counterpart of
+    :class:`~lucid.nn.quantized.Conv3d`, and shares the sidecar recipe of the
+    quantized :class:`~lucid.nn.quantized.Conv2d` family.
+
+    **Representation (sidecar design B).** The learned float kernel is quantized
+    once, at :meth:`from_float` time, into an ``int8`` code tensor plus a
+    per-output-channel ``scale`` / ``zero_point``; the float kernel is then
+    dropped. Only the int8 codes, the qparams, and the (still-float) bias live in
+    the module. Each forward *dequantizes* the kernel back to float, runs the
+    ordinary ``F.conv_transpose3d``, and finally *fake-quantizes* the output onto
+    the activation grid that calibration observed. Keeping the transposed
+    convolution itself in float means the result matches a genuine int8 kernel to
+    within a rounding step **and** the layer runs unchanged on any device.
+
+    **Per-channel weights (axis 1).** The transposed-weight layout ``(in_channels,
+    out_channels/groups, kd, kh, kw)`` places the *output* channels on **axis 1**,
+    not axis 0, so the kernel is quantized per-channel along axis 1 — each output
+    channel gets its own scale, far tighter than one per-tensor scale for the wide
+    dynamic range of volumetric kernels. The scheme is **symmetric** (``qint8``,
+    ``zero_point = 0``), matching the reference default; the bias stays float.
+
+    Encoding happens once (at :meth:`from_float`); decode + transposed-convolve run
+    on every forward:
+
+    .. math::
+
+        w^{q}_{c,o,d,i,j} = \operatorname{clamp}\!\bigl(
+            \operatorname{round}(w_{c,o,d,i,j}/s_o),\ -128,\ 127\bigr),
+        \qquad
+        \hat{w}_{c,o,d,i,j} = w^{q}_{c,o,d,i,j}\, s_o
+
+    .. math::
+
+        y = \operatorname{fake\_quant}\!\bigl(
+            \operatorname{convT3d}(x, \hat{w}) + b\bigr),
+        \qquad
+        \operatorname{fake\_quant}(t) = \bigl(
+            \operatorname{clamp}(\operatorname{round}(t/S) + Z,\ q_{\min},\ q_{\max})
+            - Z\bigr)\, S
+
+    where :math:`s_o` is the per-output-channel (axis-1) weight scale — with a zero
+    zero-point because the weight scheme is symmetric — and :math:`S, Z` the scalar
+    calibrated output ``(scale, zero_point)`` with grid bounds
+    :math:`q_{\min}, q_{\max}` (``0, 255`` for the default ``quint8``).
 
     Parameters
     ----------
     in_channels : int
         Number of channels in the input volume.
     out_channels : int
-        Number of channels produced by the transposed convolution.
+        Number of channels produced by the transposed convolution — quantized
+        per-channel (on axis 1 of the transposed weight).
     kernel_size : int or tuple of int
         Size of the convolving kernel.
     stride : int or tuple of int
@@ -285,12 +549,80 @@ class ConvTranspose3d(_QuantizedConvTransposeNd):
     groups : int
         Number of blocked connections from input to output channels.
     bias : bool
-        Whether a (float) bias term is added after the convolution.
+        Whether a learned **float** bias term is added after the convolution.
+
+    Attributes
+    ----------
+    weight_int8 : Tensor
+        The ``int8`` kernel codes, shape
+        ``(in_channels, out_channels/groups, kd, kh, kw)``.
+    weight_scale : Tensor
+        Per-output-channel weight scale, shape ``(out_channels/groups,)``.
+    weight_zero_point : Tensor
+        Per-output-channel weight zero-point, shape ``(out_channels/groups,)`` —
+        all zero under the symmetric scheme.
+    scale : Tensor
+        Scalar output-activation scale, set from the calibrated observer.
+    zero_point : Tensor
+        Scalar output-activation zero-point, set from the calibrated observer.
+    bias : Tensor or None
+        The float bias of shape ``(out_channels,)``, or ``None``.
 
     Notes
     -----
-    The weight is quantized **per-channel on axis 1** (output channels of the
-    ``(in, out/groups, kd, kh, kw)`` layout) — much tighter than per-tensor.
+    - Instances are normally produced by :func:`lucid.quantization.convert` (or
+      :meth:`from_float`), **not** constructed directly: a freshly constructed
+      layer has identity qparams (``scale = 1``, ``zero_point = 0``) and zeroed
+      kernel codes, and only becomes meaningful once ``from_float`` /
+      ``load_state_dict`` fills the buffers.
+    - Only int8 codes + qparams + float bias enter the ``state_dict``; the float
+      kernel never does — the weight payload shrinks ~``3.55x`` (int8), and a
+      whole conv-heavy checkpoint ~``3.97x`` (measured on ``resnet_18``).
+    - The kernel is quantized **per-channel on axis 1** (the output-channel axis
+      of the ``(in, out/groups, kd, kh, kw)`` layout) with a **symmetric**
+      ``qint8`` scheme (``from_float`` runs a fresh ``PerChannelMinMaxObserver``
+      over the weight); the bias stays float.
+    - This layer wins on **memory**, not compute — the transposed convolution runs
+      in float (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the
+      float layer's; the payoff is the smaller checkpoint and working set.
+    - Device-transparent: because compute stays in float, the layer runs unchanged
+      on CPU or Metal and follows the input tensor's device.
+    - Calibration is required — the output ``(scale, zero_point)`` come from an
+      activation observer that must see representative data between ``prepare`` and
+      ``convert``; an uncalibrated observer keeps its ``±inf`` seed, collapsing the
+      output toward zero (``from_float`` warns).
+    - Only integer / tuple padding is supported; string padding raises
+      ``NotImplementedError`` at ``from_float``.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.ConvTranspose3d(8, 4, 2, stride=2))
+    >>> model.qconfig = Q.get_default_qconfig()
+    >>> prepared = Q.prepare(model)                  # insert observers
+    >>> _ = prepared(lucid.randn(1, 8, 4, 8, 8))     # calibrate on representative data
+    >>> qmodel = Q.convert(prepared)                 # float -> quantized ConvTranspose3d
+    >>> type(qmodel[0]).__name__
+    'ConvTranspose3d'
+    >>> qmodel(lucid.randn(1, 8, 4, 8, 8)).shape     # int8-weight 2x upsampling
+    (1, 4, 8, 16, 16)
+
+    Constructing the layer directly is **not** a substitute for that workflow — a
+    bare instance carries zeroed codes and identity qparams, so it returns garbage
+    until ``from_float`` / ``load_state_dict`` populates the buffers:
+
+    >>> broken = nn.quantized.ConvTranspose3d(
+    ...     8, 4, (2, 2, 2), (2, 2, 2), (0, 0, 0), (0, 0, 0), (1, 1, 1), 1, True
+    ... )
+    >>> bool((broken.weight_int8 == 0).all().item())
+    True
+
+    See Also
+    --------
+    lucid.nn.quantized.ConvTranspose2d : The 2-D upsampling sibling.
+    lucid.nn.quantized.Conv3d : The (down-sampling) 3-D convolution counterpart.
+    lucid.quantization.convert : Installs this layer from a calibrated float model.
     """
 
     @override

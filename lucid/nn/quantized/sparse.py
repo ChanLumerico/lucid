@@ -26,14 +26,36 @@ if TYPE_CHECKING:
 
 
 class Embedding(nn.Module):
-    """Quantized embedding lookup table — per-row int8, dequantize-on-lookup.
+    r"""Quantized embedding lookup table — per-row int8, dequantize-on-lookup.
 
-    The table is stored as int8 codes with a per-row (per-token) ``scale`` /
-    ``zero_point``, which is the dominant memory win for large-vocabulary
-    embeddings. Each forward dequantizes the table and performs the ordinary
-    :func:`~lucid.nn.functional.embedding` lookup. Produced from a calibrated
-    float :class:`~lucid.nn.Embedding` by :func:`lucid.quantization.convert` /
-    :meth:`from_float`.
+    The inference-time replacement that :func:`lucid.quantization.convert`
+    installs for a calibrated float :class:`~lucid.nn.Embedding`. Embedding
+    tables dominate the parameter budget of large-vocabulary language models —
+    a ``(50000, 768)`` table is ~150 MB in ``float32`` — so storing the table as
+    int8 is the single largest memory win quantization offers on the text side,
+    and this layer is where it lands.
+
+    **Representation.** The learned table ``(num_embeddings, embedding_dim)`` is
+    quantized once, at :meth:`from_float` time, into an ``int8`` code tensor plus
+    a **per-row** (per-token) ``scale`` / ``zero_point``; the float table is then
+    dropped. Because each vocabulary row gets its own scale, tokens with very
+    different embedding magnitudes are all tracked tightly — far more accurately
+    than a single per-tensor scale. Each forward *dequantizes* the table back to
+    float and runs the ordinary :func:`~lucid.nn.functional.embedding` lookup, so
+    the layer needs no int8 gather kernel and runs unchanged on any device.
+
+    Encoding happens once; decode + gather run on every forward. For row
+    :math:`i`, column :math:`j`:
+
+    .. math::
+
+        \hat{W}_{ij} = (W^{q}_{ij} - z_i)\, s_i,
+        \qquad
+        \operatorname{out}[k] = \hat{W}[\, x_k\, ]
+
+    where :math:`s_i, z_i` are the row-:math:`i` scale / zero-point (symmetric
+    ``qint8``, so :math:`z_i = 0`) and :math:`x_k` the :math:`k`-th input index.
+    The lookup gathers dequantized rows; only rows actually indexed are touched.
 
     Parameters
     ----------
@@ -45,11 +67,55 @@ class Embedding(nn.Module):
         If given, the embedding at this index is treated as padding (its row is
         not accumulated into gradients upstream). Defaults to ``None``.
 
+    Attributes
+    ----------
+    weight_int8 : Tensor
+        The ``int8`` table codes, shape ``(num_embeddings, embedding_dim)``.
+    weight_scale : Tensor
+        Per-row (per-token) scale, shape ``(num_embeddings,)``.
+    weight_zero_point : Tensor
+        Per-row (per-token) zero-point, shape ``(num_embeddings,)`` — all zero
+        under the default symmetric ``qint8`` scheme.
+
     Notes
     -----
-    The table is quantized **per-row on axis 0** (one ``scale`` per token) with
-    a symmetric qint8 grid. When the source module carries no ``qconfig``, a
-    default per-channel qint8 observer is used to calibrate the rows.
+    - Instances are normally produced by :func:`lucid.quantization.convert` (or
+      :meth:`from_float`), **not** constructed directly: a bare instance holds a
+      zeroed table with identity qparams and returns zeros until ``from_float`` /
+      ``load_state_dict`` populates the buffers.
+    - The table is quantized **per-row on axis 0** (one ``scale`` per token) with
+      a symmetric ``qint8`` grid (``[-128, 127]``). When the source module
+      carries no ``qconfig``, a default per-channel ``qint8`` observer calibrates
+      the rows during ``from_float``.
+    - Memory: the int8 codes plus the per-row float scale shrink the table
+      payload ~``3.55x`` versus ``float32`` — the dominant checkpoint saving for
+      text models, whose weight mass is mostly embeddings.
+    - This layer wins on **memory**, not compute — the gather runs in float after
+      an on-the-fly dequantize.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> emb = nn.Embedding(1000, 64)
+    >>> qemb = nn.quantized.Embedding.from_float(emb)   # per-row int8 table
+    >>> qemb.weight_int8.dtype
+    int8
+    >>> qemb(lucid.tensor([1, 5, 999])).shape           # dequantize-on-lookup
+    (3, 64)
+
+    A directly constructed layer is zeroed — a common mistake is to use it
+    without ``from_float`` / ``load_state_dict``:
+
+    >>> broken = nn.quantized.Embedding(1000, 64)
+    >>> bool((broken.weight_int8 == 0).all().item())
+    True
+
+    See Also
+    --------
+    lucid.nn.quantized.EmbeddingBag : The pooled (bag-reducing) analogue.
+    lucid.nn.quantized.Linear : Per-channel int8 weight for dense layers.
+    lucid.quantization.convert : Installs this layer from a calibrated model.
     """
 
     weight_int8: Tensor
@@ -112,14 +178,36 @@ class Embedding(nn.Module):
 
 
 class EmbeddingBag(nn.Module):
-    """Quantized ``EmbeddingBag`` — per-row int8 table, pooled dequant lookup.
+    r"""Quantized ``EmbeddingBag`` — per-row int8 table, pooled dequant lookup.
 
-    Like :class:`~lucid.nn.quantized.Embedding`, the table is stored as int8
-    with a per-row (per-token) ``scale``; each forward dequantizes the table
-    and runs the pooled bag lookup, reducing each bag of indices to a single
-    vector by ``mode``. Produced from a calibrated float
-    :class:`~lucid.nn.EmbeddingBag` by :func:`lucid.quantization.convert` /
-    :meth:`from_float`.
+    The inference-time replacement for a calibrated float
+    :class:`~lucid.nn.EmbeddingBag`, installed by
+    :func:`lucid.quantization.convert` / :meth:`from_float`. Like
+    :class:`~lucid.nn.quantized.Embedding` it stores the table as int8 with a
+    per-row (per-token) ``scale`` — the same dominant memory win for
+    large-vocabulary models — but instead of returning one row per index it
+    *pools* each bag of indices into a single vector, the fused primitive behind
+    recommendation and bag-of-words text models.
+
+    **Representation.** The table ``(num_embeddings, embedding_dim)`` is
+    quantized per-row into ``int8`` codes plus a per-row ``scale`` /
+    ``zero_point`` at :meth:`from_float` time; the float table is dropped. Each
+    forward dequantizes the table, gathers the rows in each bag, and reduces them
+    by ``mode`` — fused so the per-token embedding matrix is never materialised.
+
+    Given a flat index sequence partitioned into bags by ``offsets``, the
+    :math:`i`-th pooled output is
+
+    .. math::
+
+        \hat{W}_{rc} = (W^{q}_{rc} - z_r)\, s_r,
+        \qquad
+        \operatorname{out}[i] = \operatorname{reduce}_{k \in \operatorname{bag}_i}
+            \hat{W}[\, x_k\, ]
+
+    where :math:`s_r, z_r` are the row-:math:`r` scale / zero-point (symmetric
+    ``qint8``) and ``reduce`` is one of ``sum``, ``mean``, or ``max`` selected by
+    ``mode``. The reduction runs on the dequantized (float) rows.
 
     Parameters
     ----------
@@ -134,11 +222,46 @@ class EmbeddingBag(nn.Module):
         If given, the embedding at this index is treated as padding. Defaults
         to ``None``.
 
+    Attributes
+    ----------
+    weight_int8 : Tensor
+        The ``int8`` table codes, shape ``(num_embeddings, embedding_dim)``.
+    weight_scale : Tensor
+        Per-row (per-token) scale, shape ``(num_embeddings,)``.
+    weight_zero_point : Tensor
+        Per-row (per-token) zero-point, shape ``(num_embeddings,)`` — all zero
+        under the default symmetric ``qint8`` scheme.
+
     Notes
     -----
-    The table is quantized **per-row on axis 0** (one ``scale`` per token) with
-    a symmetric qint8 grid. When the source module carries no ``qconfig``, a
-    default per-channel qint8 observer is used to calibrate the rows.
+    - Instances are normally produced by :func:`lucid.quantization.convert` (or
+      :meth:`from_float`), **not** constructed directly: a bare instance holds a
+      zeroed table with identity qparams and pools to zeros until ``from_float`` /
+      ``load_state_dict`` populates the buffers.
+    - The table is quantized **per-row on axis 0** (one ``scale`` per token) with
+      a symmetric ``qint8`` grid. When the source module carries no ``qconfig``,
+      a default per-channel ``qint8`` observer calibrates the rows.
+    - Memory: the int8 codes plus per-row scale shrink the table payload
+      ~``3.55x`` versus ``float32`` — as with :class:`Embedding`, the layer wins
+      on memory, not compute (pooling runs in float post-dequantize).
+    - ``offsets`` marks where each bag begins in a flat index tensor; pass a 2-D
+      index tensor instead to treat every row as its own fixed-length bag.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> bag = nn.EmbeddingBag(1000, 32, mode="mean")
+    >>> qbag = nn.quantized.EmbeddingBag.from_float(bag)
+    >>> idx = lucid.tensor([1, 2, 4, 5, 4])
+    >>> offsets = lucid.tensor([0, 3])              # two bags: [1,2,4] and [5,4]
+    >>> qbag(idx, offsets).shape                    # one pooled vector per bag
+    (2, 32)
+
+    See Also
+    --------
+    lucid.nn.quantized.Embedding : The unpooled (one-row-per-index) analogue.
+    lucid.nn.functional.embedding_bag : The pooled lookup run each forward.
+    lucid.quantization.convert : Installs this layer from a calibrated model.
     """
 
     weight_int8: Tensor

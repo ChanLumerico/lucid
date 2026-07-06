@@ -21,21 +21,66 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class QParams:
-    """Immutable bundle of the parameters that define a quantized tensor.
+    r"""Immutable bundle of everything that defines a quantized tensor's grid.
 
-    Parameters
+    A quantized tensor in Lucid's *sidecar* representation is an ordinary integer
+    :class:`~lucid.Tensor` plus the metadata needed to interpret its codes as real
+    numbers. :class:`QParams` is that metadata gathered into one frozen value object:
+    the ``scale`` / ``zero_point`` produced by calibration, together with the
+    :class:`~lucid.quantization.QScheme` (grid geometry) and
+    :class:`~lucid.quantization.QDtype` (grid range) they were derived under, plus the
+    channel axis for per-channel schemes.
+
+    It is the return-shape of an observer's calibration: an observer records a range,
+    calls :func:`calculate_qparams` to get ``(scale, zero_point)``, and packages the
+    result — with the scheme / dtype it used — into a :class:`QParams` so downstream
+    quantize / dequantize / fake-quant calls have a single self-describing object to
+    read from.
+
+    Attributes
     ----------
     scale : Tensor
-        Quantization step; scalar for per-tensor, length-``C`` for
-        per-channel.
+        The quantization step size — how many real units one integer code spans. A
+        scalar for per-tensor schemes; a length-``C`` vector for per-channel schemes.
     zero_point : Tensor
-        Integer offset (stored as an integer-valued float tensor).
+        The integer code that real 0 maps to, stored as an integer-valued float tensor.
+        0 (or the grid midpoint) for symmetric schemes; solved for under affine
+        schemes. Same shape as ``scale``.
     qscheme : QScheme
-        The mapping family.
+        The mapping family (per-tensor / per-channel × affine / symmetric) the
+        parameters were derived under.
     qdtype : QDtype
-        The target integer grid.
-    ch_axis : int, optional
-        Channel axis for per-channel schemes; ``None`` for per-tensor.
+        The target integer grid (bit width + ``[quant_min, quant_max]``) the codes
+        clamp to.
+    ch_axis : int or None, default None
+        The channel axis for per-channel schemes; ``None`` for per-tensor.
+
+    Notes
+    -----
+    - Frozen (``@dataclass(frozen=True)``): a :class:`QParams` is a value, safe to share
+      and compare; re-calibration produces a new instance rather than mutating one.
+    - ``scale`` and ``zero_point`` always share a shape, and it is that shape (scalar vs
+      length-``C``) — not ``qscheme`` alone — that a kernel broadcasts against.
+    - The pair is consumed by :func:`~lucid.quantization.quantize` /
+      :func:`~lucid.quantization.dequantize` /
+      :func:`~lucid.quantization.fake_quantize`, which broadcast ``scale`` /
+      ``zero_point`` along ``ch_axis``.
+
+    Examples
+    --------
+    >>> import lucid.quantization as Q
+    >>> scale, zp = Q.calculate_qparams(-2.0, 6.0, Q.per_tensor_affine, Q.quint8)
+    >>> p = Q.QParams(scale, zp, Q.per_tensor_affine, Q.quint8)
+    >>> p.qscheme.is_per_channel, p.ch_axis
+    (False, None)
+    >>> round(float(p.scale.item()), 4)        # (6 - (-2)) / 255
+    0.0314
+
+    See Also
+    --------
+    calculate_qparams : Derives the ``scale`` / ``zero_point`` a :class:`QParams` holds.
+    lucid.quantization.QScheme : The grid-geometry field.
+    lucid.quantization.QDtype : The grid-range field.
     """
 
     scale: Tensor
@@ -54,37 +99,93 @@ def calculate_qparams(
 ) -> tuple[Tensor, Tensor]:
     r"""Derive ``(scale, zero_point)`` from an observed value range.
 
-    Implements the standard affine / symmetric calibration.  The observed
-    range is first extended to include zero (so real 0 is always
-    representable), then:
+    The shared calibration math behind every observer. Given the ``[min_val, max_val]``
+    range an observer recorded, it solves for the affine map
+    :math:`q = \operatorname{round}(x / s) + z` that packs that range into the target
+    grid ``[q_\min, q_\max]``. The observed range is first **extended to include zero**
+    (``min <- min(min, 0)``, ``max <- max(max, 0)``) so that real 0 is always exactly
+    representable — a property the padding / masking paths rely on.
 
-    * **affine** — :math:`s = (\max - \min)/(q_\max - q_\min)`,
-      :math:`z = \operatorname{clip}(q_\min - \operatorname{round}(\min/s),
-      q_\min, q_\max)`;
-    * **symmetric** — :math:`s = \max(|\min|, |\max|) / ((q_\max -
-      q_\min)/2)` with ``z`` pinned to 0 (signed) or mid-range
-      (unsigned).
+    The scheme's symmetry then selects the formula:
 
-    Works elementwise, so scalar ``min_val`` / ``max_val`` yield per-tensor
-    params and length-``C`` inputs yield per-channel params.
+    .. math::
+
+        \textbf{affine:}\quad
+        s = \frac{\max - \min}{q_\max - q_\min},\qquad
+        z = \operatorname{clip}\!\bigl(q_\min - \operatorname{round}(\min / s),\;
+            q_\min,\; q_\max\bigr)
+
+    .. math::
+
+        \textbf{symmetric:}\quad
+        s = \frac{\max(\lvert\min\rvert,\ \lvert\max\rvert)}{(q_\max - q_\min) / 2},
+        \qquad
+        z = \begin{cases}
+            0 & \text{signed} \\
+            \lfloor (q_\max + q_\min + 1)/2 \rfloor & \text{unsigned}
+        \end{cases}
+
+    ``scale`` is floored at ``eps`` in every branch so a degenerate (constant) range
+    never yields a zero or infinite step. The whole computation is elementwise, so
+    scalar ``min_val`` / ``max_val`` produce per-tensor (scalar) parameters and
+    length-``C`` inputs produce per-channel (vector) parameters — the function does not
+    itself branch on granularity, only on symmetry.
 
     Parameters
     ----------
     min_val, max_val : Tensor or float
-        Observed minimum / maximum (per-tensor scalars or per-channel
-        vectors).
+        The observed minimum / maximum of the tensor being calibrated — per-tensor
+        scalars, or length-``C`` vectors for a per-channel scheme. Plain Python floats
+        are lifted to scalar tensors.
     qscheme : QScheme
-        Mapping family.
+        The mapping family; only its :attr:`~QScheme.is_symmetric` flag is consulted
+        here (granularity is implied by the shape of ``min_val`` / ``max_val``).
     qdtype : QDtype
-        Target grid supplying ``quant_min`` / ``quant_max``.
+        The target grid, supplying ``quant_min`` / ``quant_max`` and ``signed``.
     eps : float, default 1e-8
-        Lower floor on ``scale`` to avoid division by zero on a degenerate
-        (constant) range.
+        Lower floor on ``scale`` to avoid a division-by-zero step on a degenerate
+        (constant-valued) range.
 
     Returns
     -------
     (Tensor, Tensor)
-        ``scale`` and ``zero_point`` tensors.
+        The ``scale`` and ``zero_point`` tensors, matching the shape of the inputs
+        (scalar for per-tensor, length-``C`` for per-channel). ``zero_point`` is
+        integer-valued but carried as a float tensor.
+
+    Notes
+    -----
+    - **Zero is always representable.** Extending the range to include 0 guarantees a
+      code for real 0, which matters wherever padding / masking injects exact zeros.
+    - **Symmetric ``zero_point``.** Signed grids pin it to 0 (so integer matmuls need no
+      weight-offset correction); unsigned grids pin it to the grid midpoint.
+    - **Granularity is shape-driven.** There is no per-channel branch — passing vectors
+      in yields vectors out, so a single code path serves both granularities.
+    - Mirrors the reference framework's calibration but stays entirely on Lucid tensor
+      ops (no external numeric library).
+
+    Examples
+    --------
+    >>> import lucid.quantization as Q
+    >>> # affine quint8 over an asymmetric activation range:
+    >>> s, z = Q.calculate_qparams(-2.0, 6.0, Q.per_tensor_affine, Q.quint8)
+    >>> round(float(s.item()), 4), int(z.item())     # (6 - (-2)) / 255, then clip
+    (0.0314, 64)
+    >>> # symmetric qint8 weight — zero_point pinned to 0:
+    >>> s, z = Q.calculate_qparams(-0.8, 0.5, Q.per_channel_symmetric, Q.qint8)
+    >>> int(z.item())
+    0
+    >>> # degenerate (constant) range floors scale at eps, never 0:
+    >>> s, _ = Q.calculate_qparams(3.0, 3.0, Q.per_tensor_affine, Q.qint8)
+    >>> bool(s.item() > 0)
+    True
+
+    See Also
+    --------
+    QParams : Bundles the returned ``(scale, zero_point)`` with its scheme / dtype.
+    lucid.quantization.QScheme : Selects affine vs symmetric here.
+    lucid.quantization.QDtype : Supplies ``quant_min`` / ``quant_max`` / ``signed``.
+    lucid.quantization.quantize : Applies the derived parameters to produce codes.
     """
     min_t: Tensor = (
         min_val if isinstance(min_val, Tensor) else lucid.tensor(float(min_val))

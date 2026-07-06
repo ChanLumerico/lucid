@@ -40,18 +40,127 @@ if TYPE_CHECKING:
 
 
 class ObserverBase(nn.Module):
-    """Base class for statistics collectors that yield ``(scale, zero_point)``.
+    r"""Abstract base for calibration observers that yield ``(scale, zero_point)``.
+
+    An *observer* is the calibration workhorse of the quantization subsystem: an
+    :class:`~lucid.nn.Module` that watches a tensor stream during a calibration pass,
+    accumulates a summary statistic (a running min/max, a channel-wise range, or a value
+    histogram), and on demand distills that statistic into the ``(scale, zero_point)``
+    pair a quantized tensor needs. Its ``forward`` is the *identity* — it observes ``x``
+    and returns it untouched — so an observer can be spliced inline into a prepared graph
+    or wrapped by a :class:`FakeQuantize` without perturbing numerics. Concrete
+    subclasses override :meth:`forward` (to fold each batch into the running statistic)
+    and :meth:`calculate_qparams` (to reduce that statistic to qparams).
+
+    **What ``calculate_qparams`` computes.** Every min/max-family subclass funnels its
+    observed range through the shared affine / symmetric calibration in
+    :func:`~lucid.quantization.calculate_qparams`. The range is first widened to include
+    real zero (so ``0.0`` is always representable), then mapped onto the integer grid
+    ``[q_min, q_max]`` of :attr:`qdtype`:
+
+    .. math::
+
+        \text{affine:}\quad
+        s = \frac{\max - \min}{q_{\max} - q_{\min}},\qquad
+        z = \operatorname{clip}\!\bigl(q_{\min} - \operatorname{round}(\min/s),\,
+            q_{\min},\, q_{\max}\bigr)
+
+    .. math::
+
+        \text{symmetric:}\quad
+        s = \frac{\max(|\min|,\,|\max|)}{(q_{\max} - q_{\min})/2},\qquad
+        z = \begin{cases} 0 & \text{signed} \\
+             \lfloor (q_{\max}+q_{\min}+1)/2 \rfloor & \text{unsigned} \end{cases}
+
+    with a floor :math:`s \leftarrow \max(s, \varepsilon)` guarding a degenerate
+    (constant-input) range. Affine spends a free ``zero_point`` to pack an asymmetric
+    range tightly (ideal for post-ReLU activations); symmetric pins ``zero_point`` so
+    real 0 lands exactly on a code (the standard choice for signed weights).
+
+    **Choosing a subclass.** Pick along three axes. *Granularity* — per-tensor
+    (:class:`MinMaxObserver`, one pair for the whole tensor) vs per-channel
+    (:class:`PerChannelMinMaxObserver`, one pair per output channel, far tighter for
+    conv / linear weights whose channels differ in range). *Outlier robustness* — a hard
+    running min/max grabs every spike, an EMA variant
+    (:class:`MovingAverageMinMaxObserver`) smooths per-batch outliers, and
+    :class:`HistogramObserver` clips the tails to minimise L2 error on heavy-tailed
+    activations. *Fixed-range* — ops whose output range is known a priori use
+    :class:`FixedQParamsObserver`, and dtype-only carriers use
+    :class:`PlaceholderObserver` / :class:`NoopObserver`.
 
     Parameters
     ----------
     qscheme : QScheme
-        Target quantization scheme.
+        Target quantization scheme — one of ``per_tensor_affine`` /
+        ``per_tensor_symmetric`` / ``per_channel_affine`` / ``per_channel_symmetric``.
+        Selects the affine-vs-symmetric branch above and whether qparams are scalar or
+        per-channel vectors.
     qdtype : QDtype
-        Target quantized dtype.
+        Target quantized dtype supplying the grid bounds ``quant_min`` / ``quant_max``
+        (e.g. ``quint8`` → ``[0, 255]``, ``qint8`` → ``[-128, 127]``) and the on-device
+        storage dtype that physically holds the integer codes.
     ch_axis : int, optional
-        Channel axis; forced to ``None`` for per-tensor schemes.
+        Channel axis quantized independently. Forced to ``None`` for per-tensor schemes
+        regardless of the value passed.
     eps : float, default 1e-8
-        Lower floor on ``scale`` passed to :func:`calculate_qparams`.
+        Lower floor on the derived ``scale``, forwarded to
+        :func:`~lucid.quantization.calculate_qparams` to avoid division by zero.
+
+    Attributes
+    ----------
+    qscheme : QScheme
+        The stored target scheme.
+    qdtype : QDtype
+        The stored target dtype.
+    ch_axis : int or None
+        The effective channel axis (``None`` unless the scheme is per-channel).
+    eps : float
+        The stored scale floor.
+
+    Notes
+    -----
+    - **Identity forward.** ``forward`` returns its input unchanged; only the side effect
+      of updating the running buffers matters. This is what lets an observer be spliced
+      into a prepared model transparently.
+    - **Buffer re-registration contract.** Subclasses update their running statistics by
+      *re-registering* the buffer (``register_buffer`` with the same name), never by
+      plain attribute assignment: Lucid's ``Module.__setattr__`` drops a name from
+      ``_buffers`` on reassignment, so re-registration is the only correct in-place
+      update — and it transparently absorbs the scalar-seed → per-channel-vector shape
+      change on the first observation.
+    - **Not instantiated directly.** ``ObserverBase`` is abstract; its
+      :meth:`calculate_qparams` raises :class:`NotImplementedError`. Use a concrete
+      subclass, or :meth:`with_args` to defer construction into a
+      :class:`~lucid.quantization.QConfig`.
+    - **H4 purity.** Every statistic is computed on the public ``lucid.*`` op surface —
+      no external numeric libraries — so the same code path is correct on both the
+      Accelerate (CPU) and MLX (GPU) streams.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.MinMaxObserver()            # a concrete ObserverBase subclass
+    >>> _ = obs(lucid.randn(64, 128))       # forward observes and returns x unchanged
+    >>> scale, zero_point = obs.calculate_qparams()
+    >>> scale.shape, zero_point.shape
+    ((), ())
+
+    Deferring construction into a :class:`~lucid.quantization.QConfig` recipe:
+
+    >>> factory = Q.PerChannelMinMaxObserver.with_args(ch_axis=0)
+    >>> obs2 = factory()                    # zero-arg factory builds a fresh observer
+    >>> type(obs2).__name__
+    'PerChannelMinMaxObserver'
+
+    See Also
+    --------
+    lucid.quantization.MinMaxObserver : Per-tensor running min/max (the common default).
+    lucid.quantization.PerChannelMinMaxObserver : Per-channel weight observer.
+    lucid.quantization.HistogramObserver : Tail-clipping observer for activations.
+    lucid.quantization.calculate_qparams : The shared range → ``(scale, zero_point)`` map.
+    lucid.quantization.QConfig : Pairs activation + weight observer factories.
+    lucid.quantization.FakeQuantize : Wraps an observer for quantization-aware training.
     """
 
     def __init__(
@@ -83,23 +192,103 @@ class ObserverBase(nn.Module):
 
 
 class MinMaxObserver(ObserverBase):
-    """Per-tensor observer tracking the global running min / max of the input.
+    r"""Per-tensor observer tracking the global running min / max of the input.
 
-    The default activation / weight statistic: every batch's overall ``min`` /
-    ``max`` is folded into a running range, from which :meth:`calculate_qparams`
-    derives a single per-tensor ``(scale, zero_point)``.  Simple and robust,
-    though sensitive to outliers — see :class:`MovingAverageMinMaxObserver` and
-    :class:`HistogramObserver` for outlier-tolerant variants.
+    The simplest and most common calibration statistic: on every batch it folds the
+    tensor's overall ``min`` / ``max`` into a *cumulative* running range, and
+    :meth:`calculate_qparams` distills that single ``[min_val, max_val]`` into one
+    per-tensor ``(scale, zero_point)`` pair. It is the natural default for activations
+    and a serviceable choice for weights, but because the running range only ever grows,
+    a single spike in any calibration batch permanently widens it — wasting codes on a
+    range that most values never occupy.
+
+    **When to pick it.** Reach for ``MinMaxObserver`` when the tensor's distribution is
+    well-behaved (roughly bounded, light-tailed) and you want the cheapest possible
+    calibration. If a few calibration batches carry outliers, prefer
+    :class:`MovingAverageMinMaxObserver`, whose EMA lets the range *relax* back toward
+    the bulk of the data; for heavy-tailed activations where clipping the tails buys real
+    accuracy, prefer :class:`HistogramObserver`. For weights, the per-channel
+    :class:`PerChannelMinMaxObserver` is almost always tighter.
+
+    Per batch the running range is the cumulative min/max:
+
+    .. math::
+
+        \text{min\_val} \leftarrow \min(\text{min\_val},\ \min_i x_i),\qquad
+        \text{max\_val} \leftarrow \max(\text{max\_val},\ \max_i x_i)
+
+    seeded from :math:`(+\infty, -\infty)`, then reduced to qparams by the affine map of
+    :func:`~lucid.quantization.calculate_qparams` (range first widened to include 0):
+
+    .. math::
+
+        s = \frac{\text{max\_val} - \text{min\_val}}{q_{\max} - q_{\min}},\qquad
+        z = \operatorname{clip}\!\bigl(q_{\min} -
+            \operatorname{round}(\text{min\_val}/s),\ q_{\min},\ q_{\max}\bigr)
+
+    (or the symmetric form of the base class if a symmetric ``qscheme`` is passed).
 
     Parameters
     ----------
     qscheme : QScheme, default ``per_tensor_affine``
-        Target quantization scheme.
+        Target quantization scheme. Affine spends a free ``zero_point`` to fit an
+        asymmetric range tightly (e.g. post-ReLU activations).
     qdtype : QDtype, default ``quint8``
-        Target quantized dtype.
+        Target quantized dtype; ``quint8`` gives the unsigned grid ``[0, 255]``.
     eps : float, default 1e-8
-        Lower floor on the derived ``scale`` (avoids division by zero on a
-        constant input).
+        Lower floor on the derived ``scale`` — avoids a zero scale on a constant input
+        (``min_val == max_val``).
+
+    Attributes
+    ----------
+    min_val : Tensor
+        Scalar (shape ``()``) running minimum, seeded ``+inf``.
+    max_val : Tensor
+        Scalar (shape ``()``) running maximum, seeded ``-inf``.
+
+    Notes
+    -----
+    - **Cumulative, not per-batch.** ``min_val`` / ``max_val`` are monotone: they only
+      widen across calibration, so the final range reflects the extreme of *all* data
+      seen, not any single batch. This is the source of the outlier sensitivity.
+    - **Buffer re-registration.** ``forward`` updates the range via ``register_buffer``
+      (same name), per the :class:`ObserverBase` in-place-update contract.
+    - **Symmetric vs affine.** With a symmetric ``qscheme`` the base-class math pins
+      ``zero_point`` (0 for a signed dtype, mid-range for unsigned); with an affine
+      scheme ``zero_point`` is free.
+    - **Uncalibrated.** Before the first ``forward`` the range is ``[+inf, -inf]``;
+      calling :meth:`calculate_qparams` on it yields a meaningless (infinite) scale —
+      always calibrate first.
+    - Not the default in :func:`~lucid.quantization.get_default_qconfig` (which uses
+      :class:`HistogramObserver` for activations); it is the plain building block the EMA
+      and per-channel variants specialise.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.MinMaxObserver()
+    >>> for _ in range(4):                       # feed several calibration batches
+    ...     _ = obs(lucid.randn(32, 256))
+    >>> scale, zero_point = obs.calculate_qparams()
+    >>> bool(scale.item() > 0)
+    True
+
+    An *uncalibrated* observer still holds the ``[+inf, -inf]`` seed, so its range is
+    degenerate until it has seen data:
+
+    >>> fresh = Q.MinMaxObserver()
+    >>> import math
+    >>> math.isinf(fresh.min_val.item()), math.isinf(fresh.max_val.item())
+    (True, True)
+
+    See Also
+    --------
+    lucid.quantization.MovingAverageMinMaxObserver : EMA variant, robust to outliers.
+    lucid.quantization.PerChannelMinMaxObserver : Per-channel granularity for weights.
+    lucid.quantization.HistogramObserver : Tail-clipping for heavy-tailed activations.
+    lucid.quantization.calculate_qparams : The range → ``(scale, zero_point)`` reduction.
+    lucid.quantization.FakeQuantize : Wraps an observer for QAT.
     """
 
     min_val: Tensor
@@ -130,10 +319,104 @@ class MinMaxObserver(ObserverBase):
 
 
 class MovingAverageMinMaxObserver(MinMaxObserver):
-    """Per-tensor observer with an exponential moving average of min / max.
+    r"""Per-tensor observer with an exponential moving average of min / max.
 
-    Smooths the running range across calibration batches, which is more
-    robust to per-batch outliers than a hard running min/max.
+    An outlier-tolerant refinement of :class:`MinMaxObserver`. Instead of taking a hard
+    cumulative min/max, it tracks an *exponential moving average* of each batch's range,
+    so a single anomalous batch nudges the running range only slightly and is soon
+    forgotten as later batches pull it back toward the bulk of the data. The result is a
+    tighter, more representative grid than a plain min/max on noisy activation streams —
+    at the cost of one hyperparameter, the averaging constant.
+
+    **When to pick it.** Prefer this over :class:`MinMaxObserver` whenever calibration
+    data may contain occasional spikes (most real activation streams do) and you want a
+    range that reflects the *typical* extreme rather than the absolute worst case. It is
+    the activation observer wrapped by :class:`FakeQuantize` in
+    :func:`~lucid.quantization.get_default_qat_qconfig`, where smoothing also stabilises
+    training. For heavy-tailed distributions where you would rather *clip* the tail than
+    average it, :class:`HistogramObserver` is stronger; for weights, use
+    :class:`MovingAveragePerChannelMinMaxObserver`.
+
+    The first batch *seeds* the range directly (the ``±inf`` seed cannot be averaged);
+    every later batch applies the EMA update with averaging constant :math:`c`:
+
+    .. math::
+
+        \text{min\_val} \leftarrow (1-c)\,\text{min\_val} + c\,(\min_i x_i)
+            = \text{min\_val} + c\,(\min_i x_i - \text{min\_val}),
+
+    .. math::
+
+        \text{max\_val} \leftarrow (1-c)\,\text{max\_val} + c\,(\max_i x_i)
+            = \text{max\_val} + c\,(\max_i x_i - \text{max\_val}).
+
+    Smaller :math:`c` means heavier smoothing (slower to react, more outlier-robust);
+    :math:`c = 1` degenerates to using only the latest batch. The reduction to
+    ``(scale, zero_point)`` is the same affine / symmetric map inherited from
+    :class:`MinMaxObserver`.
+
+    Parameters
+    ----------
+    qscheme : QScheme, default ``per_tensor_affine``
+        Target quantization scheme.
+    qdtype : QDtype, default ``quint8``
+        Target quantized dtype (unsigned ``[0, 255]`` grid).
+    averaging_constant : float, default 0.01
+        EMA weight :math:`c \in (0, 1]` of each new batch's range; smaller is smoother
+        and more outlier-robust, larger reacts faster.
+    eps : float, default 1e-8
+        Lower floor on the derived ``scale``.
+
+    Attributes
+    ----------
+    min_val : Tensor
+        Scalar (shape ``()``) EMA of the batch minimum, seeded ``+inf``.
+    max_val : Tensor
+        Scalar (shape ``()``) EMA of the batch maximum, seeded ``-inf``.
+    averaging_constant : float
+        The stored EMA weight :math:`c`.
+
+    Notes
+    -----
+    - **First-batch seeding.** ``forward`` detects the ``+inf`` seed and copies the first
+      batch's range in verbatim; the EMA recurrence applies only from the second batch
+      on. Without this the average would be corrupted by the infinite seed.
+    - **Not cumulative.** Unlike :class:`MinMaxObserver`, the range can *shrink* between
+      batches — this is exactly why a lone outlier does not permanently widen the grid.
+    - **Buffer re-registration.** The EMA update is written back via ``register_buffer``
+      (same name), per the :class:`ObserverBase` contract.
+    - **Symmetric vs affine** behaves as in the base class; ``averaging_constant`` only
+      affects the running range, not the range → qparams reduction.
+    - Default activation observer of :func:`~lucid.quantization.get_default_qat_qconfig`
+      (wrapped in :class:`FakeQuantize`).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.MovingAverageMinMaxObserver(averaging_constant=0.1)
+    >>> for _ in range(8):
+    ...     _ = obs(lucid.randn(16, 128))
+    >>> scale, zero_point = obs.calculate_qparams()
+    >>> bool(scale.item() > 0)
+    True
+
+    A lone outlier batch barely moves the smoothed range (contrast the hard-min/max
+    observer, which would absorb the full spike):
+
+    >>> obs = Q.MovingAverageMinMaxObserver(averaging_constant=0.01)
+    >>> _ = obs(lucid.zeros(1, 4))               # seed range ~ [0, 0]
+    >>> _ = obs(lucid.full((1, 4), 1000.0))      # one huge batch
+    >>> bool(obs.max_val.item() < 20.0)          # EMA absorbed only ~1% of the spike
+    True
+
+    See Also
+    --------
+    lucid.quantization.MinMaxObserver : Hard cumulative min/max (no smoothing).
+    lucid.quantization.MovingAveragePerChannelMinMaxObserver : Per-channel EMA analogue.
+    lucid.quantization.HistogramObserver : Tail-clipping alternative for outliers.
+    lucid.quantization.get_default_qat_qconfig : Uses this observer for activations.
+    lucid.quantization.FakeQuantize : Wraps it for quantization-aware training.
     """
 
     def __init__(
@@ -165,25 +448,115 @@ class MovingAverageMinMaxObserver(MinMaxObserver):
 
 
 class PerChannelMinMaxObserver(ObserverBase):
-    """Per-channel observer tracking a running min / max along ``ch_axis``.
+    r"""Per-channel observer tracking a running min / max along ``ch_axis``.
 
-    The standard **weight** observer: it keeps an independent ``[min, max]`` per
-    channel (reducing over every other axis), so :meth:`calculate_qparams`
-    returns a *vector* of ``(scale, zero_point)`` — one per output channel.
-    Per-channel granularity is markedly more accurate than per-tensor for conv /
-    linear kernels whose channels differ in dynamic range.
+    The standard **weight** observer. Rather than one range for the whole tensor, it
+    keeps an independent ``[min, max]`` for every slice along ``ch_axis`` — reducing over
+    all *other* axes — so :meth:`calculate_qparams` returns a length-``C`` *vector* of
+    ``(scale, zero_point)``, one per output channel. Because different output neurons /
+    filters routinely span wildly different dynamic ranges, a single per-tensor scale is
+    dominated by the widest channel and quantizes the rest coarsely; a per-channel scale
+    tracks each one tightly, which is why per-channel symmetric ``qint8`` is the standard
+    accuracy-preserving choice for convolution and linear weights.
+
+    **When to pick it.** Use it for **weights** — it is the weight observer in both
+    :func:`~lucid.quantization.get_default_qconfig` (static PTQ) and
+    :func:`~lucid.quantization.get_default_qat_qconfig` (QAT, wrapped in
+    :class:`FakeQuantize`). It is *not* used for activations, whose channel layout varies
+    per op and which are cheaper to quantize per-tensor. For a smoothed per-channel range
+    over noisy weight calibration, use :class:`MovingAveragePerChannelMinMaxObserver`.
+
+    Writing the input with ``ch_axis`` moved to the front and the rest flattened,
+    :math:`x^{(c)}` denotes the values of channel :math:`c`; each channel keeps its own
+    cumulative range:
+
+    .. math::
+
+        \text{min\_val}_c \leftarrow \min\!\bigl(\text{min\_val}_c,\ \min x^{(c)}\bigr),
+        \qquad
+        \text{max\_val}_c \leftarrow \max\!\bigl(\text{max\_val}_c,\ \max x^{(c)}\bigr)
+
+    then the (default symmetric, signed) reduction pins ``zero_point`` to 0 and scales
+    each channel by its own peak magnitude:
+
+    .. math::
+
+        s_c = \frac{\max(|\text{min\_val}_c|,\ |\text{max\_val}_c|)}
+                   {(q_{\max} - q_{\min})/2},\qquad z_c = 0
+
+    (an affine ``qscheme`` instead yields per-channel ``(s_c, z_c)`` via the base-class
+    affine map).
 
     Parameters
     ----------
     ch_axis : int, default 0
-        Axis whose entries are quantized independently (output channels — axis 0
-        for conv / linear weights).
+        Axis whose entries are quantized independently — the output-channel axis, which
+        is 0 for both conv weights ``(out, in, kh, kw)`` and linear weights ``(out, in)``.
     qscheme : QScheme, default ``per_channel_symmetric``
-        Target quantization scheme.
+        Target quantization scheme; the per-channel default pins ``zero_point`` per
+        channel.
     qdtype : QDtype, default ``qint8``
-        Target quantized dtype.
+        Target quantized dtype; ``qint8`` gives the signed grid ``[-128, 127]``.
     eps : float, default 1e-8
-        Lower floor on each derived ``scale``.
+        Lower floor on each derived per-channel ``scale``.
+
+    Attributes
+    ----------
+    min_val : Tensor
+        Per-channel running minimum, shape ``(C,)`` after the first batch (scalar
+        ``+inf`` seed before it).
+    max_val : Tensor
+        Per-channel running maximum, shape ``(C,)`` after the first batch (scalar
+        ``-inf`` seed before it).
+
+    Notes
+    -----
+    - **Scalar seed → per-channel vector.** The buffers start as scalar ``±inf``; the
+      first ``forward`` broadcasts that seed against the length-``C`` batch range, so
+      ``min_val`` / ``max_val`` acquire shape ``(C,)`` on the first observation. This
+      shape change rides on the buffer re-registration contract (plain assignment would
+      drop the buffer from ``_buffers``).
+    - **Cumulative** per channel — like :class:`MinMaxObserver`, the ranges only widen,
+      so the observer is outlier-sensitive; smooth with the moving-average variant.
+    - **Symmetric vs affine.** The default per-channel-symmetric scheme fixes
+      ``zero_point = 0`` (signed weights map 0 → 0 exactly); an affine scheme gives each
+      channel a free zero-point.
+    - **Reduction axes.** Every axis except ``ch_axis`` is reduced, so the number of
+      qparams equals ``x.shape[ch_axis]``.
+    - Weight observer of both default QConfigs
+      (:func:`~lucid.quantization.get_default_qconfig` and
+      :func:`~lucid.quantization.get_default_qat_qconfig`).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.PerChannelMinMaxObserver(ch_axis=0)
+    >>> _ = obs(lucid.randn(16, 8))              # 16 output channels
+    >>> scale, zero_point = obs.calculate_qparams()
+    >>> scale.shape                              # one scale per output channel
+    (16,)
+    >>> bool((zero_point == 0).all().item())     # symmetric ⇒ zero_point pinned to 0
+    True
+
+    Per-channel is far tighter than per-tensor when channels differ in range — here one
+    row is ~1000x larger, yet each row keeps its own scale:
+
+    >>> import lucid
+    >>> w = lucid.stack([lucid.ones(4) * 0.001, lucid.ones(4) * 1.0])
+    >>> obs = Q.PerChannelMinMaxObserver(ch_axis=0)
+    >>> _ = obs(w)
+    >>> s, _ = obs.calculate_qparams()
+    >>> bool(s[0].item() < s[1].item())          # small-range row ⇒ smaller step
+    True
+
+    See Also
+    --------
+    lucid.quantization.MinMaxObserver : Per-tensor counterpart.
+    lucid.quantization.MovingAveragePerChannelMinMaxObserver : Per-channel EMA variant.
+    lucid.quantization.get_default_qconfig : Uses this as the weight observer.
+    lucid.nn.quantized.Linear : Consumes per-channel weight qparams at convert time.
+    lucid.quantization.calculate_qparams : The per-channel range → qparams reduction.
     """
 
     min_val: Tensor
@@ -222,14 +595,116 @@ class PerChannelMinMaxObserver(ObserverBase):
 
 
 class HistogramObserver(ObserverBase):
-    """Per-tensor observer that records a value histogram and picks a clip range.
+    r"""Per-tensor observer that records a value histogram and picks a clip range.
 
-    Accumulates a ``bins``-bucket histogram (via the engine ``histc``
-    primitive) over the running ``[min, max]``, rebinning when the range
-    grows.  ``calculate_qparams`` then selects the ``[new_min, new_max]``
-    clip that minimises the expected L2 quantization error estimated from
-    the histogram — trading a little clipping for much finer resolution on
-    heavy-tailed activations.
+    The accuracy-maximising activation observer. Instead of committing to the raw
+    ``[min, max]`` — which on a heavy-tailed activation would stretch the grid over a
+    handful of rare extremes and quantize the dense bulk coarsely — it accumulates a
+    ``bins``-bucket histogram of every value seen (via the engine ``histc`` primitive),
+    then at :meth:`calculate_qparams` time *searches* for the clip range
+    ``[new_min, new_max]`` that minimises the expected L2 quantization error. Clipping
+    the tails costs a little error on the rare outliers but wins far finer resolution on
+    the common values, which is usually a large net accuracy gain.
+
+    **When to pick it.** Use it for **activations** with skewed / heavy-tailed
+    distributions — it is the activation observer in
+    :func:`~lucid.quantization.get_default_qconfig` (static PTQ). It is more expensive
+    than min/max (it maintains a histogram and runs a search) and applies to per-tensor
+    affine schemes, so it is not used for per-channel weights (see
+    :class:`PerChannelMinMaxObserver`). When calibration is cheap and distributions are
+    light-tailed, plain :class:`MinMaxObserver` / :class:`MovingAverageMinMaxObserver`
+    suffice.
+
+    The running range widens with the data; when it grows the existing histogram is
+    *rebinned* onto the wider support before the new batch is added. With bin centers
+    :math:`c_i` and counts :math:`n_i`, the search evaluates candidate clip endpoints
+    :math:`[a, b]` (drawn from a few tail quantiles) and picks the pair minimising the
+    per-value clip error plus the uniform-quantization noise variance:
+
+    .. math::
+
+        \operatorname{err}(a, b) = \sum_i n_i
+            \Bigl[\bigl(c_i - \operatorname{clip}(c_i, a, b)\bigr)^2
+                  + \tfrac{\Delta^2}{12}\Bigr],
+        \qquad \Delta = \frac{b - a}{q_{\max} - q_{\min}},
+
+    where the first term is the squared clipping error (mass pushed onto the boundary)
+    and :math:`\Delta^2/12` is the variance of rounding to a uniform grid of step
+    :math:`\Delta`. The winning :math:`[a, b]` is then fed to
+    :func:`~lucid.quantization.calculate_qparams` for the final affine ``(scale,
+    zero_point)``.
+
+    Parameters
+    ----------
+    bins : int, default 2048
+        Number of histogram buckets over the running ``[min, max]``. More bins give a
+        finer clip search at higher memory / compute cost.
+    qscheme : QScheme, default ``per_tensor_affine``
+        Target quantization scheme (the clip search assumes a per-tensor grid).
+    qdtype : QDtype, default ``quint8``
+        Target quantized dtype; ``quint8`` gives the unsigned ``[0, 255]`` grid.
+    eps : float, default 1e-8
+        Lower floor on the derived ``scale``.
+
+    Attributes
+    ----------
+    min_val : Tensor
+        Scalar (shape ``()``) running minimum of the histogram support, seeded ``+inf``.
+    max_val : Tensor
+        Scalar (shape ``()``) running maximum of the histogram support, seeded ``-inf``.
+    histogram : Tensor
+        The accumulated value histogram, shape ``(bins,)``, seeded to zeros.
+
+    Notes
+    -----
+    - **Rebinning on growth.** When a batch widens ``[min, max]``, the stored histogram
+      is redistributed onto the new, wider bin grid before the fresh counts are added, so
+      accumulated mass is preserved rather than discarded.
+    - **Search is a coarse scan.** The clip endpoints are candidate tail quantiles
+      (``0, 1e-5, 1e-4, 1e-3, 5e-3, 1e-2``), not a full exhaustive sweep — a deliberate
+      speed / accuracy trade-off. The best-scoring pair wins.
+    - **Data-dependent control flow.** ``forward`` reads ``x.min()/.max()`` via
+      ``.item()`` and the search runs in Python over ``histogram.tolist()``; this is a
+      sanctioned CPU round-trip (data-dependent output), still H4-pure (engine ``histc``,
+      no external histogram library).
+    - **Buffer re-registration.** ``min_val`` / ``max_val`` / ``histogram`` are all
+      updated via ``register_buffer`` (same name) per the :class:`ObserverBase` contract.
+    - **Symmetric vs affine.** The reduction honours ``qscheme``; the default per-tensor
+      affine leaves ``zero_point`` free to fit the (clipped) asymmetric range.
+    - Default activation observer of :func:`~lucid.quantization.get_default_qconfig`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.HistogramObserver(bins=512)
+    >>> for _ in range(4):
+    ...     _ = obs(lucid.randn(8, 1024))
+    >>> obs.histogram.shape
+    (512,)
+    >>> scale, zero_point = obs.calculate_qparams()
+    >>> bool(scale.item() > 0)
+    True
+
+    On a heavy-tailed input the search clips the rare extreme, so the chosen range is
+    *narrower* than the raw min/max the histogram spans:
+
+    >>> import lucid
+    >>> x = lucid.randn(1, 100000)
+    >>> x[0, 0] = 50.0                           # a single far outlier
+    >>> obs = Q.HistogramObserver(bins=2048)
+    >>> _ = obs(x)
+    >>> s, _ = obs.calculate_qparams()
+    >>> bool(s.item() * 255 < 50.0)              # grid span clipped below the outlier
+    True
+
+    See Also
+    --------
+    lucid.quantization.MinMaxObserver : Cheaper per-tensor observer (no clip search).
+    lucid.quantization.MovingAverageMinMaxObserver : EMA alternative for outliers.
+    lucid.quantization.get_default_qconfig : Uses this as the activation observer.
+    lucid.quantization.calculate_qparams : Reduces the chosen clip range to qparams.
+    lucid.quantization.FakeQuantize : Wraps an observer for QAT.
     """
 
     min_val: Tensor
@@ -348,24 +823,94 @@ def _quantile_from_hist(counts: list[float], centers: list[float], q: float) -> 
 
 
 class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
-    """Per-channel observer with an EMA of the per-channel min / max.
+    r"""Per-channel observer with an EMA of the per-channel min / max.
 
-    The per-channel analogue of :class:`MovingAverageMinMaxObserver` — smooths
-    each channel's range across calibration batches (robust to per-batch
-    outliers), which the reference framework ships as a distinct observer.
+    The per-channel analogue of :class:`MovingAverageMinMaxObserver`, and the
+    outlier-tolerant sibling of :class:`PerChannelMinMaxObserver`. It keeps an
+    independent range per channel along ``ch_axis`` (reducing over every other axis) but
+    updates each channel's ``[min, max]`` with an exponential moving average instead of a
+    hard cumulative min/max — so a spike in one calibration batch nudges that channel's
+    range only slightly and is relaxed back by later batches. :meth:`calculate_qparams`
+    still returns a length-``C`` vector of ``(scale, zero_point)``.
+
+    **When to pick it.** Use it for **weights** when weight calibration is noisy (e.g.
+    running statistics observed during QAT rather than on static weights) and you want
+    per-channel tightness *and* per-batch robustness. For static weights the plain
+    :class:`PerChannelMinMaxObserver` is usually enough; for activations, use the
+    per-tensor :class:`MovingAverageMinMaxObserver` or :class:`HistogramObserver`.
+
+    With :math:`x^{(c)}` the values of channel :math:`c` in the current batch, the first
+    batch seeds each channel directly and every later batch applies the per-channel EMA:
+
+    .. math::
+
+        \text{min\_val}_c \leftarrow \text{min\_val}_c
+            + c\,\bigl(\min x^{(c)} - \text{min\_val}_c\bigr),\qquad
+        \text{max\_val}_c \leftarrow \text{max\_val}_c
+            + c\,\bigl(\max x^{(c)} - \text{max\_val}_c\bigr),
+
+    where :math:`c` is ``averaging_constant``. The reduction to per-channel qparams is
+    the (default symmetric, signed) map inherited from
+    :class:`PerChannelMinMaxObserver`, pinning each ``z_c = 0``.
 
     Parameters
     ----------
     ch_axis : int, default 0
-        Axis quantized independently (output channels).
+        Output-channel axis quantized independently (0 for conv / linear weights).
     qscheme : QScheme, default ``per_channel_symmetric``
         Target quantization scheme.
     qdtype : QDtype, default ``qint8``
-        Target quantized dtype.
+        Target quantized dtype (signed ``[-128, 127]`` grid).
     averaging_constant : float, default 0.01
-        EMA weight of each new batch's range; smaller is smoother / slower.
+        EMA weight :math:`c \in (0, 1]` of each new batch's per-channel range; smaller is
+        smoother / slower / more outlier-robust.
     eps : float, default 1e-8
-        Lower floor on each derived ``scale``.
+        Lower floor on each derived per-channel ``scale``.
+
+    Attributes
+    ----------
+    min_val : Tensor
+        Per-channel EMA minimum, shape ``(C,)`` after the first batch (scalar ``+inf``
+        seed before it).
+    max_val : Tensor
+        Per-channel EMA maximum, shape ``(C,)`` after the first batch (scalar ``-inf``
+        seed before it).
+    averaging_constant : float
+        The stored EMA weight :math:`c`.
+
+    Notes
+    -----
+    - **First-batch seeding is explicit.** Because the scalar ``±inf`` seed cannot be
+      broadcast into an elementwise ``where`` against a length-``C`` batch range,
+      ``forward`` special-cases the first observation and copies the per-channel range in
+      directly; the EMA recurrence runs only from the second batch on.
+    - **Not cumulative** — each channel's range can shrink between batches (the whole
+      point of the EMA), unlike :class:`PerChannelMinMaxObserver`.
+    - **Buffer re-registration** carries both the scalar-seed → ``(C,)`` shape change and
+      every later in-place EMA update, per the :class:`ObserverBase` contract.
+    - **Symmetric vs affine** behaves as in the per-channel base class; the default pins
+      each ``zero_point`` to 0.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.MovingAveragePerChannelMinMaxObserver(ch_axis=0, averaging_constant=0.1)
+    >>> for _ in range(8):
+    ...     _ = obs(lucid.randn(12, 32))         # 12 output channels
+    >>> scale, zero_point = obs.calculate_qparams()
+    >>> scale.shape
+    (12,)
+    >>> bool((zero_point == 0).all().item())     # per-channel symmetric ⇒ z = 0
+    True
+
+    See Also
+    --------
+    lucid.quantization.PerChannelMinMaxObserver : Hard per-channel min/max (no smoothing).
+    lucid.quantization.MovingAverageMinMaxObserver : Per-tensor EMA counterpart.
+    lucid.quantization.get_default_qat_qconfig : QAT recipe using per-channel weights.
+    lucid.quantization.calculate_qparams : The per-channel range → qparams reduction.
+    lucid.quantization.FakeQuantize : Wraps an observer for QAT.
     """
 
     def __init__(
@@ -400,25 +945,93 @@ class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
 
 
 class FixedQParamsObserver(ObserverBase):
-    """Observer with a fixed ``(scale, zero_point)`` — no statistics collected.
+    r"""Observer with a fixed ``(scale, zero_point)`` — no statistics collected.
 
-    For ops whose output range is known a priori (``sigmoid`` → ``[0, 1]``,
-    ``tanh`` → ``[-1, 1]``, ``softmax`` → ``[0, 1]``): the grid is fixed, so
-    calibration would be wasted.  ``forward`` is the identity and
-    :meth:`calculate_qparams` returns the constructor-supplied qparams verbatim.
+    For ops whose output range is *known a priori*, calibration is pointless: the grid
+    can be fixed once and for all. The canonical cases are bounded activations —
+    ``sigmoid`` → ``[0, 1]``, ``softmax`` → ``[0, 1]``, ``tanh`` → ``[-1, 1]`` — where
+    the ideal ``(scale, zero_point)`` is a closed-form function of the dtype grid, not
+    something the data can improve on. ``FixedQParamsObserver`` carries that fixed pair,
+    makes ``forward`` a pure identity (no statistics gathered), and returns the supplied
+    qparams verbatim from :meth:`calculate_qparams`.
+
+    **When to pick it.** Use it on the output of a range-bounded op so calibration does
+    not waste effort (or worse, under-shoot the true bound) estimating a range you
+    already know. For a ``sigmoid``/``softmax`` output on the unsigned ``quint8`` grid
+    ``[0, 255]`` the natural choice is ``scale = 1/256, zero_point = 0`` (mapping
+    ``[0, 1]`` onto the full grid); a ``tanh`` output ``[-1, 1]`` uses ``scale = 2/256``
+    with a mid-grid ``zero_point``. For every unbounded tensor, use a statistics-collecting
+    observer (:class:`MinMaxObserver`, :class:`HistogramObserver`, …) instead.
+
+    There is no statistic and no reduction — the qparams are the constants themselves:
+
+    .. math::
+
+        (\text{scale},\ \text{zero\_point}) = (s_{\text{fixed}},\ z_{\text{fixed}}),
+        \qquad \hat{x} = \bigl(\operatorname{clip}(\operatorname{round}(x/s_{\text{fixed}})
+            + z_{\text{fixed}},\ q_{\min},\ q_{\max}) - z_{\text{fixed}}\bigr)\,
+            s_{\text{fixed}}
+
+    independent of any observed data.
 
     Parameters
     ----------
     scale : float
-        The fixed quantization step size.
+        The fixed quantization step size :math:`s_{\text{fixed}}`.
     zero_point : int
-        The fixed integer mapped to real value ``0``.
+        The fixed integer code that real value ``0`` maps to.
     qscheme : QScheme, default ``per_tensor_affine``
-        Target quantization scheme (metadata only; qparams are fixed).
+        Target quantization scheme — metadata only; the qparams are fixed regardless.
     qdtype : QDtype, default ``quint8``
-        Target quantized dtype.
+        Target quantized dtype recorded for downstream consumers (grid bounds).
     eps : float, default 1e-8
-        Retained for interface symmetry; unused (the ``scale`` is fixed).
+        Retained for interface symmetry with :class:`ObserverBase`; unused because the
+        ``scale`` is fixed (never derived, so never floored).
+
+    Attributes
+    ----------
+    scale : Tensor
+        Scalar (shape ``()``) fixed quantization step.
+    zero_point : Tensor
+        Scalar (shape ``()``) fixed zero-point (stored as an integer-valued float).
+
+    Notes
+    -----
+    - **Identity forward.** ``forward`` returns ``x`` unchanged and collects nothing —
+      the two buffers are set once at construction and never move.
+    - **No calibration needed.** :meth:`calculate_qparams` never raises (unlike
+      :class:`PlaceholderObserver`); it simply returns the stored ``(scale, zero_point)``,
+      so it is valid to call immediately after construction with no forward passes.
+    - **Buffers, not stats.** ``scale`` / ``zero_point`` are registered buffers, so they
+      persist through ``state_dict`` and move with ``.to(device)`` like any other buffer.
+    - **Metadata fields.** ``qscheme`` / ``eps`` are stored for interface symmetry but do
+      not affect the returned qparams.
+
+    Examples
+    --------
+    A fixed observer for a ``sigmoid`` output on the ``quint8`` grid — the ``[0, 1]``
+    range maps onto ``[0, 255]`` with ``scale = 1/256``:
+
+    >>> import lucid.quantization as Q
+    >>> obs = Q.FixedQParamsObserver(scale=1.0 / 256, zero_point=0)
+    >>> scale, zero_point = obs.calculate_qparams()   # valid with no calibration
+    >>> round(scale.item(), 6), int(zero_point.item())
+    (0.003906, 0)
+
+    The forward is a pure identity — feeding data changes nothing:
+
+    >>> import lucid
+    >>> before = obs.scale.item()
+    >>> _ = obs(lucid.randn(4, 4))
+    >>> obs.scale.item() == before
+    True
+
+    See Also
+    --------
+    lucid.quantization.PlaceholderObserver : Dtype carrier whose qparams instead raise.
+    lucid.quantization.MinMaxObserver : Statistics-collecting observer for unbounded ops.
+    lucid.quantization.calculate_qparams : The range-based reduction this observer skips.
+    lucid.quantization.FakeQuantize : Wraps an observer for QAT.
     """
 
     scale: Tensor
@@ -447,20 +1060,80 @@ class FixedQParamsObserver(ObserverBase):
 
 
 class PlaceholderObserver(ObserverBase):
-    """Carries ``qdtype`` metadata but collects no statistics.
+    r"""Carries ``qdtype`` / ``qscheme`` metadata but collects no statistics.
 
-    Used where activation qparams are produced at *runtime* (dynamic quant) or
-    deliberately absent — the observer only records the target dtype / scheme,
-    so :meth:`calculate_qparams` raises rather than returning a range.
+    A pure metadata carrier for the cases where a range cannot — or should not — be
+    calibrated ahead of time. The prototypical use is **dynamic quantization**, where an
+    activation's ``(scale, zero_point)`` is computed *at runtime* from the actual input
+    of each forward, so estimating a static range during a calibration pass would be
+    meaningless. The observer still needs to advertise the *target* dtype and scheme to
+    downstream consumers (the convert pass, the quantized module), which is exactly what
+    it records — and nothing more. Its ``forward`` is the identity, and because there is
+    no statistic to reduce, :meth:`calculate_qparams` deliberately **raises**.
+
+    **When to pick it.** Use it wherever qparams are supplied elsewhere or produced
+    later: the activation slot of a dynamic-quant recipe, or a tensor deliberately
+    excluded from static calibration. If the range *is* fixed and known, use
+    :class:`FixedQParamsObserver` (whose ``calculate_qparams`` returns the constants
+    instead of raising); if the range should be *learned* from data, use a
+    statistics-collecting observer such as :class:`MinMaxObserver` or
+    :class:`HistogramObserver`.
+
+    There is no statistic and no reduction — only the recorded metadata; asking for
+    qparams is an error:
+
+    .. math::
+
+        \text{calculate\_qparams}() \;\Rightarrow\;
+        \textbf{raise } \texttt{RuntimeError}
 
     Parameters
     ----------
     qscheme : QScheme, default ``per_tensor_affine``
         Target quantization scheme recorded for downstream consumers.
     qdtype : QDtype, default ``quint8``
-        Target quantized dtype recorded for downstream consumers.
+        Target quantized dtype recorded for downstream consumers (grid + storage).
     eps : float, default 1e-8
-        Retained for interface symmetry; unused (no range is derived).
+        Retained for interface symmetry with :class:`ObserverBase`; unused because no
+        range is ever derived.
+
+    Attributes
+    ----------
+    qscheme : QScheme
+        The recorded target scheme (metadata only).
+    qdtype : QDtype
+        The recorded target dtype (metadata only).
+
+    Notes
+    -----
+    - **No buffers.** Unlike the min/max family, this observer registers no running
+      statistic — there is nothing to persist beyond the metadata fields.
+    - **Identity forward.** ``forward`` returns ``x`` unchanged and gathers nothing.
+    - **``calculate_qparams`` raises.** It throws :class:`RuntimeError` by design — the
+      qparams are produced at runtime (dynamic quantization) or supplied elsewhere, so
+      there is no stored range to return. Callers must not treat this observer as a
+      static-range source.
+    - **Relation to** :class:`NoopObserver` — ``NoopObserver`` is a named subclass with
+      identical behaviour, used to mark tensors that should pass through untouched.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.PlaceholderObserver()
+    >>> _ = obs(lucid.randn(4, 8))               # identity: observes nothing
+    >>> try:
+    ...     obs.calculate_qparams()              # no statistic ⇒ raises
+    ... except RuntimeError as e:
+    ...     print("raised")
+    raised
+
+    See Also
+    --------
+    lucid.quantization.NoopObserver : Named no-op subclass with the same behaviour.
+    lucid.quantization.FixedQParamsObserver : Fixed qparams (returns, does not raise).
+    lucid.quantization.MinMaxObserver : Statistics-collecting observer for static ranges.
+    lucid.quantization.FakeQuantize : Wraps an observer for QAT.
     """
 
     def __init__(
@@ -485,11 +1158,62 @@ class PlaceholderObserver(ObserverBase):
 
 
 class NoopObserver(PlaceholderObserver):
-    """A no-op :class:`PlaceholderObserver` — pure identity, collects no stats.
+    r"""A no-op :class:`PlaceholderObserver` — pure identity, collects no statistics.
 
-    Named alias the reference framework uses to mark tensors that should pass
-    through the observed graph **without** any statistic gathering (e.g. an
-    already-quantized input, or a layer deliberately excluded from calibration).
-    Inherits the ``qscheme`` / ``qdtype`` / ``eps`` constructor of
-    :class:`PlaceholderObserver` unchanged.
+    The intent-revealing name for a :class:`PlaceholderObserver`: a tensor should flow
+    through the observed graph **without any statistic gathering at all**. Whereas a bare
+    ``PlaceholderObserver`` reads as "qparams come from elsewhere (dynamic quant)",
+    ``NoopObserver`` reads as "this tensor is deliberately *not* quantized here" — an
+    already-quantized input, a residual passed straight through, or a layer explicitly
+    excluded from calibration. Behaviourally the two are identical: ``forward`` is the
+    identity and :meth:`calculate_qparams` raises. Only the name (and the reader's
+    intent) differs.
+
+    **When to pick it.** Use it to annotate a passthrough tensor in a QConfig / mapping
+    so the tooling records the "leave alone" intent explicitly rather than by omission.
+    When qparams really are produced at runtime, prefer :class:`PlaceholderObserver`;
+    when a fixed grid is known, use :class:`FixedQParamsObserver`.
+
+    Like its parent it holds no statistic and its qparams query is an error:
+
+    .. math::
+
+        \text{forward}(x) = x,\qquad
+        \text{calculate\_qparams}() \;\Rightarrow\;
+        \textbf{raise } \texttt{RuntimeError}
+
+    Parameters
+    ----------
+    qscheme : QScheme, default ``per_tensor_affine``
+        Target quantization scheme recorded for downstream consumers (metadata only).
+    qdtype : QDtype, default ``quint8``
+        Target quantized dtype recorded for downstream consumers (metadata only).
+    eps : float, default 1e-8
+        Retained for interface symmetry; unused (no range is derived).
+
+    Notes
+    -----
+    - **Pure alias.** Inherits the ``qscheme`` / ``qdtype`` / ``eps`` constructor and all
+      behaviour of :class:`PlaceholderObserver` unchanged; it overrides nothing.
+    - **Identity forward, raising qparams** — same contract as the parent; the class
+      exists to make "no observation" a first-class, greppable choice.
+    - **No buffers**, so nothing is added to the ``state_dict`` beyond the metadata.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> obs = Q.NoopObserver()
+    >>> x = lucid.randn(2, 3)
+    >>> bool((obs(x) == x).all().item())         # identity passthrough
+    True
+    >>> isinstance(obs, Q.PlaceholderObserver)   # it *is* a PlaceholderObserver
+    True
+
+    See Also
+    --------
+    lucid.quantization.PlaceholderObserver : The parent — dtype carrier, qparams raise.
+    lucid.quantization.FixedQParamsObserver : Fixed qparams for range-bounded ops.
+    lucid.quantization.MinMaxObserver : Statistics-collecting observer for static ranges.
+    lucid.quantization.FakeQuantize : Wraps an observer for QAT.
     """

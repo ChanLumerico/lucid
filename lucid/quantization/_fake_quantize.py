@@ -27,15 +27,137 @@ if TYPE_CHECKING:
 
 
 class FakeQuantize(nn.Module):
-    """Observer + straight-through fake-quantization, toggleable for QAT.
+    r"""Observer + straight-through fake-quantization, toggleable for QAT.
+
+    The building block of **quantization-aware training** (QAT). A ``FakeQuantize`` sits
+    on a weight or activation and, on every forward, does two things: it lets its wrapped
+    observer refresh ``(scale, zero_point)`` from the live statistics, then it applies
+    :func:`~lucid.quantization.fake_quantize` — rounding the tensor onto the integer grid
+    and back to float — so the downstream graph *sees the quantization error* while
+    training still runs in float. This is what lets a network learn weights that are
+    robust to the eventual int8 inference numerics: the forward simulates quantization,
+    and a straight-through estimator (STE) keeps the operation differentiable so the
+    rounding does not block gradients.
+
+    **Observer vs fake-quant, decoupled.** The two behaviours are independently gated by
+    :meth:`enable_observer` / :meth:`enable_fake_quant`, which drives the standard QAT
+    schedule: observe + fake-quant early so statistics settle and the net adapts, then
+    :meth:`disable_observer` to freeze the grid once ranges converge (and, in fused
+    stacks, freeze BN stats). With the observer off but fake-quant on, the layer keeps
+    quantizing against the last-learned qparams; with fake-quant off it is a pure
+    passthrough (the observer may still watch).
+
+    **The straight-through fake-quant.** Writing :math:`S, Z` for the current
+    ``(scale, zero_point)`` and :math:`[q_\min, q_\max]` for the grid, the forward
+    computes the quantize→dequantize round-trip in the float domain:
+
+    .. math::
+
+        \hat{x} = \bigl(\operatorname{clip}(\operatorname{round}(x/S) + Z,\
+            q_\min,\ q_\max) - Z\bigr)\,S.
+
+    The :math:`\operatorname{round}` step has a zero (a.e.) derivative, which would kill
+    training, so the backward substitutes the **straight-through estimator** — gradient
+    passes through unchanged inside the grid and is zeroed where the code saturates:
+
+    .. math::
+
+        \frac{\partial \hat{x}}{\partial x} =
+        \begin{cases}
+            1 & q_\min \le \operatorname{round}(x/S) + Z \le q_\max \\
+            0 & \text{otherwise}
+        \end{cases}
+
+    so :math:`\nabla_x = \nabla_{\hat{x}} \cdot \mathbb{1}[\,\text{code in range}\,]`.
+    The qparams :math:`S, Z` are treated as constants of the step (they are refreshed by
+    the observer, not learned through this gradient).
 
     Parameters
     ----------
     observer : type[ObserverBase], default MovingAverageMinMaxObserver
-        Observer class instantiated to track statistics.
+        Observer *class* (not instance) instantiated once to track the statistics from
+        which ``(scale, zero_point)`` are derived. The default matches the activation
+        recipe of :func:`~lucid.quantization.get_default_qat_qconfig`.
     **observer_kwargs : object
-        Forwarded to the observer constructor (``qscheme`` / ``qdtype`` /
-        ``ch_axis`` / …).
+        Forwarded verbatim to the observer constructor — e.g. ``qscheme`` / ``qdtype`` /
+        ``ch_axis`` / ``averaging_constant`` — so one :class:`FakeQuantize` can wrap any
+        observer configuration (per-tensor activation or per-channel weight).
+
+    Attributes
+    ----------
+    activation_post_process : ObserverBase
+        The live wrapped observer instance; its :meth:`calculate_qparams` supplies the
+        grid on each forward.
+    scale : Tensor
+        Scalar (or length-``C`` for per-channel) quantization step, refreshed from the
+        observer while observing is enabled. Seeded to ``1.0``.
+    zero_point : Tensor
+        The matching zero-point, refreshed alongside ``scale``. Seeded to ``0.0``.
+    qdtype : QDtype
+        Target dtype, mirrored from the wrapped observer (supplies the grid bounds).
+    qscheme : QScheme
+        Target scheme, mirrored from the wrapped observer.
+    ch_axis : int or None
+        Per-channel axis, mirrored from the wrapped observer (``None`` for per-tensor),
+        passed to :func:`~lucid.quantization.fake_quantize` so per-channel qparams
+        broadcast correctly.
+
+    Notes
+    -----
+    - **QAT schedule.** Typical use: start with both toggles on; call
+      :meth:`disable_observer` once activation ranges stabilise to freeze the grid, so the
+      final quantized weights are trained against fixed qparams.
+    - **STE saturation mask.** The backward zeroes gradient for values whose code lands
+      outside ``[q_min, q_max]`` — saturated activations receive no learning signal,
+      which nudges the observer's range to cover them.
+    - **Buffer re-registration.** Refreshed ``scale`` / ``zero_point`` are written back
+      via ``register_buffer`` (same name), the same in-place-update contract the
+      observers use, so the qparams persist through ``state_dict``.
+    - **Per-channel weights.** When wrapping a per-channel observer (``ch_axis`` set), the
+      fake-quant applies a distinct ``(scale, zero_point)`` per channel — the QAT analogue
+      of the per-channel int8 weight used at inference by
+      :class:`~lucid.nn.quantized.Linear`.
+    - **Default QAT recipe.** :func:`~lucid.quantization.get_default_qat_qconfig` builds
+      one ``FakeQuantize`` for activations (wrapping
+      :class:`~lucid.quantization.MovingAverageMinMaxObserver`) and one for weights
+      (wrapping :class:`~lucid.quantization.PerChannelMinMaxObserver`).
+    - Use :meth:`with_args` to defer construction into a
+      :class:`~lucid.quantization.QConfig` as a zero-arg factory.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.quantization as Q
+    >>> fq = Q.FakeQuantize()                    # wraps MovingAverageMinMaxObserver
+    >>> y = fq(lucid.randn(8, 16))               # observe, then round-trip through grid
+    >>> y.shape
+    (8, 16)
+    >>> bool(fq.scale.item() > 0)                # qparams refreshed from the observer
+    True
+
+    Freezing the observer holds the grid fixed while fake-quant keeps applying it — the
+    QAT "freeze ranges near convergence" step:
+
+    >>> _ = fq.disable_observer()
+    >>> frozen = fq.scale.item()
+    >>> _ = fq(lucid.randn(8, 16) * 100.0)       # a wild batch cannot move the grid now
+    >>> fq.scale.item() == frozen
+    True
+
+    Turning fake-quant off makes the module a pure passthrough (identity):
+
+    >>> _ = fq.disable_fake_quant()
+    >>> x = lucid.randn(2, 4)
+    >>> bool((fq(x) == x).all().item())
+    True
+
+    See Also
+    --------
+    lucid.quantization.fake_quantize : The underlying STE round-trip primitive.
+    lucid.quantization.MovingAverageMinMaxObserver : Default wrapped activation observer.
+    lucid.quantization.PerChannelMinMaxObserver : Default wrapped weight observer.
+    lucid.quantization.get_default_qat_qconfig : Builds the default QAT FakeQuantize pair.
+    lucid.nn.quantized.Linear : The int8 inference layer QAT trains toward.
     """
 
     scale: Tensor

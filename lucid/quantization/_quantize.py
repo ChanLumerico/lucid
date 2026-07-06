@@ -206,22 +206,87 @@ def prepare(
     qconfig: QConfig | QConfigMapping | None = None,
     inplace: bool = False,
 ) -> nn.Module:
-    """Insert activation observers ahead of calibration.
+    r"""Attach activation observers to a float model ahead of calibration.
+
+    ``prepare`` is step one of the eager-mode static post-training quantization
+    (PTQ) workflow — the classic ``prepare`` → *calibrate* → :func:`convert`
+    pipeline. It does not touch weights or change any numerics; it walks the
+    model and, for every quantizable module the :class:`QConfigMapping` selects,
+    attaches an **activation observer** as a forward hook. As calibration data
+    flows through the returned model, each observer records the running range
+    (min / max, or a histogram) of that module's output, and :func:`convert`
+    later reads those ranges to freeze the per-layer activation ``scale`` /
+    ``zero_point``.
+
+    Only module types in the observed set — Linear, the Conv / ConvTranspose
+    family, the intrinsic fused Conv/Linear+ReLU modules, a handful of
+    activations, and the ``QuantStub`` / ``FloatFunctional`` boundaries — receive
+    an observer, and only where the mapping returns a non-``None`` ``QConfig``
+    for them. The model is switched to ``eval`` mode so BatchNorm / Dropout stay
+    deterministic during calibration. Use this when you want the best accuracy
+    and can afford a calibration pass over representative data; for a
+    calibration-free path see :func:`quantize_dynamic`, and to make quantization
+    error visible to the optimizer see :func:`prepare_qat`.
 
     Parameters
     ----------
     model : nn.Module
-        Float model (with ``QuantStub`` / ``DeQuantStub`` boundaries).
+        The float model to observe. Explicit ``QuantStub`` / ``DeQuantStub``
+        boundaries are picked up automatically; if you would rather not place
+        them by hand, use :func:`prepare_fx`, which wraps them for you.
     qconfig : QConfig or QConfigMapping, optional
-        Quantization recipe; defaults to :func:`get_default_qconfig_mapping`.
+        The quantization recipe — a single :class:`QConfig` is promoted to a
+        global mapping, and ``None`` (default) falls back to
+        :func:`get_default_qconfig_mapping` (per-channel int8 weights,
+        per-tensor affine activations).
     inplace : bool, default False
-        Mutate ``model`` in place instead of deep-copying it.
+        If ``True`` mutate and return ``model`` itself; if ``False`` (default)
+        observe a :func:`copy.deepcopy` and leave the original untouched.
 
     Returns
     -------
     nn.Module
-        The prepared model — run calibration data through it, then
+        The prepared, ``eval``-mode model carrying activation observers. Run
+        representative data through it to calibrate, then pass it to
         :func:`convert`.
+
+    Notes
+    -----
+    - Non-destructive: with ``inplace=False`` the source model is deep-copied,
+      so the returned graph is a separate object.
+    - Nothing is quantized yet — the returned model still runs in full float and
+      is marginally *slower* than the original because of the observer hooks.
+      The size / speed win only lands after :func:`convert`.
+    - If the mapping matches no quantizable module a ``UserWarning`` is raised
+      and a later :func:`convert` leaves the model unchanged — usually a sign
+      the ``QConfigMapping`` targets types the model does not contain.
+    - Fuse Conv/BN/ReLU runs with :func:`fuse_modules` *before* ``prepare`` so
+      the observer sees the true post-fusion (e.g. post-ReLU) activation range.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 10))
+    >>> model.qconfig = Q.get_default_qconfig()
+    >>> prepared = Q.prepare(model)            # observers inserted (deep copy)
+    >>> for _ in range(8):                      # calibrate on representative data
+    ...     _ = prepared(lucid.randn(32, 128))
+    >>> qmodel = Q.convert(prepared)            # freeze qparams, bake int8 weights
+
+    Targeting a type the model does not contain warns, and the downstream
+    :func:`convert` becomes a no-op:
+
+    >>> mapping = Q.QConfigMapping().set_object_type(nn.Conv2d, Q.get_default_qconfig())
+    >>> _ = Q.prepare(nn.Sequential(nn.Linear(8, 8)), mapping)   # doctest: +SKIP
+    UserWarning: prepare(): the QConfigMapping matched no quantizable modules ...
+
+    See Also
+    --------
+    lucid.quantization.convert : Bake the calibrated model into quantized modules.
+    lucid.quantization.quantize_dynamic : Calibration-free dynamic quantization.
+    lucid.quantization.prepare_qat : Insert fake-quant for quantization-aware training.
+    lucid.quantization.fuse_modules : Fuse Conv/BN/ReLU runs before ``prepare``.
     """
     mapping = _as_mapping(qconfig)
     model = model if inplace else copy.deepcopy(model)
@@ -247,28 +312,92 @@ def prepare(
 
 
 def convert(model: nn.Module, inplace: bool = False) -> nn.Module:
-    """Swap calibrated float modules for their quantized replacements.
+    r"""Bake a calibrated model into quantized inference modules.
 
-    When ``lucid.backends.quantized.use_mlx()`` is true (the MLX quantized
-    engine is present), Linear-family layers are routed to the real weight-only
-    ``quantized_matmul`` GEMM — the genuine speed + memory win — instead of the
-    dequantize-to-float path.  Set ``backends.quantized.engine = "reference"``
-    to force the exact W8A8 dequant numerics on every layer.
+    ``convert`` is the final step of the static-PTQ pipeline (``prepare`` →
+    *calibrate* → ``convert``). It walks the calibrated model and swaps every
+    observed float submodule for its quantized counterpart: the learned float
+    weight is quantized once into int8 codes plus per-channel ``scale`` /
+    ``zero_point`` (dropping the float weight), and each activation observer's
+    recorded range is frozen into that layer's output qparams. What comes back
+    is a self-contained, ``eval``-mode model with no observers left — ready to
+    run or serialize, with a checkpoint roughly ``4x`` smaller than the float
+    original.
+
+    A submodule is convertible when calibration attached an
+    ``activation_post_process`` to it; a small always-convert set
+    (``DeQuantStub``, ``Embedding``, ``EmbeddingBag``) converts even without an
+    activation observer. Replacements are spliced in through ``_modules`` rather
+    than ``setattr`` so a ``Sequential``'s child order is preserved.
+
+    When ``lucid.backends.quantized.use_mlx()`` is true (the MLX quantized engine
+    is present), the Linear family is routed to the real weight-only
+    ``quantized_matmul`` GEMM — the genuine compute + memory win, at W8A16
+    numerics (weights int8/int4, activations kept float) — instead of the
+    dequantize-to-float reference path. On a fully-Metal model this is bandwidth-
+    bound and measures ~``3.15x`` faster at the memory-bound decode shape
+    ``M = 1`` with a weight payload ~``3.55x`` smaller; layers whose
+    ``in_features`` is not divisible by a supported MLX group size fall back to
+    the dequant path automatically. Set ``backends.quantized.engine =
+    "reference"`` to force the exact W8A8 dequant numerics on every layer.
 
     Parameters
     ----------
     model : nn.Module
-        A model previously returned by :func:`prepare` and run through
+        A model previously returned by :func:`prepare` and then run through
         calibration, so every quantizable submodule carries frozen activation
-        qparams.
+        qparams. QAT models (from :func:`prepare_qat`, fine-tuned) also convert
+        here — their ``nn.qat`` layers map to the same quantized inference layers.
     inplace : bool, default False
-        Mutate ``model`` in place instead of deep-copying it before conversion.
+        If ``True`` mutate and return ``model`` itself; if ``False`` (default)
+        convert a :func:`copy.deepcopy` and leave the calibrated model intact.
 
     Returns
     -------
     nn.Module
-        The converted, evaluation-mode model with int8 weights baked in and its
+        The converted, ``eval``-mode model with int8 weights baked in and its
         float submodules replaced by their quantized counterparts.
+
+    Notes
+    -----
+    - Non-destructive by default (deep-copy); pass ``inplace=True`` to convert
+      the calibrated model in place and reclaim its float weights.
+    - Only int8 codes + qparams + float bias enter the resulting ``state_dict``;
+      the float weight never does (a whole checkpoint shrinks ~``3.97x`` on
+      ``resnet_18``).
+    - The reference (non-MLX) path wins on **memory**, not compute — its GEMM
+      runs in float and so is roughly float-speed on the CPU stream. Convert with
+      the MLX backend active for the genuine low-precision compute speed-up.
+    - Calling ``convert`` on a model that was never calibrated is a silent
+      correctness bug: the output qparams are whatever the fresh observers hold
+      (often identity), so run calibration data through :func:`prepare`'s output
+      first.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.Linear(128, 64))
+    >>> model.qconfig = Q.get_default_qconfig()
+    >>> prepared = Q.prepare(model)
+    >>> for _ in range(8):                       # calibrate before converting
+    ...     _ = prepared(lucid.randn(32, 128))
+    >>> qmodel = Q.convert(prepared)
+    >>> type(qmodel[0]).__name__
+    'Linear'
+
+    The common mistake — converting straight after ``prepare`` with **no**
+    calibration — silently produces a model with meaningless activation qparams:
+
+    >>> prepared = Q.prepare(nn.Sequential(nn.Linear(128, 64)))  # doctest: +SKIP
+    >>> qmodel = Q.convert(prepared)   # no data ran through -> garbage output scale
+
+    See Also
+    --------
+    lucid.quantization.prepare : Insert observers ahead of calibration.
+    lucid.quantization.convert_fx : The graph-mode counterpart.
+    lucid.quantization.quantize_dynamic : Calibration-free alternative.
+    lucid.nn.quantized.Linear : The quantized layer this installs for Linear.
     """
     import lucid
     import lucid.nn.intrinsic as nni
@@ -303,22 +432,88 @@ def quantize_dynamic(
     dtype: QDtype = qint8,
     inplace: bool = False,
 ) -> nn.Module:
-    """Dynamically quantize a model — int8 weights, runtime-quantized activations.
+    r"""Dynamically quantize a model — int8 weights, runtime-quantized activations.
 
-    Unlike static PTQ this needs **no calibration**: every module whose type
-    is in ``qconfig_spec`` (default ``{Linear, LSTM}``) is swapped for its
-    dynamic counterpart, which measures the activation range per forward.
+    ``quantize_dynamic`` is the whole dynamic-PTQ workflow in one call: unlike
+    the static ``prepare`` → *calibrate* → ``convert`` flow it needs **no
+    calibration data and no observers**. Every module whose type is in
+    ``qconfig_spec`` (default ``{Linear, LSTM}``) is swapped in place for its
+    dynamic counterpart, which stores its weight as int8 codes but measures the
+    activation range and quantizes activations *per forward*, at runtime. That
+    makes it the go-to for models where activation statistics vary widely between
+    inputs and a fixed calibrated range would be a poor fit — most notably the
+    Linear-heavy stacks of Transformers and RNN language models, where the weight
+    memory dominates and per-call activation quantization costs little.
+
+    Because activation qparams are recomputed each call, dynamic quantization
+    captures the ``4x`` weight-memory win without an offline calibration pass, at
+    the cost of a small per-forward quantize overhead. Prefer static PTQ
+    (:func:`prepare` / :func:`convert`) when you can calibrate and want the
+    lowest inference latency; prefer this when calibration is impractical or the
+    stack is Linear-only.
+
+    When ``lucid.backends.quantized.use_mlx()`` is true, the Linear family is
+    routed to the real weight-only ``quantized_matmul`` MLX GEMM (the genuine
+    speed + memory win, W8A16 numerics), falling back to the dequantize path for
+    layers whose ``in_features`` is not group-size-divisible.
 
     Parameters
     ----------
     model : nn.Module
-        Float model.
+        The float model to quantize. A bare top-level target (e.g. calling this
+        directly on an ``nn.Linear``) is handled too — it has no parent to swap
+        it into, so the quantized module is returned directly.
     qconfig_spec : set of module types, optional
-        Which module types to quantize; defaults to ``{nn.Linear, nn.LSTM}``.
+        Which module types to quantize; ``None`` (default) uses the mapping's
+        keys — ``{nn.Linear, nn.LSTM}``.
     dtype : QDtype, default ``qint8``
-        Weight quantized dtype.
+        The quantized dtype for the weights (its ``bits`` also selects the MLX
+        fast-path bit width when that backend is active).
     inplace : bool, default False
-        Mutate in place instead of deep-copying.
+        If ``True`` mutate and return ``model`` itself; if ``False`` (default)
+        quantize a :func:`copy.deepcopy` and leave the original untouched.
+
+    Returns
+    -------
+    nn.Module
+        The dynamically-quantized, ``eval``-mode model (or the single quantized
+        module when a bare target was passed).
+
+    Notes
+    -----
+    - No calibration and no observers are inserted — the model is ready to run
+      immediately after this call.
+    - Only the targeted types are swapped; everything else (activations,
+      norms, attention softmax) stays float, so this is a *partial* quantization
+      aimed at the weight-heavy layers.
+    - If no module of a targeted type is found, a ``UserWarning`` is raised and
+      the model is returned unchanged.
+    - The model is switched to ``eval`` mode before swapping.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> mlp = nn.Sequential(nn.Linear(512, 512), nn.ReLU(), nn.Linear(512, 10))
+    >>> qmlp = Q.quantize_dynamic(mlp)          # no calibration needed
+    >>> type(qmlp[0]).__name__
+    'Linear'
+    >>> qmlp(lucid.randn(1, 512)).shape
+    (1, 10)
+
+    A model with no targeted layers warns and comes back unchanged — e.g. a
+    conv-only stack, since ``Conv2d`` is not a dynamic-quant target:
+
+    >>> conv = nn.Sequential(nn.Conv2d(3, 8, 3))
+    >>> Q.quantize_dynamic(conv) is not None    # doctest: +SKIP
+    UserWarning: quantize_dynamic(): no module of a targeted type (Linear, LSTM) found ...
+
+    See Also
+    --------
+    lucid.quantization.prepare : Static-PTQ observer insertion (needs calibration).
+    lucid.quantization.convert : Static-PTQ bake step.
+    lucid.quantization.prepare_qat : Quantization-aware training entry point.
+    lucid.nn.quantized.dynamic.Linear : The dynamic quantized Linear installed here.
     """
     import lucid
 
@@ -382,21 +577,76 @@ def prepare_qat(
     qconfig: QConfig | QConfigMapping | None = None,
     inplace: bool = False,
 ) -> nn.Module:
-    """Insert fake-quant modules for quantization-aware training.
+    r"""Insert fake-quant modules for quantization-aware training.
 
-    Swaps weighted layers for their :mod:`lucid.nn.qat` counterparts (weight +
-    output fake-quant) and attaches a fake-quant to every ``QuantStub``.  The
-    returned model is left in ``train`` mode — fine-tune it, then
-    :func:`convert` to the int8 inference model.
+    ``prepare_qat`` is the entry point of the QAT workflow — ``prepare_qat`` →
+    *fine-tune* → :func:`convert`. Where static PTQ only *observes* a frozen
+    float model, QAT makes the quantization grid part of the forward pass: this
+    swaps every weighted layer for its :mod:`lucid.nn.qat` counterpart (which
+    fake-quantizes both its weight and its output) and attaches a fake-quant to
+    every ``QuantStub``. During the subsequent fine-tuning the network *feels*
+    the int8 grid on each step — via the straight-through estimator of
+    :func:`fake_quantize` — and learns weights that minimize the rounding error,
+    typically recovering most of the accuracy a low-bit model would otherwise
+    lose. Reach for it when plain static PTQ drops too much accuracy (aggressive
+    bit widths, quantization-sensitive architectures).
+
+    Unlike :func:`prepare`, the returned model is left in **``train`` mode**: BN
+    keeps updating its running stats and the fake-quant grids track the evolving
+    ranges. Fuse Conv/BN with :func:`fuse_modules_qat` first so the folded
+    ``ConvBn*`` modules stay trainable and fold BN per forward under the STE.
+    After fine-tuning, :func:`convert` maps the ``nn.qat`` layers to the same
+    int8 inference layers a static-PTQ ``convert`` produces.
 
     Parameters
     ----------
     model : nn.Module
-        Float model with ``QuantStub`` / ``DeQuantStub`` boundaries.
+        Float model with ``QuantStub`` / ``DeQuantStub`` boundaries (and,
+        ideally, Conv/BN runs already fused for QAT).
     qconfig : QConfig or QConfigMapping, optional
-        QAT recipe; defaults to :func:`get_default_qat_qconfig_mapping`.
+        The QAT recipe — a single :class:`QConfig` is promoted to a global
+        mapping, and ``None`` (default) falls back to
+        :func:`get_default_qat_qconfig_mapping` (fused weight + activation
+        fake-quant).
     inplace : bool, default False
-        Mutate in place instead of deep-copying.
+        If ``True`` mutate and return ``model`` itself; if ``False`` (default)
+        prepare a :func:`copy.deepcopy` and leave the original untouched.
+
+    Returns
+    -------
+    nn.Module
+        The QAT-ready model in ``train`` mode. Fine-tune it, then call
+        :func:`convert` to obtain the int8 inference model.
+
+    Notes
+    -----
+    - Returned in ``train`` mode (contrast :func:`prepare`, which returns
+      ``eval``) — fake-quant and BN both need training-time behavior.
+    - Weighted layers become trainable fake-quant modules; their float weights
+      are kept and updated by the optimizer (nothing is baked to int8 until
+      :func:`convert`).
+    - Fuse with :func:`fuse_modules_qat` (not :func:`fuse_modules`) beforehand:
+      the eval-time BN fold would freeze BN, which QAT needs to keep learning.
+    - Non-destructive by default (deep-copy).
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 10))
+    >>> model.qconfig = Q.get_default_qat_qconfig()
+    >>> qat = Q.prepare_qat(model)              # fake-quant inserted, train mode
+    >>> qat.training
+    True
+    >>> # ... fine-tune qat for a few epochs with real labels ...
+    >>> qmodel = Q.convert(qat.eval())          # bake into the int8 inference model
+
+    See Also
+    --------
+    lucid.quantization.prepare : Static-PTQ observers (no fake-quant, eval mode).
+    lucid.quantization.convert : Bake the fine-tuned QAT model into int8.
+    lucid.quantization.fuse_modules_qat : Trainable Conv/BN fusion for QAT.
+    lucid.quantization.fake_quantize : The STE primitive QAT trains through.
     """
     if qconfig is None:
         mapping = get_default_qat_qconfig_mapping()

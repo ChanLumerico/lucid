@@ -23,11 +23,75 @@ if TYPE_CHECKING:
 
 
 class FloatFunctional(nn.Module):
-    """Float-domain quantizable merge ops; ``prepare`` observes their output.
+    """Float-domain quantizable merge ops whose output ``prepare`` observes.
 
-    Drop into a model in place of raw ``x + y`` / :func:`lucid.cat` so the merge
-    result is calibrated.  Until ``prepare`` attaches an ``activation_post_process``
-    observer these stay plain float ops (the ``_obs`` passthrough).
+    Element-wise merges — residual skip-adds, gated multiplies, concatenations —
+    carry no learnable weight, so the module-swap machinery that quantizes
+    ``Linear`` / ``Conv`` never sees a bare ``x + y`` or :func:`lucid.cat`. Yet a
+    residual network cannot be quantized end-to-end unless the *merge result* is
+    observed and later requantized to a consistent grid: otherwise the two
+    branches of an add arrive on different scales and the sum leaks precision.
+    ``FloatFunctional`` is the fix — a stateless module you call in place of the
+    raw op (``ff.add(x, y)`` instead of ``x + y``) so the merge gets a named site
+    the tooling can attach an observer to.
+
+    It is the calibration-time half of the pair. Until
+    :func:`lucid.quantization.prepare` installs an ``activation_post_process``
+    observer, every method is a plain float op routed through the ``_obs``
+    passthrough — the numerics are identical to writing the operator by hand.
+    Once prepared, each call additionally feeds its result to the observer, which
+    records the merged activation's dynamic range. :func:`lucid.quantization.convert`
+    then swaps the whole module for a :class:`QFunctional` carrying those qparams.
+
+    The exposed merges are ``add`` (residual skip-add), ``mul``, ``add_relu``
+    (the fused add-then-ReLU of a ResNet block), ``cat`` (concatenation along a
+    dim), and the scalar variants ``add_scalar`` / ``mul_scalar``.
+
+    Parameters
+    ----------
+    None
+        Constructed directly with no arguments (``nn.quantized.FloatFunctional()``)
+        and placed inside a float model. It gains its observer from ``prepare``
+        rather than from constructor arguments, and is replaced — not converted
+        in place — by :class:`QFunctional` at ``convert`` time.
+
+    Notes
+    -----
+    - Reuse **one** ``FloatFunctional`` per merge site; do not share a single
+      instance across unrelated adds, since they would then share one observer
+      and be forced onto a common, looser grid.
+    - Before ``prepare`` it is a transparent passthrough, so inserting it into a
+      float model never changes float-mode numerics — safe to add pre-emptively.
+    - Only the *output* is observed; the two operands keep whatever grids their
+      producing layers assigned.
+
+    Examples
+    --------
+    Residual skip-add inside a block — call ``add`` instead of ``+``:
+
+    >>> import lucid.nn as nn
+    >>> class Block(nn.Module):
+    ...     def __init__(self) -> None:
+    ...         super().__init__()
+    ...         self.conv = nn.Conv2d(8, 8, 3, padding=1)
+    ...         self.skip = nn.quantized.FloatFunctional()
+    ...     def forward(self, x):
+    ...         return self.skip.add(self.conv(x), x)   # not `self.conv(x) + x`
+
+    The common mistake is leaving the raw operator in place — the sum then has no
+    observer and cannot be requantized to a single grid:
+
+    >>> ff = nn.quantized.FloatFunctional()
+    >>> import lucid
+    >>> a, b = lucid.randn(4), lucid.randn(4)
+    >>> bool((ff.add(a, b) == a + b).all().item())      # identity pre-prepare
+    True
+
+    See Also
+    --------
+    lucid.nn.quantized.QFunctional : The converted, requantizing counterpart.
+    lucid.quantization.prepare : Attaches the observer these merges feed.
+    lucid.quantization.convert : Swaps this module for :class:`QFunctional`.
     """
 
     def _obs(self, x: Tensor) -> Tensor:
@@ -61,14 +125,81 @@ class FloatFunctional(nn.Module):
 
 
 class QFunctional(nn.Module):
-    """Quantized element-wise merges — each result fake-quantized to one grid.
+    r"""Quantized element-wise merges — each result fake-quantized to one grid.
 
-    The converted form of :class:`FloatFunctional`, produced by ``convert``.  It
-    exposes the same ``add`` / ``mul`` / ``cat`` / ``add_relu`` / ``*_scalar``
-    methods, but each fake-quantizes its output to the ``(scale, zero_point)``
-    the :class:`FloatFunctional` observed during calibration — so a residual add
-    or concat is requantized to a single consistent grid rather than left at
-    full precision.
+    The converted, inference-time form of :class:`FloatFunctional`, installed by
+    :func:`lucid.quantization.convert` (or built via :meth:`from_float`). It
+    exposes the identical surface — ``add``, ``mul``, ``add_relu``, ``cat``,
+    ``add_scalar``, ``mul_scalar`` — but every call now *fake-quantizes* its
+    output onto the single ``(scale, zero_point)`` grid the source
+    :class:`FloatFunctional` observed during calibration.
+
+    This is what makes residual quantization correct. A skip-add feeds two
+    branches that were quantized on their own scales; requantizing the sum to one
+    calibrated grid re-aligns them, so the block's output matches int8 numerics
+    instead of drifting off at full precision. Under the sidecar representation
+    (design B) the requantized result is carried as ``float32`` with int8
+    numerics — no packed-integer container is produced.
+
+    Every merge routes its raw float result :math:`t` through
+
+    .. math::
+
+        \operatorname{fake\_quant}(t) = \bigl(
+            \operatorname{clamp}(\operatorname{round}(t/S) + Z,\ q_{\min},\ q_{\max})
+            - Z\bigr)\, S
+
+    with the calibrated ``(scale, zero_point)`` :math:`S, Z` and grid bounds
+    :math:`q_{\min}, q_{\max}` (``0, 255`` for the default ``quint8``). Only the
+    output is snapped; ``add_relu`` applies the ReLU *before* this step so the
+    grid matches the post-ReLU range calibration saw.
+
+    Parameters
+    ----------
+    scale : Tensor
+        Per-tensor output scale, from the source ``FloatFunctional``'s observer.
+    zero_point : Tensor
+        Per-tensor output zero-point, from that same observer.
+    qdtype : QDtype, optional
+        Quantized dtype whose ``quant_min`` / ``quant_max`` bound the grid.
+        Defaults to :data:`~lucid.quantization.quint8` (``[0, 255]``).
+
+    Attributes
+    ----------
+    scale : Tensor
+        Scalar output-scale buffer shared by every merge method.
+    zero_point : Tensor
+        Scalar output zero-point buffer shared by every merge method.
+
+    Notes
+    -----
+    - Normally produced by ``convert`` / :meth:`from_float`, which reads the
+      calibrated ``FloatFunctional``'s observer; construct directly only when you
+      already hold the qparams.
+    - All merge methods share one grid — the module is bound to a single merge
+      site, mirroring the one-instance-per-site rule for ``FloatFunctional``.
+    - ``add_relu`` fuses add + ReLU into one requantization; prefer it over
+      ``F.relu(qf.add(x, y))`` so the observed and executed ranges agree.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> qf = nn.quantized.QFunctional(lucid.tensor(0.1), lucid.tensor(0.0))
+    >>> a = lucid.randn(4)
+    >>> qf.add(a, a).shape                       # residual add, requantized
+    (4,)
+
+    The fused residual-add of a ResNet block clamps negatives *before* the grid:
+
+    >>> out = qf.add_relu(lucid.randn(4), lucid.randn(4))
+    >>> bool((out >= 0).all().item())
+    True
+
+    See Also
+    --------
+    lucid.nn.quantized.FloatFunctional : The calibration-time counterpart.
+    lucid.quantization.fake_quantize : The op applied to each merge output.
+    lucid.quantization.convert : Installs this module from a calibrated model.
     """
 
     scale: Tensor
