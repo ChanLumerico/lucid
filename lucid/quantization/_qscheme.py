@@ -89,8 +89,7 @@ class QScheme(enum.Enum):
     See Also
     --------
     QDtype : The companion descriptor that fixes the integer grid (bits / range).
-    lucid.quantization.calculate_qparams : Turns an observed range into
-        ``(scale, zero_point)`` per this scheme.
+    lucid.quantization.calculate_qparams : Derives the scale + zero-point per this scheme.
     lucid.quantization.QParams : Bundles a scheme with its derived parameters.
     """
 
@@ -223,8 +222,7 @@ class QDtype:
     See Also
     --------
     QScheme : The companion descriptor fixing grid geometry (granularity / symmetry).
-    lucid.quantization.calculate_qparams : Reads ``quant_min`` / ``quant_max`` to derive
-        ``(scale, zero_point)``.
+    lucid.quantization.calculate_qparams : Reads ``quant_min`` / ``quant_max`` for qparams.
     lucid.quantization.QParams : Bundles a :class:`QDtype` with a scheme and params.
     """
 
