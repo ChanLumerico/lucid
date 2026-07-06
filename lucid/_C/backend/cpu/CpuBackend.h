@@ -4710,20 +4710,29 @@ public:
         const int num_emb = static_cast<int>(weight_shape[0]);
         const int D = static_cast<int>(weight_shape[1]);
         const int n_idx = static_cast<int>(shape_numel(indices_shape));
-        const auto* idx_p = reinterpret_cast<const std::int32_t*>(ci.ptr.get());
-        const auto* off_p = reinterpret_cast<const std::int32_t*>(co.ptr.get());
-        const int B = static_cast<int>(co.nbytes / sizeof(std::int32_t));
+        // Indices / offsets may be I32 or I64.  Read each per its actual dtype —
+        // this bag path previously hard-cast to int32, silently misreading an
+        // int64 index buffer (the common case, since index tensors default to
+        // I64).  The non-bag ``embedding_forward`` path is already dtype-aware.
+        auto read_int = [](const CpuStorage& s, int k) -> int {
+            return s.dtype == Dtype::I64
+                       ? static_cast<int>(
+                             reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
+                       : static_cast<int>(
+                             reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
+        };
+        const int B = static_cast<int>(co.nbytes / dtype_size(co.dtype));
 
         // Determine bag boundaries
         std::vector<int> starts(static_cast<std::size_t>(B));
         std::vector<int> ends(static_cast<std::size_t>(B));
         for (int b = 0; b < B; ++b) {
-            starts[static_cast<std::size_t>(b)] = static_cast<int>(off_p[b]);
+            starts[static_cast<std::size_t>(b)] = read_int(co, b);
             ends[static_cast<std::size_t>(b)] =
-                (b + 1 < B && !include_last_offset) ? static_cast<int>(off_p[b + 1]) : n_idx;
+                (b + 1 < B && !include_last_offset) ? read_int(co, b + 1) : n_idx;
         }
         if (include_last_offset && B > 0)
-            ends[static_cast<std::size_t>(B - 1)] = static_cast<int>(off_p[B - 1]);
+            ends[static_cast<std::size_t>(B - 1)] = read_int(co, B - 1);
 
         std::size_t out_nb = static_cast<std::size_t>(B) * D * dtype_size(dt);
         auto out_ptr = allocate_aligned_bytes(out_nb, Device::CPU);
@@ -4739,9 +4748,14 @@ public:
                 int s = starts[static_cast<std::size_t>(b)];
                 int e = ends[static_cast<std::size_t>(b)];
                 T* row = op + b * D;
+                if (mode == 2) {  // max: seed with the lowest value so an
+                    // all-negative bag isn't masked by the 0 memset init.
+                    for (int d = 0; d < D; ++d)
+                        row[d] = std::numeric_limits<T>::lowest();
+                }
                 int count = 0;
                 for (int k = s; k < e; ++k) {
-                    int emb = static_cast<int>(idx_p[k]);
+                    int emb = read_int(ci, k);
                     if (emb == padding_idx)
                         continue;
                     if (emb < 0 || emb >= num_emb)
@@ -4756,6 +4770,10 @@ public:
                             row[d] += src[d];
                     }
                     ++count;
+                }
+                if (mode == 2 && count == 0) {  // empty bag → 0 (match reference)
+                    for (int d = 0; d < D; ++d)
+                        row[d] = T(0);
                 }
                 if (mode == 1 && count > 0) {  // mean
                     for (int d = 0; d < D; ++d)
