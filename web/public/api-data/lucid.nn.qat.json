@@ -3,7 +3,7 @@
   "name": "qat",
   "path": "lucid.nn.qat",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/__init__.py#L1",
   "members": [
     {
       "name": "Conv1d",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "Conv1d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L46",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L46",
       "subcategory": "conv",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L77",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L164",
           "subcategory": "conv",
           "summary": "Initialise the Conv1d module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -46,7 +46,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L87",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L174",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -70,7 +70,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L95",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L182",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -87,37 +87,67 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware 1-D convolution (trainable float kernel, fake-quant).",
-      "extended": "A trainable float `lucid.nn.Conv1d` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), so the\nnetwork adapts its weights to the eventual int8 grid while still training in full\nprecision.  Inserted in place of a float conv by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` later\nbakes the trained kernel and the observed qparams into an inference\n`lucid.nn.quantized.Conv1d`.",
+      "summary": "Quantization-aware 1-D convolution — trainable float kernel, fake-quant per forward.",
+      "extended": "The training-time stand-in that `lucid.quantization.prepare_qat` installs in\nplace of a float `lucid.nn.Conv1d`. It keeps a **trainable float kernel** but\nroutes both the weight and the layer output through a\n`lucid.quantization.FakeQuantize` on every forward, so the network *feels* the\nint8 rounding error as it learns and adapts its kernel to the eventual int8 grid. This\ncloses the train / inference accuracy gap: a network trained *with* the rounding baked\nin barely moves when its weights are finally frozen to int8, whereas plain\npost-training quantization perturbs a kernel that never saw rounding.\n\n**Straight-through estimator (STE).** Rounding is a step function whose derivative is\nzero almost everywhere, so a literal `round` would block all gradient flow. The\nfake-quant rounds in the forward pass but, in the backward pass, pretends it was the\nidentity — the incoming gradient passes *straight through* to the float kernel (clipped\nto the quantization range). The kernel thus stays fully trainable while every forward\nvalue it produces is the *dequantized* number an int8 conv kernel would have computed.\n\n**Where it sits.** `lucid.quantization.prepare_qat` deep-copies the float model\nand swaps each `lucid.nn.Conv1d` for this class, attaching the weight and\nactivation `FakeQuantize` modules from the layer's `qconfig`. After training,\n`lucid.quantization.convert` reads the trained kernel together with the\nactivation observer's final `(scale, zero_point)` and bakes them into an inference\n`lucid.nn.quantized.Conv1d` whose weight is stored as (typically\nper-output-channel) int8 codes.\n\nOn each forward the kernel is fake-quantized, the ordinary `F.conv1d` runs, and the\nresult is fake-quantized onto the observed activation grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\bigl(\n    \\operatorname{fake\\_quant}_{w}(W) \\star x + b\\bigr)\n$$\n\nwhere $\\star$ is the 1-D cross-correlation, $s, z$ are the scale /\nzero-point the enclosing `FakeQuantize` derives from its observer (per-output-channel\nfor the weight), and $q_{\\min}, q_{\\max}$ are the grid bounds. The\nstraight-through unit derivative is what keeps the layer differentiable despite the\nnon-differentiable `round`.",
       "parameters": [
         {
           "name": "qconfig",
-          "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "annotation": "(QConfig, keyword - only)",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         },
         {
           "name": "*args",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv1d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "description": "All remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv1d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`),\nwhich owns the actual trainable kernel and bias.",
           "default": "()"
         },
         {
           "name": "**kwargs",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv1d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "description": "All remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv1d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`),\nwhich owns the actual trainable kernel and bias.",
           "default": "()"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight fake-quant rounds the kernel while the STE passes gradients straight\nthrough, keeping the layer fully differentiable.  String padding (`\"same\"` /\n`\"valid\"`) is deferred, matching the quantized conv."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> model = nn.Sequential(nn.Conv1d(3, 8, 3, padding=1))\n>>> qat = Q.prepare_qat(model)              # nn.Conv1d -> qat.Conv1d\n>>> isinstance(qat[0], nnqat.Conv1d)\nTrue\n>>> loss = (qat(lucid.randn(2, 3, 8)) ** 2).mean()\n>>> loss.backward()                         # STE routes grads to the float kernel\n>>> qat.eval()\n>>> qc = Q.convert(qat)                     # -> quantized.Conv1d (int8 weight)\n>>> type(qc[0]).__name__\n'Conv1d'\nA qconfig is mandatory — constructing the layer directly without one raises:\n>>> nnqat.Conv1d(3, 8, 3)\nTraceback (most recent call last):\n    ...\nValueError: qat conv requires a qconfig"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** `round` is applied forward but the gradient is passed\n  through as the identity, so the float kernel trains normally.\n- **Deferred string padding.** Integer / tuple `padding` is supported; string padding\n  (`\"same\"` / `\"valid\"`) is deferred, matching the quantized conv.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` swaps\n  the float conv *in*; `lucid.quantization.convert` folds this layer *out* into\n  the matching `lucid.nn.quantized.Conv1d`. Manual construction is rarely\n  needed and requires an explicit `qconfig`.\n- **Training is slower, not faster.** Only the int8 *numerics* are simulated; the\n  convolution itself still runs in float with two extra fake-quant ops, so the speed /\n  memory win arrives only after `convert`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nkernel each forward and tracks its range so `convert` can pick the int8 qparams."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; calibrates\nthe activation grid whose `(scale, zero_point)` `convert` later bakes in."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv1d",
+          "description": "The int8 inference conv `convert` bakes this into."
+        },
+        {
+          "name": "lucid.nn.qat.ConvReLU1d",
+          "description": "QAT conv with a fused ReLU before the output observer."
+        },
+        {
+          "name": "lucid.quantization.prepare_qat",
+          "description": "Swaps the float `Conv1d` for this QAT layer."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Bakes the trained QAT layer into the quantized conv."
+        }
+      ]
     },
     {
       "name": "Conv2d",
@@ -129,7 +159,7 @@
       ],
       "labels": [],
       "signature": "Conv2d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L100",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L187",
       "subcategory": "conv",
       "methods": [
         {
@@ -138,7 +168,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L131",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L305",
           "subcategory": "conv",
           "summary": "Initialise the driver; the executable itself is lazy.",
           "extended": null,
@@ -190,7 +220,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L141",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L315",
           "subcategory": "conv",
           "summary": "Generate anchors for all FPN levels.",
           "extended": null,
@@ -233,7 +263,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L149",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L323",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -250,37 +280,67 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware 2-D convolution (trainable float kernel, fake-quant).",
-      "extended": "A trainable float `lucid.nn.Conv2d` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), so the\nnetwork adapts its weights to the eventual int8 grid while still training in full\nprecision.  Inserted in place of a float conv by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` later\nbakes the trained kernel and the observed qparams into an inference\n`lucid.nn.quantized.Conv2d`.",
+      "summary": "Quantization-aware 2-D convolution — trainable float kernel, fake-quant per forward.",
+      "extended": "The training-time stand-in that `lucid.quantization.prepare_qat` installs in\nplace of a float `lucid.nn.Conv2d` — the workhorse of every quantized vision\nbackbone. It keeps a **trainable float kernel** but routes both the weight and the\nlayer output through a `lucid.quantization.FakeQuantize` on every forward, so\nthe network *feels* the int8 rounding error as it learns and adapts its kernel to the\neventual int8 grid. This closes the train / inference accuracy gap: a network trained\n*with* the rounding baked in barely moves when its weights are finally frozen to int8,\nwhereas plain post-training quantization perturbs a kernel that never saw rounding.\n\n**Straight-through estimator (STE).** Rounding is a step function whose derivative is\nzero almost everywhere, so a literal `round` would block all gradient flow. The\nfake-quant rounds in the forward pass but, in the backward pass, pretends it was the\nidentity — the incoming gradient passes *straight through* to the float kernel (clipped\nto the quantization range). The kernel thus stays fully trainable while every forward\nvalue it produces is the *dequantized* number an int8 conv kernel would have computed.\n\n**Where it sits.** `lucid.quantization.prepare_qat` deep-copies the float model\nand swaps each `lucid.nn.Conv2d` for this class, attaching the weight and\nactivation `FakeQuantize` modules from the layer's `qconfig`. After training,\n`lucid.quantization.convert` reads the trained kernel together with the\nactivation observer's final `(scale, zero_point)` and bakes them into an inference\n`lucid.nn.quantized.Conv2d` whose weight is stored as (typically\nper-output-channel) int8 codes.\n\nOn each forward the kernel is fake-quantized, the ordinary `F.conv2d` runs, and the\nresult is fake-quantized onto the observed activation grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\bigl(\n    \\operatorname{fake\\_quant}_{w}(W) \\star x + b\\bigr)\n$$\n\nwhere $\\star$ is the 2-D cross-correlation, $s, z$ are the scale /\nzero-point the enclosing `FakeQuantize` derives from its observer (per-output-channel\nfor the weight), and $q_{\\min}, q_{\\max}$ are the grid bounds. The\nstraight-through unit derivative is what keeps the layer differentiable despite the\nnon-differentiable `round`.",
       "parameters": [
         {
           "name": "qconfig",
-          "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "annotation": "(QConfig, keyword - only)",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         },
         {
           "name": "*args",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv2d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "description": "All remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv2d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`),\nwhich owns the actual trainable kernel and bias.",
           "default": "()"
         },
         {
           "name": "**kwargs",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv2d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "description": "All remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv2d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`),\nwhich owns the actual trainable kernel and bias.",
           "default": "()"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight fake-quant rounds the kernel while the STE passes gradients straight\nthrough, keeping the layer fully differentiable.  String padding (`\"same\"` /\n`\"valid\"`) is deferred, matching the quantized conv."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> model = nn.Sequential(nn.Conv2d(3, 8, 3, padding=1))\n>>> qat = Q.prepare_qat(model)              # nn.Conv2d -> qat.Conv2d\n>>> isinstance(qat[0], nnqat.Conv2d)\nTrue\n>>> loss = (qat(lucid.randn(2, 3, 8, 8)) ** 2).mean()\n>>> loss.backward()                         # STE routes grads to the float kernel\n>>> qat.eval()\n>>> qc = Q.convert(qat)                     # -> quantized.Conv2d (int8 weight)\n>>> type(qc[0]).__name__\n'Conv2d'\nA qconfig is mandatory — constructing the layer directly without one raises:\n>>> nnqat.Conv2d(3, 8, 3)\nTraceback (most recent call last):\n    ...\nValueError: qat conv requires a qconfig"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** `round` is applied forward but the gradient is passed\n  through as the identity, so the float kernel trains normally.\n- **Deferred string padding.** Integer / tuple `padding` is supported; string padding\n  (`\"same\"` / `\"valid\"`) is deferred, matching the quantized conv.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` swaps\n  the float conv *in*; `lucid.quantization.convert` folds this layer *out* into\n  the matching `lucid.nn.quantized.Conv2d`. Manual construction is rarely\n  needed and requires an explicit `qconfig`.\n- **Training is slower, not faster.** Only the int8 *numerics* are simulated; the\n  convolution itself still runs in float with two extra fake-quant ops, so the speed /\n  memory win arrives only after `convert`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nkernel each forward and tracks its range so `convert` can pick the int8 qparams."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; calibrates\nthe activation grid whose `(scale, zero_point)` `convert` later bakes in."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv2d",
+          "description": "The int8 inference conv `convert` bakes this into."
+        },
+        {
+          "name": "lucid.nn.qat.ConvReLU2d",
+          "description": "QAT conv with a fused ReLU before the output observer."
+        },
+        {
+          "name": "lucid.quantization.prepare_qat",
+          "description": "Swaps the float `Conv2d` for this QAT layer."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Bakes the trained QAT layer into the quantized conv."
+        }
+      ]
     },
     {
       "name": "Conv3d",
@@ -292,7 +352,7 @@
       ],
       "labels": [],
       "signature": "Conv3d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L154",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L328",
       "subcategory": "conv",
       "methods": [
         {
@@ -301,7 +361,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L185",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L446",
           "subcategory": "conv",
           "summary": "Initialise the Conv1d module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -323,7 +383,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L195",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L456",
           "subcategory": "conv",
           "summary": "Run U-Net forward pass.",
           "extended": null,
@@ -347,7 +407,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L203",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L464",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -364,37 +424,67 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware 3-D convolution (trainable float kernel, fake-quant).",
-      "extended": "A trainable float `lucid.nn.Conv3d` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), so the\nnetwork adapts its weights to the eventual int8 grid while still training in full\nprecision.  Inserted in place of a float conv by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` later\nbakes the trained kernel and the observed qparams into an inference\n`lucid.nn.quantized.Conv3d`.",
+      "summary": "Quantization-aware 3-D convolution — trainable float kernel, fake-quant per forward.",
+      "extended": "The training-time stand-in that `lucid.quantization.prepare_qat` installs in\nplace of a float `lucid.nn.Conv3d` (volumetric / video backbones). It keeps a\n**trainable float kernel** but routes both the weight and the layer output through a\n`lucid.quantization.FakeQuantize` on every forward, so the network *feels* the\nint8 rounding error as it learns and adapts its kernel to the eventual int8 grid. This\ncloses the train / inference accuracy gap: a network trained *with* the rounding baked\nin barely moves when its weights are finally frozen to int8, whereas plain\npost-training quantization perturbs a kernel that never saw rounding.\n\n**Straight-through estimator (STE).** Rounding is a step function whose derivative is\nzero almost everywhere, so a literal `round` would block all gradient flow. The\nfake-quant rounds in the forward pass but, in the backward pass, pretends it was the\nidentity — the incoming gradient passes *straight through* to the float kernel (clipped\nto the quantization range). The kernel thus stays fully trainable while every forward\nvalue it produces is the *dequantized* number an int8 conv kernel would have computed.\n\n**Where it sits.** `lucid.quantization.prepare_qat` deep-copies the float model\nand swaps each `lucid.nn.Conv3d` for this class, attaching the weight and\nactivation `FakeQuantize` modules from the layer's `qconfig`. After training,\n`lucid.quantization.convert` reads the trained kernel together with the\nactivation observer's final `(scale, zero_point)` and bakes them into an inference\n`lucid.nn.quantized.Conv3d` whose weight is stored as (typically\nper-output-channel) int8 codes.\n\nOn each forward the kernel is fake-quantized, the ordinary `F.conv3d` runs, and the\nresult is fake-quantized onto the observed activation grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\bigl(\n    \\operatorname{fake\\_quant}_{w}(W) \\star x + b\\bigr)\n$$\n\nwhere $\\star$ is the 3-D cross-correlation, $s, z$ are the scale /\nzero-point the enclosing `FakeQuantize` derives from its observer (per-output-channel\nfor the weight), and $q_{\\min}, q_{\\max}$ are the grid bounds. The\nstraight-through unit derivative is what keeps the layer differentiable despite the\nnon-differentiable `round`.",
       "parameters": [
         {
           "name": "qconfig",
-          "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "annotation": "(QConfig, keyword - only)",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         },
         {
           "name": "*args",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv3d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "description": "All remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv3d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`),\nwhich owns the actual trainable kernel and bias.",
           "default": "()"
         },
         {
           "name": "**kwargs",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv3d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`).",
+          "description": "All remaining arguments are forwarded verbatim to the float\n`lucid.nn.Conv3d` constructor (`in_channels`, `out_channels`,\n`kernel_size`, `stride`, `padding`, `dilation`, `groups`, `bias`),\nwhich owns the actual trainable kernel and bias.",
           "default": "()"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight fake-quant rounds the kernel while the STE passes gradients straight\nthrough, keeping the layer fully differentiable.  String padding (`\"same\"` /\n`\"valid\"`) is deferred, matching the quantized conv."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> model = nn.Sequential(nn.Conv3d(3, 8, 3, padding=1))\n>>> qat = Q.prepare_qat(model)              # nn.Conv3d -> qat.Conv3d\n>>> isinstance(qat[0], nnqat.Conv3d)\nTrue\n>>> loss = (qat(lucid.randn(2, 3, 4, 4, 4)) ** 2).mean()\n>>> loss.backward()                         # STE routes grads to the float kernel\n>>> qat.eval()\n>>> qc = Q.convert(qat)                     # -> quantized.Conv3d (int8 weight)\n>>> type(qc[0]).__name__\n'Conv3d'\nA qconfig is mandatory — constructing the layer directly without one raises:\n>>> nnqat.Conv3d(3, 8, 3)\nTraceback (most recent call last):\n    ...\nValueError: qat conv requires a qconfig"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** `round` is applied forward but the gradient is passed\n  through as the identity, so the float kernel trains normally.\n- **Deferred string padding.** Integer / tuple `padding` is supported; string padding\n  (`\"same\"` / `\"valid\"`) is deferred, matching the quantized conv.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` swaps\n  the float conv *in*; `lucid.quantization.convert` folds this layer *out* into\n  the matching `lucid.nn.quantized.Conv3d`. Manual construction is rarely\n  needed and requires an explicit `qconfig`.\n- **Training is slower, not faster.** Only the int8 *numerics* are simulated; the\n  convolution itself still runs in float with two extra fake-quant ops, so the speed /\n  memory win arrives only after `convert`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nkernel each forward and tracks its range so `convert` can pick the int8 qparams."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; calibrates\nthe activation grid whose `(scale, zero_point)` `convert` later bakes in."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv3d",
+          "description": "The int8 inference conv `convert` bakes this into."
+        },
+        {
+          "name": "lucid.nn.qat.ConvReLU3d",
+          "description": "QAT conv with a fused ReLU before the output observer."
+        },
+        {
+          "name": "lucid.quantization.prepare_qat",
+          "description": "Swaps the float `Conv3d` for this QAT layer."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Bakes the trained QAT layer into the quantized conv."
+        }
+      ]
     },
     {
       "name": "ConvReLU1d",
@@ -406,7 +496,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU1d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L215",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L476",
       "subcategory": "conv",
       "methods": [
         {
@@ -415,7 +505,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L240",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L572",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -439,9 +529,9 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L248",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L580",
           "subcategory": "conv",
-          "summary": null,
+          "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -456,37 +546,67 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware fused 1-D convolution + ReLU (trainable, fake-quant).",
-      "extended": "Behaves like `Conv1d`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.ConvReLU1d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.ConvReLU1d`.",
+      "summary": "Quantization-aware fused 1-D conv + ReLU — trainable, fake-quant per forward.",
+      "extended": "A `Conv1d` whose forward applies ReLU *before* the output fake-quant, so the\nactivation observer sees the true post-ReLU (non-negative) range and calibrates a grid\nthat spends all of its codes on values the layer can actually emit. Fusing conv and\nReLU also lets a single activation observer stand in for both, which is exactly the\nshape `lucid.quantization.convert` needs to collapse them into one kernel.\n\nLike the base `Conv1d`, the weight and the (post-ReLU) output are fake-quantized\nevery forward under a straight-through estimator (STE): rounding happens in the forward\npass while gradients pass straight through to the float kernel, so it stays fully\ntrainable and learns to compensate for the eventual int8 rounding. Built from a fused\nfloat `lucid.nn.intrinsic.ConvReLU1d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it into\na single quantized `lucid.nn.quantized.ConvReLU1d`.\n\nOn each forward the kernel is fake-quantized, `F.conv1d` runs, ReLU clips, and the\nresult is fake-quantized onto the observed post-ReLU grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\Bigl(\n    \\operatorname{ReLU}\\bigl(\n        \\operatorname{fake\\_quant}_{w}(W) \\star x + b\\bigr)\\Bigr)\n$$\n\nwhere $\\star$ is the 1-D cross-correlation, $s, z$ are the observer's scale\n/ zero-point and $q_{\\min}, q_{\\max}$ the grid bounds. Because the activation\nobserver sits *outside* the ReLU, the calibrated $(s, z)$ describe the\nnon-negative output.",
       "parameters": [
         {
           "name": "qconfig",
-          "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "annotation": "(QConfig, keyword - only)",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         },
         {
           "name": "*args",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv1d`\nconstructor, exactly as for `Conv1d`.",
+          "description": "All remaining arguments are forwarded to the float `lucid.nn.Conv1d`\nconstructor, exactly as for `Conv1d`.",
           "default": "()"
         },
         {
           "name": "**kwargs",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv1d`\nconstructor, exactly as for `Conv1d`.",
+          "description": "All remaining arguments are forwarded to the float `lucid.nn.Conv1d`\nconstructor, exactly as for `Conv1d`.",
           "default": "()"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, so gradients reach the float kernel unchanged."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> m = nn.Sequential(nn.Conv1d(3, 8, 3, padding=1), nn.ReLU())\n>>> fused = Q.fuse_modules(m, [[\"0\", \"1\"]])         # -> nni.ConvReLU1d marker\n>>> qat = Q.prepare_qat(fused, Q.get_default_qat_qconfig_mapping())\n>>> isinstance(qat[0], nnqat.ConvReLU1d)\nTrue\n>>> loss = (qat(lucid.randn(2, 3, 8)) ** 2).mean()\n>>> loss.backward()                                 # STE trains the fused float kernel\n>>> qat.eval()\n>>> qc = Q.convert(qat)                             # -> quantized.ConvReLU1d\n>>> type(qc[0]).__name__\n'ConvReLU1d'"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** Rounding is applied forward but the gradient passes\n  through as the identity, so the float kernel trains normally.\n- **Post-ReLU calibration.** Observing after the ReLU means the calibrated grid covers\n  only $[0, \\max]$, roughly doubling resolution versus a symmetric pre-ReLU range.\n- **Deferred string padding.** Integer / tuple `padding` is supported; string padding\n  (`\"same\"` / `\"valid\"`) is deferred, matching the quantized conv.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` builds\n  this from a fused float `lucid.nn.intrinsic.ConvReLU1d`;\n  `lucid.quantization.convert` folds it into the quantized\n  `lucid.nn.quantized.ConvReLU1d`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nkernel each forward and tracks its range for `convert`."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; here it\nobserves the **post-ReLU** range so the baked-in grid matches inference."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.ConvReLU1d",
+          "description": "The fused int8 inference conv `convert` bakes into."
+        },
+        {
+          "name": "lucid.nn.intrinsic.ConvReLU1d",
+          "description": "The plain-float fused marker this is built from."
+        },
+        {
+          "name": "lucid.nn.qat.Conv1d",
+          "description": "The un-fused QAT base class."
+        },
+        {
+          "name": "lucid.quantization.fuse_modules_qat",
+          "description": "Fuses `Conv1d` + `ReLU` straight to QAT."
+        }
+      ]
     },
     {
       "name": "ConvReLU2d",
@@ -498,7 +618,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU2d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L254",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L586",
       "subcategory": "conv",
       "methods": [
         {
@@ -507,7 +627,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L279",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L683",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -531,9 +651,9 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L287",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L691",
           "subcategory": "conv",
-          "summary": null,
+          "summary": "Build from a calibrated float activation (reads its output observer).",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -548,37 +668,67 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware fused 2-D convolution + ReLU (trainable, fake-quant).",
-      "extended": "Behaves like `Conv2d`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.ConvReLU2d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.ConvReLU2d`.",
+      "summary": "Quantization-aware fused 2-D conv + ReLU — trainable, fake-quant per forward.",
+      "extended": "A `Conv2d` whose forward applies ReLU *before* the output fake-quant, so the\nactivation observer sees the true post-ReLU (non-negative) range and calibrates a grid\nthat spends all of its codes on values the layer can actually emit. This is the\ndominant fused pattern in quantized vision backbones. Fusing conv and ReLU also lets a\nsingle activation observer stand in for both, which is exactly the shape\n`lucid.quantization.convert` needs to collapse them into one kernel.\n\nLike the base `Conv2d`, the weight and the (post-ReLU) output are fake-quantized\nevery forward under a straight-through estimator (STE): rounding happens in the forward\npass while gradients pass straight through to the float kernel, so it stays fully\ntrainable and learns to compensate for the eventual int8 rounding. Built from a fused\nfloat `lucid.nn.intrinsic.ConvReLU2d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it into\na single quantized `lucid.nn.quantized.ConvReLU2d`.\n\nOn each forward the kernel is fake-quantized, `F.conv2d` runs, ReLU clips, and the\nresult is fake-quantized onto the observed post-ReLU grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\Bigl(\n    \\operatorname{ReLU}\\bigl(\n        \\operatorname{fake\\_quant}_{w}(W) \\star x + b\\bigr)\\Bigr)\n$$\n\nwhere $\\star$ is the 2-D cross-correlation, $s, z$ are the observer's scale\n/ zero-point and $q_{\\min}, q_{\\max}$ the grid bounds. Because the activation\nobserver sits *outside* the ReLU, the calibrated $(s, z)$ describe the\nnon-negative output.",
       "parameters": [
         {
           "name": "qconfig",
-          "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "annotation": "(QConfig, keyword - only)",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         },
         {
           "name": "*args",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv2d`\nconstructor, exactly as for `Conv2d`.",
+          "description": "All remaining arguments are forwarded to the float `lucid.nn.Conv2d`\nconstructor, exactly as for `Conv2d`.",
           "default": "()"
         },
         {
           "name": "**kwargs",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv2d`\nconstructor, exactly as for `Conv2d`.",
+          "description": "All remaining arguments are forwarded to the float `lucid.nn.Conv2d`\nconstructor, exactly as for `Conv2d`.",
           "default": "()"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, so gradients reach the float kernel unchanged."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> m = nn.Sequential(nn.Conv2d(3, 8, 3, padding=1), nn.ReLU())\n>>> fused = Q.fuse_modules(m, [[\"0\", \"1\"]])         # -> nni.ConvReLU2d marker\n>>> qat = Q.prepare_qat(fused, Q.get_default_qat_qconfig_mapping())\n>>> isinstance(qat[0], nnqat.ConvReLU2d)\nTrue\n>>> loss = (qat(lucid.randn(2, 3, 8, 8)) ** 2).mean()\n>>> loss.backward()                                 # STE trains the fused float kernel\n>>> qat.eval()\n>>> qc = Q.convert(qat)                             # -> quantized.ConvReLU2d\n>>> type(qc[0]).__name__\n'ConvReLU2d'"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** Rounding is applied forward but the gradient passes\n  through as the identity, so the float kernel trains normally.\n- **Post-ReLU calibration.** Observing after the ReLU means the calibrated grid covers\n  only $[0, \\max]$, roughly doubling resolution versus a symmetric pre-ReLU range.\n- **Deferred string padding.** Integer / tuple `padding` is supported; string padding\n  (`\"same\"` / `\"valid\"`) is deferred, matching the quantized conv.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` builds\n  this from a fused float `lucid.nn.intrinsic.ConvReLU2d`;\n  `lucid.quantization.convert` folds it into the quantized\n  `lucid.nn.quantized.ConvReLU2d`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nkernel each forward and tracks its range for `convert`."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; here it\nobserves the **post-ReLU** range so the baked-in grid matches inference."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.ConvReLU2d",
+          "description": "The fused int8 inference conv `convert` bakes into."
+        },
+        {
+          "name": "lucid.nn.intrinsic.ConvReLU2d",
+          "description": "The plain-float fused marker this is built from."
+        },
+        {
+          "name": "lucid.nn.qat.Conv2d",
+          "description": "The un-fused QAT base class."
+        },
+        {
+          "name": "lucid.quantization.fuse_modules_qat",
+          "description": "Fuses `Conv2d` + `ReLU` straight to QAT."
+        }
+      ]
     },
     {
       "name": "ConvReLU3d",
@@ -590,7 +740,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU3d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L293",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L697",
       "subcategory": "conv",
       "methods": [
         {
@@ -599,7 +749,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L318",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L793",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -623,9 +773,9 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/conv.py#L326",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/conv.py#L801",
           "subcategory": "conv",
-          "summary": null,
+          "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -640,37 +790,67 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware fused 3-D convolution + ReLU (trainable, fake-quant).",
-      "extended": "Behaves like `Conv3d`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.ConvReLU3d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.ConvReLU3d`.",
+      "summary": "Quantization-aware fused 3-D conv + ReLU — trainable, fake-quant per forward.",
+      "extended": "A `Conv3d` whose forward applies ReLU *before* the output fake-quant, so the\nactivation observer sees the true post-ReLU (non-negative) range and calibrates a grid\nthat spends all of its codes on values the layer can actually emit. Fusing conv and\nReLU also lets a single activation observer stand in for both, which is exactly the\nshape `lucid.quantization.convert` needs to collapse them into one kernel.\n\nLike the base `Conv3d`, the weight and the (post-ReLU) output are fake-quantized\nevery forward under a straight-through estimator (STE): rounding happens in the forward\npass while gradients pass straight through to the float kernel, so it stays fully\ntrainable and learns to compensate for the eventual int8 rounding. Built from a fused\nfloat `lucid.nn.intrinsic.ConvReLU3d` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it into\na single quantized `lucid.nn.quantized.ConvReLU3d`.\n\nOn each forward the kernel is fake-quantized, `F.conv3d` runs, ReLU clips, and the\nresult is fake-quantized onto the observed post-ReLU grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\Bigl(\n    \\operatorname{ReLU}\\bigl(\n        \\operatorname{fake\\_quant}_{w}(W) \\star x + b\\bigr)\\Bigr)\n$$\n\nwhere $\\star$ is the 3-D cross-correlation, $s, z$ are the observer's scale\n/ zero-point and $q_{\\min}, q_{\\max}$ the grid bounds. Because the activation\nobserver sits *outside* the ReLU, the calibrated $(s, z)$ describe the\nnon-negative output.",
       "parameters": [
         {
           "name": "qconfig",
-          "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "annotation": "(QConfig, keyword - only)",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         },
         {
           "name": "*args",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv3d`\nconstructor, exactly as for `Conv3d`.",
+          "description": "All remaining arguments are forwarded to the float `lucid.nn.Conv3d`\nconstructor, exactly as for `Conv3d`.",
           "default": "()"
         },
         {
           "name": "**kwargs",
           "annotation": "object",
-          "description": "Remaining arguments are forwarded to the float `lucid.nn.Conv3d`\nconstructor, exactly as for `Conv3d`.",
+          "description": "All remaining arguments are forwarded to the float `lucid.nn.Conv3d`\nconstructor, exactly as for `Conv3d`.",
           "default": "()"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, so gradients reach the float kernel unchanged."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> m = nn.Sequential(nn.Conv3d(3, 8, 3, padding=1), nn.ReLU())\n>>> fused = Q.fuse_modules(m, [[\"0\", \"1\"]])         # -> nni.ConvReLU3d marker\n>>> qat = Q.prepare_qat(fused, Q.get_default_qat_qconfig_mapping())\n>>> isinstance(qat[0], nnqat.ConvReLU3d)\nTrue\n>>> loss = (qat(lucid.randn(2, 3, 4, 4, 4)) ** 2).mean()\n>>> loss.backward()                                 # STE trains the fused float kernel\n>>> qat.eval()\n>>> qc = Q.convert(qat)                             # -> quantized.ConvReLU3d\n>>> type(qc[0]).__name__\n'ConvReLU3d'"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** Rounding is applied forward but the gradient passes\n  through as the identity, so the float kernel trains normally.\n- **Post-ReLU calibration.** Observing after the ReLU means the calibrated grid covers\n  only $[0, \\max]$, roughly doubling resolution versus a symmetric pre-ReLU range.\n- **Deferred string padding.** Integer / tuple `padding` is supported; string padding\n  (`\"same\"` / `\"valid\"`) is deferred, matching the quantized conv.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` builds\n  this from a fused float `lucid.nn.intrinsic.ConvReLU3d`;\n  `lucid.quantization.convert` folds it into the quantized\n  `lucid.nn.quantized.ConvReLU3d`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nkernel each forward and tracks its range for `convert`."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; here it\nobserves the **post-ReLU** range so the baked-in grid matches inference."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.ConvReLU3d",
+          "description": "The fused int8 inference conv `convert` bakes into."
+        },
+        {
+          "name": "lucid.nn.intrinsic.ConvReLU3d",
+          "description": "The plain-float fused marker this is built from."
+        },
+        {
+          "name": "lucid.nn.qat.Conv3d",
+          "description": "The un-fused QAT base class."
+        },
+        {
+          "name": "lucid.quantization.fuse_modules_qat",
+          "description": "Fuses `Conv3d` + `ReLU` straight to QAT."
+        }
+      ]
     },
     {
       "name": "Linear",
@@ -682,7 +862,7 @@
       ],
       "labels": [],
       "signature": "Linear(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/linear.py#L23",
       "subcategory": "linear",
       "methods": [
         {
@@ -691,7 +871,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L51",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/linear.py#L142",
           "subcategory": "linear",
           "summary": "Construct a Tensor from Python data, a NumPy array, or another Tensor.",
           "extended": "The data is funnelled through `lucid._factories.converters._to_impl`,\nthe canonical bridge between the outside world and Lucid's C++\n`TensorImpl`. Python scalars become 0-d tensors; nested lists are\nrecursively flattened with shape inference; NumPy arrays cross the\nsingle sanctioned host-to-engine boundary; and existing `Tensor`\nsources are rewrapped (optionally with cast and/or device transfer).",
@@ -742,7 +922,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L65",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/linear.py#L156",
           "subcategory": "linear",
           "summary": "Fake-quantize the weight, run linear, fake-quantize the output.",
           "extended": null,
@@ -766,7 +946,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L72",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/linear.py#L163",
           "subcategory": "linear",
           "summary": "Build a QAT `Linear` from a float one (shares the trained weight).",
           "extended": null,
@@ -783,43 +963,73 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware `Linear` (trainable float weight, fake-quant).",
-      "extended": "A trainable float `lucid.nn.Linear` that fake-quantizes both the weight\nand the output on every forward through a straight-through estimator (STE), letting\nthe network experience quantization rounding and learn to compensate while training\nin full precision.  Inserted by `lucid.quantization.prepare_qat`;\n`lucid.quantization.convert` reads the trained weight and the observers' final\nqparams to build an inference `lucid.nn.quantized.Linear`.",
+      "summary": "Quantization-aware `Linear` — trainable float weight, fake-quant every forward.",
+      "extended": "The training-time stand-in that `lucid.quantization.prepare_qat` installs in\nplace of a float `lucid.nn.Linear`. It keeps a **trainable float weight** but\nroutes both the weight and the layer output through a\n`lucid.quantization.FakeQuantize` on every forward, so the network *feels* the\nint8 rounding error while it is still learning and can adapt its weights to\ncompensate. This is what closes the train / inference accuracy gap: plain\npost-training quantization perturbs a network that never saw rounding, whereas a\nQAT-trained network has already minimised its loss *with* the rounding baked in, so its\naccuracy barely moves when the weights are finally frozen to int8.\n\n**Straight-through estimator (STE).** Rounding is a step function; its derivative is\nzero almost everywhere, so a literal `round` would block all gradient flow. The\nfake-quant therefore rounds in the forward pass but, in the backward pass, pretends it\nwas the identity — the incoming gradient passes *straight through* to the underlying\nfloat weight (clipped to the quantization range). The float weight thus stays fully\ntrainable while every forward value it produces is the *dequantized* number an int8\nkernel would have computed.\n\n**Where it sits.** `lucid.quantization.prepare_qat` deep-copies the float model\nand swaps each `lucid.nn.Linear` for this class, attaching the weight and\nactivation `FakeQuantize` modules described by the layer's `qconfig`. After\ntraining, `lucid.quantization.convert` reads the trained weight together with the\nactivation observer's final `(scale, zero_point)` and bakes them into an inference\n`lucid.nn.quantized.Linear` whose weight is stored as true int8 codes.\n\nOn each forward the weight is fake-quantized, the ordinary `F.linear` runs, and the\nresult is fake-quantized onto the observed activation grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\bigl(\n    \\operatorname{fake\\_quant}_{w}(W)\\, x^{\\top} + b\\bigr)\n$$\n\nwhere $s, z$ are the scale / zero-point the enclosing `FakeQuantize` derives\nfrom its observer and $q_{\\min}, q_{\\max}$ are the grid bounds (`0, 255` for\nthe default `quint8` activation, `-128, 127` for the `qint8` weight). The\nstraight-through unit derivative is what keeps the layer differentiable despite the\nnon-differentiable `round`.",
       "parameters": [
         {
           "name": "in_features",
           "annotation": "int",
-          "description": "Size of each input sample.",
+          "description": "Size of each input sample — forwarded verbatim to the float\n`lucid.nn.Linear` parent.",
           "default": null
         },
         {
           "name": "out_features",
           "annotation": "int",
-          "description": "Size of each output sample.",
+          "description": "Size of each output sample — forwarded verbatim to the float parent.",
           "default": null
         },
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether to add a learnable (float) bias term.",
+          "description": "Whether to add a learnable (float) bias term; forwarded to the float parent. The\nbias is left in float and never fake-quantized.",
           "default": "True"
         },
         {
           "name": "qconfig",
           "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The STE rounds the weight in the forward pass but passes gradients straight through,\nso the float weight stays fully trainable."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.Linear(16, 4))\n>>> qat = Q.prepare_qat(model)              # nn.Linear -> qat.Linear\n>>> type(qat[0]).__name__\n'Linear'\n>>> loss = (qat(lucid.randn(8, 16)) ** 2).mean()\n>>> loss.backward()                         # STE routes grads to the float weight\n>>> qat.eval()\n>>> qmodel = Q.convert(qat)                 # qat.Linear -> quantized.Linear (int8)\n>>> type(qmodel[0]).__name__\n'Linear'\nA qconfig is mandatory — constructing the layer directly without one raises:\n>>> import lucid.nn.qat as nnqat\n>>> nnqat.Linear(8, 8)\nTraceback (most recent call last):\n    ...\nValueError: qat.Linear requires a qconfig"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** `round` is applied in the forward pass but the gradient\n  is passed through as if it were the identity, so the float weight trains normally —\n  no gradient is lost to the non-differentiable rounding step.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` swaps\n  the float layer *in*; `lucid.quantization.convert` folds this layer *out* into\n  the matching `lucid.nn.quantized.Linear`. Manual construction is rarely\n  needed and requires an explicit `qconfig`.\n- **Training is slower, not faster.** Only the *numerics* of int8 are simulated; the\n  matmul itself still runs in float and each forward carries two extra fake-quant ops,\n  so a QAT model runs *slower* than the float baseline. The speed / memory win arrives\n  only after `convert` replaces this layer with the int8 inference module."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nweight each forward and tracks its range so `convert` can pick the int8 qparams."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; calibrates\nthe activation grid whose `(scale, zero_point)` `convert` later bakes in."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Linear",
+          "description": "The int8 inference layer `convert` bakes this into."
+        },
+        {
+          "name": "lucid.nn.qat.LinearReLU",
+          "description": "QAT `Linear` with a fused ReLU before the output observer."
+        },
+        {
+          "name": "lucid.quantization.prepare_qat",
+          "description": "Swaps the float `Linear` for this QAT layer."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Bakes the trained QAT layer into the quantized layer."
+        }
+      ]
     },
     {
       "name": "LinearReLU",
@@ -831,7 +1041,7 @@
       ],
       "labels": [],
       "signature": "LinearReLU(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L90",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/linear.py#L181",
       "subcategory": "linear",
       "methods": [
         {
@@ -840,7 +1050,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L118",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/linear.py#L280",
           "subcategory": "linear",
           "summary": "Fake-quantize the weight, run linear, ReLU, fake-quantize the output.",
           "extended": null,
@@ -864,7 +1074,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/linear.py#L125",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/linear.py#L287",
           "subcategory": "linear",
           "summary": "Build from a fused float `nni.LinearReLU` (its inner linear).",
           "extended": null,
@@ -881,43 +1091,73 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware fused `Linear` + `ReLU` (trainable, fake-quant).",
-      "extended": "Behaves like `Linear`, but the activation fake-quant observes the range\n*after* the fused ReLU, so the calibrated output grid reflects the true\n(non-negative) inference range.  Built from a fused float\n`lucid.nn.intrinsic.LinearReLU` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it\ninto a single quantized `lucid.nn.quantized.LinearReLU`.",
+      "summary": "Quantization-aware fused `Linear` + `ReLU` — trainable, fake-quant every forward.",
+      "extended": "A `Linear` whose forward applies ReLU *before* the output fake-quant, so the\nactivation observer sees the true post-ReLU (non-negative) range and calibrates a grid\nthat spends all of its codes on values the layer can actually emit. Fusing the two ops\nalso lets a single activation observer stand in for both, which is exactly the shape\n`lucid.quantization.convert` needs to collapse them into one kernel.\n\nLike the base `Linear`, the weight and the (post-ReLU) output are fake-quantized\nevery forward under a straight-through estimator (STE): rounding happens in the forward\npass while gradients pass straight through to the float weight, so it stays fully\ntrainable and learns to compensate for the eventual int8 rounding. Built from a fused\nfloat `lucid.nn.intrinsic.LinearReLU` by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` folds it into\na single quantized `lucid.nn.quantized.LinearReLU`.\n\nOn each forward the weight is fake-quantized, `F.linear` runs, ReLU clips, and the\nresult is fake-quantized onto the observed post-ReLU grid:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{a}\\!\\Bigl(\n    \\operatorname{ReLU}\\bigl(\n        \\operatorname{fake\\_quant}_{w}(W)\\, x^{\\top} + b\\bigr)\\Bigr)\n$$\n\nwhere $s, z$ are the observer's scale / zero-point and\n$q_{\\min}, q_{\\max}$ the grid bounds. Because the activation observer sits\n*outside* the ReLU, the calibrated $(s, z)$ describe the non-negative output.",
       "parameters": [
         {
           "name": "in_features",
           "annotation": "int",
-          "description": "Size of each input sample.",
+          "description": "Size of each input sample — forwarded verbatim to the float\n`lucid.nn.Linear` parent.",
           "default": null
         },
         {
           "name": "out_features",
           "annotation": "int",
-          "description": "Size of each output sample.",
+          "description": "Size of each output sample — forwarded verbatim to the float parent.",
           "default": null
         },
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether to add a learnable (float) bias term.",
+          "description": "Whether to add a learnable (float) bias term; forwarded to the float parent.",
           "default": "True"
         },
         {
           "name": "qconfig",
           "annotation": "QConfig",
-          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.",
+          "description": "Quantization recipe supplying the weight and activation\n`lucid.quantization.FakeQuantize` modules applied during training.\nRequired — constructing the layer without one raises `ValueError`.",
           "default": "None"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight and the post-ReLU output are both fake-quantized every forward via a\nstraight-through estimator, keeping the float weight fully trainable."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> m = nn.Sequential(nn.Linear(32, 16), nn.ReLU())\n>>> fused = Q.fuse_modules(m, [[\"0\", \"1\"]])         # -> nni.LinearReLU marker\n>>> qat = Q.prepare_qat(fused, Q.get_default_qat_qconfig_mapping())\n>>> isinstance(qat[0], nnqat.LinearReLU)\nTrue\n>>> loss = (qat(lucid.randn(8, 32)) ** 2).mean()\n>>> loss.backward()                                 # STE trains the fused float weight\n>>> qat.eval()\n>>> qc = Q.convert(qat)                             # -> quantized.LinearReLU\n>>> type(qc[0]).__name__\n'LinearReLU'"
       ],
-      "attributes": [],
+      "notes": [
+        "- **STE differentiability.** Rounding is applied forward but the gradient passes\n  through as the identity, so both the weight and the pre-ReLU activations keep clean\n  gradients and the float weight trains normally.\n- **Post-ReLU calibration.** Observing after the ReLU means the calibrated\n  `(scale, zero_point)` cover only $[0, \\max]$, doubling the effective\n  resolution versus observing a symmetric pre-ReLU range.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` builds\n  this from a fused float `lucid.nn.intrinsic.LinearReLU`;\n  `lucid.quantization.convert` folds it into the quantized\n  `lucid.nn.quantized.LinearReLU`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The weight observer + fake-quant built from `qconfig.weight()`; rounds the float\nweight each forward and tracks its range for `convert`."
+        },
+        {
+          "name": "activation_post_process",
+          "annotation": "FakeQuantize",
+          "description": "The output observer + fake-quant built from `qconfig.activation()`; here it\nobserves the **post-ReLU** range so the baked-in grid matches inference."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.LinearReLU",
+          "description": "The fused int8 inference layer `convert` bakes into."
+        },
+        {
+          "name": "lucid.nn.intrinsic.LinearReLU",
+          "description": "The plain-float fused marker this is built from."
+        },
+        {
+          "name": "lucid.nn.qat.Linear",
+          "description": "The un-fused QAT base class."
+        },
+        {
+          "name": "lucid.quantization.fuse_modules_qat",
+          "description": "Fuses `Linear` + `ReLU` straight to QAT."
+        }
+      ]
     },
     {
       "name": "Embedding",
@@ -929,7 +1169,7 @@
       ],
       "labels": [],
       "signature": "Embedding(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None, qconfig: QConfig | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/sparse.py#L21",
       "subcategory": "sparse",
       "methods": [
         {
@@ -938,7 +1178,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None, qconfig: QConfig | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L52",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/sparse.py#L128",
           "subcategory": "sparse",
           "summary": "Initialise the MSELoss module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -960,7 +1200,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L66",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/sparse.py#L142",
           "subcategory": "sparse",
           "summary": "Fake-quantize the table, then look up `x`.",
           "extended": null,
@@ -984,7 +1224,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/qat/sparse.py#L72",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/qat/sparse.py#L148",
           "subcategory": "sparse",
           "summary": "Build a QAT `Embedding` from a float one (shares the trained table).",
           "extended": null,
@@ -1001,43 +1241,68 @@
           "see_also": []
         }
       ],
-      "summary": "Quantization-aware embedding (trainable float table, fake-quant).",
-      "extended": "A trainable float `lucid.nn.Embedding` whose lookup table is fake-quantized\non every forward through a straight-through estimator (STE), so the learned\nembeddings survive the eventual int8 storage.  Inserted by\n`lucid.quantization.prepare_qat`; `lucid.quantization.convert` bakes the\ntrained, fake-quantized table into a quantized\n`lucid.nn.quantized.Embedding`.",
+      "summary": "Quantization-aware embedding — trainable float table, fake-quant every forward.",
+      "extended": "The training-time stand-in that `lucid.quantization.prepare_qat` installs in\nplace of a float `lucid.nn.Embedding`. It keeps a **trainable float lookup\ntable** but fake-quantizes that table on every forward, so the learned embeddings\nexperience the int8 rounding error while training and settle into values that survive\nthe eventual int8 storage. This is what lets a QAT-trained embedding match its float\naccuracy after conversion, where a naively-quantized table would shift every token\nvector by an uncontrolled rounding step.\n\n**Only the table is fake-quantized.** Unlike the QAT `lucid.nn.qat.Linear` /\nconv layers, there is **no activation observer** here: the layer's output is a plain\n`gather` of rows that are *already* on the (fake-)quantized grid, so the output range\nis fully determined by the table and a second observer would be redundant. The module\ntherefore carries a single `weight_fake_quant` and no `activation_post_process`.\n\n**Straight-through estimator (STE).** Rounding a table entry is a step function whose\nderivative is zero almost everywhere; the fake-quant rounds in the forward pass but\npasses the gradient *straight through* to the float table in the backward pass, so the\nembeddings stay fully trainable. `lucid.quantization.convert` then reads the\ntrained table and the weight observer's final qparams and bakes them into an inference\n`lucid.nn.quantized.Embedding` whose rows are stored as int8 codes.\n\nOn each forward the table is fake-quantized, then the rows for `x` are gathered:\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t / s) + z,\\ q_{\\min},\\ q_{\\max})\n    - z\\bigr)\\, s,\n\\qquad\n\\frac{\\partial\\, \\operatorname{fake\\_quant}(t)}{\\partial t} = 1\n$$\n\n$$\ny = \\operatorname{fake\\_quant}_{w}(W)[\\, x \\,]\n$$\n\nwhere $s, z$ are the scale / zero-point the weight `FakeQuantize` derives from\nits observer and $q_{\\min}, q_{\\max}$ are the grid bounds. The straight-through\nunit derivative keeps the table trainable despite the non-differentiable `round`.",
       "parameters": [
         {
           "name": "num_embeddings",
           "annotation": "int",
-          "description": "Number of rows in the lookup table (vocabulary size).",
+          "description": "Number of rows in the lookup table (vocabulary size) — forwarded to the float\n`lucid.nn.Embedding` parent.",
           "default": null
         },
         {
           "name": "embedding_dim",
           "annotation": "int",
-          "description": "Dimensionality of each embedding vector.",
+          "description": "Dimensionality of each embedding vector — forwarded to the float parent.",
           "default": null
         },
         {
           "name": "padding_idx",
           "annotation": "int or None",
-          "description": "If given, the embedding at this index stays fixed and does not contribute to\nthe gradient.",
+          "description": "If given, the embedding at this index stays fixed and does not contribute to the\ngradient; forwarded to the float parent.",
           "default": "None"
         },
         {
           "name": "qconfig",
-          "annotation": "QConfig",
-          "description": "Quantization recipe (keyword-only) supplying the weight\n`lucid.quantization.FakeQuantize` applied to the table during training.",
+          "annotation": "(QConfig, keyword - only)",
+          "description": "Quantization recipe supplying the weight `lucid.quantization.FakeQuantize`\napplied to the table during training. Required — constructing the layer without\none raises `ValueError`.",
           "default": "None"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Only the table (weight) is fake-quantized — there is no activation observer, since\nthe output is a gather of already-quantized rows."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> import lucid.nn.qat as nnqat\n>>> m = nn.Sequential(nn.Embedding(20, 8))\n>>> qat = Q.prepare_qat(m, Q.get_default_qat_qconfig_mapping())\n>>> isinstance(qat[0], nnqat.Embedding)\nTrue\n>>> _ = qat(lucid.tensor([[1, 5, 9]], dtype=lucid.int64))   # fake-quant + gather\n>>> qat.eval()\n>>> qc = Q.convert(qat)                                     # -> quantized.Embedding\n>>> type(qc[0]).__name__\n'Embedding'\nA qconfig is mandatory — constructing the layer directly without one raises:\n>>> nnqat.Embedding(20, 8)\nTraceback (most recent call last):\n    ...\nValueError: qat.Embedding requires a qconfig"
       ],
-      "attributes": [],
+      "notes": [
+        "- **Table-only fake-quant.** Only the weight table is fake-quantized; the layer has no\n  activation observer because a gather of quantized rows is already on the grid.\n- **STE differentiability.** `round` is applied forward but the gradient passes\n  through as the identity, so the float table trains normally.\n- **Both directions are wired for you.** `lucid.quantization.prepare_qat` swaps\n  the float embedding *in*; `lucid.quantization.convert` folds this layer *out*\n  into the matching `lucid.nn.quantized.Embedding`. Manual construction is\n  rarely needed and requires an explicit keyword `qconfig`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_fake_quant",
+          "annotation": "FakeQuantize",
+          "description": "The table observer + fake-quant built from `qconfig.weight()`; rounds the float\ntable each forward and tracks its range so `convert` can pick the int8 qparams.\nThere is no `activation_post_process` — the gather output needs no separate grid."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Embedding",
+          "description": "The int8 inference embedding `convert` bakes into."
+        },
+        {
+          "name": "lucid.nn.qat.Linear",
+          "description": "The QAT layer that *does* carry an activation observer."
+        },
+        {
+          "name": "lucid.quantization.prepare_qat",
+          "description": "Swaps the float `Embedding` for this QAT layer."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Bakes the trained QAT table into the quantized embedding."
+        }
+      ]
     }
   ],
   "summary": "`lucid.nn.qat` — quantization-aware training modules.",

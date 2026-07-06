@@ -3,7 +3,7 @@
   "name": "attention_unet",
   "path": "lucid.models.vision.attention_unet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/vision/attention_unet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/vision/attention_unet/__init__.py#L1",
   "members": [
     {
       "name": "AttentionUNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "AttentionUNetConfig(num_classes: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/vision/attention_unet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/vision/attention_unet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/vision/attention_unet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/vision/attention_unet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -95,7 +95,7 @@
       ],
       "labels": [],
       "signature": "AttentionUNetForSemanticSegmentation(config: AttentionUNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/vision/attention_unet/_model.py#L168",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/vision/attention_unet/_model.py#L168",
       "subcategory": "model",
       "methods": [
         {
@@ -104,7 +104,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AttentionUNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/vision/attention_unet/_model.py#L239",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/vision/attention_unet/_model.py#L239",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -126,7 +126,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/vision/attention_unet/_model.py#L278",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/vision/attention_unet/_model.py#L278",
           "subcategory": "model",
           "summary": "Run Attention U-Net.",
           "extended": null,
@@ -210,7 +210,7 @@
       "kind": "function",
       "labels": [],
       "signature": "attention_unet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/vision/attention_unet/_pretrained.py#L29",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/vision/attention_unet/_pretrained.py#L29",
       "subcategory": "pretrained",
       "summary": "Attention U-Net (Oktay et al., MIDL 2018).",
       "extended": "Builds an `AttentionUNetForSemanticSegmentation` with the\nstandard configuration: 4-level encoder / decoder, `base_channels =\n64` (channel schedule 64 -> 128 -> 256 -> 512 -> 1024),\n`in_channels = 1` (medical imaging default), and `num_classes = 2`.\nSoft attention gates on every skip connection suppress irrelevant\nencoder activations.",

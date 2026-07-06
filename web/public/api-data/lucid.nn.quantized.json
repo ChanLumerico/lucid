@@ -3,7 +3,7 @@
   "name": "quantized",
   "path": "lucid.nn.quantized",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/__init__.py#L1",
   "members": [
     {
       "name": "ELU",
@@ -15,19 +15,61 @@
       ],
       "labels": [],
       "signature": "ELU(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/activation.py#L113",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/activation.py#L328",
       "subcategory": "activation",
       "methods": [],
       "summary": "Quantized `lucid.nn.ELU` — `elu(x, alpha)` then output fake-quant.",
-      "extended": "Carries the source module's `alpha` (the negative-branch scale\n`alpha·(exp(x)-1)`), copied from the float `nn.ELU` in `from_float`.",
-      "parameters": [],
+      "extended": "The inference-time replacement for a calibrated float `nn.ELU`, installed\nby `lucid.quantization.convert` / `from_float`. Under the sidecar\nrepresentation (design B) the quantized layer is the float ELU followed by a\nfake-quantize to the calibrated output grid. Unlike the bounded activations,\nELU is **unbounded above** and saturates to $-\\alpha$ below, so its\nrange is data-dependent and must be calibrated with a real observer rather\nthan a `lucid.quantization.FixedQParamsObserver`.\n\nThe negative-branch scale $\\alpha$ is a parameter of the activation,\nnot a learned weight; `from_float` copies it from the source `nn.ELU`\n(via the internal `_configure` hook) so the quantized layer reproduces the\nexact float curve before snapping the output to the grid.\n\n$$\ny = \\operatorname{fake\\_quant}\\bigl(\\operatorname{elu}(x)\\bigr),\n\\qquad\n\\operatorname{elu}(x) =\n    \\begin{cases} x & x > 0 \\\\ \\alpha\\,(e^{x} - 1) & x \\le 0 \\end{cases}\n$$\n\nwith $\\operatorname{fake\\_quant}(t) = (\\operatorname{clamp}( \\operatorname{round}(t/S) + Z, q_{\\min}, q_{\\max}) - Z)\\, S$ and the\ncalibrated output `(scale, zero_point)` $S, Z$.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Per-tensor output scale from the calibrating observer. Supplied by\n`from_float`; construct directly only with qparams in hand.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Per-tensor output zero-point from the calibrating observer.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Quantized dtype bounding the grid. Defaults to\n`lucid.quantization.quint8` (`[0, 255]`).",
+          "default": "quint8"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
+      "examples": [
+        ">>> import lucid.nn as nn\n>>> src = nn.ELU(alpha=1.5)\n>>> qelu = nn.quantized.ELU.from_float(src)   # (needs a calibrated observer)\n>>> qelu.alpha\n1.5"
+      ],
+      "notes": [
+        "- Built via `convert` / `from_float`, which reads the output observer\n  and copies `alpha` from the float module.\n- Range is data-dependent (unbounded above), so calibrate through the\n  prepared model before `convert`; a fixed grid would clip the upper tail.\n- The forward is `float elu(x, alpha) → fake-quant`; only the output is\n  snapped to the grid."
+      ],
+      "attributes": [
+        {
+          "name": "alpha",
+          "annotation": "float",
+          "description": "The negative-branch scale $\\alpha$ in $\\alpha\\,(e^{x} - 1)$,\ncopied from the source `nn.ELU` by `from_float`. Defaults to\n`1.0` on a bare instance."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.LeakyReLU",
+          "description": "Also carries a slope parameter across convert."
+        },
+        {
+          "name": "lucid.nn.quantized.Hardswish",
+          "description": "Another unbounded, calibration-only activation."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "Hardsigmoid",
@@ -39,19 +81,55 @@
       ],
       "labels": [],
       "signature": "Hardsigmoid(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/activation.py#L89",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/activation.py#L196",
       "subcategory": "activation",
       "methods": [],
       "summary": "Quantized `lucid.nn.Hardsigmoid` — `hardsigmoid(x)` then fake-quant.",
-      "extended": "Like `Sigmoid` its output is bounded to `[0, 1]`, a natural\nfixed-qparams range; the piecewise-linear gate of MobileNetV3's SE blocks.",
-      "parameters": [],
+      "extended": "The inference-time replacement for a calibrated float `nn.Hardsigmoid`,\ninstalled by `lucid.quantization.convert` / `from_float`.\nHardsigmoid is the piecewise-linear approximation of the sigmoid gate used in\nMobileNetV3's squeeze-and-excitation blocks; like `Sigmoid` its output\nis bounded to $[0, 1]$, so it is a natural **fixed-qparams** activation.\nUnder the sidecar representation (design B) the quantized layer is the float\nactivation followed by a fake-quantize to the calibrated output grid.\n\nBecause the range is fixed to $[0, 1]$, pair it with a\n`lucid.quantization.FixedQParamsObserver` (scale $1/256$,\nzero-point $0$) to skip calibrating a range known a priori.\n\n$$\ny = \\operatorname{fake\\_quant}\\bigl(\\operatorname{hardsigmoid}(x)\\bigr),\n\\qquad\n\\operatorname{hardsigmoid}(x) =\n    \\frac{\\operatorname{clamp}(x + 3,\\ 0,\\ 6)}{6}\n$$\n\nwith $\\operatorname{fake\\_quant}(t) = (\\operatorname{clamp}( \\operatorname{round}(t/S) + Z, q_{\\min}, q_{\\max}) - Z)\\, S$ and, for the\nfixed grid, $S = 1/256,\\ Z = 0$.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Per-tensor output scale — the fixed `1/256` under a\n`lucid.quantization.FixedQParamsObserver`, else calibrated.\nSupplied by `from_float`.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Per-tensor output zero-point (`0` for the fixed `[0, 1]` grid).",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Quantized dtype bounding the grid. Defaults to\n`lucid.quantization.quint8` (`[0, 255]`).",
+          "default": "quint8"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> qhs = nn.quantized.Hardsigmoid(lucid.tensor(1 / 256), lucid.tensor(0.0))\n>>> y = qhs(lucid.randn(8))\n>>> bool(((y >= 0) & (y <= 1)).all().item())     # bounded to [0, 1]\nTrue"
+      ],
+      "notes": [
+        "- Built via `convert` / `from_float`, which reads the source module's\n  output observer.\n- Bounded to `[0, 1]`, so pairing with\n  `lucid.quantization.FixedQParamsObserver` avoids a calibration pass.\n- Often paired with `Hardswish` inside the same SE block; both are the\n  hardware-friendly piecewise-linear substitutes for their smooth originals."
+      ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Sigmoid",
+          "description": "The smooth `[0, 1]` original."
+        },
+        {
+          "name": "lucid.nn.quantized.Hardswish",
+          "description": "Its partner activation in SE blocks."
+        },
+        {
+          "name": "lucid.quantization.FixedQParamsObserver",
+          "description": "Pins the grid for bounded outputs."
+        }
+      ]
     },
     {
       "name": "Hardswish",
@@ -63,19 +141,55 @@
       ],
       "labels": [],
       "signature": "Hardswish(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/activation.py#L76",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/activation.py#L131",
       "subcategory": "activation",
       "methods": [],
       "summary": "Quantized `lucid.nn.Hardswish` — `hardswish(x)` then output fake-quant.",
-      "extended": "The piecewise-linear swish approximation used in MobileNetV3 / EfficientNet-lite;\nconverted from a calibrated float `nn.Hardswish` and requantized to the\nobserved output grid.",
-      "parameters": [],
+      "extended": "The inference-time replacement for a calibrated float `nn.Hardswish`,\ninstalled by `lucid.quantization.convert` / `from_float`.\nHardswish is the cheap piecewise-linear approximation of `x·sigmoid(x)`\nused throughout MobileNetV3 / EfficientNet-lite, chosen precisely because its\nclamp-and-multiply form quantizes cleanly. Under the sidecar representation\n(design B) the quantized layer is the float activation followed by a\nfake-quantize to the calibrated output grid.\n\nUnlike `Sigmoid` / `Tanh`, hardswish is **unbounded above**\n(it grows like $x$ for large $x$), so its output range is *not*\nknown a priori — it must be calibrated with a real observer rather than a\n`lucid.quantization.FixedQParamsObserver`.\n\n$$\ny = \\operatorname{fake\\_quant}\\bigl(\\operatorname{hardswish}(x)\\bigr),\n\\qquad\n\\operatorname{hardswish}(x) = x\\,\n    \\frac{\\operatorname{clamp}(x + 3,\\ 0,\\ 6)}{6}\n$$\n\nwith $\\operatorname{fake\\_quant}(t) = (\\operatorname{clamp}( \\operatorname{round}(t/S) + Z, q_{\\min}, q_{\\max}) - Z)\\, S$ and the\ncalibrated output `(scale, zero_point)` $S, Z$.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Per-tensor output scale from the calibrating observer. Supplied by\n`from_float`; construct directly only with qparams in hand.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Per-tensor output zero-point from the calibrating observer.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Quantized dtype bounding the grid. Defaults to\n`lucid.quantization.quint8` (`[0, 255]`).",
+          "default": "quint8"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> qhs = nn.quantized.Hardswish(lucid.tensor(0.05), lucid.tensor(64.0))\n>>> qhs(lucid.randn(8)).shape\n(8,)"
+      ],
+      "notes": [
+        "- Built via `convert` / `from_float`, which reads the source module's\n  output observer.\n- Its range is data-dependent, so calibrate through the prepared model before\n  `convert` — a fixed-qparams grid would clip the unbounded upper tail.\n- The forward is `float hardswish → fake-quant`; only the output is snapped."
+      ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Sigmoid",
+          "description": "Bounded `[0, 1]` (fixed-qparams-friendly)."
+        },
+        {
+          "name": "lucid.nn.quantized.Hardsigmoid",
+          "description": "The gate paired with hardswish in SE blocks."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "LeakyReLU",
@@ -87,19 +201,61 @@
       ],
       "labels": [],
       "signature": "LeakyReLU(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/activation.py#L131",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/activation.py#L408",
       "subcategory": "activation",
       "methods": [],
       "summary": "Quantized `lucid.nn.LeakyReLU` — `leaky_relu(x, slope)` then fake-quant.",
-      "extended": "Carries the source module's `negative_slope` (the slope applied to `x < 0`),\ncopied from the float `nn.LeakyReLU` in `from_float`.",
-      "parameters": [],
+      "extended": "The inference-time replacement for a calibrated float `nn.LeakyReLU`,\ninstalled by `lucid.quantization.convert` / `from_float`. Under\nthe sidecar representation (design B) the quantized layer is the float\nleaky-ReLU followed by a fake-quantize to the calibrated output grid. Like\n`ELU` its range is **unbounded** on both sides (linear far from the\norigin), so it is calibrated with a real observer, not a\n`lucid.quantization.FixedQParamsObserver`.\n\nThe `negative_slope` — the small gradient applied to $x < 0$ that\nkeeps dead-unit gradients alive — is a parameter of the activation;\n`from_float` copies it from the source `nn.LeakyReLU` (via the\ninternal `_configure` hook) so the quantized curve matches the float one\nbefore the output is snapped to the grid.\n\n$$\ny = \\operatorname{fake\\_quant}\\bigl(\\operatorname{leaky\\_relu}(x)\\bigr),\n\\qquad\n\\operatorname{leaky\\_relu}(x) =\n    \\begin{cases} x & x \\ge 0 \\\\ \\text{slope}\\cdot x & x < 0 \\end{cases}\n$$\n\nwith $\\operatorname{fake\\_quant}(t) = (\\operatorname{clamp}( \\operatorname{round}(t/S) + Z, q_{\\min}, q_{\\max}) - Z)\\, S$ and the\ncalibrated output `(scale, zero_point)` $S, Z$.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Per-tensor output scale from the calibrating observer. Supplied by\n`from_float`; construct directly only with qparams in hand.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Per-tensor output zero-point from the calibrating observer.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Quantized dtype bounding the grid. Defaults to\n`lucid.quantization.quint8` (`[0, 255]`).",
+          "default": "quint8"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
+      "examples": [
+        ">>> import lucid.nn as nn\n>>> src = nn.LeakyReLU(negative_slope=0.2)\n>>> qlr = nn.quantized.LeakyReLU.from_float(src)   # (needs a calibrated obs.)\n>>> qlr.negative_slope\n0.2"
+      ],
+      "notes": [
+        "- Built via `convert` / `from_float`, which reads the output observer\n  and copies `negative_slope` from the float module.\n- Range is unbounded on both sides, so calibrate through the prepared model\n  before `convert` rather than using a fixed grid.\n- The forward is `float leaky_relu(x, slope) → fake-quant`; only the output\n  is snapped to the grid."
+      ],
+      "attributes": [
+        {
+          "name": "negative_slope",
+          "annotation": "float",
+          "description": "The slope applied to $x < 0$, copied from the source\n`nn.LeakyReLU` by `from_float`. Defaults to `0.01` on a bare\ninstance."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.ELU",
+          "description": "Also carries a shape parameter across convert."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU2d",
+          "description": "Fused ReLU folded into a quantized conv."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "Sigmoid",
@@ -111,19 +267,55 @@
       ],
       "labels": [],
       "signature": "Sigmoid(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/activation.py#L63",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/activation.py#L63",
       "subcategory": "activation",
       "methods": [],
       "summary": "Quantized `lucid.nn.Sigmoid` — `sigmoid(x)` then output fake-quant.",
-      "extended": "The output is bounded to `[0, 1]`, so pairing this layer with a\n`lucid.quantization.FixedQParamsObserver` (fixed `1/256` scale,\nzero-point 0) in the qconfig skips calibrating a range that is known a priori.",
-      "parameters": [],
+      "extended": "The inference-time replacement for a calibrated float `nn.Sigmoid` sitting\ninside a quantized region, installed by `lucid.quantization.convert` /\n`from_float`. Under the sidecar representation (design B) a *quantized*\nactivation is simply the float activation followed by a fake-quantize to the\ncalibrated output grid, so a standalone sigmoid is requantized rather than\nleft at full precision between two int8 layers.\n\nBecause $\\sigma(x) \\in [0, 1]$ the output range is known a priori, this\nis the archetypal **fixed-qparams** activation: instead of calibrating the\nrange from data, pair it with a\n`lucid.quantization.FixedQParamsObserver` in the qconfig, which pins\nthe grid to the constant $[0, 1]$ mapping.\n\n$$\ny = \\operatorname{fake\\_quant}\\bigl(\\sigma(x)\\bigr),\n\\qquad\nS = \\tfrac{1}{256},\\quad Z = 0\n$$\n\nso the `quint8` codes `0 .. 255` tile $[0, 1]$ uniformly with step\n$S$. $\\operatorname{fake\\_quant}(t) = (\\operatorname{clamp}( \\operatorname{round}(t/S) + Z, q_{\\min}, q_{\\max}) - Z)\\, S$.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Per-tensor output scale — the fixed `1/256` when paired with a\n`lucid.quantization.FixedQParamsObserver`, else the calibrated\nvalue. Supplied by `from_float`; construct directly only with\nqparams in hand.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Per-tensor output zero-point (`0` for the fixed `[0, 1]` grid).",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Quantized dtype bounding the grid. Defaults to\n`lucid.quantization.quint8` (`[0, 255]`).",
+          "default": "quint8"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> qsig = nn.quantized.Sigmoid(lucid.tensor(1 / 256), lucid.tensor(0.0))\n>>> y = qsig(lucid.randn(8))\n>>> bool(((y >= 0) & (y <= 1)).all().item())     # bounded to [0, 1]\nTrue"
+      ],
+      "notes": [
+        "- Built via `convert` / `from_float`, which reads the source module's\n  output observer; a bare `nn.Sigmoid` is not one of these.\n- Pairing with `lucid.quantization.FixedQParamsObserver` skips a\n  calibration pass for a range that is fixed by construction.\n- The forward is `float sigmoid → fake-quant`; the sigmoid itself runs at\n  full float precision, only the output is snapped to the grid."
+      ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Tanh",
+          "description": "Bounded to `[-1, 1]` (also fixed-qparams)."
+        },
+        {
+          "name": "lucid.nn.quantized.Hardsigmoid",
+          "description": "Piecewise-linear `[0, 1]` gate."
+        },
+        {
+          "name": "lucid.quantization.FixedQParamsObserver",
+          "description": "Pins the grid for bounded outputs."
+        }
+      ]
     },
     {
       "name": "Tanh",
@@ -135,19 +327,55 @@
       ],
       "labels": [],
       "signature": "Tanh(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/activation.py#L101",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/activation.py#L263",
       "subcategory": "activation",
       "methods": [],
       "summary": "Quantized `lucid.nn.Tanh` — `tanh(x)` then output fake-quant.",
-      "extended": "The output is bounded to `[-1, 1]` (another fixed-qparams-friendly range);\nconverted from a calibrated float `nn.Tanh`.",
-      "parameters": [],
+      "extended": "The inference-time replacement for a calibrated float `nn.Tanh`, installed\nby `lucid.quantization.convert` / `from_float`. Under the sidecar\nrepresentation (design B) the quantized layer is the float `tanh` followed\nby a fake-quantize to the calibrated output grid, so a standalone tanh inside\na quantized region is requantized rather than left at full precision.\n\nBecause $\\tanh(x) \\in [-1, 1]$ the range is known a priori, making this\nanother **fixed-qparams** activation. Since the range is *signed*, the fixed\ngrid centres the zero-point in the middle of the `quint8` codes so that both\nthe `-1` and `+1` extremes are representable.\n\n$$\ny = \\operatorname{fake\\_quant}\\bigl(\\tanh(x)\\bigr),\n\\qquad\nS = \\tfrac{2}{256},\\quad Z = 128\n$$\n\nso codes `0 .. 255` tile $[-1, 1]$ with the real value `0` landing\non code `128`. $\\operatorname{fake\\_quant}(t) = (\\operatorname{clamp}( \\operatorname{round}(t/S) + Z, q_{\\min}, q_{\\max}) - Z)\\, S$.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Per-tensor output scale — the fixed `2/256` under a\n`lucid.quantization.FixedQParamsObserver`, else calibrated.\nSupplied by `from_float`.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Per-tensor output zero-point (`128` for the signed `[-1, 1]` grid).",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Quantized dtype bounding the grid. Defaults to\n`lucid.quantization.quint8` (`[0, 255]`).",
+          "default": "quint8"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> qtanh = nn.quantized.Tanh(lucid.tensor(2 / 256), lucid.tensor(128.0))\n>>> y = qtanh(lucid.randn(8))\n>>> bool(((y >= -1) & (y <= 1)).all().item())    # bounded to [-1, 1]\nTrue"
+      ],
+      "notes": [
+        "- Built via `convert` / `from_float`, which reads the source module's\n  output observer.\n- Bounded to `[-1, 1]`; pairing with\n  `lucid.quantization.FixedQParamsObserver` avoids a calibration pass.\n- The non-zero zero-point (`128`) is what lets a *signed* range live on the\n  unsigned `quint8` grid without clipping either sign."
+      ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Sigmoid",
+          "description": "Bounded `[0, 1]` (unsigned fixed grid)."
+        },
+        {
+          "name": "lucid.quantization.FixedQParamsObserver",
+          "description": "Pins the grid for bounded outputs."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "Conv1d",
@@ -159,11 +387,11 @@
       ],
       "labels": [],
       "signature": "Conv1d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/conv.py#L151",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/conv.py#L151",
       "subcategory": "conv",
       "methods": [],
-      "summary": "Quantized 1-D convolution (int8 weight, dequantize-to-float compute).",
-      "extended": "Each forward dequantizes the per-output-channel int8 kernel, runs the\nordinary `F.conv1d`, then fake-quantizes the output to the calibrated\nactivation grid (the sidecar design-B numerics: int8 weight stored, but the\nconvolution itself runs in float so accuracy matches a real int8 kernel).\nProduced from a calibrated float `lucid.nn.Conv1d` by\n`lucid.quantization.convert` / `from_float`.",
+      "summary": "Quantized 1-D convolution — int8 kernel, dequantize-to-float compute.",
+      "extended": "The inference-time replacement that `lucid.quantization.convert`\ninstalls in place of a calibrated float `lucid.nn.Conv1d`. It is the\nquantized member of the 1-D conv family — audio / time-series front ends,\n1-D residual stacks, token-mixing convolutions — and shares the exact sidecar\nrecipe of the quantized `lucid.nn.quantized.Linear`.\n\n**Representation (sidecar design B).** The learned float kernel is quantized\nonce, at `from_float` time, into an `int8` code tensor plus a\nper-output-channel `scale` / `zero_point`; the float kernel is then\ndropped. Only the int8 codes, the qparams, and the (still-float) bias live in\nthe module, so the checkpoint is far smaller than the float layer's. Each\nforward *dequantizes* the kernel back to float, runs the ordinary\n`F.conv1d`, and finally *fake-quantizes* the output onto the activation grid\nthat calibration observed. Keeping the convolution itself in float means the\nresult matches a genuine int8 kernel to within a rounding step **and** the\nlayer runs unchanged on any device, with no int8 conv kernel required.\n\n**Per-channel weights.** The kernel `(out_channels, in_channels/groups, k)`\nis quantized independently for every output channel (axis 0): each filter\ncarries its own scale and zero-point. Because different output filters often\nspan very different dynamic ranges, per-channel quantization tracks them far\nmore tightly than a single per-tensor scale, and is the standard\naccuracy-preserving choice for convolution kernels. The bias is small and\nprecision-sensitive, so it is left in float.\n\nEncoding happens once (at `from_float`); decode + convolve run on every\nforward:\n\n$$\nw^{q}_{o,c,k} = \\operatorname{clamp}\\!\\bigl(\n    \\operatorname{round}(w_{o,c,k}/s_o) + z_o,\\ -128,\\ 127\\bigr),\n\\qquad\n\\hat{w}_{o,c,k} = (w^{q}_{o,c,k} - z_o)\\, s_o\n$$\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{conv1d}(x, \\hat{w}) + b\\bigr),\n\\qquad\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $s_o, z_o$ are the per-output-channel weight scale / zero-point\n(index $o$ runs over `out_channels`) and $S, Z$ the scalar\ncalibrated output `(scale, zero_point)` with grid bounds\n$q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`). The\ndecode → float-conv → re-quantize round-trip is what makes the output\n*bit-equivalent* to a true int8 kernel without needing one.",
       "parameters": [
         {
           "name": "in_channels",
@@ -174,7 +402,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the convolution.",
+          "description": "Number of channels produced by the convolution — quantized per-channel.",
           "default": null
         },
         {
@@ -210,19 +438,69 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the convolution.",
+          "description": "Whether a learned **float** bias term is added after the convolution.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight is quantized **per-output-channel on axis 0** (much tighter than\nper-tensor for wide kernels); the bias stays float. Only integer / tuple\npadding with `padding_mode=\"zeros\"` is supported — string `\"same\"` /\n`\"valid\"` padding is deferred. See `lucid.nn.quantized.Conv2d`."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.Conv1d(8, 16, 3))\n>>> model.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(model)             # insert activation/weight observers\n>>> _ = prepared(lucid.randn(4, 8, 32))     # calibrate on representative data\n>>> qmodel = Q.convert(prepared)            # float Conv1d -> quantized Conv1d\n>>> type(qmodel[0]).__name__\n'Conv1d'\n>>> qmodel(lucid.randn(4, 8, 32)).shape     # int8-weight inference\n(4, 16, 30)\nConstructing the layer directly is **not** a substitute for that workflow — a\nbare instance carries zeroed codes and identity qparams, so it returns garbage\nuntil from_float / load_state_dict populates the buffers:\n>>> broken = nn.quantized.Conv1d(8, 16, (3,), (1,), (0,), (1,), 1, True)\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a freshly constructed\n  layer has identity qparams (`scale = 1`, `zero_point = 0`) and zeroed\n  kernel codes, and only becomes meaningful once `from_float` /\n  `load_state_dict` fills the buffers.\n- Only int8 codes + qparams + float bias enter the `state_dict`; the float\n  kernel never does. The weight payload shrinks ~`3.55x` (int8) and a whole\n  model checkpoint ~`3.97x` (measured on `resnet_18`, a conv-heavy net).\n- The kernel is quantized **per-output-channel on axis 0** — each filter gets\n  its own scale / zero-point, far tighter than one per-tensor scale for wide\n  kernels; the bias stays float.\n- This layer wins on **memory**, not compute — the convolution runs in float\n  (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the float\n  layer's. There is no weight-only int8 *conv* GEMM analogue of\n  `lucid.nn.quantized.QuantizedLinearMLX`; the payoff is the smaller\n  checkpoint and working set.\n- Device-transparent: because compute stays in float, the layer runs\n  unchanged on CPU or Metal and follows the input tensor's device.\n- Calibration is required — the output `(scale, zero_point)` come from an\n  activation observer that must see representative data between `prepare`\n  and `convert`; an uncalibrated observer keeps its `±inf` seed,\n  collapsing `scale` toward `eps` and the output toward zero\n  (`from_float` warns loudly in that case).\n- Only integer / tuple padding with `padding_mode=\"zeros\"` is supported;\n  string `\"same\"` / `\"valid\"` padding raises `NotImplementedError` at\n  `from_float`.\n- `_activation` is the identity here; the fused\n  `lucid.nn.quantized.ConvReLU1d` overrides it to apply ReLU *before*\n  the output fake-quant so calibration and inference see the same post-ReLU\n  range."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape `(out_channels, in_channels/groups, k)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_channels,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_channels,)`."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, set from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv2d",
+          "description": "The 2-D workhorse (per-channel int8 kernel)."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU1d",
+          "description": "Quantized 1-D conv with a fused ReLU."
+        },
+        {
+          "name": "lucid.nn.quantized.Linear",
+          "description": "The fully-connected analogue (per-channel int8)."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated float model."
+        }
+      ]
     },
     {
       "name": "Conv2d",
@@ -234,11 +512,11 @@
       ],
       "labels": [],
       "signature": "Conv2d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/conv.py#L201",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/conv.py#L315",
       "subcategory": "conv",
       "methods": [],
-      "summary": "Quantized 2-D convolution (int8 weight, dequantize-to-float compute).",
-      "extended": "The workhorse of the quantized vision zoo. Each forward dequantizes the\nper-output-channel int8 kernel, runs the ordinary `F.conv2d`, then\nfake-quantizes the output to the calibrated activation grid (sidecar\ndesign-B: int8 weight stored, but the convolution runs in float so accuracy\nmatches a real int8 kernel). Produced from a calibrated float\n`lucid.nn.Conv2d` by `lucid.quantization.convert` /\n`from_float`.",
+      "summary": "Quantized 2-D convolution — int8 kernel, dequantize-to-float compute.",
+      "extended": "The workhorse of the quantized vision zoo — the inference-time replacement\nthat `lucid.quantization.convert` installs for a calibrated float\n`lucid.nn.Conv2d`. Backbones such as `resnet_18` are almost\nentirely 2-D convolutions, so this layer is where the checkpoint / working-set\nsavings of int8 quantization are actually realized.\n\n**Representation (sidecar design B).** The learned float kernel is quantized\nonce, at `from_float` time, into an `int8` code tensor plus a\nper-output-channel `scale` / `zero_point`; the float kernel is then\ndropped. Only the int8 codes, the qparams, and the (still-float) bias live in\nthe module, so the checkpoint is far smaller than the float layer's. Each\nforward *dequantizes* the kernel back to float, runs the ordinary\n`F.conv2d`, and finally *fake-quantizes* the output onto the activation grid\nthat calibration observed. Keeping the convolution itself in float means the\nresult matches a genuine int8 kernel to within a rounding step **and** the\nlayer runs unchanged on any device, with no int8 conv kernel required.\n\n**Per-channel weights.** The kernel `(out_channels, in_channels/groups, kh,\nkw)` is quantized independently for every output channel (axis 0): each\nfilter carries its own scale and zero-point. Because different output filters\noften span very different dynamic ranges, per-channel quantization tracks them\nfar more tightly than a single per-tensor scale, and is the standard\naccuracy-preserving choice for convolution kernels. The bias is small and\nprecision-sensitive, so it is left in float.\n\nEncoding happens once (at `from_float`); decode + convolve run on every\nforward:\n\n$$\nw^{q}_{o,c,i,j} = \\operatorname{clamp}\\!\\bigl(\n    \\operatorname{round}(w_{o,c,i,j}/s_o) + z_o,\\ -128,\\ 127\\bigr),\n\\qquad\n\\hat{w}_{o,c,i,j} = (w^{q}_{o,c,i,j} - z_o)\\, s_o\n$$\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{conv2d}(x, \\hat{w}) + b\\bigr),\n\\qquad\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $s_o, z_o$ are the per-output-channel weight scale / zero-point\n(index $o$ runs over `out_channels`) and $S, Z$ the scalar\ncalibrated output `(scale, zero_point)` with grid bounds\n$q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`). The\ndecode → float-conv → re-quantize round-trip is what makes the output\n*bit-equivalent* to a true int8 kernel without needing one.",
       "parameters": [
         {
           "name": "in_channels",
@@ -249,7 +527,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the convolution.",
+          "description": "Number of channels produced by the convolution — quantized per-channel.",
           "default": null
         },
         {
@@ -285,19 +563,69 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the convolution.",
+          "description": "Whether a learned **float** bias term is added after the convolution.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight is quantized **per-output-channel on axis 0** (much tighter than\nper-tensor for wide kernels); the bias stays float. Only integer / tuple\npadding with `padding_mode=\"zeros\"` is supported — string `\"same\"` /\n`\"valid\"` padding is deferred."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1))\n>>> model.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(model)               # insert activation/weight observers\n>>> _ = prepared(lucid.randn(8, 3, 32, 32))   # calibrate on representative data\n>>> qmodel = Q.convert(prepared)              # float Conv2d -> quantized Conv2d\n>>> type(qmodel[0]).__name__\n'Conv2d'\n>>> qmodel(lucid.randn(1, 3, 32, 32)).shape   # int8-weight inference\n(1, 16, 32, 32)\nConstructing the layer directly is **not** a substitute for that workflow — a\nbare instance carries zeroed codes and identity qparams, so it returns garbage\nuntil from_float / load_state_dict populates the buffers:\n>>> broken = nn.quantized.Conv2d(3, 16, (3, 3), (1, 1), (1, 1), (1, 1), 1, True)\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a freshly constructed\n  layer has identity qparams (`scale = 1`, `zero_point = 0`) and zeroed\n  kernel codes, and only becomes meaningful once `from_float` /\n  `load_state_dict` fills the buffers.\n- Only int8 codes + qparams + float bias enter the `state_dict`; the float\n  kernel never does. The weight payload shrinks ~`3.55x` (int8) and a whole\n  model checkpoint ~`3.97x` (measured on `resnet_18`, a conv-heavy net).\n- The kernel is quantized **per-output-channel on axis 0** — each filter gets\n  its own scale / zero-point, far tighter than one per-tensor scale for wide\n  kernels; the bias stays float.\n- This layer wins on **memory**, not compute — the convolution runs in float\n  (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the float\n  layer's. There is no weight-only int8 *conv* GEMM analogue of\n  `lucid.nn.quantized.QuantizedLinearMLX`; the payoff is the smaller\n  checkpoint and working set.\n- Device-transparent: because compute stays in float, the layer runs\n  unchanged on CPU or Metal and follows the input tensor's device.\n- Calibration is required — the output `(scale, zero_point)` come from an\n  activation observer that must see representative data between `prepare`\n  and `convert`; an uncalibrated observer keeps its `±inf` seed,\n  collapsing `scale` toward `eps` and the output toward zero\n  (`from_float` warns loudly in that case).\n- Only integer / tuple padding with `padding_mode=\"zeros\"` is supported;\n  string `\"same\"` / `\"valid\"` padding raises `NotImplementedError` at\n  `from_float`.\n- `_activation` is the identity here; the fused\n  `lucid.nn.quantized.ConvReLU2d` overrides it to apply ReLU *before*\n  the output fake-quant so calibration and inference see the same post-ReLU\n  range."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape\n`(out_channels, in_channels/groups, kh, kw)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_channels,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_channels,)`."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, set from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv1d",
+          "description": "The 1-D sibling (per-channel int8 kernel)."
+        },
+        {
+          "name": "lucid.nn.quantized.Conv3d",
+          "description": "The volumetric sibling (per-channel int8 kernel)."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU2d",
+          "description": "Quantized 2-D conv with a fused ReLU."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated float model."
+        }
+      ]
     },
     {
       "name": "Conv3d",
@@ -309,11 +637,11 @@
       ],
       "labels": [],
       "signature": "Conv3d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/conv.py#L252",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/conv.py#L480",
       "subcategory": "conv",
       "methods": [],
-      "summary": "Quantized 3-D convolution (int8 weight, dequantize-to-float compute).",
-      "extended": "The volumetric member of the quantized conv family (video / 3-D medical\nmodels). Each forward dequantizes the per-output-channel int8 kernel, runs\nthe ordinary `F.conv3d`, then fake-quantizes the output to the calibrated\nactivation grid (sidecar design-B: int8 weight stored, but the convolution\nruns in float so accuracy matches a real int8 kernel). Produced from a\ncalibrated float `lucid.nn.Conv3d` by\n`lucid.quantization.convert` / `from_float`.",
+      "summary": "Quantized 3-D convolution — int8 kernel, dequantize-to-float compute.",
+      "extended": "The volumetric member of the quantized conv family (video, 3-D medical\nimaging), and the inference-time replacement that\n`lucid.quantization.convert` installs for a calibrated float\n`lucid.nn.Conv3d`. Volumetric kernels are the largest weights in a\n3-D net, so the int8 checkpoint / working-set savings matter most here.\n\n**Representation (sidecar design B).** The learned float kernel is quantized\nonce, at `from_float` time, into an `int8` code tensor plus a\nper-output-channel `scale` / `zero_point`; the float kernel is then\ndropped. Only the int8 codes, the qparams, and the (still-float) bias live in\nthe module, so the checkpoint is far smaller than the float layer's. Each\nforward *dequantizes* the kernel back to float, runs the ordinary\n`F.conv3d`, and finally *fake-quantizes* the output onto the activation grid\nthat calibration observed. Keeping the convolution itself in float means the\nresult matches a genuine int8 kernel to within a rounding step **and** the\nlayer runs unchanged on any device, with no int8 conv kernel required.\n\n**Per-channel weights.** The kernel `(out_channels, in_channels/groups, kd,\nkh, kw)` is quantized independently for every output channel (axis 0): each\nfilter carries its own scale and zero-point. Because different output filters\noften span very different dynamic ranges, per-channel quantization tracks them\nfar more tightly than a single per-tensor scale, and is the standard\naccuracy-preserving choice for convolution kernels. The bias is small and\nprecision-sensitive, so it is left in float.\n\nEncoding happens once (at `from_float`); decode + convolve run on every\nforward:\n\n$$\nw^{q}_{o,c,d,i,j} = \\operatorname{clamp}\\!\\bigl(\n    \\operatorname{round}(w_{o,c,d,i,j}/s_o) + z_o,\\ -128,\\ 127\\bigr),\n\\qquad\n\\hat{w}_{o,c,d,i,j} = (w^{q}_{o,c,d,i,j} - z_o)\\, s_o\n$$\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{conv3d}(x, \\hat{w}) + b\\bigr),\n\\qquad\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $s_o, z_o$ are the per-output-channel weight scale / zero-point\n(index $o$ runs over `out_channels`) and $S, Z$ the scalar\ncalibrated output `(scale, zero_point)` with grid bounds\n$q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`). The\ndecode → float-conv → re-quantize round-trip is what makes the output\n*bit-equivalent* to a true int8 kernel without needing one.",
       "parameters": [
         {
           "name": "in_channels",
@@ -324,7 +652,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the convolution.",
+          "description": "Number of channels produced by the convolution — quantized per-channel.",
           "default": null
         },
         {
@@ -360,19 +688,69 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the convolution.",
+          "description": "Whether a learned **float** bias term is added after the convolution.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight is quantized **per-output-channel on axis 0** (much tighter than\nper-tensor for wide kernels); the bias stays float. Only integer / tuple\npadding with `padding_mode=\"zeros\"` is supported — string `\"same\"` /\n`\"valid\"` padding is deferred. See `lucid.nn.quantized.Conv2d`."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.Conv3d(3, 8, 3))\n>>> model.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(model)                  # insert observers\n>>> _ = prepared(lucid.randn(1, 3, 8, 16, 16))   # calibrate on representative data\n>>> qmodel = Q.convert(prepared)                 # float Conv3d -> quantized Conv3d\n>>> type(qmodel[0]).__name__\n'Conv3d'\n>>> qmodel(lucid.randn(1, 3, 8, 16, 16)).shape   # int8-weight inference\n(1, 8, 6, 14, 14)\nConstructing the layer directly is **not** a substitute for that workflow — a\nbare instance carries zeroed codes and identity qparams, so it returns garbage\nuntil from_float / load_state_dict populates the buffers:\n>>> broken = nn.quantized.Conv3d(3, 8, (3, 3, 3), (1, 1, 1), (0, 0, 0), (1, 1, 1), 1, True)\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a freshly constructed\n  layer has identity qparams (`scale = 1`, `zero_point = 0`) and zeroed\n  kernel codes, and only becomes meaningful once `from_float` /\n  `load_state_dict` fills the buffers.\n- Only int8 codes + qparams + float bias enter the `state_dict`; the float\n  kernel never does. The weight payload shrinks ~`3.55x` (int8) and a whole\n  model checkpoint ~`3.97x` (measured on `resnet_18`, a conv-heavy net).\n- The kernel is quantized **per-output-channel on axis 0** — each filter gets\n  its own scale / zero-point, far tighter than one per-tensor scale for wide\n  kernels; the bias stays float.\n- This layer wins on **memory**, not compute — the convolution runs in float\n  (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the float\n  layer's. There is no weight-only int8 *conv* GEMM analogue of\n  `lucid.nn.quantized.QuantizedLinearMLX`; the payoff is the smaller\n  checkpoint and working set.\n- Device-transparent: because compute stays in float, the layer runs\n  unchanged on CPU or Metal and follows the input tensor's device.\n- Calibration is required — the output `(scale, zero_point)` come from an\n  activation observer that must see representative data between `prepare`\n  and `convert`; an uncalibrated observer keeps its `±inf` seed,\n  collapsing `scale` toward `eps` and the output toward zero\n  (`from_float` warns loudly in that case).\n- Only integer / tuple padding with `padding_mode=\"zeros\"` is supported;\n  string `\"same\"` / `\"valid\"` padding raises `NotImplementedError` at\n  `from_float`.\n- `_activation` is the identity here; the fused\n  `lucid.nn.quantized.ConvReLU3d` overrides it to apply ReLU *before*\n  the output fake-quant so calibration and inference see the same post-ReLU\n  range."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape\n`(out_channels, in_channels/groups, kd, kh, kw)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_channels,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_channels,)`."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, set from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv2d",
+          "description": "The 2-D workhorse (per-channel int8 kernel)."
+        },
+        {
+          "name": "lucid.nn.quantized.Conv1d",
+          "description": "The 1-D sibling (per-channel int8 kernel)."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU3d",
+          "description": "Quantized 3-D conv with a fused ReLU."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated float model."
+        }
+      ]
     },
     {
       "name": "ConvTranspose1d",
@@ -384,11 +762,11 @@
       ],
       "labels": [],
       "signature": "ConvTranspose1d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, output_padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/conv_transpose.py#L158",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/conv_transpose.py#L159",
       "subcategory": "conv_transpose",
       "methods": [],
-      "summary": "Quantized 1-D transposed convolution (fractionally-strided conv).",
-      "extended": "Each forward dequantizes the per-output-channel int8 kernel, runs\n`F.conv_transpose1d`, then fake-quantizes the output to the calibrated\nactivation grid.  Produced from a calibrated float\n`lucid.nn.ConvTranspose1d` by `lucid.quantization.convert`.",
+      "summary": "Quantized 1-D transposed (fractionally-strided) convolution.",
+      "extended": "The int8-weight, dequantize-to-float replacement that\n`lucid.quantization.convert` installs for a calibrated float\n`lucid.nn.ConvTranspose1d`. Transposed convolutions *upsample* — they\nare the decoder / generator counterpart of `lucid.nn.quantized.Conv1d`\nin 1-D signal models — and share the exact sidecar recipe of the quantized\n`lucid.nn.quantized.Conv2d` family.\n\n**Representation (sidecar design B).** The learned float kernel is quantized\nonce, at `from_float` time, into an `int8` code tensor plus a\nper-output-channel `scale` / `zero_point`; the float kernel is then\ndropped. Only the int8 codes, the qparams, and the (still-float) bias live in\nthe module. Each forward *dequantizes* the kernel back to float, runs the\nordinary `F.conv_transpose1d`, and finally *fake-quantizes* the output onto\nthe activation grid that calibration observed. Keeping the transposed\nconvolution itself in float means the result matches a genuine int8 kernel to\nwithin a rounding step **and** the layer runs unchanged on any device.\n\n**Per-channel weights (axis 1).** The transposed-weight layout `(in_channels,\nout_channels/groups, k)` places the *output* channels on **axis 1**, not axis\n0, so the kernel is quantized per-channel along axis 1 — each output channel\ngets its own scale, far tighter than one per-tensor scale for wide kernels.\nThe scheme is **symmetric** (`qint8`, `zero_point = 0`), matching the\nreference default for transposed weights; the bias stays float.\n\nEncoding happens once (at `from_float`); decode + transposed-convolve run\non every forward:\n\n$$\nw^{q}_{c,o,k} = \\operatorname{clamp}\\!\\bigl(\n    \\operatorname{round}(w_{c,o,k}/s_o),\\ -128,\\ 127\\bigr),\n\\qquad\n\\hat{w}_{c,o,k} = w^{q}_{c,o,k}\\, s_o\n$$\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{convT1d}(x, \\hat{w}) + b\\bigr),\n\\qquad\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $s_o$ is the per-output-channel (axis-1) weight scale — with a zero\nzero-point because the weight scheme is symmetric — and $S, Z$ the scalar\ncalibrated output `(scale, zero_point)` with grid bounds\n$q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`).",
       "parameters": [
         {
           "name": "in_channels",
@@ -399,7 +777,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the transposed convolution.",
+          "description": "Number of channels produced by the transposed convolution — quantized\nper-channel (on axis 1 of the transposed weight).",
           "default": null
         },
         {
@@ -441,19 +819,65 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the convolution.",
+          "description": "Whether a learned **float** bias term is added after the convolution.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The transposed-weight layout `(in, out/groups, k)` makes a per-output-\nchannel axis ambiguous, so the weight is quantized **per-channel on axis 1**\n(the output-channel axis) — much tighter than per-tensor for wide kernels."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.ConvTranspose1d(8, 4, 3))\n>>> model.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(model)             # insert activation/weight observers\n>>> _ = prepared(lucid.randn(2, 8, 16))     # calibrate on representative data\n>>> qmodel = Q.convert(prepared)            # float -> quantized ConvTranspose1d\n>>> type(qmodel[0]).__name__\n'ConvTranspose1d'\n>>> qmodel(lucid.randn(2, 8, 16)).shape     # int8-weight upsampling\n(2, 4, 18)\nConstructing the layer directly is **not** a substitute for that workflow — a\nbare instance carries zeroed codes and identity qparams, so it returns garbage\nuntil from_float / load_state_dict populates the buffers:\n>>> broken = nn.quantized.ConvTranspose1d(\n...     8, 4, (3,), (1,), (0,), (0,), (1,), 1, True\n... )\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a freshly constructed\n  layer has identity qparams (`scale = 1`, `zero_point = 0`) and zeroed\n  kernel codes, and only becomes meaningful once `from_float` /\n  `load_state_dict` fills the buffers.\n- Only int8 codes + qparams + float bias enter the `state_dict`; the float\n  kernel never does — the weight payload shrinks ~`3.55x` (int8), and a\n  whole conv-heavy checkpoint ~`3.97x` (measured on `resnet_18`).\n- The kernel is quantized **per-channel on axis 1** (the output-channel axis\n  of the `(in, out/groups, k)` layout) with a **symmetric** `qint8` scheme\n  (`from_float` runs a fresh `PerChannelMinMaxObserver` over the weight);\n  the bias stays float.\n- This layer wins on **memory**, not compute — the transposed convolution runs\n  in float (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the\n  float layer's; the payoff is the smaller checkpoint and working set.\n- Device-transparent: because compute stays in float, the layer runs unchanged\n  on CPU or Metal and follows the input tensor's device.\n- Calibration is required — the output `(scale, zero_point)` come from an\n  activation observer that must see representative data between `prepare` and\n  `convert`; an uncalibrated observer keeps its `±inf` seed, collapsing the\n  output toward zero (`from_float` warns).\n- Only integer / tuple padding is supported; string padding raises\n  `NotImplementedError` at `from_float`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape `(in_channels, out_channels/groups, k)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_channels/groups,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_channels/groups,)` —\nall zero under the symmetric scheme."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, set from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.ConvTranspose2d",
+          "description": "The 2-D upsampling sibling."
+        },
+        {
+          "name": "lucid.nn.quantized.Conv1d",
+          "description": "The (down-sampling) 1-D convolution counterpart."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated float model."
+        }
+      ]
     },
     {
       "name": "ConvTranspose2d",
@@ -465,11 +889,11 @@
       ],
       "labels": [],
       "signature": "ConvTranspose2d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, output_padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/conv_transpose.py#L208",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/conv_transpose.py#L319",
       "subcategory": "conv_transpose",
       "methods": [],
-      "summary": "Quantized 2-D transposed convolution (fractionally-strided conv).",
-      "extended": "The upsampling counterpart of `lucid.nn.quantized.Conv2d`, common in\nsegmentation decoders and GAN generators.  Each forward dequantizes the\nper-output-channel int8 kernel, runs `F.conv_transpose2d`, then\nfake-quantizes the output to the calibrated activation grid.  Produced from a\ncalibrated float `lucid.nn.ConvTranspose2d` by\n`lucid.quantization.convert`.",
+      "summary": "Quantized 2-D transposed (fractionally-strided) convolution.",
+      "extended": "The upsampling counterpart of `lucid.nn.quantized.Conv2d`, and the\nint8-weight, dequantize-to-float replacement that\n`lucid.quantization.convert` installs for a calibrated float\n`lucid.nn.ConvTranspose2d`. It is the standard decoder / up-projection\nlayer of segmentation heads and generative up-samplers, and shares the sidecar\nrecipe of the quantized `lucid.nn.quantized.Conv2d`.\n\n**Representation (sidecar design B).** The learned float kernel is quantized\nonce, at `from_float` time, into an `int8` code tensor plus a\nper-output-channel `scale` / `zero_point`; the float kernel is then\ndropped. Only the int8 codes, the qparams, and the (still-float) bias live in\nthe module. Each forward *dequantizes* the kernel back to float, runs the\nordinary `F.conv_transpose2d`, and finally *fake-quantizes* the output onto\nthe activation grid that calibration observed. Keeping the transposed\nconvolution itself in float means the result matches a genuine int8 kernel to\nwithin a rounding step **and** the layer runs unchanged on any device.\n\n**Per-channel weights (axis 1).** The transposed-weight layout `(in_channels,\nout_channels/groups, kh, kw)` places the *output* channels on **axis 1**, not\naxis 0, so the kernel is quantized per-channel along axis 1 — each output\nchannel gets its own scale, far tighter than one per-tensor scale for wide\nkernels. The scheme is **symmetric** (`qint8`, `zero_point = 0`), matching\nthe reference default for transposed weights; the bias stays float.\n\nEncoding happens once (at `from_float`); decode + transposed-convolve run\non every forward:\n\n$$\nw^{q}_{c,o,i,j} = \\operatorname{clamp}\\!\\bigl(\n    \\operatorname{round}(w_{c,o,i,j}/s_o),\\ -128,\\ 127\\bigr),\n\\qquad\n\\hat{w}_{c,o,i,j} = w^{q}_{c,o,i,j}\\, s_o\n$$\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{convT2d}(x, \\hat{w}) + b\\bigr),\n\\qquad\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $s_o$ is the per-output-channel (axis-1) weight scale — with a zero\nzero-point because the weight scheme is symmetric — and $S, Z$ the scalar\ncalibrated output `(scale, zero_point)` with grid bounds\n$q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`).",
       "parameters": [
         {
           "name": "in_channels",
@@ -480,7 +904,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the transposed convolution.",
+          "description": "Number of channels produced by the transposed convolution — quantized\nper-channel (on axis 1 of the transposed weight).",
           "default": null
         },
         {
@@ -522,19 +946,69 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the convolution.",
+          "description": "Whether a learned **float** bias term is added after the convolution.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight is quantized **per-channel on axis 1** (output channels of the\n`(in, out/groups, kh, kw)` layout) — the reference default, and much\ntighter than per-tensor for wide kernels."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.ConvTranspose2d(16, 8, 2, stride=2))\n>>> model.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(model)                # insert observers\n>>> _ = prepared(lucid.randn(1, 16, 8, 8))     # calibrate on representative data\n>>> qmodel = Q.convert(prepared)               # float -> quantized ConvTranspose2d\n>>> type(qmodel[0]).__name__\n'ConvTranspose2d'\n>>> qmodel(lucid.randn(1, 16, 8, 8)).shape     # int8-weight 2x upsampling\n(1, 8, 16, 16)\nConstructing the layer directly is **not** a substitute for that workflow — a\nbare instance carries zeroed codes and identity qparams, so it returns garbage\nuntil from_float / load_state_dict populates the buffers:\n>>> broken = nn.quantized.ConvTranspose2d(\n...     16, 8, (2, 2), (2, 2), (0, 0), (0, 0), (1, 1), 1, True\n... )\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a freshly constructed\n  layer has identity qparams (`scale = 1`, `zero_point = 0`) and zeroed\n  kernel codes, and only becomes meaningful once `from_float` /\n  `load_state_dict` fills the buffers.\n- Only int8 codes + qparams + float bias enter the `state_dict`; the float\n  kernel never does — the weight payload shrinks ~`3.55x` (int8), and a\n  whole conv-heavy checkpoint ~`3.97x` (measured on `resnet_18`).\n- The kernel is quantized **per-channel on axis 1** (the output-channel axis\n  of the `(in, out/groups, kh, kw)` layout) with a **symmetric** `qint8`\n  scheme (`from_float` runs a fresh `PerChannelMinMaxObserver` over the\n  weight); the bias stays float.\n- This layer wins on **memory**, not compute — the transposed convolution runs\n  in float (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the\n  float layer's; the payoff is the smaller checkpoint and working set.\n- Device-transparent: because compute stays in float, the layer runs unchanged\n  on CPU or Metal and follows the input tensor's device.\n- Calibration is required — the output `(scale, zero_point)` come from an\n  activation observer that must see representative data between `prepare` and\n  `convert`; an uncalibrated observer keeps its `±inf` seed, collapsing the\n  output toward zero (`from_float` warns).\n- Only integer / tuple padding is supported; string padding raises\n  `NotImplementedError` at `from_float`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape\n`(in_channels, out_channels/groups, kh, kw)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_channels/groups,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_channels/groups,)` —\nall zero under the symmetric scheme."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, set from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.ConvTranspose1d",
+          "description": "The 1-D upsampling sibling."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvTranspose3d",
+          "description": "The volumetric upsampling sibling."
+        },
+        {
+          "name": "lucid.nn.quantized.Conv2d",
+          "description": "The (down-sampling) 2-D convolution counterpart."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated float model."
+        }
+      ]
     },
     {
       "name": "ConvTranspose3d",
@@ -546,11 +1020,11 @@
       ],
       "labels": [],
       "signature": "ConvTranspose3d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, output_padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/conv_transpose.py#L260",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/conv_transpose.py#L481",
       "subcategory": "conv_transpose",
       "methods": [],
-      "summary": "Quantized 3-D transposed convolution (fractionally-strided conv).",
-      "extended": "The volumetric upsampling layer (video / 3-D medical decoders).  Each forward\ndequantizes the per-output-channel int8 kernel, runs `F.conv_transpose3d`,\nthen fake-quantizes the output to the calibrated activation grid.  Produced\nfrom a calibrated float `lucid.nn.ConvTranspose3d` by\n`lucid.quantization.convert`.",
+      "summary": "Quantized 3-D transposed (fractionally-strided) convolution.",
+      "extended": "The volumetric upsampling layer (video / 3-D medical decoders), and the\nint8-weight, dequantize-to-float replacement that\n`lucid.quantization.convert` installs for a calibrated float\n`lucid.nn.ConvTranspose3d`. It is the up-projection counterpart of\n`lucid.nn.quantized.Conv3d`, and shares the sidecar recipe of the\nquantized `lucid.nn.quantized.Conv2d` family.\n\n**Representation (sidecar design B).** The learned float kernel is quantized\nonce, at `from_float` time, into an `int8` code tensor plus a\nper-output-channel `scale` / `zero_point`; the float kernel is then\ndropped. Only the int8 codes, the qparams, and the (still-float) bias live in\nthe module. Each forward *dequantizes* the kernel back to float, runs the\nordinary `F.conv_transpose3d`, and finally *fake-quantizes* the output onto\nthe activation grid that calibration observed. Keeping the transposed\nconvolution itself in float means the result matches a genuine int8 kernel to\nwithin a rounding step **and** the layer runs unchanged on any device.\n\n**Per-channel weights (axis 1).** The transposed-weight layout `(in_channels,\nout_channels/groups, kd, kh, kw)` places the *output* channels on **axis 1**,\nnot axis 0, so the kernel is quantized per-channel along axis 1 — each output\nchannel gets its own scale, far tighter than one per-tensor scale for the wide\ndynamic range of volumetric kernels. The scheme is **symmetric** (`qint8`,\n`zero_point = 0`), matching the reference default; the bias stays float.\n\nEncoding happens once (at `from_float`); decode + transposed-convolve run\non every forward:\n\n$$\nw^{q}_{c,o,d,i,j} = \\operatorname{clamp}\\!\\bigl(\n    \\operatorname{round}(w_{c,o,d,i,j}/s_o),\\ -128,\\ 127\\bigr),\n\\qquad\n\\hat{w}_{c,o,d,i,j} = w^{q}_{c,o,d,i,j}\\, s_o\n$$\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{convT3d}(x, \\hat{w}) + b\\bigr),\n\\qquad\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $s_o$ is the per-output-channel (axis-1) weight scale — with a zero\nzero-point because the weight scheme is symmetric — and $S, Z$ the scalar\ncalibrated output `(scale, zero_point)` with grid bounds\n$q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`).",
       "parameters": [
         {
           "name": "in_channels",
@@ -561,7 +1035,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the transposed convolution.",
+          "description": "Number of channels produced by the transposed convolution — quantized\nper-channel (on axis 1 of the transposed weight).",
           "default": null
         },
         {
@@ -603,19 +1077,65 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the convolution.",
+          "description": "Whether a learned **float** bias term is added after the convolution.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight is quantized **per-channel on axis 1** (output channels of the\n`(in, out/groups, kd, kh, kw)` layout) — much tighter than per-tensor."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.ConvTranspose3d(8, 4, 2, stride=2))\n>>> model.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(model)                  # insert observers\n>>> _ = prepared(lucid.randn(1, 8, 4, 8, 8))     # calibrate on representative data\n>>> qmodel = Q.convert(prepared)                 # float -> quantized ConvTranspose3d\n>>> type(qmodel[0]).__name__\n'ConvTranspose3d'\n>>> qmodel(lucid.randn(1, 8, 4, 8, 8)).shape     # int8-weight 2x upsampling\n(1, 4, 8, 16, 16)\nConstructing the layer directly is **not** a substitute for that workflow — a\nbare instance carries zeroed codes and identity qparams, so it returns garbage\nuntil from_float / load_state_dict populates the buffers:\n>>> broken = nn.quantized.ConvTranspose3d(\n...     8, 4, (2, 2, 2), (2, 2, 2), (0, 0, 0), (0, 0, 0), (1, 1, 1), 1, True\n... )\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a freshly constructed\n  layer has identity qparams (`scale = 1`, `zero_point = 0`) and zeroed\n  kernel codes, and only becomes meaningful once `from_float` /\n  `load_state_dict` fills the buffers.\n- Only int8 codes + qparams + float bias enter the `state_dict`; the float\n  kernel never does — the weight payload shrinks ~`3.55x` (int8), and a\n  whole conv-heavy checkpoint ~`3.97x` (measured on `resnet_18`).\n- The kernel is quantized **per-channel on axis 1** (the output-channel axis\n  of the `(in, out/groups, kd, kh, kw)` layout) with a **symmetric**\n  `qint8` scheme (`from_float` runs a fresh `PerChannelMinMaxObserver`\n  over the weight); the bias stays float.\n- This layer wins on **memory**, not compute — the transposed convolution runs\n  in float (CPU stream = Accelerate, GPU stream = MLX), so its speed tracks the\n  float layer's; the payoff is the smaller checkpoint and working set.\n- Device-transparent: because compute stays in float, the layer runs unchanged\n  on CPU or Metal and follows the input tensor's device.\n- Calibration is required — the output `(scale, zero_point)` come from an\n  activation observer that must see representative data between `prepare` and\n  `convert`; an uncalibrated observer keeps its `±inf` seed, collapsing the\n  output toward zero (`from_float` warns).\n- Only integer / tuple padding is supported; string padding raises\n  `NotImplementedError` at `from_float`."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape\n`(in_channels, out_channels/groups, kd, kh, kw)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_channels/groups,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_channels/groups,)` —\nall zero under the symmetric scheme."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, set from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.ConvTranspose2d",
+          "description": "The 2-D upsampling sibling."
+        },
+        {
+          "name": "lucid.nn.quantized.Conv3d",
+          "description": "The (down-sampling) 3-D convolution counterpart."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated float model."
+        }
+      ]
     },
     {
       "name": "FloatFunctional",
@@ -627,7 +1147,7 @@
       ],
       "labels": [],
       "signature": "FloatFunctional()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L25",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L25",
       "subcategory": "functional_module",
       "methods": [
         {
@@ -636,7 +1156,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add(x: Tensor, y: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L38",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L102",
           "subcategory": "functional_module",
           "summary": "Observed `x + y` (a residual skip-add).",
           "extended": null,
@@ -658,7 +1178,7 @@
           "kind": "function",
           "labels": [],
           "signature": "mul(x: Tensor, y: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L42",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L106",
           "subcategory": "functional_module",
           "summary": "Observed `x * y`.",
           "extended": null,
@@ -680,7 +1200,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add_relu(x: Tensor, y: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L46",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L110",
           "subcategory": "functional_module",
           "summary": "Observed `relu(x + y)` — the fused residual-add of a ResNet block.",
           "extended": null,
@@ -702,7 +1222,7 @@
           "kind": "function",
           "labels": [],
           "signature": "cat(tensors: list[Tensor], dim: int = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L50",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L114",
           "subcategory": "functional_module",
           "summary": "Observed concatenation along `dim`.",
           "extended": null,
@@ -724,7 +1244,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add_scalar(x: Tensor, scalar: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L54",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L118",
           "subcategory": "functional_module",
           "summary": "Observed `x + scalar`.",
           "extended": null,
@@ -746,7 +1266,7 @@
           "kind": "function",
           "labels": [],
           "signature": "mul_scalar(x: Tensor, scalar: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L58",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L122",
           "subcategory": "functional_module",
           "summary": "Observed `x * scalar`.",
           "extended": null,
@@ -763,16 +1283,40 @@
           "see_also": []
         }
       ],
-      "summary": "Float-domain quantizable merge ops; `prepare` observes their output.",
-      "extended": "Drop into a model in place of raw `x + y` / `lucid.cat` so the merge\nresult is calibrated.  Until `prepare` attaches an `activation_post_process`\nobserver these stay plain float ops (the `_obs` passthrough).",
-      "parameters": [],
+      "summary": "Float-domain quantizable merge ops whose output `prepare` observes.",
+      "extended": "Element-wise merges — residual skip-adds, gated multiplies, concatenations —\ncarry no learnable weight, so the module-swap machinery that quantizes\n`Linear` / `Conv` never sees a bare `x + y` or `lucid.cat`. Yet a\nresidual network cannot be quantized end-to-end unless the *merge result* is\nobserved and later requantized to a consistent grid: otherwise the two\nbranches of an add arrive on different scales and the sum leaks precision.\n`FloatFunctional` is the fix — a stateless module you call in place of the\nraw op (`ff.add(x, y)` instead of `x + y`) so the merge gets a named site\nthe tooling can attach an observer to.\n\nIt is the calibration-time half of the pair. Until\n`lucid.quantization.prepare` installs an `activation_post_process`\nobserver, every method is a plain float op routed through the `_obs`\npassthrough — the numerics are identical to writing the operator by hand.\nOnce prepared, each call additionally feeds its result to the observer, which\nrecords the merged activation's dynamic range. `lucid.quantization.convert`\nthen swaps the whole module for a `QFunctional` carrying those qparams.\n\nThe exposed merges are `add` (residual skip-add), `mul`, `add_relu`\n(the fused add-then-ReLU of a ResNet block), `cat` (concatenation along a\ndim), and the scalar variants `add_scalar` / `mul_scalar`.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "Constructed directly with no arguments (`nn.quantized.FloatFunctional()`)\nand placed inside a float model. It gains its observer from `prepare`\nrather than from constructor arguments, and is replaced — not converted\nin place — by `QFunctional` at `convert` time.",
+          "default": null
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
+      "examples": [
+        "Residual skip-add inside a block — call add instead of +:\n>>> import lucid.nn as nn\n>>> class Block(nn.Module):\n...     def __init__(self) -> None:\n...         super().__init__()\n...         self.conv = nn.Conv2d(8, 8, 3, padding=1)\n...         self.skip = nn.quantized.FloatFunctional()\n...     def forward(self, x):\n...         return self.skip.add(self.conv(x), x)   # not `self.conv(x) + x`\nThe common mistake is leaving the raw operator in place — the sum then has no\nobserver and cannot be requantized to a single grid:\n>>> ff = nn.quantized.FloatFunctional()\n>>> import lucid\n>>> a, b = lucid.randn(4), lucid.randn(4)\n>>> bool((ff.add(a, b) == a + b).all().item())      # identity pre-prepare\nTrue"
+      ],
+      "notes": [
+        "- Reuse **one** `FloatFunctional` per merge site; do not share a single\n  instance across unrelated adds, since they would then share one observer\n  and be forced onto a common, looser grid.\n- Before `prepare` it is a transparent passthrough, so inserting it into a\n  float model never changes float-mode numerics — safe to add pre-emptively.\n- Only the *output* is observed; the two operands keep whatever grids their\n  producing layers assigned."
+      ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.QFunctional",
+          "description": "The converted, requantizing counterpart."
+        },
+        {
+          "name": "lucid.quantization.prepare",
+          "description": "Attaches the observer these merges feed."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Swaps this module for `QFunctional`."
+        }
+      ]
     },
     {
       "name": "QFunctional",
@@ -784,7 +1328,7 @@
       ],
       "labels": [],
       "signature": "QFunctional(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L63",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L127",
       "subcategory": "functional_module",
       "methods": [
         {
@@ -793,7 +1337,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L77",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L208",
           "subcategory": "functional_module",
           "summary": null,
           "extended": null,
@@ -815,7 +1359,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add(x: Tensor, y: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L91",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L222",
           "subcategory": "functional_module",
           "summary": "Quantized `x + y`.",
           "extended": null,
@@ -837,7 +1381,7 @@
           "kind": "function",
           "labels": [],
           "signature": "mul(x: Tensor, y: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L95",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L226",
           "subcategory": "functional_module",
           "summary": "Quantized `x * y`.",
           "extended": null,
@@ -859,7 +1403,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add_relu(x: Tensor, y: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L99",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L230",
           "subcategory": "functional_module",
           "summary": "Quantized `relu(x + y)`.",
           "extended": null,
@@ -881,7 +1425,7 @@
           "kind": "function",
           "labels": [],
           "signature": "cat(tensors: list[Tensor], dim: int = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L103",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L234",
           "subcategory": "functional_module",
           "summary": "Quantized concatenation along `dim`.",
           "extended": null,
@@ -903,7 +1447,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add_scalar(x: Tensor, scalar: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L107",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L238",
           "subcategory": "functional_module",
           "summary": "Quantized `x + scalar`.",
           "extended": null,
@@ -925,7 +1469,7 @@
           "kind": "function",
           "labels": [],
           "signature": "mul_scalar(x: Tensor, scalar: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L111",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L242",
           "subcategory": "functional_module",
           "summary": "Quantized `x * scalar`.",
           "extended": null,
@@ -949,7 +1493,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/functional_module.py#L115",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/functional_module.py#L246",
           "subcategory": "functional_module",
           "summary": "Build from a calibrated `FloatFunctional` (reads its observer).",
           "extended": null,
@@ -967,15 +1511,62 @@
         }
       ],
       "summary": "Quantized element-wise merges — each result fake-quantized to one grid.",
-      "extended": "The converted form of `FloatFunctional`, produced by `convert`.  It\nexposes the same `add` / `mul` / `cat` / `add_relu` / `*_scalar`\nmethods, but each fake-quantizes its output to the `(scale, zero_point)`\nthe `FloatFunctional` observed during calibration — so a residual add\nor concat is requantized to a single consistent grid rather than left at\nfull precision.",
-      "parameters": [],
+      "extended": "The converted, inference-time form of `FloatFunctional`, installed by\n`lucid.quantization.convert` (or built via `from_float`). It\nexposes the identical surface — `add`, `mul`, `add_relu`, `cat`,\n`add_scalar`, `mul_scalar` — but every call now *fake-quantizes* its\noutput onto the single `(scale, zero_point)` grid the source\n`FloatFunctional` observed during calibration.\n\nThis is what makes residual quantization correct. A skip-add feeds two\nbranches that were quantized on their own scales; requantizing the sum to one\ncalibrated grid re-aligns them, so the block's output matches int8 numerics\ninstead of drifting off at full precision. Under the sidecar representation\n(design B) the requantized result is carried as `float32` with int8\nnumerics — no packed-integer container is produced.\n\nEvery merge routes its raw float result $t$ through\n\n$$\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwith the calibrated `(scale, zero_point)` $S, Z$ and grid bounds\n$q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`). Only the\noutput is snapped; `add_relu` applies the ReLU *before* this step so the\ngrid matches the post-ReLU range calibration saw.",
+      "parameters": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Per-tensor output scale, from the source `FloatFunctional`'s observer.",
+          "default": null
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Per-tensor output zero-point, from that same observer.",
+          "default": null
+        },
+        {
+          "name": "qdtype",
+          "annotation": "QDtype",
+          "description": "Quantized dtype whose `quant_min` / `quant_max` bound the grid.\nDefaults to `lucid.quantization.quint8` (`[0, 255]`).",
+          "default": "quint8"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> qf = nn.quantized.QFunctional(lucid.tensor(0.1), lucid.tensor(0.0))\n>>> a = lucid.randn(4)\n>>> qf.add(a, a).shape                       # residual add, requantized\n(4,)\nThe fused residual-add of a ResNet block clamps negatives *before* the grid:\n>>> out = qf.add_relu(lucid.randn(4), lucid.randn(4))\n>>> bool((out >= 0).all().item())\nTrue"
+      ],
+      "notes": [
+        "- Normally produced by `convert` / `from_float`, which reads the\n  calibrated `FloatFunctional`'s observer; construct directly only when you\n  already hold the qparams.\n- All merge methods share one grid — the module is bound to a single merge\n  site, mirroring the one-instance-per-site rule for `FloatFunctional`.\n- `add_relu` fuses add + ReLU into one requantization; prefer it over\n  `F.relu(qf.add(x, y))` so the observed and executed ranges agree."
+      ],
+      "attributes": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-scale buffer shared by every merge method."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output zero-point buffer shared by every merge method."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.FloatFunctional",
+          "description": "The calibration-time counterpart."
+        },
+        {
+          "name": "lucid.quantization.fake_quantize",
+          "description": "The op applied to each merge output."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this module from a calibrated model."
+        }
+      ]
     },
     {
       "name": "ConvReLU1d",
@@ -987,7 +1578,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU1d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L75",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L141",
       "subcategory": "intrinsic",
       "methods": [
         {
@@ -998,9 +1589,9 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L113",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L235",
           "subcategory": "intrinsic",
-          "summary": null,
+          "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -1015,8 +1606,8 @@
           "see_also": []
         }
       ],
-      "summary": "Quantized 1-D convolution with a fused ReLU (int8 weight, float compute).",
-      "extended": "Behaves exactly like `lucid.nn.quantized.Conv1d` but applies ReLU to\nthe output *before* it is fake-quantized — matching calibration, where the\nfused module's activation observer saw the post-ReLU range. Produced from a\ncalibrated float / QAT `ConvReLU1d` by `lucid.quantization.convert`\n/ `from_float`.",
+      "summary": "Quantized 1-D convolution with a fused ReLU — int8 kernel, float compute.",
+      "extended": "A fused (intrinsic) block: the quantized counterpart of the float\n`nn.intrinsic.ConvReLU1d`, installed by `lucid.quantization.convert`\n/ `from_float`. It behaves exactly like\n`lucid.nn.quantized.Conv1d` — int8 per-output-channel kernel, float\nconvolution, output fake-quantized to the calibrated grid — but folds a ReLU\ninto the layer so the conv and its activation share one quantized output.\n\n**Why fuse.** During calibration the fused module's activation observer sat\n*after* the ReLU, so it recorded the post-ReLU (non-negative) range. To\nreproduce those numerics at inference the ReLU must run *before* the output\nfake-quant — the job of the overridden `_activation` hook. Requantizing the\n`conv → relu` pair once, against the tighter non-negative range, uses the\nint8 grid more efficiently than quantizing the raw conv output then clamping.\n\nEncoding (int8 kernel) happens once at `from_float`; decode + convolve +\nfused ReLU + requantize run on every forward:\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{relu}(\\operatorname{conv1d}(x, \\hat{w}) + b)\\bigr),\n\\qquad\n\\hat{w}_{o,c,k} = (w^{q}_{o,c,k} - z_o)\\, s_o\n$$\n\nwhere $s_o, z_o$ are the per-output-channel kernel scale / zero-point\nand the outer fake-quant snaps the post-ReLU result to the scalar calibrated\noutput `(scale, zero_point)`.",
       "parameters": [
         {
           "name": "in_channels",
@@ -1027,7 +1618,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the convolution.",
+          "description": "Number of channels produced by the convolution — quantized per-channel.",
           "default": null
         },
         {
@@ -1063,19 +1654,60 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added before the ReLU.",
+          "description": "Whether a (float) bias term is added *before* the fused ReLU.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Constructor is inherited unchanged from `lucid.nn.quantized.Conv1d`;\nonly the post-op activation hook differs."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> q = nn.quantized.ConvReLU1d(4, 8, 3, 1, 1, 1, 1, True)   # via convert()\n>>> q(lucid.randn(1, 4, 16)).shape\n(1, 8, 16)\n>>> bool((q.weight_int8 == 0).all().item())      # zeroed until from_float\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Produced by `convert` / `from_float`, **not** constructed directly;\n  the constructor is inherited unchanged from\n  `lucid.nn.quantized.Conv1d` and only the `_activation` hook differs.\n- `from_float` accepts a **float** fused `nn.Sequential` (`[0]` is\n  the conv) or a single-layer **QAT** fused module; the shared wiring copies\n  the fused qconfig / observer onto the weighted child before quantizing.\n- Output is non-negative (ReLU precedes the fake-quant) — calibrate the\n  *fused* module so the observed grid matches inference."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape `(out_channels, in_channels/groups, k)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel kernel scale, shape `(out_channels,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel kernel zero-point, shape `(out_channels,)`."
+        },
+        {
+          "name": "scale, zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation qparams (post-ReLU), from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv1d",
+          "description": "The un-fused quantized 1-D conv it extends."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU2d",
+          "description": "The 2-D fused analogue (vision workhorse)."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "ConvReLU2d",
@@ -1087,7 +1719,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU2d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L119",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L241",
       "subcategory": "intrinsic",
       "methods": [
         {
@@ -1098,9 +1730,9 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L158",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L338",
           "subcategory": "intrinsic",
-          "summary": null,
+          "summary": "Build from a calibrated float activation (reads its output observer).",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -1115,8 +1747,8 @@
           "see_also": []
         }
       ],
-      "summary": "Quantized 2-D convolution with a fused ReLU (int8 weight, float compute).",
-      "extended": "The most common fused block in the quantized vision zoo. Behaves exactly\nlike `lucid.nn.quantized.Conv2d` but applies ReLU to the output\n*before* it is fake-quantized — matching calibration, where the fused\nmodule's activation observer saw the post-ReLU range. Produced from a\ncalibrated float / QAT `ConvReLU2d` by `lucid.quantization.convert`\n/ `from_float`.",
+      "summary": "Quantized 2-D convolution with a fused ReLU — int8 kernel, float compute.",
+      "extended": "The most common fused block in the quantized vision zoo: nearly every\n`conv → bn → relu` triple in a ResNet-class backbone folds down to a\n`ConvReLU2d` after batch-norm folding. It is the quantized counterpart of\nthe float `nn.intrinsic.ConvReLU2d`, installed by\n`lucid.quantization.convert` / `from_float`, and behaves exactly\nlike `lucid.nn.quantized.Conv2d` — int8 per-output-channel kernel,\nfloat convolution, output fake-quantized to the calibrated grid — but folds a\nReLU into the layer so conv + activation share one quantized output.\n\n**Why fuse.** During calibration the fused module's activation observer sat\n*after* the ReLU, so it recorded the post-ReLU (non-negative) range. To\nreproduce those numerics at inference the ReLU must run *before* the output\nfake-quant — the job of the overridden `_activation` hook. Requantizing the\n`conv → relu` pair once, against the tighter non-negative range, uses the\nint8 grid more efficiently than quantizing the raw conv output then clamping.\n\nEncoding (int8 kernel) happens once at `from_float`; decode + convolve +\nfused ReLU + requantize run on every forward:\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{relu}(\\operatorname{conv2d}(x, \\hat{w}) + b)\\bigr),\n\\qquad\n\\hat{w}_{o,c,i,j} = (w^{q}_{o,c,i,j} - z_o)\\, s_o\n$$\n\nwhere $s_o, z_o$ are the per-output-channel kernel scale / zero-point\nand the outer fake-quant snaps the post-ReLU result to the scalar calibrated\noutput `(scale, zero_point)`.",
       "parameters": [
         {
           "name": "in_channels",
@@ -1127,7 +1759,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the convolution.",
+          "description": "Number of channels produced by the convolution — quantized per-channel.",
           "default": null
         },
         {
@@ -1163,19 +1795,60 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added before the ReLU.",
+          "description": "Whether a (float) bias term is added *before* the fused ReLU.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Constructor is inherited unchanged from `lucid.nn.quantized.Conv2d`;\nonly the post-op activation hook differs."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> q = nn.quantized.ConvReLU2d(3, 8, 3, 1, 1, 1, 1, True)   # via convert()\n>>> q(lucid.randn(1, 3, 8, 8)).shape\n(1, 8, 8, 8)\n>>> bool((q.weight_int8 == 0).all().item())      # zeroed until from_float\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Produced by `convert` / `from_float`, **not** constructed directly;\n  the constructor is inherited unchanged from\n  `lucid.nn.quantized.Conv2d` and only the `_activation` hook differs.\n- `from_float` accepts a **float** fused `nn.Sequential` (`[0]` is\n  the conv) or a single-layer **QAT** fused module; the shared wiring copies\n  the fused qconfig / observer onto the weighted child before quantizing.\n- Output is non-negative (ReLU precedes the fake-quant) — calibrate the\n  *fused* module so the observed grid matches inference."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape\n`(out_channels, in_channels/groups, kh, kw)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel kernel scale, shape `(out_channels,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel kernel zero-point, shape `(out_channels,)`."
+        },
+        {
+          "name": "scale, zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation qparams (post-ReLU), from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv2d",
+          "description": "The un-fused quantized 2-D conv it extends."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU1d",
+          "description": "The 1-D fused analogue."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "ConvReLU3d",
@@ -1187,7 +1860,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU3d(in_channels: int, out_channels: int, kernel_size: _IntTuple, stride: _IntTuple, padding: _IntTuple, dilation: _IntTuple, groups: int, bias: bool)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L164",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L344",
       "subcategory": "intrinsic",
       "methods": [
         {
@@ -1198,9 +1871,9 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L202",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L441",
           "subcategory": "intrinsic",
-          "summary": null,
+          "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -1215,8 +1888,8 @@
           "see_also": []
         }
       ],
-      "summary": "Quantized 3-D convolution with a fused ReLU (int8 weight, float compute).",
-      "extended": "Behaves exactly like `lucid.nn.quantized.Conv3d` but applies ReLU to\nthe output *before* it is fake-quantized — matching calibration, where the\nfused module's activation observer saw the post-ReLU range. Produced from a\ncalibrated float / QAT `ConvReLU3d` by `lucid.quantization.convert`\n/ `from_float`.",
+      "summary": "Quantized 3-D convolution with a fused ReLU — int8 kernel, float compute.",
+      "extended": "A fused (intrinsic) block for volumetric / video models: the quantized\ncounterpart of the float `nn.intrinsic.ConvReLU3d`, installed by\n`lucid.quantization.convert` / `from_float`. It behaves exactly\nlike `lucid.nn.quantized.Conv3d` — int8 per-output-channel kernel,\nfloat convolution, output fake-quantized to the calibrated grid — but folds a\nReLU into the layer so conv + activation share one quantized output. The 3-D\nkernel makes int8 storage especially valuable here, since a volumetric filter\n`(out, in/groups, kd, kh, kw)` is large.\n\n**Why fuse.** During calibration the fused module's activation observer sat\n*after* the ReLU, so it recorded the post-ReLU (non-negative) range. To\nreproduce those numerics at inference the ReLU must run *before* the output\nfake-quant — the job of the overridden `_activation` hook. Requantizing the\n`conv → relu` pair once, against the tighter non-negative range, uses the\nint8 grid more efficiently than quantizing the raw conv output then clamping.\n\nEncoding (int8 kernel) happens once at `from_float`; decode + convolve +\nfused ReLU + requantize run on every forward:\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{relu}(\\operatorname{conv3d}(x, \\hat{w}) + b)\\bigr),\n\\qquad\n\\hat{w}_{o,c,d,i,j} = (w^{q}_{o,c,d,i,j} - z_o)\\, s_o\n$$\n\nwhere $s_o, z_o$ are the per-output-channel kernel scale / zero-point\nand the outer fake-quant snaps the post-ReLU result to the scalar calibrated\noutput `(scale, zero_point)`.",
       "parameters": [
         {
           "name": "in_channels",
@@ -1227,7 +1900,7 @@
         {
           "name": "out_channels",
           "annotation": "int",
-          "description": "Number of channels produced by the convolution.",
+          "description": "Number of channels produced by the convolution — quantized per-channel.",
           "default": null
         },
         {
@@ -1263,19 +1936,60 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added before the ReLU.",
+          "description": "Whether a (float) bias term is added *before* the fused ReLU.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Constructor is inherited unchanged from `lucid.nn.quantized.Conv3d`;\nonly the post-op activation hook differs."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> q = nn.quantized.ConvReLU3d(2, 4, 3, 1, 1, 1, 1, True)   # via convert()\n>>> q(lucid.randn(1, 2, 8, 8, 8)).shape\n(1, 4, 8, 8, 8)\n>>> bool((q.weight_int8 == 0).all().item())      # zeroed until from_float\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Produced by `convert` / `from_float`, **not** constructed directly;\n  the constructor is inherited unchanged from\n  `lucid.nn.quantized.Conv3d` and only the `_activation` hook differs.\n- `from_float` accepts a **float** fused `nn.Sequential` (`[0]` is\n  the conv) or a single-layer **QAT** fused module; the shared wiring copies\n  the fused qconfig / observer onto the weighted child before quantizing.\n- Output is non-negative (ReLU precedes the fake-quant) — calibrate the\n  *fused* module so the observed grid matches inference."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` kernel codes, shape\n`(out_channels, in_channels/groups, kd, kh, kw)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel kernel scale, shape `(out_channels,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel kernel zero-point, shape `(out_channels,)`."
+        },
+        {
+          "name": "scale, zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation qparams (post-ReLU), from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_channels,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Conv3d",
+          "description": "The un-fused quantized 3-D conv it extends."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU2d",
+          "description": "The 2-D fused analogue (vision workhorse)."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "LinearReLU",
@@ -1287,7 +2001,7 @@
       ],
       "labels": [],
       "signature": "LinearReLU(in_features: int, out_features: int, bias: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L40",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L40",
       "subcategory": "intrinsic",
       "methods": [
         {
@@ -1298,7 +2012,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/intrinsic.py#L69",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/intrinsic.py#L135",
           "subcategory": "intrinsic",
           "summary": "Build a QAT `Linear` from a float one (shares the trained weight).",
           "extended": null,
@@ -1315,37 +2029,83 @@
           "see_also": []
         }
       ],
-      "summary": "Quantized linear layer with a fused ReLU (int8 weight, float compute).",
-      "extended": "Behaves exactly like `lucid.nn.quantized.Linear` but applies ReLU\nto the output *before* it is fake-quantized — matching calibration, where\nthe fused module's activation observer saw the post-ReLU range. Produced\nfrom a calibrated float / QAT `LinearReLU` by\n`lucid.quantization.convert` / `from_float`.",
+      "summary": "Quantized linear layer with a fused ReLU — int8 weight, float compute.",
+      "extended": "A fused (intrinsic) block: the quantized counterpart of the float\n`nn.intrinsic.LinearReLU`, installed by `lucid.quantization.convert`\n/ `from_float`. It behaves exactly like\n`lucid.nn.quantized.Linear` — int8 per-output-channel weight, float\nmatmul, output fake-quantized to the calibrated grid — but folds a ReLU into\nthe layer so the linear and its activation share a single quantized output.\n\n**Why fuse.** During calibration the fused module's activation observer sat\n*after* the ReLU, so it recorded the post-ReLU (non-negative) range. To\nreproduce those numerics at inference the ReLU must be applied *before* the\noutput fake-quant — exactly what the overridden `_activation` hook does.\nFusing also requantizes the whole `linear → relu` pair once, against the\ntighter non-negative range, which uses the int8 grid more efficiently than\nquantizing the raw linear output and clamping afterwards.\n\nEncoding (int8 weight) happens once at `from_float`; decode + matmul +\nfused ReLU + requantize run on every forward:\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\n    \\operatorname{relu}(\\hat{w}\\, x^{\\top} + b)\\bigr),\n\\qquad\n\\hat{w}_{ij} = (w^{q}_{ij} - z_i)\\, s_i\n$$\n\nwhere $s_i, z_i$ are the per-output-channel weight scale / zero-point,\n$b$ the float bias, and the outer fake-quant snaps the post-ReLU result\nto the scalar calibrated output `(scale, zero_point)`.",
       "parameters": [
         {
           "name": "in_features",
           "annotation": "int",
-          "description": "Size of each input sample.",
+          "description": "Size of each input sample — the `in` dimension of the weight.",
           "default": null
         },
         {
           "name": "out_features",
           "annotation": "int",
-          "description": "Size of each output sample.",
+          "description": "Size of each output sample — the `out` dimension, quantized per-channel.",
           "default": null
         },
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added before the ReLU. Defaults to\n`True`.",
+          "description": "Whether a (float) bias term is added *before* the fused ReLU. Defaults to\n`True`.",
           "default": "True"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Constructor is inherited unchanged from `lucid.nn.quantized.Linear`;\nonly the post-op activation hook differs."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> qlr = nn.quantized.LinearReLU(64, 32)     # normally built via convert()\n>>> qlr(lucid.randn(4, 64)).shape\n(4, 32)\nA directly constructed instance carries zeroed int8 weights and identity\nqparams — like Linear, it returns garbage until from_float /\nload_state_dict populates the buffers:\n>>> bool((qlr.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Produced by `convert` / `from_float`, **not** constructed directly;\n  the constructor is inherited unchanged from\n  `lucid.nn.quantized.Linear` and only the `_activation` hook differs.\n- `from_float` accepts either a **float** fused module (an\n  `nn.Sequential` whose `[0]` is the weighted layer) or a single-layer\n  **QAT** fused module; the shared wiring copies the fused qconfig / observer\n  onto the weighted child before quantizing.\n- The output range is non-negative because the ReLU precedes the fake-quant —\n  calibrate the *fused* module (not the bare linear) so the observed grid\n  matches what runs at inference."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` weight codes, shape `(out_features, in_features)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_features,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_features,)`."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale (post-ReLU), from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_features,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Linear",
+          "description": "The un-fused quantized linear it extends."
+        },
+        {
+          "name": "lucid.nn.quantized.ConvReLU2d",
+          "description": "The convolutional fused analogue."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "Linear",
@@ -1357,7 +2117,7 @@
       ],
       "labels": [],
       "signature": "Linear(in_features: int, out_features: int, bias: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/linear.py#L34",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/linear.py#L34",
       "subcategory": "linear",
       "methods": [
         {
@@ -1366,7 +2126,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(in_features: int, out_features: int, bias: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/linear.py#L69",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/linear.py#L177",
           "subcategory": "linear",
           "summary": "Construct a Tensor from Python data, a NumPy array, or another Tensor.",
           "extended": "The data is funnelled through `lucid._factories.converters._to_impl`,\nthe canonical bridge between the outside world and Lucid's C++\n`TensorImpl`. Python scalars become 0-d tensors; nested lists are\nrecursively flattened with shape inference; NumPy arrays cross the\nsingle sanctioned host-to-engine boundary; and existing `Tensor`\nsources are rewrapped (optionally with cast and/or device transfer).",
@@ -1417,7 +2177,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/linear.py#L91",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/linear.py#L199",
           "subcategory": "linear",
           "summary": "Dequantize the weight, run linear, fake-quantize the output.",
           "extended": null,
@@ -1441,7 +2201,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/linear.py#L109",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/linear.py#L217",
           "subcategory": "linear",
           "summary": "Quantize a calibrated float `lucid.nn.Linear`.",
           "extended": null,
@@ -1463,7 +2223,7 @@
           "kind": "function",
           "labels": [],
           "signature": "extra_repr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/linear.py#L130",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/linear.py#L238",
           "subcategory": "linear",
           "summary": "Override to add extra repr info (e.g. Linear shows in_features, etc.).",
           "extended": null,
@@ -1481,36 +2241,86 @@
         }
       ],
       "summary": "Quantized linear (fully-connected) layer — int8 weight, float compute.",
-      "extended": "Under the sidecar representation (design B) the weight is stored as int8\ncodes plus per-output-channel `scale` / `zero_point` buffers; each\nforward dequantizes the weight to float, runs the ordinary `F.linear`,\nthen fake-quantizes the output to the calibrated activation grid. This\nyields the *numerics* of int8 inference (accuracy matches a real int8\nkernel) while the GEMM itself stays in float. Produced from a calibrated\nfloat `lucid.nn.Linear` by `lucid.quantization.convert` /\n`from_float`.",
+      "extended": "The inference-time replacement that `lucid.quantization.convert` installs\nin place of a calibrated float `lucid.nn.Linear`. It is the quantized\nworkhorse of every fully-connected stack — classifier heads, Transformer MLP\nblocks, projection layers — and the layer whose weight memory dominates most\nlanguage models.\n\n**Representation (sidecar design B).** The learned float weight is quantized\nonce, at `from_float` time, into an `int8` code tensor plus a\nper-output-channel `scale` / `zero_point`; the float weight is then dropped.\nOnly the int8 codes, the qparams, and the (still-float) bias live in the module,\nso the checkpoint is roughly `4x` smaller than the float layer's. Each forward\n*dequantizes* the weight back to float, runs the ordinary `F.linear`, and\nfinally *fake-quantizes* the output onto the activation grid that calibration\nobserved. Keeping the matmul itself in float means the result matches a genuine\nint8 kernel to within a rounding step **and** the layer runs unchanged on any\ndevice, with no int8 GEMM kernel required.\n\n**Per-channel weights.** The weight `(out_features, in_features)` is quantized\nindependently for every output channel (axis 0): each row carries its own scale\nand zero-point. Because different output neurons often span very different\ndynamic ranges, per-channel quantization tracks them far more tightly than a\nsingle per-tensor scale, and is the standard accuracy-preserving choice for\nlinear and convolution kernels. The bias is small and precision-sensitive, so it\nis left in float.\n\nEncoding happens once (at `from_float`); decode + matmul run on every\nforward:\n\n$$\nw^{q}_{ij} = \\operatorname{clamp}\\!\\bigl(\n    \\operatorname{round}(w_{ij}/s_i) + z_i,\\ -128,\\ 127\\bigr),\n\\qquad\n\\hat{w}_{ij} = (w^{q}_{ij} - z_i)\\, s_i\n$$\n\n$$\ny = \\operatorname{fake\\_quant}\\!\\bigl(\\hat{w}\\, x^{\\top} + b\\bigr),\n\\qquad\n\\operatorname{fake\\_quant}(t) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(t/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $s_i, z_i$ are the per-output-channel weight scale / zero-point and\n$S, Z$ the scalar calibrated output `(scale, zero_point)` with grid\nbounds $q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`). The\ndecode → float-matmul → re-quantize round-trip is what makes the output *bit-\nequivalent* to a true int8 kernel without needing one.",
       "parameters": [
         {
           "name": "in_features",
           "annotation": "int",
-          "description": "Size of each input sample.",
+          "description": "Size of each input sample — the `in` dimension of the weight.",
           "default": null
         },
         {
           "name": "out_features",
           "annotation": "int",
-          "description": "Size of each output sample.",
+          "description": "Size of each output sample — the `out` dimension, quantized per-channel.",
           "default": null
         },
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the linear map. Defaults to\n`True`.",
+          "description": "If `True` the layer keeps a learned **float** bias added after the matmul;\nif `False` no bias term is stored.",
           "default": "True"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The weight is quantized **per-output-channel on axis 0**; the bias stays\nfloat. For the real low-precision Metal GEMM (weight-only int4/int8, no\ndequantize hop) see `lucid.nn.quantized.QuantizedLinearMLX`."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> model = nn.Sequential(nn.Linear(128, 64))\n>>> model.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(model)          # insert activation/weight observers\n>>> _ = prepared(lucid.randn(32, 128))   # calibrate on representative data\n>>> qmodel = Q.convert(prepared)         # float Linear -> quantized Linear\n>>> type(qmodel[0]).__name__\n'Linear'\n>>> y = qmodel(lucid.randn(1, 128))      # int8-weight inference\n>>> y.shape\n(1, 64)\nConstructing the layer directly is **not** a substitute for that workflow — a\nbare instance carries zeroed weights and identity qparams, so it returns garbage\nuntil from_float / load_state_dict populates the buffers:\n>>> broken = nn.quantized.Linear(128, 64)     # zeroed weight, scale=1, zp=0\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue\nFor the *compute* speed-up on Metal, route through the real low-precision GEMM:\n>>> src = nn.Linear(512, 512)\n>>> qlin = nn.quantized.QuantizedLinearMLX.from_float(src, bits=8)\n>>> qlin(lucid.randn(1, 512).to(\"metal\")).shape\n(1, 512)"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a freshly constructed layer\n  has identity qparams (`scale = 1`, `zero_point = 0`) and zeroed weights,\n  and only becomes meaningful once `from_float` / `load_state_dict` fills the\n  buffers.\n- Only int8 codes + qparams + float bias enter the `state_dict`; the float\n  weight never does. In practice the weight payload shrinks ~`3.55x` (int8)\n  and a whole model checkpoint ~`3.97x` (measured on `resnet_18`).\n- This layer wins on **memory**, not compute — the GEMM runs in float, so on the\n  CPU stream it is roughly float-speed. For the genuine low-precision *compute*\n  speed-up on Metal, convert with the MLX backend active so the Linear family is\n  routed to `lucid.nn.quantized.QuantizedLinearMLX`, which runs a real\n  weight-only int4/int8 GEMM (skipping the dequantize hop) — measured ~`3.15x`\n  faster at the memory-bound decode shape `M = 1` on a fully-Metal model. That\n  win is bandwidth-bound: it lands in the inference / generation regime and\n  fades toward parity (~`0.9-1x`) in compute-bound training GEMMs.\n- `_activation` is the identity here; the fused\n  `lucid.nn.quantized.LinearReLU` overrides it to apply ReLU *before* the\n  output fake-quant so calibration and inference see the same post-ReLU range."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` weight codes, shape `(out_features, in_features)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight scale, shape `(out_features,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-output-channel weight zero-point, shape `(out_features,)`."
+        },
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation scale, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar output-activation zero-point, set from the calibrated observer."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_features,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.QuantizedLinearMLX",
+          "description": "Real Metal int4/int8 GEMM (compute win)."
+        },
+        {
+          "name": "lucid.nn.quantized.LinearReLU",
+          "description": "Quantized Linear with a fused ReLU."
+        },
+        {
+          "name": "lucid.nn.quantized.Conv2d",
+          "description": "The convolutional analogue (per-channel int8 weight)."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated float model."
+        }
+      ]
     },
     {
       "name": "QuantizedLinearMLX",
@@ -1522,7 +2332,7 @@
       ],
       "labels": [],
       "signature": "QuantizedLinearMLX(in_features: int, out_features: int, bias: bool = True, bits: int = 8, group_size: int = 64, relu: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/mlx_linear.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/mlx_linear.py#L21",
       "subcategory": "mlx_linear",
       "methods": [
         {
@@ -1531,7 +2341,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(in_features: int, out_features: int, bias: bool = True, bits: int = 8, group_size: int = 64, relu: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/mlx_linear.py#L74",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/mlx_linear.py#L163",
           "subcategory": "mlx_linear",
           "summary": null,
           "extended": null,
@@ -1553,7 +2363,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/mlx_linear.py#L105",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/mlx_linear.py#L194",
           "subcategory": "mlx_linear",
           "summary": "Run the MLX low-precision GEMM `x @ packed_wᵀ` (+ bias, +ReLU).",
           "extended": "The kernel is Metal-only, so a CPU-carried activation is moved onto the\nGPU for the GEMM and the result is moved **back to the input's device**.\nThat keeps this layer device-transparent — it accelerates inside an\notherwise-CPU model without forcing the whole model (or residual skip\nbranches) onto Metal.",
@@ -1577,7 +2387,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module, bits: int = 8, group_size: int = 64, relu: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/mlx_linear.py#L133",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/mlx_linear.py#L222",
           "subcategory": "mlx_linear",
           "summary": "Quantize a float `Linear`'s weight into MLX packed form (on Metal).",
           "extended": null,
@@ -1599,7 +2409,7 @@
           "kind": "function",
           "labels": [],
           "signature": "extra_repr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/mlx_linear.py#L160",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/mlx_linear.py#L249",
           "subcategory": "mlx_linear",
           "summary": null,
           "extended": null,
@@ -1617,7 +2427,7 @@
         }
       ],
       "summary": "Weight-only int4/int8 linear backed by a real Metal low-precision GEMM.",
-      "extended": "Unlike `lucid.nn.quantized.Linear` (which dequantizes the weight to\nfloat and runs a float matmul), this layer stores the weight in MLX's\ngroup-wise packed format and runs the genuine low-precision kernel\n(`quantized_matmul`) — the actual compute *and* memory win. Build it from\na float `lucid.nn.Linear` via `from_float`, choosing `bits`\n(4 or 8).",
+      "extended": "The *compute-and-memory* quantized linear, and the layer\n`lucid.quantization.convert` routes the Linear family to when the MLX\nbackend is active. Where `lucid.nn.quantized.Linear` dequantizes its\nint8 weight back to float and runs an ordinary float matmul (a memory-only\nwin), `QuantizedLinearMLX` stores the weight in MLX's group-wise packed\nformat and runs the genuine low-precision kernel — the packed weight is\ndequantized *inside* the GEMM, in one pass, so a full float weight is never\nmaterialized. Build it from a float `lucid.nn.Linear` via\n`from_float`, choosing `bits` (4 or 8).\n\n**Group-wise packed representation.** The float weight `(out_features,\nin_features)` is split, along the input dim, into contiguous groups of\n`group_size` elements; every `(output-channel, group)` block gets its own\naffine `scale` $s$ and `bias` $\\beta$ (an offset, distinct from\nthe layer's additive bias term), and the codes are bit-packed into a `uint32`\ntensor (tagged `I32`). Finer groups track a channel's local dynamic range\nmore tightly than one per-row scale, at the cost of more metadata. This is the\npacking MLX's `quantized_matmul` consumes directly.\n\nEncoding happens once (at `from_float`); the packed decode + matmul run\nfused on every forward:\n\n$$\nq_{o,i} = \\operatorname{clamp}\\!\\Bigl(\n    \\operatorname{round}\\!\\bigl((w_{o,i} - \\beta_{o,g}) / s_{o,g}\\bigr),\\\n    0,\\ 2^{b}-1\\Bigr),\n\\qquad\n\\hat{w}_{o,i} = s_{o,g}\\, q_{o,i} + \\beta_{o,g}\n$$\n\n$$\ny = x\\, \\hat{w}^{\\top} + \\mathbf{b},\n\\qquad\ng = \\bigl\\lfloor i / \\texttt{group\\_size} \\bigr\\rfloor\n$$\n\nwhere $o$ indexes `out_features`, $i$ the input dim, $b$\nthe bit-width (grid `0 .. 2^b - 1`), and $g$ maps input index\n$i$ to its group. A ReLU is optionally fused after `+ b`. In the\nkernel, $\\hat{w}$ is never fully realized — the packed codes and the\nper-group $(s, \\beta)$ are streamed into the matmul directly.",
       "parameters": [
         {
           "name": "in_features",
@@ -1634,19 +2444,19 @@
         {
           "name": "bias",
           "annotation": "bool",
-          "description": "Whether a (float) bias term is added after the GEMM. Defaults to\n`True`.",
+          "description": "Whether a learned **float** bias term is added after the GEMM. Defaults\nto `True`.",
           "default": "True"
         },
         {
           "name": "bits",
           "annotation": "int",
-          "description": "Weight bit-width — `4` or `8`. Defaults to `8`.",
+          "description": "Weight bit-width — `4` (aggressive memory) or `8`. Defaults to `8`.",
           "default": "8"
         },
         {
           "name": "group_size",
           "annotation": "int",
-          "description": "Number of input-dim elements sharing one `scale` / `bias` block in\nthe packed layout. Defaults to `64`.",
+          "description": "Number of input-dim elements sharing one `scale` / `bias` block in\nthe packed layout. Must divide `in_features`. Smaller groups are tighter\nbut carry more metadata. Defaults to `64`.",
           "default": "64"
         },
         {
@@ -1659,14 +2469,48 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid.nn as nn\n>>> from lucid.nn.quantized import QuantizedLinearMLX\n>>> lin = nn.Linear(512, 256)\n>>> qlin = QuantizedLinearMLX.from_float(lin, bits=8)\n>>> x = lucid.randn(4, 512)\n>>> y = qlin(x)          # GEMM runs on Metal, y returns on x's device\n>>> y.shape\n(4, 256)"
+        ">>> import lucid, lucid.nn as nn\n>>> from lucid.nn.quantized import QuantizedLinearMLX\n>>> lin = nn.Linear(512, 256)\n>>> qlin = QuantizedLinearMLX.from_float(lin, bits=8)  # quantize on Metal\n>>> x = lucid.randn(4, 512)\n>>> y = qlin(x)          # GEMM runs on Metal, y returns on x's device\n>>> y.shape\n(4, 256)\nThe layer is device-transparent — a CPU input is round-tripped through Metal\nfor the GEMM and the result comes back on the input's device, while a Metal\ninput stays on the GPU throughout:\n>>> qlin(x).is_metal                       # CPU in -> CPU out\nFalse\n>>> qlin(x.to(\"metal\")).is_metal           # Metal in -> Metal out\nTrue\nConstructing directly (instead of via from_float) yields a zeroed,\nno-op layer — the packed weight is all zero until the buffers are filled:\n>>> broken = QuantizedLinearMLX(512, 256, bits=8)\n>>> bool((broken.packed_weight == 0).all().item())\nTrue"
       ],
       "notes": [
-        "The kernel is **Metal-only** but the layer is device-transparent: a\nCPU-carried activation is moved onto the GPU for the GEMM and the result is\nmoved **back to the input's device**, so this layer accelerates inside an\notherwise-CPU model without forcing the whole model onto Metal. The packed\nweight is `(out, in·bits/32)` uint32 (tagged I32), with one `scale` +\n`bias` per `group_size` block along the input dim."
+        "- The kernel is **Metal-only** but the layer is *device-transparent*: a\n  CPU-carried activation is moved onto the GPU for the GEMM and the result is\n  moved **back to the input's device**, so this layer accelerates inside an\n  otherwise-CPU model (or residual skip branch) without forcing the whole\n  model onto Metal.\n- Build via `from_float` (which quantizes on Metal), **not** by\n  constructing directly: a fresh instance has an all-zero `packed_weight` and\n  zeroed `scales` / `biases`, so it returns zeros until `from_float` /\n  `load_state_dict` populates the buffers.\n- The `state_dict` carries the packed `int32` weight + per-group `scales`\n  / `biases` + the float bias — never a float weight. The weight payload\n  shrinks ~`3.55x` at `bits=8` and ~`6.40x` at `bits=4` (the packed\n  codes plus the small per-group metadata).\n- This is the layer that wins on **compute**, not just memory: it skips the\n  dequantize-to-float hop entirely. The speed-up is **bandwidth-bound** — it is\n  largest in the memory-bound decode / generation regime (measured ~`3.15x`\n  at `M = 1`) and fades toward parity (~`0.9-1x`) in compute-bound\n  (large-`M`) training GEMMs, where the matmul, not weight bandwidth,\n  dominates.\n- The real int4/int8 kernels are an optional C++ submodule; gate on\n  `lucid.quantization._qgemm.is_available` before relying on this fast\n  path. `lucid.quantization.convert` routes the Linear family here only\n  when the MLX backend is active."
       ],
-      "attributes": [],
+      "attributes": [
+        {
+          "name": "packed_weight",
+          "annotation": "Tensor",
+          "description": "The bit-packed codes, shape `(out_features, in_features·bits/32)`,\n`int32` (I32-tagged uint32) — `bits/32` codes packed per word."
+        },
+        {
+          "name": "scales",
+          "annotation": "Tensor",
+          "description": "Per-`(output-channel, group)` affine scale, shape\n`(out_features, in_features/group_size)`."
+        },
+        {
+          "name": "biases",
+          "annotation": "Tensor",
+          "description": "Per-`(output-channel, group)` affine offset, shape\n`(out_features, in_features/group_size)`."
+        },
+        {
+          "name": "bias",
+          "annotation": "Tensor or None",
+          "description": "The float bias of shape `(out_features,)`, or `None`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Linear",
+          "description": "Sidecar int8 Linear (memory win, float compute)."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Routes the Linear family here on the MLX backend."
+        },
+        {
+          "name": "lucid.quantization._qgemm.is_available",
+          "description": "Whether the Metal kernels are built."
+        }
+      ]
     },
     {
       "name": "DeQuantize",
@@ -1678,7 +2522,7 @@
       ],
       "labels": [],
       "signature": "DeQuantize()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L139",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L295",
       "subcategory": "modules",
       "methods": [
         {
@@ -1687,7 +2531,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L155",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L340",
           "subcategory": "modules",
           "summary": "Identity (activations are already float-carried).",
           "extended": null,
@@ -1711,7 +2555,7 @@
             "classmethod"
           ],
           "signature": "from_float(stub: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L160",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L345",
           "subcategory": "modules",
           "summary": "Build from a `DeQuantStub` (no state to carry).",
           "extended": null,
@@ -1729,17 +2573,39 @@
         }
       ],
       "summary": "Runtime exit from the quantized region — identity under design B.",
-      "extended": "The converted form of a `DeQuantStub`, produced by\n`lucid.quantization.convert` / `from_float`. It marks where the\nquantized region ends. Because Lucid's sidecar representation (design B)\ncarries activations as (fake-quantized) float throughout, there is nothing\nto unpack: the forward is a plain identity and the module holds no state.",
-      "parameters": [],
+      "extended": "The converted, inference-time form of a `DeQuantStub`, produced by\n`lucid.quantization.convert` / `from_float`. It marks where the\nquantized region ends and float compute resumes. Because Lucid's sidecar\nrepresentation (design B) carries activations as (fake-quantized) `float32`\nthroughout — never as packed integers — there is nothing to unpack: the\nforward is a plain identity and the module holds no state.\n\nIt is the passive twin of the active `Quantize` entry marker. Keeping\nit in the graph (rather than deleting it) makes the quantized module tree\nsymmetric, so tooling that walks entry/exit pairs sees a balanced boundary.",
+      "parameters": [
+        {
+          "name": "None",
+          "annotation": null,
+          "description": "The class takes no constructor arguments; instances are created by\n`from_float` from a `DeQuantStub` (there is no state to\ncarry over) or by calling `DeQuantize()` directly.",
+          "default": null
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> dq = nn.quantized.DeQuantize()\n>>> x = lucid.randn(2, 3)\n>>> bool((dq(x) == x).all().item())      # identity — nothing to unpack\nTrue"
+      ],
       "notes": [
-        "Takes no constructor arguments. It exists as an explicit boundary marker so\nthe quantized graph is symmetric with `Quantize` — useful for\ntooling that walks the module tree."
+        "- Pure identity in every mode — it never changes a tensor's dtype, shape, or\n  values. Its role is documentary / structural, not numerical.\n- Holds no buffers and no qparams; contrast with `Quantize`, which\n  carries the calibrated `scale` / `zero_point`.\n- A model may legally omit the dequant marker; it is retained for graph\n  symmetry and to signal where float compute resumes."
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.DeQuantStub",
+          "description": "The float-model marker this converts from."
+        },
+        {
+          "name": "lucid.nn.quantized.Quantize",
+          "description": "The active entry marker it mirrors."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "DeQuantStub",
@@ -1751,7 +2617,7 @@
       ],
       "labels": [],
       "signature": "DeQuantStub(qconfig: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L56",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L126",
       "subcategory": "modules",
       "methods": [
         {
@@ -1760,7 +2626,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(qconfig: object = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L74",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L175",
           "subcategory": "modules",
           "summary": null,
           "extended": null,
@@ -1782,7 +2648,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L79",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L180",
           "subcategory": "modules",
           "summary": "Identity.",
           "extended": null,
@@ -1799,8 +2665,8 @@
           "see_also": []
         }
       ],
-      "summary": "Marks the quantized→float boundary in a to-be-quantized model.",
-      "extended": "The exit-side counterpart of `QuantStub`: place it where the\nquantized region ends and float compute resumes. It is an identity at\nfloat / calibration time; `lucid.quantization.convert` replaces it\nwith the runtime `DeQuantize` marker. Under Lucid's sidecar\nrepresentation (design B) activations are carried as (fake-quantized) float\nthroughout, so this marker never changes tensor values.",
+      "summary": "Quantized→float boundary marker — the exit stub of a quantizable model.",
+      "extended": "The exit-side counterpart of `QuantStub`: place it where the\nquantized region ends and ordinary float compute resumes. Like its\nentry-side twin it is a placeholder — an identity at float / calibration\ntime whose only job is to give the tooling a named site — and\n`lucid.quantization.convert` swaps it for a runtime\n`DeQuantize`.\n\nUnder Lucid's sidecar representation (design B) activations are carried as\n(fake-quantized) `float32` throughout the quantized region rather than as\npacked integer tensors, so \"dequantizing\" the exit is a no-op: there is no\ninteger buffer to unpack back to float. The marker therefore never changes a\ntensor's values in either its stub or its converted form — it exists purely\nso the quantized graph is symmetric and walkable by tooling.",
       "parameters": [
         {
           "name": "qconfig",
@@ -1811,11 +2677,28 @@
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> dq = nn.quantized.DeQuantStub()\n>>> x = lucid.randn(2, 3)\n>>> bool((dq(x) == x).all().item())      # identity in every mode\nTrue"
+      ],
+      "notes": [
+        "- Holds no state and takes no runtime tensor arguments beyond the input.\n- Because activations stay float-carried, a model may omit `DeQuantStub`\n  entirely and still produce correct numerics; it is kept for graph\n  symmetry and to mark intent.\n- Converts to `DeQuantize`, which is likewise a pure identity — so a\n  quantized region is bracketed by exactly one *active* boundary\n  (`Quantize` on entry)."
+      ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.QuantStub",
+          "description": "The matching entry-side boundary marker."
+        },
+        {
+          "name": "lucid.nn.quantized.DeQuantize",
+          "description": "The runtime form this stub converts into."
+        },
+        {
+          "name": "lucid.nn.quantized.QuantWrapper",
+          "description": "Wraps a model in a stub pair."
+        }
+      ]
     },
     {
       "name": "Quantize",
@@ -1827,7 +2710,7 @@
       ],
       "labels": [],
       "signature": "Quantize(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L85",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L186",
       "subcategory": "modules",
       "methods": [
         {
@@ -1836,7 +2719,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L110",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L266",
           "subcategory": "modules",
           "summary": null,
           "extended": null,
@@ -1858,7 +2741,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L118",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L274",
           "subcategory": "modules",
           "summary": "Quantize `x` to the calibrated activation grid (float-carried).",
           "extended": "Integer inputs (e.g. token indices) are passed through unchanged —\nonly real-valued activations are quantized.",
@@ -1882,7 +2765,7 @@
             "classmethod"
           ],
           "signature": "from_float(stub: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L131",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L287",
           "subcategory": "modules",
           "summary": "Build from a calibrated `QuantStub` (reads its observer).",
           "extended": null,
@@ -1900,7 +2783,7 @@
         }
       ],
       "summary": "Runtime entry into the quantized region — fake-quantizes the input.",
-      "extended": "The converted form of a calibrated `QuantStub`, produced by\n`lucid.quantization.convert` / `from_float`. Each forward\nquantizes a real-valued activation to the calibrated `(scale,\nzero_point)` grid (integer inputs such as token indices are passed through\nunchanged). Under the sidecar representation (design B) the result is\ncarried as fake-quantized float, so it has int8 numerics while staying a\nfloat tensor.",
+      "extended": "The converted, inference-time form of a calibrated `QuantStub`,\ninstalled by `lucid.quantization.convert` (or built directly via\n`from_float`). Where the stub was a passive marker, `Quantize` is\nactive: every forward maps a real-valued activation onto the calibrated\n`(scale, zero_point)` grid the observer recorded, which is the numerical\n\"entry\" into the quantized region.\n\nUnder the sidecar representation (design B) the quantized activation is\n*carried as float* — the result has int8 numerics (values snapped to the\ngrid) but remains an ordinary `float32` tensor, so it flows through the\nrest of the quantized graph without any packed-integer container. Integer\ninputs such as token indices are recognised and passed through unchanged,\nsince only real-valued activations have a meaningful quantization grid.\n\n$$\n\\operatorname{fake\\_quant}(x) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(x/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwhere $S, Z$ are the calibrated activation `(scale, zero_point)` and\n$q_{\\min}, q_{\\max}$ the grid bounds (`0, 255` for the default\n`quint8`). The inner round-and-clamp is what quantizes; the outer\n$(\\cdot - Z)\\, S$ re-expresses the integer code as the nearest\nrepresentable float.",
       "parameters": [
         {
           "name": "scale",
@@ -1917,17 +2800,49 @@
         {
           "name": "qdtype",
           "annotation": "QDtype",
-          "description": "Quantized dtype whose `quant_min` / `quant_max` bound the grid.\nDefaults to `lucid.quantization.quint8`.",
+          "description": "Quantized dtype whose `quant_min` / `quant_max` bound the grid.\nDefaults to `lucid.quantization.quint8` (`[0, 255]`).",
           "default": "quint8"
         }
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> q = nn.quantized.Quantize(lucid.tensor(0.05), lucid.tensor(128.0))\n>>> q(lucid.randn(4)).shape              # snapped to the 0.05 grid\n(4,)\nInteger inputs bypass quantization entirely (a common surprise):\n>>> idx = lucid.tensor([1, 2, 3])\n>>> bool((q(idx) == idx).all().item())\nTrue"
+      ],
+      "notes": [
+        "- Normally produced by `convert` / `from_float`, which reads the\n  calibrated `QuantStub`'s observer via `calculate_qparams`; construct\n  directly only when you already hold the qparams.\n- The input's dtype decides the path: floating-point tensors are\n  fake-quantized, integer tensors are returned verbatim.\n- The exit-side `DeQuantize` is an identity, so a quantized region is\n  bracketed by exactly one active boundary (this one)."
+      ],
+      "attributes": [
+        {
+          "name": "scale",
+          "annotation": "Tensor",
+          "description": "Scalar activation-scale buffer, set from the calibrated observer."
+        },
+        {
+          "name": "zero_point",
+          "annotation": "Tensor",
+          "description": "Scalar activation zero-point buffer, set from the calibrated observer."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.QuantStub",
+          "description": "The float-model marker this converts from."
+        },
+        {
+          "name": "lucid.nn.quantized.DeQuantize",
+          "description": "The matching (identity) exit marker."
+        },
+        {
+          "name": "lucid.quantization.fake_quantize",
+          "description": "The op applied on each forward."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "QuantStub",
@@ -1939,7 +2854,7 @@
       ],
       "labels": [],
       "signature": "QuantStub(qconfig: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L29",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L29",
       "subcategory": "modules",
       "methods": [
         {
@@ -1948,7 +2863,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(qconfig: object = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L36",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L106",
           "subcategory": "modules",
           "summary": null,
           "extended": null,
@@ -1970,7 +2885,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L41",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L111",
           "subcategory": "modules",
           "summary": "Identity for PTQ (a hook observes); fake-quant for QAT.",
           "extended": "In QAT `prepare_qat` attaches a `FakeQuantize` as\n`activation_post_process` — apply it so the input is fake-quantized\nduring training.  In PTQ it's a bare observer fed by a forward hook,\nso the stub stays an identity.",
@@ -1987,16 +2902,44 @@
           "see_also": []
         }
       ],
-      "summary": "Marks the float→quantized boundary in a to-be-quantized model.",
-      "extended": "Identity at float / calibration time; `prepare` attaches an activation\nobserver and `convert` replaces it with `Quantize`.",
-      "parameters": [],
+      "summary": "Float→quantized boundary marker — the entry stub of a quantizable model.",
+      "extended": "Placed in a **float** model at the point where the quantized region should\nbegin. On its own it does nothing to the numerics; it exists so the\nquantization tooling has a named site to attach an activation observer and,\nlater, to swap in a runtime quantizer. It is the mirror image of\n`DeQuantStub`, which marks the exit.\n\nIts behaviour depends on which workflow prepared the model:\n\n* **PTQ** (`lucid.quantization.prepare`) attaches a bare observer as a\n  forward hook and leaves the stub an identity — the observer passively\n  records the activation range while calibration data flows through.\n* **QAT** (`lucid.quantization.prepare_qat`) attaches a\n  `lucid.quantization.FakeQuantize` as `activation_post_process`;\n  the stub then fake-quantizes its (floating-point) input on every forward so\n  the network trains against the same rounding it will meet at inference.\n\nOnce calibrated, `lucid.quantization.convert` replaces the stub with a\nruntime `Quantize`. In the QAT path the fake-quantize applied to a\nreal-valued input is\n\n$$\n\\operatorname{fake\\_quant}(x) = \\bigl(\n    \\operatorname{clamp}(\\operatorname{round}(x/S) + Z,\\ q_{\\min},\\ q_{\\max})\n    - Z\\bigr)\\, S\n$$\n\nwith the observed activation `(scale, zero_point)` $S, Z$ and grid\nbounds $q_{\\min}, q_{\\max}$ (`0, 255` for the default `quint8`).\nInteger inputs (e.g. token indices) are passed through untouched.",
+      "parameters": [
+        {
+          "name": "qconfig",
+          "annotation": "object",
+          "description": "Quantization config to attach to this boundary. When `None` (the\ndefault) no `qconfig` attribute is set and the stub inherits the\nsurrounding model's config during `prepare` / `convert`.",
+          "default": "None"
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> class Net(nn.Module):\n...     def __init__(self) -> None:\n...         super().__init__()\n...         self.quant = nn.quantized.QuantStub()\n...         self.fc = nn.Linear(4, 2)\n...         self.dequant = nn.quantized.DeQuantStub()\n...     def forward(self, x):\n...         return self.dequant(self.fc(self.quant(x)))\nA stub used *before* prepare is a plain identity — the common mistake is\nto expect it to quantize on its own:\n>>> stub = nn.quantized.QuantStub()      # no observer attached yet\n>>> x = lucid.randn(3)\n>>> bool((stub(x) == x).all().item())    # identity until prepare() runs\nTrue"
+      ],
+      "notes": [
+        "- A raw `QuantStub()` is a no-op identity; it only acquires an\n  `activation_post_process` after `prepare` / `prepare_qat` runs.\n- Use `QuantWrapper` to bolt a `QuantStub` / `DeQuantStub` pair\n  onto a model that has no explicit boundaries of its own.\n- It converts to `Quantize`, which carries the calibrated qparams as\n  buffers; the stub itself holds no scale / zero-point."
+      ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.DeQuantStub",
+          "description": "The matching exit-side boundary marker."
+        },
+        {
+          "name": "lucid.nn.quantized.Quantize",
+          "description": "The runtime form this stub converts into."
+        },
+        {
+          "name": "lucid.nn.quantized.QuantWrapper",
+          "description": "Wraps a model in a stub pair."
+        },
+        {
+          "name": "lucid.quantization.prepare",
+          "description": "Attaches the observer this stub feeds."
+        }
+      ]
     },
     {
       "name": "QuantWrapper",
@@ -2008,7 +2951,7 @@
       ],
       "labels": [],
       "signature": "QuantWrapper(module: nn.Module)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L166",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L351",
       "subcategory": "modules",
       "methods": [
         {
@@ -2017,7 +2960,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(module: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L174",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L413",
           "subcategory": "modules",
           "summary": null,
           "extended": null,
@@ -2039,7 +2982,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/modules.py#L180",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/modules.py#L419",
           "subcategory": "modules",
           "summary": "Quantize the input, run the wrapped model, dequantize the output.",
           "extended": null,
@@ -2057,15 +3000,59 @@
         }
       ],
       "summary": "Wrap an arbitrary float model with `QuantStub` / `DeQuantStub`.",
-      "extended": "Lets a model that has no explicit quantization boundaries (e.g. a stock\nzoo model) be quantized: the input is quantized on entry and dequantized\non exit, with the wrapped model in between.",
-      "parameters": [],
+      "extended": "A convenience container that bolts a quantization boundary pair onto a model\nthat was never written with quantization in mind (e.g. a stock zoo model\nwith no `QuantStub` of its own). The wrapper inserts a `QuantStub`\nbefore the model and a `DeQuantStub` after it, so `prepare` can\nattach an entry-side activation observer and `convert` can install a\nruntime `Quantize` at the boundary — all without editing the wrapped\nmodule's `forward`.\n\nThe wrapped module is stored as the `module` submodule, flanked by\n`quant` and `dequant`. Each forward runs `quant → module → dequant`:\nthe input is quantized on entry, the model runs (its own weighted layers get\nswapped to their quantized forms during `convert`), and the output passes\nthrough the identity dequant marker on the way out.",
+      "parameters": [
+        {
+          "name": "module",
+          "annotation": "nn.Module",
+          "description": "The float model to wrap. It is stored verbatim as `self.module` and is\nitself quantized in place when the wrapper is prepared and converted.",
+          "default": null
+        }
+      ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [],
-      "attributes": [],
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> net = nn.Sequential(nn.Linear(16, 8))\n>>> wrapped = nn.quantized.QuantWrapper(net)\n>>> wrapped.qconfig = Q.get_default_qconfig()\n>>> prepared = Q.prepare(wrapped)\n>>> _ = prepared(lucid.randn(4, 16))         # calibrate\n>>> qmodel = Q.convert(prepared)\n>>> type(qmodel.quant).__name__              # stub swapped to runtime form\n'Quantize'"
+      ],
+      "notes": [
+        "- Only the entry boundary is numerically active after `convert` — the\n  dequant side is an identity under the sidecar representation (design B).\n- The wrapped model still needs a `qconfig` (set it on the wrapper or the\n  inner module) before `prepare` can attach observers.\n- Prefer explicit in-model `QuantStub` / `DeQuantStub` placement when you\n  want the boundary somewhere other than the model's outermost input/output."
+      ],
+      "attributes": [
+        {
+          "name": "quant",
+          "annotation": "QuantStub",
+          "description": "The entry-side boundary marker inserted before `module`."
+        },
+        {
+          "name": "module",
+          "annotation": "nn.Module",
+          "description": "The wrapped float (later quantized) model."
+        },
+        {
+          "name": "dequant",
+          "annotation": "DeQuantStub",
+          "description": "The exit-side boundary marker inserted after `module`."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.QuantStub",
+          "description": "The entry marker it inserts."
+        },
+        {
+          "name": "lucid.nn.quantized.DeQuantStub",
+          "description": "The exit marker it inserts."
+        },
+        {
+          "name": "lucid.quantization.prepare",
+          "description": "Attaches observers to the wrapped boundaries."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Swaps the stubs for their runtime forms."
+        }
+      ]
     },
     {
       "name": "Embedding",
@@ -2077,7 +3064,7 @@
       ],
       "labels": [],
       "signature": "Embedding(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L28",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L28",
       "subcategory": "sparse",
       "methods": [
         {
@@ -2086,7 +3073,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L59",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L125",
           "subcategory": "sparse",
           "summary": "Initialise the MSELoss module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -2108,7 +3095,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L74",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L140",
           "subcategory": "sparse",
           "summary": "Dequantize the table and look up `x`.",
           "extended": null,
@@ -2132,7 +3119,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L82",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L148",
           "subcategory": "sparse",
           "summary": "Quantize a float `lucid.nn.Embedding`'s table (per-row int8).",
           "extended": null,
@@ -2154,7 +3141,7 @@
           "kind": "function",
           "labels": [],
           "signature": "extra_repr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L107",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L173",
           "subcategory": "sparse",
           "summary": "Return a string representation of the layer's configuration.",
           "extended": null,
@@ -2172,7 +3159,7 @@
         }
       ],
       "summary": "Quantized embedding lookup table — per-row int8, dequantize-on-lookup.",
-      "extended": "The table is stored as int8 codes with a per-row (per-token) `scale` /\n`zero_point`, which is the dominant memory win for large-vocabulary\nembeddings. Each forward dequantizes the table and performs the ordinary\n`lucid.nn.functional.embedding` lookup. Produced from a calibrated\nfloat `lucid.nn.Embedding` by `lucid.quantization.convert` /\n`from_float`.",
+      "extended": "The inference-time replacement that `lucid.quantization.convert`\ninstalls for a calibrated float `lucid.nn.Embedding`. Embedding\ntables dominate the parameter budget of large-vocabulary language models —\na `(50000, 768)` table is ~150 MB in `float32` — so storing the table as\nint8 is the single largest memory win quantization offers on the text side,\nand this layer is where it lands.\n\n**Representation.** The learned table `(num_embeddings, embedding_dim)` is\nquantized once, at `from_float` time, into an `int8` code tensor plus\na **per-row** (per-token) `scale` / `zero_point`; the float table is then\ndropped. Because each vocabulary row gets its own scale, tokens with very\ndifferent embedding magnitudes are all tracked tightly — far more accurately\nthan a single per-tensor scale. Each forward *dequantizes* the table back to\nfloat and runs the ordinary `lucid.nn.functional.embedding` lookup, so\nthe layer needs no int8 gather kernel and runs unchanged on any device.\n\nEncoding happens once; decode + gather run on every forward. For row\n$i$, column $j$:\n\n$$\n\\hat{W}_{ij} = (W^{q}_{ij} - z_i)\\, s_i,\n\\qquad\n\\operatorname{out}[k] = \\hat{W}[\\, x_k\\, ]\n$$\n\nwhere $s_i, z_i$ are the row-$i$ scale / zero-point (symmetric\n`qint8`, so $z_i = 0$) and $x_k$ the $k$-th input index.\nThe lookup gathers dequantized rows; only rows actually indexed are touched.",
       "parameters": [
         {
           "name": "num_embeddings",
@@ -2195,13 +3182,44 @@
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The table is quantized **per-row on axis 0** (one `scale` per token) with\na symmetric qint8 grid. When the source module carries no `qconfig`, a\ndefault per-channel qint8 observer is used to calibrate the rows."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> import lucid.quantization as Q\n>>> emb = nn.Embedding(1000, 64)\n>>> qemb = nn.quantized.Embedding.from_float(emb)   # per-row int8 table\n>>> qemb.weight_int8.dtype\nint8\n>>> qemb(lucid.tensor([1, 5, 999])).shape           # dequantize-on-lookup\n(3, 64)\nA directly constructed layer is zeroed — a common mistake is to use it\nwithout from_float / load_state_dict:\n>>> broken = nn.quantized.Embedding(1000, 64)\n>>> bool((broken.weight_int8 == 0).all().item())\nTrue"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a bare instance holds a\n  zeroed table with identity qparams and returns zeros until `from_float` /\n  `load_state_dict` populates the buffers.\n- The table is quantized **per-row on axis 0** (one `scale` per token) with\n  a symmetric `qint8` grid (`[-128, 127]`). When the source module\n  carries no `qconfig`, a default per-channel `qint8` observer calibrates\n  the rows during `from_float`.\n- Memory: the int8 codes plus the per-row float scale shrink the table\n  payload ~`3.55x` versus `float32` — the dominant checkpoint saving for\n  text models, whose weight mass is mostly embeddings.\n- This layer wins on **memory**, not compute — the gather runs in float after\n  an on-the-fly dequantize."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` table codes, shape `(num_embeddings, embedding_dim)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-row (per-token) scale, shape `(num_embeddings,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-row (per-token) zero-point, shape `(num_embeddings,)` — all zero\nunder the default symmetric `qint8` scheme."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.EmbeddingBag",
+          "description": "The pooled (bag-reducing) analogue."
+        },
+        {
+          "name": "lucid.nn.quantized.Linear",
+          "description": "Per-channel int8 weight for dense layers."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     },
     {
       "name": "EmbeddingBag",
@@ -2213,7 +3231,7 @@
       ],
       "labels": [],
       "signature": "EmbeddingBag(num_embeddings: int, embedding_dim: int, mode: str = 'mean', padding_idx: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L114",
+      "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L180",
       "subcategory": "sparse",
       "methods": [
         {
@@ -2222,7 +3240,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_embeddings: int, embedding_dim: int, mode: str = 'mean', padding_idx: int | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L148",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L271",
           "subcategory": "sparse",
           "summary": "Initialise the Embedding module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -2244,7 +3262,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, offsets: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L168",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L291",
           "subcategory": "sparse",
           "summary": "Dequantize the table and run the pooled bag lookup.",
           "extended": null,
@@ -2268,7 +3286,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L180",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L303",
           "subcategory": "sparse",
           "summary": "Quantize a float `lucid.nn.EmbeddingBag`'s table (per-row int8).",
           "extended": null,
@@ -2290,7 +3308,7 @@
           "kind": "function",
           "labels": [],
           "signature": "extra_repr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/nn/quantized/sparse.py#L208",
+          "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/nn/quantized/sparse.py#L331",
           "subcategory": "sparse",
           "summary": "Return a string representation of the layer's configuration.",
           "extended": null,
@@ -2308,7 +3326,7 @@
         }
       ],
       "summary": "Quantized `EmbeddingBag` — per-row int8 table, pooled dequant lookup.",
-      "extended": "Like `lucid.nn.quantized.Embedding`, the table is stored as int8\nwith a per-row (per-token) `scale`; each forward dequantizes the table\nand runs the pooled bag lookup, reducing each bag of indices to a single\nvector by `mode`. Produced from a calibrated float\n`lucid.nn.EmbeddingBag` by `lucid.quantization.convert` /\n`from_float`.",
+      "extended": "The inference-time replacement for a calibrated float\n`lucid.nn.EmbeddingBag`, installed by\n`lucid.quantization.convert` / `from_float`. Like\n`lucid.nn.quantized.Embedding` it stores the table as int8 with a\nper-row (per-token) `scale` — the same dominant memory win for\nlarge-vocabulary models — but instead of returning one row per index it\n*pools* each bag of indices into a single vector, the fused primitive behind\nrecommendation and bag-of-words text models.\n\n**Representation.** The table `(num_embeddings, embedding_dim)` is\nquantized per-row into `int8` codes plus a per-row `scale` /\n`zero_point` at `from_float` time; the float table is dropped. Each\nforward dequantizes the table, gathers the rows in each bag, and reduces them\nby `mode` — fused so the per-token embedding matrix is never materialised.\n\nGiven a flat index sequence partitioned into bags by `offsets`, the\n$i$-th pooled output is\n\n$$\n\\hat{W}_{rc} = (W^{q}_{rc} - z_r)\\, s_r,\n\\qquad\n\\operatorname{out}[i] = \\operatorname{reduce}_{k \\in \\operatorname{bag}_i}\n    \\hat{W}[\\, x_k\\, ]\n$$\n\nwhere $s_r, z_r$ are the row-$r$ scale / zero-point (symmetric\n`qint8`) and `reduce` is one of `sum`, `mean`, or `max` selected by\n`mode`. The reduction runs on the dequantized (float) rows.",
       "parameters": [
         {
           "name": "num_embeddings",
@@ -2337,13 +3355,44 @@
       ],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "The table is quantized **per-row on axis 0** (one `scale` per token) with\na symmetric qint8 grid. When the source module carries no `qconfig`, a\ndefault per-channel qint8 observer is used to calibrate the rows."
+      "examples": [
+        ">>> import lucid, lucid.nn as nn\n>>> bag = nn.EmbeddingBag(1000, 32, mode=\"mean\")\n>>> qbag = nn.quantized.EmbeddingBag.from_float(bag)\n>>> idx = lucid.tensor([1, 2, 4, 5, 4])\n>>> offsets = lucid.tensor([0, 3])              # two bags: [1,2,4] and [5,4]\n>>> qbag(idx, offsets).shape                    # one pooled vector per bag\n(2, 32)"
       ],
-      "attributes": [],
+      "notes": [
+        "- Instances are normally produced by `lucid.quantization.convert` (or\n  `from_float`), **not** constructed directly: a bare instance holds a\n  zeroed table with identity qparams and pools to zeros until `from_float` /\n  `load_state_dict` populates the buffers.\n- The table is quantized **per-row on axis 0** (one `scale` per token) with\n  a symmetric `qint8` grid. When the source module carries no `qconfig`,\n  a default per-channel `qint8` observer calibrates the rows.\n- Memory: the int8 codes plus per-row scale shrink the table payload\n  ~`3.55x` versus `float32` — as with `Embedding`, the layer wins\n  on memory, not compute (pooling runs in float post-dequantize).\n- `offsets` marks where each bag begins in a flat index tensor; pass a 2-D\n  index tensor instead to treat every row as its own fixed-length bag."
+      ],
+      "attributes": [
+        {
+          "name": "weight_int8",
+          "annotation": "Tensor",
+          "description": "The `int8` table codes, shape `(num_embeddings, embedding_dim)`."
+        },
+        {
+          "name": "weight_scale",
+          "annotation": "Tensor",
+          "description": "Per-row (per-token) scale, shape `(num_embeddings,)`."
+        },
+        {
+          "name": "weight_zero_point",
+          "annotation": "Tensor",
+          "description": "Per-row (per-token) zero-point, shape `(num_embeddings,)` — all zero\nunder the default symmetric `qint8` scheme."
+        }
+      ],
       "warns": [],
-      "see_also": []
+      "see_also": [
+        {
+          "name": "lucid.nn.quantized.Embedding",
+          "description": "The unpooled (one-row-per-index) analogue."
+        },
+        {
+          "name": "lucid.nn.functional.embedding_bag",
+          "description": "The pooled lookup run each forward."
+        },
+        {
+          "name": "lucid.quantization.convert",
+          "description": "Installs this layer from a calibrated model."
+        }
+      ]
     }
   ],
   "summary": "`lucid.nn.quantized` — quantized inference modules.",

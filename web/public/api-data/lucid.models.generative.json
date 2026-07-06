@@ -3,7 +3,7 @@
   "name": "generative",
   "path": "lucid.models.generative",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e27f3ac08/lucid/models/generative/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/4b22d32cc/lucid/models/generative/__init__.py#L1",
   "members": [],
   "summary": "Image-generative model families — Phase 5 of the model zoo.",
   "extended": "Concrete families (VAE / DDPM / NCSN) will populate this package in follow-up\ncommits.  The infrastructure exported here — base configs, output dataclasses,\nnoise schedulers — is in place so each family only needs to add its own\n`_config.py`, `_model.py`, and `_pretrained.py`.\n\nPositional / timestep encoding primitives (`SinusoidalEmbedding`,\n`TimestepEmbedding`) live in `lucid.nn`; family code imports them\nfrom there rather than redefining locally.",
