@@ -37,11 +37,15 @@ from lucid.quantization._qscheme import (
 )
 from lucid.quantization._fake_quantize import FakeQuantize
 from lucid.quantization.observer import (
+    FixedQParamsObserver,
     HistogramObserver,
     MinMaxObserver,
     MovingAverageMinMaxObserver,
+    MovingAveragePerChannelMinMaxObserver,
+    NoopObserver,
     ObserverBase,
     PerChannelMinMaxObserver,
+    PlaceholderObserver,
 )
 from lucid.quantization.qconfig import (
     QConfig,
@@ -85,7 +89,11 @@ __all__ = [
     "MinMaxObserver",
     "MovingAverageMinMaxObserver",
     "PerChannelMinMaxObserver",
+    "MovingAveragePerChannelMinMaxObserver",
     "HistogramObserver",
+    "FixedQParamsObserver",
+    "PlaceholderObserver",
+    "NoopObserver",
     # QAT fake-quant
     "FakeQuantize",
     # config

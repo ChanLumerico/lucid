@@ -309,3 +309,108 @@ def _quantile_from_hist(counts: list[float], centers: list[float], q: float) -> 
         if acc >= target:
             return c
     return centers[-1]
+
+
+class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
+    """Per-channel observer with an EMA of the per-channel min / max.
+
+    The per-channel analogue of :class:`MovingAverageMinMaxObserver` — smooths
+    each channel's range across calibration batches (robust to per-batch
+    outliers), which the reference framework ships as a distinct observer.
+    """
+
+    def __init__(
+        self,
+        ch_axis: int = 0,
+        qscheme: QScheme = per_channel_symmetric,
+        qdtype: QDtype = qint8,
+        averaging_constant: float = 0.01,
+        eps: float = 1e-8,
+    ) -> None:
+        super().__init__(ch_axis, qscheme, qdtype, eps)
+        self.averaging_constant = averaging_constant
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+        """EMA-update the per-channel min/max (seeded on the first batch)."""
+        c = self.averaging_constant
+        axis = self.ch_axis if self.ch_axis is not None else 0
+        perm = lucid.moveaxis(x, axis, 0)
+        flat = perm.reshape(perm.shape[0], -1)
+        cur_min, cur_max = lucid.amin(flat, dim=1), lucid.amax(flat, dim=1)
+        # First batch: the ±inf seed is scalar, so seed the per-channel vectors
+        # directly (a scalar `where` condition wouldn't broadcast to length C).
+        if bool(lucid.isinf(self.min_val).all().item()):
+            new_min, new_max = cur_min, cur_max
+        else:
+            new_min = self.min_val + c * (cur_min - self.min_val)
+            new_max = self.max_val + c * (cur_max - self.max_val)
+        self.register_buffer("min_val", new_min)
+        self.register_buffer("max_val", new_max)
+        return x
+
+
+class FixedQParamsObserver(ObserverBase):
+    """Observer with a fixed ``(scale, zero_point)`` — no statistics collected.
+
+    For ops whose output range is known a priori (``sigmoid`` → ``[0, 1]``,
+    ``tanh`` → ``[-1, 1]``, ``softmax`` → ``[0, 1]``): the grid is fixed, so
+    calibration would be wasted.  ``forward`` is the identity.
+    """
+
+    scale: Tensor
+    zero_point: Tensor
+
+    def __init__(
+        self,
+        scale: float,
+        zero_point: int,
+        qscheme: QScheme = per_tensor_affine,
+        qdtype: QDtype = quint8,
+        eps: float = 1e-8,
+    ) -> None:
+        super().__init__(qscheme, qdtype, None, eps)
+        self.register_buffer("scale", lucid.tensor(float(scale)))
+        self.register_buffer("zero_point", lucid.tensor(float(zero_point)))
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+        """Identity — the qparams are fixed, so no statistics are gathered."""
+        return x
+
+    @override
+    def calculate_qparams(self) -> tuple[Tensor, Tensor]:
+        return self.scale, self.zero_point
+
+
+class PlaceholderObserver(ObserverBase):
+    """Carries ``qdtype`` metadata but collects no statistics.
+
+    Used where activation qparams are produced at *runtime* (dynamic quant) or
+    deliberately absent — the observer only records the target dtype/scheme.
+    """
+
+    def __init__(
+        self,
+        qscheme: QScheme = per_tensor_affine,
+        qdtype: QDtype = quint8,
+        eps: float = 1e-8,
+    ) -> None:
+        super().__init__(qscheme, qdtype, None, eps)
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+        """Identity — no statistics are gathered."""
+        return x
+
+    @override
+    def calculate_qparams(self) -> tuple[Tensor, Tensor]:
+        raise RuntimeError(
+            f"{type(self).__name__} collects no statistics; qparams are computed "
+            "at runtime (dynamic quantization) or supplied elsewhere."
+        )
+
+
+class NoopObserver(PlaceholderObserver):
+    """A :class:`PlaceholderObserver` by another name — pure identity, no stats."""
+
