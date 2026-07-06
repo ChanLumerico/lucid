@@ -202,6 +202,9 @@ const PACKAGE_LABELS: Record<string, string> = {
   "lucid.nn.functional":     "Functional",
   "lucid.nn.init":           "Init",
   "lucid.nn.utils":          "NN Utils",
+  "lucid.nn.quantized":      "Quantized",
+  "lucid.nn.qat":            "QAT",
+  "lucid.nn.intrinsic":      "Fused Modules",
   "lucid.optim":             "Optimizers",
   "lucid.autograd":          "Autograd",
   "lucid.compile":           "Compile",
@@ -213,6 +216,7 @@ const PACKAGE_LABELS: Record<string, string> = {
   "lucid.distributions":     "Distributions",
   "lucid.einops":            "Einops",
   "lucid.amp":               "Mixed Precision",
+  "lucid.quantization":      "Quantization",
   "lucid.profiler":          "Profiler",
   "lucid.serialization":     "Serialization",
   "lucid.utils":             "Utils",        // synthetic-ish parent

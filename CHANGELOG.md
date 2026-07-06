@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Fixed
+
+- register quantization modules in sidebar + labels (unblocks Pages)
+
+---
+
 ## [3.6.0] — 2026-07-06
 
 ### Added — Torch-grade quantization subsystem (PTQ · dynamic · QAT · graph-mode)

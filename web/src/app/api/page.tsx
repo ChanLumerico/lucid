@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
+  Binary,
   Boxes,
   BrainCircuit,
   Cpu,
@@ -179,6 +180,7 @@ function buildModuleGroups(): ModuleGroup[] {
       category: "Others",
       modules: [
         { name: "lucid.amp",           slug: "lucid.amp",           description: "Automatic mixed precision.",       icon: Gauge },
+        { name: "lucid.quantization",  slug: "lucid.quantization",  description: "Post-training + QAT quantization (int8 / int4 weights, MLX GEMM).", icon: Binary },
         { name: "lucid.profiler",      slug: "lucid.profiler",      description: "Performance profiling utilities.", icon: Timer },
         { name: "lucid.serialization", slug: "lucid.serialization", description: "State dict save / load.",          icon: Save  },
       ],
