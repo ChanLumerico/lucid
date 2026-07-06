@@ -1,11 +1,26 @@
 """``lucid.quantization`` Phase-3 — dynamic PTQ (no calibration)."""
 
+import contextlib
+from collections.abc import Iterator
+
 import numpy as np
 
 import lucid
+import lucid.backends as backends
 import lucid.nn as nn
 import lucid.nn.quantized.dynamic as nnqd
 import lucid.quantization as Q
+
+
+@contextlib.contextmanager
+def _reference_engine() -> Iterator[None]:
+    """Pin the dequant (reference) path so structure asserts don't see MLX routing."""
+    prev = backends.quantized.engine
+    backends.quantized.engine = "reference"
+    try:
+        yield
+    finally:
+        backends.quantized.engine = prev
 
 
 def _linear_stack() -> nn.Sequential:
@@ -17,7 +32,8 @@ def _linear_stack() -> nn.Sequential:
 
 class TestDynamicLinear:
     def test_swaps_without_calibration(self) -> None:
-        qm = Q.quantize_dynamic(_linear_stack())
+        with _reference_engine():
+            qm = Q.quantize_dynamic(_linear_stack())
         assert isinstance(qm[0], nnqd.Linear)
         assert qm[0].weight_int8.dtype is lucid.int8
 

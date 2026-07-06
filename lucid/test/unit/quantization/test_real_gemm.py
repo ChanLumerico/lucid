@@ -7,6 +7,7 @@ import lucid
 import lucid.backends as backends
 import lucid.nn as nn
 import lucid.nn.quantized as nnq
+import lucid.quantization as Q
 
 
 def _metal_ok() -> bool:
@@ -89,6 +90,59 @@ class TestRealGEMM:
         w_deq = _qgemm.dequantize(packed, scales, biases, group_size=64, bits=8)
         y_deq = lucid.matmul(x, w_deq.mT).numpy()
         assert np.allclose(y_kernel, y_deq, atol=1e-3)
+
+
+class TestConvertRoutesToMLX:
+    """`convert` / `quantize_dynamic` route Linear to the real MLX GEMM (auto engine)."""
+
+    def test_static_convert_routes_linear(self) -> None:
+        lucid.manual_seed(0)
+        m = nn.Sequential(nn.Linear(128, 256), nn.ReLU(), nn.Linear(256, 64))
+        m.eval()
+        x = lucid.randn(16, 128)
+        yf = m(x).numpy()
+        prepared = Q.prepare(m, Q.get_default_qconfig_mapping())
+        for _ in range(5):
+            prepared(lucid.randn(16, 128))
+        qm = Q.convert(prepared)  # auto engine + Metal → weight-only MLX GEMM
+        assert isinstance(qm[0], nnq.QuantizedLinearMLX)
+        assert isinstance(qm[2], nnq.QuantizedLinearMLX)
+        yq = qm(x).numpy()
+        assert np.abs(yf - yq).max() / (np.abs(yf).max() + 1e-9) < 0.05
+
+    def test_dynamic_convert_routes_linear(self) -> None:
+        lucid.manual_seed(1)
+        m = nn.Sequential(nn.Linear(128, 256), nn.ReLU(), nn.Linear(256, 64))
+        m.eval()
+        qm = Q.quantize_dynamic(m)
+        assert isinstance(qm[0], nnq.QuantizedLinearMLX)
+
+    def test_indivisible_dim_falls_back_to_dequant(self) -> None:
+        # in_features=8 divides no MLX group size (32/64/128) → dequant, not a crash.
+        lucid.manual_seed(2)
+        m = nn.Sequential(nn.Linear(8, 16))
+        m.eval()
+        prepared = Q.prepare(m, Q.get_default_qconfig_mapping())
+        for _ in range(3):
+            prepared(lucid.randn(4, 8))
+        qm = Q.convert(prepared)
+        assert isinstance(qm[0], nnq.Linear)
+        assert not isinstance(qm[0], nnq.QuantizedLinearMLX)
+
+    def test_relu_fused_variant_routes(self) -> None:
+        lucid.manual_seed(3)
+        import lucid.nn.intrinsic as nni
+
+        seq = nn.Sequential(nn.Linear(64, 128), nn.ReLU())
+        fused = nni.LinearReLU(seq[0], seq[1])
+        m = nn.Sequential(fused)
+        m.eval()
+        prepared = Q.prepare(m, Q.get_default_qconfig_mapping())
+        for _ in range(3):
+            prepared(lucid.randn(8, 64))
+        qm = Q.convert(prepared)
+        assert isinstance(qm[0], nnq.QuantizedLinearMLX)
+        assert qm[0].relu is True  # ReLU folded into the fast layer
 
 
 class TestBackendsToggle:

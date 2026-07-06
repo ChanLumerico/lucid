@@ -81,6 +81,72 @@ def _quant_mapping() -> dict[type, _FromFloat]:
     }
 
 
+def _mlx_weight_bits(mod: nn.Module) -> int:
+    """Weight bit-width (4/8) for the MLX fast path, read from the module's qconfig."""
+    qcfg = getattr(mod, "qconfig", None)
+    if qcfg is not None:
+        bits = getattr(getattr(qcfg.weight(), "qdtype", None), "bits", None)
+        if isinstance(bits, int) and bits in (4, 8):
+            return bits
+    return 8
+
+
+def _mlx_group_size(in_features: int) -> int | None:
+    """Largest valid MLX group size (32/64/128) dividing ``in_features``.
+
+    ``mlx.core.quantize`` requires the quantized dimension to be a multiple of
+    the group size, so a layer whose ``in_features`` divides none of the three
+    supported sizes cannot use the group-wise kernel — return ``None`` and let
+    the caller fall back to the dequantize path.
+    """
+    for gs in (64, 128, 32):
+        if in_features % gs == 0:
+            return gs
+    return None
+
+
+def _mlx_linear_builder(relu: bool) -> _FromFloat:
+    """1-arg ``convert`` builder that routes a (fused) Linear to the real MLX GEMM.
+
+    Weight-only group-wise quantization (``quantized_matmul``) — the actual
+    speed + memory win, in exchange for W8A16 numerics (activations stay float).
+    Selected only when ``backends.quantized.use_mlx()`` is true; layers whose
+    ``in_features`` is not group-size-divisible fall back to the dequant path.
+    """
+    from lucid.nn.quantized import Linear as QLinear
+    from lucid.nn.quantized import LinearReLU as QLinearReLU
+    from lucid.nn.quantized import QuantizedLinearMLX
+
+    dequant: _FromFloat = QLinearReLU.from_float if relu else QLinear.from_float
+
+    def build(child: nn.Module) -> nn.Module:
+        inner = cast("nn.Sequential", child)[0] if relu else child
+        gs = _mlx_group_size(cast("nn.Linear", inner).in_features)
+        if gs is None:
+            return dequant(child)
+        return QuantizedLinearMLX.from_float(
+            inner, bits=_mlx_weight_bits(child), group_size=gs, relu=relu
+        )
+
+    return build
+
+
+def _mlx_dynamic_builder() -> _DynFromFloat:
+    """2-arg ``quantize_dynamic`` builder routing Linear to the real MLX GEMM."""
+    import lucid.nn.quantized.dynamic as nnqd
+    from lucid.nn.quantized import QuantizedLinearMLX
+
+    def build(child: nn.Module, dtype: QDtype) -> nn.Module:
+        gs = _mlx_group_size(cast("nn.Linear", child).in_features)
+        if gs is None:
+            return nnqd.Linear.from_float(child, dtype)
+        return QuantizedLinearMLX.from_float(
+            child, bits=dtype.bits, group_size=gs, relu=False
+        )
+
+    return build
+
+
 def _make_observer_hook(obs: nn.Module) -> _Hook:
     """Forward hook that feeds a module's output to its activation observer."""
 
@@ -141,11 +207,26 @@ def prepare(
 
 
 def convert(model: nn.Module, inplace: bool = False) -> nn.Module:
-    """Swap calibrated float modules for their quantized replacements."""
+    """Swap calibrated float modules for their quantized replacements.
+
+    When ``lucid.backends.quantized.use_mlx()`` is true (the MLX quantized
+    engine is present), Linear-family layers are routed to the real weight-only
+    ``quantized_matmul`` GEMM — the genuine speed + memory win — instead of the
+    dequantize-to-float path.  Set ``backends.quantized.engine = "reference"``
+    to force the exact W8A8 dequant numerics on every layer.
+    """
+    import lucid
+    import lucid.nn.intrinsic as nni
+    import lucid.nn.qat as nnqat
     import lucid.nn.quantized as nnq
 
     model = model if inplace else copy.deepcopy(model)
     mapping = _quant_mapping()
+    if lucid.backends.quantized.use_mlx():
+        mapping = dict(mapping)
+        mapping[nn.Linear] = _mlx_linear_builder(relu=False)
+        mapping[nni.LinearReLU] = _mlx_linear_builder(relu=True)
+        mapping[nnqat.Linear] = _mlx_linear_builder(relu=False)
     # DeQuantStub + Embedding convert without calibration (no activation observer).
     _convert_recursive(model, mapping, always=(nnq.DeQuantStub, nn.Embedding))
     model.eval()
@@ -182,9 +263,14 @@ def quantize_dynamic(
     inplace : bool, default False
         Mutate in place instead of deep-copying.
     """
+    import lucid
+
     model = model if inplace else copy.deepcopy(model)
     model.eval()
     mapping = _dynamic_mapping()
+    if lucid.backends.quantized.use_mlx():
+        mapping = dict(mapping)
+        mapping[nn.Linear] = _mlx_dynamic_builder()
     types = qconfig_spec if qconfig_spec is not None else set(mapping)
     # Handle a bare top-level target (no parent to swap it in).
     build = mapping.get(type(model))

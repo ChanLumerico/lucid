@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast, override
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
 from lucid.quantization._qgemm import quantize, quantized_matmul
 
 if TYPE_CHECKING:
@@ -31,12 +32,14 @@ class QuantizedLinearMLX(nn.Module):
         bias: bool = True,
         bits: int = 8,
         group_size: int = 64,
+        relu: bool = False,
     ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.bits = bits
         self.group_size = group_size
+        self.relu = relu
         # Buffers sized to MLX's group-wise packed layout so a fresh module can
         # ``load_state_dict`` (strict) without a shape mismatch: the packed
         # weight is ``(out, in·bits/32)`` uint32 (tagged I32) and there is one
@@ -55,7 +58,12 @@ class QuantizedLinearMLX(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary layer
-        """Run the MLX low-precision GEMM ``x @ packed_wᵀ`` (+ bias)."""
+        """Run the MLX low-precision GEMM ``x @ packed_wᵀ`` (+ bias, +ReLU)."""
+        # The kernel is Metal-only; move a CPU-carried activation onto the GPU
+        # so this layer works inside an otherwise-CPU model without the caller
+        # having to pre-move inputs.
+        if not x.is_metal:
+            x = x.to("metal")
         y = quantized_matmul(
             x,
             self.packed_weight,
@@ -67,11 +75,17 @@ class QuantizedLinearMLX(nn.Module):
         )
         if self.bias is not None:
             y = y + self.bias
+        if self.relu:
+            y = F.relu(y)
         return y
 
     @classmethod
     def from_float(
-        cls, mod: nn.Module, bits: int = 8, group_size: int = 64
+        cls,
+        mod: nn.Module,
+        bits: int = 8,
+        group_size: int = 64,
+        relu: bool = False,
     ) -> QuantizedLinearMLX:
         """Quantize a float ``Linear``'s weight into MLX packed form (on Metal)."""
         lin = cast("nn.Linear", mod)
@@ -81,6 +95,7 @@ class QuantizedLinearMLX(nn.Module):
             bias=lin.bias is not None,
             bits=bits,
             group_size=group_size,
+            relu=relu,
         )
         weight = lin.weight.to("metal")  # (out, in)
         packed, scales, biases = quantize(weight, group_size=group_size, bits=bits)
@@ -95,5 +110,6 @@ class QuantizedLinearMLX(nn.Module):
     def extra_repr(self) -> str:
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
-            f"bits={self.bits}, group_size={self.group_size}, backend=mlx"
+            f"bits={self.bits}, group_size={self.group_size}, relu={self.relu}, "
+            f"backend=mlx"
         )

@@ -1,11 +1,26 @@
 """``lucid.quantization`` Phase-2 — eager static PTQ end-to-end."""
 
+import contextlib
+from collections.abc import Iterator
+
 import numpy as np
 
 import lucid
+import lucid.backends as backends
 import lucid.nn as nn
 import lucid.nn.quantized as nnq
 import lucid.quantization as Q
+
+
+@contextlib.contextmanager
+def _reference_engine() -> Iterator[None]:
+    """Pin the dequant (reference) path so int8-structure asserts skip MLX routing."""
+    prev = backends.quantized.engine
+    backends.quantized.engine = "reference"
+    try:
+        yield
+    finally:
+        backends.quantized.engine = prev
 
 
 class _MLP(nn.Module):
@@ -53,7 +68,8 @@ class TestConvertStructure:
         assert isinstance(qm.dequant, nnq.DeQuantize)
 
     def test_weight_is_int8(self) -> None:
-        _, qm = _calibrate_mlp()
+        with _reference_engine():
+            _, qm = _calibrate_mlp()
         assert qm.fc1.weight_int8.dtype is lucid.int8
         assert qm.fc2.weight_int8.dtype is lucid.int8
 
