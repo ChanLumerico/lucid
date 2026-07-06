@@ -53,7 +53,8 @@ class Conv1d(nn.Conv1d):
         self, *args: object, qconfig: QConfig | None = None, **kwargs: object
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]  # forwarded to nn.Conv1d
-        assert qconfig is not None
+        if qconfig is None:
+            raise ValueError("qat conv requires a qconfig")
         self.qconfig = qconfig
         self.weight_fake_quant = cast("FakeQuantize", qconfig.weight())
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())
@@ -81,7 +82,8 @@ class Conv2d(nn.Conv2d):
         self, *args: object, qconfig: QConfig | None = None, **kwargs: object
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]  # forwarded to nn.Conv2d
-        assert qconfig is not None
+        if qconfig is None:
+            raise ValueError("qat conv requires a qconfig")
         self.qconfig = qconfig
         self.weight_fake_quant = cast("FakeQuantize", qconfig.weight())
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())
@@ -109,7 +111,8 @@ class Conv3d(nn.Conv3d):
         self, *args: object, qconfig: QConfig | None = None, **kwargs: object
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]  # forwarded to nn.Conv3d
-        assert qconfig is not None
+        if qconfig is None:
+            raise ValueError("qat conv requires a qconfig")
         self.qconfig = qconfig
         self.weight_fake_quant = cast("FakeQuantize", qconfig.weight())
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())

@@ -36,7 +36,8 @@ class ConvBnReLU2d(nn.Module):
         qconfig: QConfig | None = None,
     ) -> None:
         super().__init__()
-        assert qconfig is not None, "qat.ConvBnReLU2d requires a qconfig"
+        if qconfig is None:
+            raise ValueError("qat.ConvBnReLU2d requires a qconfig")
         self.conv = conv
         self.bn = bn
         self.relu = relu

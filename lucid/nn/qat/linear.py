@@ -31,7 +31,8 @@ class Linear(nn.Linear):
         qconfig: QConfig | None = None,
     ) -> None:
         super().__init__(in_features, out_features, bias)
-        assert qconfig is not None, "qat.Linear requires a qconfig"
+        if qconfig is None:
+            raise ValueError("qat.Linear requires a qconfig")
         self.qconfig = qconfig
         self.weight_fake_quant = cast("FakeQuantize", qconfig.weight())
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())

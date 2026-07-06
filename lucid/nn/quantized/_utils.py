@@ -7,8 +7,10 @@ that so ``Linear`` / the ``Conv`` family stay tiny and cover both the PTQ and
 QAT source modules.
 """
 
+import warnings
 from typing import TYPE_CHECKING, cast
 
+import lucid
 from lucid.quantization._functional import quantize
 
 if TYPE_CHECKING:
@@ -55,5 +57,17 @@ def activation_qparams(mod: nn.Module) -> tuple[Tensor, Tensor, QDtype]:
     :class:`FakeQuantize` for QAT — both expose ``calculate_qparams`` / ``qdtype``.
     """
     obs = cast("ObserverBase", mod.activation_post_process)
+    # A PTQ observer that never saw calibration data keeps its ±inf seed, which
+    # collapses ``scale`` to ``eps`` and makes the quantized output ~0.  Warn
+    # loudly rather than fail silently.  (QAT's FakeQuantize has no ``min_val``,
+    # so this only fires on the uncalibrated static path.)
+    min_val = getattr(obs, "min_val", None)
+    if min_val is not None and bool(lucid.isinf(cast("Tensor", min_val)).any().item()):
+        warnings.warn(
+            f"Quantizing {type(mod).__name__} whose activation observer never saw "
+            "data — run calibration through the prepared model before convert(), "
+            "or the quantized output collapses to a near-zero grid.",
+            stacklevel=3,
+        )
     scale, zero_point = obs.calculate_qparams()
     return scale, zero_point, obs.qdtype

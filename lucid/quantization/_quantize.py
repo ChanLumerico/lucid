@@ -15,6 +15,7 @@ imports the quantization primitives back).
 """
 
 import copy
+import warnings
 from typing import TYPE_CHECKING, Callable, cast
 
 import lucid.nn as nn
@@ -195,6 +196,7 @@ def prepare(
     model = model if inplace else copy.deepcopy(model)
     model.eval()
     observed = _observed_types()
+    n_matched = 0
     for name, mod in model.named_modules():
         qcfg = mapping.get_qconfig(type(mod), name)
         if qcfg is None or not isinstance(mod, observed):
@@ -203,6 +205,13 @@ def prepare(
         obs = qcfg.activation()
         mod.activation_post_process = obs
         mod.register_forward_hook(_make_observer_hook(obs))
+        n_matched += 1
+    if n_matched == 0:
+        warnings.warn(
+            "prepare(): the QConfigMapping matched no quantizable modules — "
+            "convert() will leave this model unchanged.",
+            stacklevel=2,
+        )
     return model
 
 
@@ -272,6 +281,13 @@ def quantize_dynamic(
         mapping = dict(mapping)
         mapping[nn.Linear] = _mlx_dynamic_builder()
     types = qconfig_spec if qconfig_spec is not None else set(mapping)
+    if not any(type(m) in types for m in model.modules()):
+        warnings.warn(
+            "quantize_dynamic(): no module of a targeted type "
+            f"({', '.join(sorted(t.__name__ for t in types))}) found — "
+            "the model is returned unchanged.",
+            stacklevel=2,
+        )
     # Handle a bare top-level target (no parent to swap it in).
     build = mapping.get(type(model))
     if build is not None and type(model) in types:

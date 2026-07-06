@@ -60,7 +60,8 @@ class LSTM(nn.Module):
         from lucid.quantization.observer import PerChannelMinMaxObserver
 
         shell = mod
-        assert isinstance(shell, nn.LSTM)
+        if not isinstance(shell, nn.LSTM):
+            raise TypeError(f"dynamic LSTM.from_float expects an nn.LSTM, got {type(shell).__name__}")
         qmod = cls(shell)
         for name, param in shell.named_parameters():
             if name.startswith("weight"):
