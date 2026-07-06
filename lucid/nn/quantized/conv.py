@@ -67,7 +67,10 @@ class _QuantizedConvNd(nn.Module):
         self.groups = groups
         self.weight_ch_axis = 0
         self.out_qdtype: QDtype = quint8
-        weight_shape = (out_channels, in_channels // groups, *kernel_size)
+        # ``nn.Conv1d`` stores ``kernel_size`` as a bare int; the 2d/3d convs
+        # store tuples.  Normalise so the weight buffer is built for any rank.
+        ks = (kernel_size,) if isinstance(kernel_size, int) else kernel_size
+        weight_shape = (out_channels, in_channels // groups, *ks)
         self.register_buffer("weight_int8", lucid.zeros(weight_shape, dtype=lucid.int8))
         self.register_buffer("weight_scale", lucid.ones(out_channels))
         self.register_buffer("weight_zero_point", lucid.zeros(out_channels))
