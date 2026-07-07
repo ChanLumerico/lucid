@@ -109,6 +109,14 @@ public:
     // Attention weight matrix; may be a {1} placeholder on the GPU path.
     Storage saved_weights_;
 
+    // Causal flag and additive/keep mask recorded at forward so the GPU VJP
+    // backward can reproduce the exact masked attention (the fused kernel saves
+    // no weights, so the mask cannot be recovered from ``saved_weights_``).
+    bool is_causal_ = false;
+    bool has_mask_ = false;
+    Dtype mask_dtype_ = Dtype::F32;
+    Storage saved_mask_;  // valid iff has_mask_; Bool ⇒ keep-mask, else additive.
+
     // Run the SDPA forward and return the output tensor.
     //
     // Dispatches to ``IBackend::sdpa_forward`` after validating that the

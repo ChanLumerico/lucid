@@ -4716,10 +4716,8 @@ public:
         // I64).  The non-bag ``embedding_forward`` path is already dtype-aware.
         auto read_int = [](const CpuStorage& s, int k) -> int {
             return s.dtype == Dtype::I64
-                       ? static_cast<int>(
-                             reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
-                       : static_cast<int>(
-                             reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
+                       ? static_cast<int>(reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
+                       : static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
         };
         const int B = static_cast<int>(co.nbytes / dtype_size(co.dtype));
 
@@ -6012,7 +6010,11 @@ public:
                                       std::size_t mask_numel,
                                       double scale,
                                       bool is_causal,
+                                      bool need_weights,
                                       Dtype dt) override {
+        // The Accelerate reference always rolls the full softmax weight matrix
+        // (its backward reuses it), so ``need_weights`` is a no-op here.
+        (void)need_weights;
         std::size_t B = 1;
         for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
             B *= static_cast<std::size_t>(q_shape[i]);
@@ -6160,11 +6162,21 @@ public:
                                        const Storage& k,
                                        const Storage& v,
                                        const Storage& saved_weights,
+                                       const Storage* attn_mask,
                                        const Shape& q_shape,
                                        const Shape& k_shape,
                                        const Shape& v_shape,
+                                       Dtype mask_dtype,
                                        double scale,
+                                       bool is_causal,
                                        Dtype dt) override {
+        // The Accelerate forward saves the genuine (already masked/causal)
+        // weight matrix W, so the backward is fully determined by ``saved_weights``
+        // and needs no mask/causal replay — the extra args exist only to match
+        // the interface the MLX VJP path requires.
+        (void)attn_mask;
+        (void)mask_dtype;
+        (void)is_causal;
         std::size_t B = 1;
         for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
             B *= static_cast<std::size_t>(q_shape[i]);

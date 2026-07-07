@@ -723,13 +723,17 @@ class MultiheadAttention(Module):
         # simply do *not* extend it; those extra positions are always
         # attendable, matching the reference framework's behaviour.
 
-        # Use the fused SDPA op only when there is no Python-built mask;
-        # the engine's broadcasting rules for additive masks differ from
-        # the manual softmax path and would silently desync.  Whenever
-        # weights are needed, or a mask is involved, fall back to the
-        # explicit Q·K^T → softmax path.
+        # Route to the fused, memory-efficient SDPA kernel whenever possible — it
+        # never materialises the (B, H, T, S) score matrix.  Fall back to the
+        # manual softmax only when genuinely required: the caller wants the
+        # weight matrix (need_weights), attention dropout is active during
+        # training (the fused kernel has no dropout), or both is_causal and an
+        # additive mask are set (the fused kernel carries a single mask slot, so
+        # it lets the mask win over is_causal; the manual path applies both).
         attn_weights: Tensor | None
-        if need_weights or merged_mask is not None:
+        needs_dropout: bool = self.training and self.dropout > 0.0
+        causal_and_mask: bool = is_causal and merged_mask is not None
+        if need_weights or needs_dropout or causal_and_mask:
             attn_out, _aw = self._attn_with_weights(qh, kh, vh, merged_mask, is_causal)
             attn_weights = _aw if need_weights else None
         else:
@@ -737,8 +741,7 @@ class MultiheadAttention(Module):
                 qh,
                 kh,
                 vh,
-                attn_mask=None,
-                dropout_p=self.dropout if self.training else 0.0,
+                attn_mask=merged_mask,
                 is_causal=is_causal,
             )
             attn_weights = None

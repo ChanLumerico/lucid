@@ -80,6 +80,7 @@
 #include <mlx/linalg.h>
 #include <mlx/ops.h>
 #include <mlx/random.h>
+#include <mlx/transforms.h>  // mlx::core::vjp (SDPA backward)
 
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
@@ -3060,8 +3061,7 @@ public:
         mx::array valid = mx::full({n_idx}, 1.0f, mdt);
         if (padding_idx >= 0) {
             valid = mx::astype(
-                mx::not_equal(idx_i,
-                              mx::array(static_cast<std::int32_t>(padding_idx), mx::int32)),
+                mx::not_equal(idx_i, mx::array(static_cast<std::int32_t>(padding_idx), mx::int32)),
                 mdt);
         }
 
@@ -3074,8 +3074,7 @@ public:
         mx::array out = mx::zeros({B, D}, mdt);
         if (mode == 2) {  // max
             auto keep = mx::broadcast_to(
-                mx::reshape(mx::greater(oh, mx::array(0.0f, mdt)), {B, n_idx, 1}),
-                {B, n_idx, D});
+                mx::reshape(mx::greater(oh, mx::array(0.0f, mdt)), {B, n_idx, 1}), {B, n_idx, D});
             auto emb3 = mx::broadcast_to(mx::reshape(emb, {1, n_idx, D}), {B, n_idx, D});
             auto neg = mx::full({B, n_idx, D}, -std::numeric_limits<float>::infinity(), mdt);
             out = mx::max(mx::where(keep, emb3, neg), std::vector<int>{1}, false);
@@ -3083,7 +3082,7 @@ public:
             auto sizes = mx::reshape(mx::sum(oh, std::vector<int>{1}, false), {B, 1});
             auto empty = mx::broadcast_to(mx::less_equal(sizes, mx::array(0.0f, mdt)), {B, D});
             out = mx::where(empty, mx::zeros({B, D}, mdt), out);
-        } else {  // sum / mean
+        } else {                        // sum / mean
             out = mx::matmul(oh, emb);  // (B, D) weighted sum
             if (mode == 1) {            // mean
                 auto sizes = mx::reshape(mx::sum(oh, std::vector<int>{1}, false), {B, 1});
@@ -3674,6 +3673,7 @@ public:
                                       std::size_t mask_numel,
                                       double scale,
                                       bool is_causal,
+                                      bool need_weights,
                                       Dtype dt) override {
         (void)mask_numel;
 
@@ -3683,18 +3683,23 @@ public:
 
         const bool has_custom_mask = (attn_mask != nullptr);
         const bool custom_mask_is_additive = has_custom_mask && (mask_dtype != Dtype::Bool);
+        const float scale_f = static_cast<float>(scale);
 
-        if (!custom_mask_is_additive) {
-            const float scale_f = static_cast<float>(scale);
-
+        if (!need_weights) {
+            // Memory-efficient fused path.  Unlike the manual softmax below, the
+            // fused kernel correctly applies a query-broadcast additive mask
+            // (query dim == 1, e.g. a (B,1,1,Lk) padding mask).  Precedence
+            // matches the reference eager semantics (and the backward): an
+            // additive float mask wins over is_causal; else causal; else a bool
+            // keep-mask.
             std::string mask_mode;
             std::optional<::mlx::core::array> mlx_mask;
-            if (is_causal) {
+            if (custom_mask_is_additive) {
+                mlx_mask = *std::get<GpuStorage>(*attn_mask).arr;
+            } else if (is_causal) {
                 mask_mode = "causal";
-            } else if (has_custom_mask) {
-                mask_mode = "";
-                const auto& gM = std::get<GpuStorage>(*attn_mask);
-                mlx_mask = *gM.arr;
+            } else if (has_custom_mask) {  // bool keep-mask
+                mlx_mask = *std::get<GpuStorage>(*attn_mask).arr;
             }
 
             ::mlx::core::array out = ::mlx::core::fast::scaled_dot_product_attention(
@@ -3705,27 +3710,35 @@ public:
                     Storage{gpu::wrap_mlx_array(std::move(out), dt)}};
         }
 
+        // ── Weights-materializing path (``scaled_dot_product_attention_with_weights``):
+        // the fused kernel exposes no dense W, so build W = softmax(s·QKᵀ + M) by
+        // hand.  Inherently O(T²); used only when the caller asks for the weights.
         const auto mlx_dt = gpu::to_mlx_dtype(dt);
-
-        const std::size_t Lq = static_cast<std::size_t>(q_shape[q_shape.size() - 2]);
-        const std::size_t Lk = static_cast<std::size_t>(k_shape[k_shape.size() - 2]);
-        (void)k_shape;
-        (void)v_shape;
-        (void)Lq;
-        (void)Lk;
-
+        auto scale_arr = ::mlx::core::astype(::mlx::core::array(scale_f), mlx_dt);
         auto k_t = ::mlx::core::swapaxes(*gK.arr, -2, -1);
-        auto scores = ::mlx::core::matmul(*gQ.arr, k_t);
-        auto scale_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(scale)), mlx_dt);
-        scores = ::mlx::core::multiply(scores, scale_arr);
+        auto scores = ::mlx::core::multiply(::mlx::core::matmul(*gQ.arr, k_t), scale_arr);
 
         auto neg_inf = ::mlx::core::astype(
             ::mlx::core::array(-std::numeric_limits<float>::infinity()), mlx_dt);
-        if (attn_mask) {
-            const auto& gM = std::get<GpuStorage>(*attn_mask);
-
-            scores = ::mlx::core::add(scores, *gM.arr);
+        if (custom_mask_is_additive) {
+            scores = ::mlx::core::add(scores, *std::get<GpuStorage>(*attn_mask).arr);
+        } else if (is_causal) {
+            // Bottom-right aligned causal mask (lower-triangular when Lq == Lk):
+            // keep key j for query i iff j <= i + (Lk - Lq).
+            const int Lq = static_cast<int>(q_shape[q_shape.size() - 2]);
+            const int Lk = static_cast<int>(k_shape[k_shape.size() - 2]);
+            auto rows =
+                ::mlx::core::reshape(::mlx::core::arange(static_cast<double>(Lq), mlx_dt), {Lq, 1});
+            auto cols =
+                ::mlx::core::reshape(::mlx::core::arange(static_cast<double>(Lk), mlx_dt), {1, Lk});
+            auto offset =
+                ::mlx::core::astype(::mlx::core::array(static_cast<double>(Lk - Lq)), mlx_dt);
+            auto keep = ::mlx::core::less_equal(cols, ::mlx::core::add(rows, offset));
+            scores = ::mlx::core::where(keep, scores, neg_inf);
+        } else if (has_custom_mask) {  // bool keep-mask (true = attend)
+            scores = ::mlx::core::where(*std::get<GpuStorage>(*attn_mask).arr, scores, neg_inf);
         }
+
         auto weights = ::mlx::core::softmax(scores, std::vector<int>{-1}, true);
         auto output = ::mlx::core::matmul(weights, *gV.arr);
 
@@ -3738,45 +3751,78 @@ public:
                                        const Storage& k,
                                        const Storage& v,
                                        const Storage& saved_weights,
+                                       const Storage* attn_mask,
                                        const Shape&,
                                        const Shape&,
                                        const Shape&,
+                                       Dtype mask_dtype,
                                        double scale,
+                                       bool is_causal,
                                        Dtype dt) override {
         const auto& gQ = std::get<GpuStorage>(q);
         const auto& gK = std::get<GpuStorage>(k);
         const auto& gV = std::get<GpuStorage>(v);
-        const auto& gW = std::get<GpuStorage>(saved_weights);
         const auto& gG = std::get<GpuStorage>(grad_out);
+        const auto& gW = std::get<GpuStorage>(saved_weights);
+        const float scale_f = static_cast<float>(scale);
         const auto mlx_dt = gpu::to_mlx_dtype(dt);
 
-        auto scale_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(scale)), mlx_dt);
+        if (gW.arr->ndim() > 1) {
+            // ── Materialized forward saved the real (masked) weight matrix W.
+            // The backward is then mask-agnostic — W already encodes the mask —
+            // so use the closed-form softmax-attention VJP directly on W.  This
+            // avoids the fused ``mask_arr`` kernel entirely (which miscomputes on
+            // lazy inputs), yet stays correct for additive/bool masks.
+            auto scale_arr = ::mlx::core::astype(::mlx::core::array(scale_f), mlx_dt);
+            ::mlx::core::array W = *gW.arr;
 
-        ::mlx::core::array W_arr = *gW.arr;
-        if (W_arr.ndim() == 1) {
-            auto k_t = ::mlx::core::swapaxes(*gK.arr, -2, -1);
-            auto scores = ::mlx::core::multiply(::mlx::core::matmul(*gQ.arr, k_t), scale_arr);
-            W_arr = ::mlx::core::softmax(scores, std::vector<int>{-1}, true);
+            auto W_t = ::mlx::core::swapaxes(W, -2, -1);
+            auto dV = ::mlx::core::matmul(W_t, *gG.arr);
+
+            auto V_t = ::mlx::core::swapaxes(*gV.arr, -2, -1);
+            auto dW = ::mlx::core::matmul(*gG.arr, V_t);
+            auto sum_wdw =
+                ::mlx::core::sum(::mlx::core::multiply(W, dW), std::vector<int>{-1}, true);
+            auto dscores = ::mlx::core::multiply(W, ::mlx::core::subtract(dW, sum_wdw));
+
+            auto dQ = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores, *gK.arr));
+            auto dscores_t = ::mlx::core::swapaxes(dscores, -2, -1);
+            auto dK = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores_t, *gQ.arr));
+
+            return {Storage{gpu::wrap_mlx_array(std::move(dQ), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(dK), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(dV), dt)}};
         }
 
-        auto W_t = ::mlx::core::swapaxes(W_arr, -2, -1);
-        auto dV = ::mlx::core::matmul(W_t, *gG.arr);
+        // ── Fused forward saved a {1} placeholder (no-mask / causal / masked).
+        // Differentiate the fused kernel via VJP, replaying the same effective
+        // mask routing the forward used: an additive float mask wins over
+        // is_causal; else causal; else a bool keep-mask.  The saved mask is the
+        // query-expanded one recorded at forward, so it applies correctly.
+        const bool has_custom_mask = (attn_mask != nullptr);
+        const bool custom_mask_is_additive = has_custom_mask && (mask_dtype != Dtype::Bool);
+        std::string mask_mode;
+        std::optional<::mlx::core::array> mlx_mask;
+        if (custom_mask_is_additive) {
+            mlx_mask = *std::get<GpuStorage>(*attn_mask).arr;
+        } else if (is_causal) {
+            mask_mode = "causal";
+        } else if (has_custom_mask) {
+            mlx_mask = *std::get<GpuStorage>(*attn_mask).arr;
+        }
+        auto fwd =
+            [scale_f, mask_mode, mlx_mask](
+                const std::vector<::mlx::core::array>& in) -> std::vector<::mlx::core::array> {
+            return {::mlx::core::fast::scaled_dot_product_attention(in[0], in[1], in[2], scale_f,
+                                                                    mask_mode, mlx_mask)};
+        };
 
-        auto V_t = ::mlx::core::swapaxes(*gV.arr, -2, -1);
-        auto dW = ::mlx::core::matmul(*gG.arr, V_t);
+        auto vjp_res = ::mlx::core::vjp(fwd, {*gQ.arr, *gK.arr, *gV.arr}, {*gG.arr});
+        std::vector<::mlx::core::array>& grads = vjp_res.second;  // {dQ, dK, dV}
 
-        auto wdw = ::mlx::core::multiply(W_arr, dW);
-        auto sum_wdw = ::mlx::core::sum(wdw, std::vector<int>{-1}, true);
-        auto dscores = ::mlx::core::multiply(W_arr, ::mlx::core::subtract(dW, sum_wdw));
-
-        auto dQ = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores, *gK.arr));
-
-        auto dscores_t = ::mlx::core::swapaxes(dscores, -2, -1);
-        auto dK = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores_t, *gQ.arr));
-
-        return {Storage{gpu::wrap_mlx_array(std::move(dQ), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(dK), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(dV), dt)}};
+        return {Storage{gpu::wrap_mlx_array(std::move(grads[0]), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(grads[1]), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(grads[2]), dt)}};
     }
 
     // N-D transposed convolution (fractionally-strided / "deconv") forward.

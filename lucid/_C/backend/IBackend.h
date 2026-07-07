@@ -1373,6 +1373,10 @@ public:
     // where saved_weights holds the post-softmax attention scores for backward.
     // is_causal=true applies a lower-triangular mask to prevent attending to
     // future tokens without materialising the full mask tensor.
+    // ``need_weights`` selects the return contract: ``false`` uses the
+    // memory-efficient fused kernel and returns a placeholder weights slot;
+    // ``true`` materializes the dense softmax weight matrix (O(T²)) for callers
+    // that inspect it.  The CPU reference always materializes W regardless.
     virtual std::vector<Storage> sdpa_forward(const Storage& q,
                                               const Storage& k,
                                               const Storage& v,
@@ -1384,18 +1388,27 @@ public:
                                               std::size_t mask_numel,
                                               double scale,
                                               bool is_causal,
+                                              bool need_weights,
                                               Dtype dt) = 0;
 
     // SDPA backward; returns [grad_q, grad_k, grad_v].
+    //
+    // ``attn_mask`` / ``mask_dtype`` / ``is_causal`` mirror ``sdpa_forward`` so a
+    // backend that recomputes the forward (e.g. the MLX VJP path) can reproduce
+    // the exact masked attention.  ``attn_mask`` is ``nullptr`` when absent; a
+    // ``Bool`` ``mask_dtype`` marks a keep-mask, any other dtype an additive mask.
     virtual std::vector<Storage> sdpa_backward(const Storage& grad_out,
                                                const Storage& q,
                                                const Storage& k,
                                                const Storage& v,
                                                const Storage& saved_weights,
+                                               const Storage* attn_mask,
                                                const Shape& q_shape,
                                                const Shape& k_shape,
                                                const Shape& v_shape,
+                                               Dtype mask_dtype,
                                                double scale,
+                                               bool is_causal,
                                                Dtype dt) = 0;
 
     virtual Storage conv_transpose_nd_forward(const Storage& x,

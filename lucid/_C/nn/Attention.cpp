@@ -85,7 +85,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
                         const TensorImplPtr& v,
                         const TensorImplPtr& attn_mask,
                         double scale,
-                        bool is_causal) {
+                        bool is_causal,
+                        bool need_weights) {
     if (!q || !k || !v)
         ErrorBuilder("attention").fail("null input");
     if (q->device() != k->device() || q->device() != v->device())
@@ -131,7 +132,7 @@ ForwardCore run_forward(const TensorImplPtr& q,
             .sdpa_forward(q->storage(), k->storage(), v->storage(), mask_storage, q->shape(),
                           k->shape(), v->shape(), attn_mask ? attn_mask->dtype() : Dtype::F32,
                           attn_mask ? static_cast<std::size_t>(attn_mask->numel()) : std::size_t{0},
-                          scale, is_causal, q->dtype());
+                          scale, is_causal, need_weights, q->dtype());
 
     // results[0] = weights storage; results[1] = output storage.
     auto out = std::make_shared<TensorImpl>(std::move(results[1]), out_shape, q->dtype(),
@@ -155,14 +156,24 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
                                                          const TensorImplPtr& attn_mask,
                                                          double scale,
                                                          bool is_causal) {
-    auto core = run_forward(q, k, v, attn_mask, scale, is_causal);
+    // Output-only op: use the memory-efficient fused path (no dense weights).
+    auto core = run_forward(q, k, v, attn_mask, scale, is_causal, /*need_weights=*/false);
 
     auto bwd = std::make_shared<ScaledDotProductAttentionBackward>();
     bwd->saved_weights_ = std::move(core.weights_storage);
     bwd->scale_ = scale;
+    bwd->is_causal_ = is_causal;
     bwd->orig_q_shape_ = q->shape();
     bwd->orig_k_shape_ = k->shape();
     bwd->orig_v_shape_ = v->shape();
+    if (attn_mask) {
+        // Persist the mask (a non-differentiable auxiliary) so the GPU VJP
+        // backward can replay the exact masked attention.  Copying the Storage
+        // retains the underlying buffer independently of the mask tensor.
+        bwd->has_mask_ = true;
+        bwd->saved_mask_ = attn_mask->storage();
+        bwd->mask_dtype_ = attn_mask->dtype();
+    }
     kernel::NaryKernel<ScaledDotProductAttentionBackward, 3>::wire_autograd(std::move(bwd),
                                                                             {q, k, v}, core.output);
 
@@ -181,9 +192,10 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
 }
 
 std::vector<Storage> ScaledDotProductAttentionBackward::apply(Storage grad_out) {
+    const Storage* mask_ptr = has_mask_ ? &saved_mask_ : nullptr;
     return backend::Dispatcher::for_device(device_).sdpa_backward(
-        grad_out, saved_inputs_[0], saved_inputs_[1], saved_inputs_[2], saved_weights_,
-        orig_q_shape_, orig_k_shape_, orig_v_shape_, scale_, dtype_);
+        grad_out, saved_inputs_[0], saved_inputs_[1], saved_inputs_[2], saved_weights_, mask_ptr,
+        orig_q_shape_, orig_k_shape_, orig_v_shape_, mask_dtype_, scale_, is_causal_, dtype_);
 }
 
 TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
@@ -202,7 +214,8 @@ scaled_dot_product_attention_with_weights_op(const TensorImplPtr& q,
                                              const TensorImplPtr& attn_mask_or_null,
                                              double scale,
                                              bool is_causal) {
-    auto core = run_forward(q, k, v, attn_mask_or_null, scale, is_causal);
+    // Weights variant: materialize the dense softmax weight matrix for the caller.
+    auto core = run_forward(q, k, v, attn_mask_or_null, scale, is_causal, /*need_weights=*/true);
 
     Shape weights_shape = core.weights_shape;
     auto weights = std::make_shared<TensorImpl>(

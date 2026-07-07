@@ -84,6 +84,18 @@ def scaled_dot_product_attention(
     """
     import math
 
+    if attn_mask is not None and attn_mask.ndim >= 2:
+        # The engine SDPA kernels (fused and manual) mishandle a mask that is
+        # broadcast over the query dimension (query dim == 1, e.g. a (B,1,1,S)
+        # key-padding mask) for some inputs — the mask lands on the wrong rows.
+        # Expand the query dim to the number of query positions so every row
+        # gets its mask, then materialize it.
+        tq = query.shape[-2]
+        if attn_mask.shape[-2] == 1 and tq != 1:
+            target = list(attn_mask.shape)
+            target[-2] = tq
+            attn_mask = attn_mask.expand(*target).contiguous()
+
     mask = _unwrap(attn_mask) if attn_mask is not None else None
     head_dim = query.shape[-1]
     scale_val = scale if scale is not None else 1.0 / math.sqrt(head_dim)

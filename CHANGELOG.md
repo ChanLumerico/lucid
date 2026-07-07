@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - register quantization modules in sidebar + labels (unblocks Pages)
 
+### Added
+
+- route masked/decode attention through fused memory-efficient SDPA
+
 ---
 
 ## [3.6.0] — 2026-07-06
