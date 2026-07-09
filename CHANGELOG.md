@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - register quantization modules in sidebar + labels (unblocks Pages)
 
+- max_pool2d backward mis-placed gradients on metal for non-divisible input
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

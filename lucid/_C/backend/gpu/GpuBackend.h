@@ -4362,6 +4362,20 @@ public:
             auto dx =
                 ::mlx::core::reshape(dxw_t, ::mlx::core::Shape{B, C, static_cast<SE2>(Oh * Kh),
                                                                static_cast<SE2>(Ow * Kw)});
+            // When the input is not an exact multiple of the kernel (stride==K,
+            // pad==0), the pooled region (Oh*Kh, Ow*Kw) is SMALLER than the true
+            // input (S[0], S[1]) — the trailing remainder rows/cols are dropped by
+            // pooling and never belong to a window, so their gradient is zero.
+            // Pad dx up to the input shape; without this the (Oh*Kh,Ow*Kw) buffer
+            // is silently reinterpreted at the wrong row stride and gradients land
+            // on wrong positions.  No-op / no perf cost for the divisible case.
+            const int ph = S[0] - Oh * Kh;
+            const int pw = S[1] - Ow * Kw;
+            if (ph > 0 || pw > 0) {
+                const std::vector<std::pair<int, int>> pad_w = {{0, 0}, {0, 0}, {0, ph}, {0, pw}};
+                ::mlx::core::array zero(static_cast<float>(0.0), mdt);
+                dx = ::mlx::core::pad(dx, pad_w, zero);
+            }
             return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
         }
 
