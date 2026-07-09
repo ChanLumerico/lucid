@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - route masked/decode attention through fused memory-efficient SDPA
 
+### Performance
+
+- route ViT attention through the fused memory-efficient SDPA
+
 ---
 
 ## [3.6.0] — 2026-07-06
