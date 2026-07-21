@@ -163,6 +163,15 @@ def quantize(
     """
     s: _ScaleLike = scale
     z: _ZeroPointLike = zero_point
+    # qparams may be calibrated on a different device than the data — e.g. a
+    # HistogramObserver derives its range from host floats, so its scale lands on
+    # CPU while a Metal model feeds GPU activations.  The affine math runs on the
+    # data's device, so pull a tensor scale / zero-point onto it (scalars are
+    # device-agnostic and pass through).
+    if isinstance(s, Tensor) and s.device != x.device:
+        s = s.to(x.device)
+    if isinstance(z, Tensor) and z.device != x.device:
+        z = z.to(x.device)
     if ch_axis is not None and isinstance(s, Tensor):
         ndim = len(x.shape)
         s = _reshape_for_channel(s, ch_axis, ndim)
@@ -259,6 +268,11 @@ def dequantize(
     """
     s: _ScaleLike = scale
     z: _ZeroPointLike = zero_point
+    # Align tensor qparams onto the code tensor's device (see quantize()).
+    if isinstance(s, Tensor) and s.device != q.device:
+        s = s.to(q.device)
+    if isinstance(z, Tensor) and z.device != q.device:
+        z = z.to(q.device)
     if ch_axis is not None and isinstance(s, Tensor):
         ndim = len(q.shape)
         s = _reshape_for_channel(s, ch_axis, ndim)
@@ -284,6 +298,11 @@ class _FakeQuantizeAffine(Function):
         """Fake-quantize ``x`` and cache the saturation mask for STE."""
         s: _ScaleLike = scale
         z: _ZeroPointLike = zero_point
+        # Align tensor qparams onto the input's device (see quantize()).
+        if isinstance(s, Tensor) and s.device != x.device:
+            s = s.to(x.device)
+        if isinstance(z, Tensor) and z.device != x.device:
+            z = z.to(x.device)
         if ch_axis is not None and isinstance(s, Tensor):
             ndim = len(x.shape)
             s = _reshape_for_channel(s, ch_axis, ndim)

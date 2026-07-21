@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - correct CPU SDPA with a partially broadcast mask
 
+- keep observers and qparams on the observed device
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

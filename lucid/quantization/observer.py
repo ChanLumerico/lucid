@@ -176,6 +176,21 @@ class ObserverBase(nn.Module):
         self.ch_axis = ch_axis if qscheme.is_per_channel else None
         self.eps = eps
 
+    def _align_running_buffers(self, ref: Tensor) -> None:
+        """Adopt the observed tensor's device for every running buffer.
+
+        Observers are seeded device-agnostically (``+inf`` / ``-inf`` on CPU) at
+        construction because the calibration device is unknown then.  A model run
+        on Metal feeds GPU activations, and a per-channel *weight* observer's seed
+        does not ride along on ``module.to(device)`` (the weight fake-quant is
+        reached through a path ``.to`` does not traverse), so the first
+        ``minimum(seed_cpu, x_gpu)`` reduction ``DeviceMismatch``-es.  Re-register
+        each buffer on ``ref``'s device on first sight; a no-op once aligned.
+        """
+        for name, buf in list(self.named_buffers(recurse=False)):
+            if buf.device != ref.device:
+                self.register_buffer(name, buf.to(ref.device))
+
     def calculate_qparams(self) -> tuple[Tensor, Tensor]:
         """Return ``(scale, zero_point)`` from the accumulated statistics."""
         raise NotImplementedError
@@ -307,6 +322,7 @@ class MinMaxObserver(ObserverBase):
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
         """Fold ``x``'s global min/max into the running statistics."""
+        self._align_running_buffers(x)
         self.register_buffer("min_val", lucid.minimum(self.min_val, x.min()))
         self.register_buffer("max_val", lucid.maximum(self.max_val, x.max()))
         return x
@@ -432,6 +448,7 @@ class MovingAverageMinMaxObserver(MinMaxObserver):
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
         """EMA-update the running min/max (seeded on the first batch)."""
+        self._align_running_buffers(x)
         c = self.averaging_constant
         cur_min, cur_max = x.min(), x.max()
         # On the first batch (min == +inf) seed directly; else EMA toward cur.
@@ -576,6 +593,7 @@ class PerChannelMinMaxObserver(ObserverBase):
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
         """Fold per-channel min/max (reduced over all non-channel axes)."""
+        self._align_running_buffers(x)
         axis = self.ch_axis if self.ch_axis is not None else 0
         perm = lucid.moveaxis(x, axis, 0)
         num_channels = perm.shape[0]
@@ -927,6 +945,7 @@ class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
         """EMA-update the per-channel min/max (seeded on the first batch)."""
+        self._align_running_buffers(x)
         c = self.averaging_constant
         axis = self.ch_axis if self.ch_axis is not None else 0
         perm = lucid.moveaxis(x, axis, 0)

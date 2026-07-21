@@ -46,6 +46,11 @@ def quantize_weight(mod: nn.Module) -> tuple[Tensor, Tensor, Tensor, int]:
         scale, zero_point = wobs.calculate_qparams()
         qdtype, ch_axis = wobs.qdtype, wobs.ch_axis
     axis = ch_axis if ch_axis is not None else 0
+    # Bake the qparams on the weight's device so the quantized module is
+    # single-device (a HistogramObserver derives its range from host floats, so
+    # its qparams land on CPU even for a Metal weight — a mixed-device module is
+    # both a runtime DeviceMismatch and an uncompilable mixed-device trace).
+    scale, zero_point = _to_device(scale, zero_point, weight.device)
     codes = quantize(weight, scale, zero_point, qdtype, ch_axis=ch_axis)
     return codes, scale, zero_point, axis
 
@@ -70,4 +75,39 @@ def activation_qparams(mod: nn.Module) -> tuple[Tensor, Tensor, QDtype]:
             stacklevel=3,
         )
     scale, zero_point = obs.calculate_qparams()
+    scale, zero_point = _to_device(scale, zero_point, _module_device(mod))
     return scale, zero_point, obs.qdtype
+
+
+def _module_device(mod: nn.Module) -> lucid.device:
+    """Best-effort device of ``mod``'s activations.
+
+    Prefer the layer weight; a weightless activation module (Sigmoid, ELU, …)
+    has none, so fall back to any parameter, then the activation observer's
+    running buffer (a MinMax observer's ``min_val`` rides the observed device),
+    then CPU.  Used to bake qparams onto the device the module runs on.
+    """
+    w = getattr(mod, "weight", None)
+    if isinstance(w, lucid.Tensor):
+        return w.device
+    for p in mod.parameters():
+        return p.device
+    obs = getattr(mod, "activation_post_process", None)
+    mv = getattr(obs, "min_val", None)
+    if isinstance(mv, lucid.Tensor):
+        return mv.device
+    return lucid.tensor(0.0).device
+
+
+def _to_device(
+    scale: Tensor, zero_point: Tensor, dev: lucid.device
+) -> tuple[Tensor, Tensor]:
+    """Move a ``(scale, zero_point)`` pair onto ``dev`` (no-op if already there)
+    so a quantized module built from a Metal float module keeps every buffer on
+    Metal — a HistogramObserver derives its range from host floats, so its
+    qparams otherwise land on CPU and strand the module across two devices."""
+    if scale.device != dev:
+        scale = scale.to(dev)
+    if zero_point.device != dev:
+        zero_point = zero_point.to(dev)
+    return scale, zero_point
