@@ -96,6 +96,28 @@ def scaled_dot_product_attention(
             target[-2] = tq
             attn_mask = attn_mask.expand(*target).contiguous()
 
+        # The CPU (Accelerate) SDPA kernel flattens the leading dims to one batch
+        # and only broadcasts a mask that is either fully shared over that batch
+        # — numel == Lq·Lk — or fully materialized (numel == B·…·Lq·Lk).  A
+        # *partial* broadcast (e.g. a (1,H,Lq,Lk) relative-position bias, or a
+        # (B,1,Lq,Lk) padding mask) has neither numel and is mis-indexed past the
+        # buffer → silently wrong scores.  Metal (MLX) broadcasts a mask of any
+        # rank correctly, so materialize to the full score shape on the CPU
+        # stream only — it is free there (the scores are already dense; there is
+        # no fused kernel to preserve a memory win for).
+        if not query.is_metal:
+            lead = list(query.shape[:-2])
+            lq, lk = int(query.shape[-2]), int(key.shape[-2])
+            per_batch = lq * lk
+            flat = 1
+            for d in lead:
+                flat *= int(d)
+            if attn_mask.numel() not in (per_batch, flat * per_batch):
+                full = lead + [lq, lk]
+                while attn_mask.ndim < len(full):
+                    attn_mask = attn_mask.unsqueeze(0)
+                attn_mask = attn_mask.expand(*full).contiguous()
+
     mask = _unwrap(attn_mask) if attn_mask is not None else None
     head_dim = query.shape[-1]
     scale_val = scale if scale is not None else 1.0 / math.sqrt(head_dim)

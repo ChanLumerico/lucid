@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - trace quantized_matmul so compiled quantized layers fall back to eager
 
+- correct CPU SDPA with a partially broadcast mask
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
