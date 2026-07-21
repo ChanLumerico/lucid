@@ -198,13 +198,10 @@ class _RelAttnBlock(nn.Module):
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, heads, N, head_dim)
         q, k, v = qkv[0], qkv[1], qkv[2]  # each (B, heads, N, head_dim)
 
-        attn = (q @ k.permute(0, 1, 3, 2)) * self.scale
-        # Add relative position bias (num_heads, N, N) → broadcast over B
-        bias = self._rel_pos_bias()  # (heads, N, N)
-        attn = attn + bias.reshape(1, self.num_heads, N, N)
-        attn = F.softmax(attn, dim=-1)
-
-        out = attn @ v  # (B, heads, N, head_dim)
+        # Fused SDPA with the relative-position bias as an additive mask —
+        # softmax((q·kᵀ)·scale + bias)·v, never forming the (B,H,N,N) scores.
+        bias = self._rel_pos_bias().reshape(1, self.num_heads, N, N)
+        out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(out))
 

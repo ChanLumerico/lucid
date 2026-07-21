@@ -190,10 +190,10 @@ class _CvTAttention(nn.Module):
         k = k.reshape(B, Nkv, self.num_heads, head_dim).permute(0, 2, 1, 3)
         v = v.reshape(B, Nkv, self.num_heads, head_dim).permute(0, 2, 1, 3)
 
-        attn = (q @ k.permute(0, 1, 3, 2)) * self.scale
-        attn = F.softmax(attn, dim=-1)
-
-        out = (attn @ v).permute(0, 2, 1, 3).reshape(B, Nq, C)
+        # Fused SDPA — ``scale=self.scale`` is CvT's non-standard ``dim**-0.5``
+        # (not the per-head default), so it must be passed explicitly.
+        out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        out = out.permute(0, 2, 1, 3).reshape(B, Nq, C)
         return cast(Tensor, self.out_proj(out))
 
 

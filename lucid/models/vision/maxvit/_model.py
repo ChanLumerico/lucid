@@ -267,15 +267,9 @@ class _AttnCl(nn.Module):
         qkv = qkv.reshape(B, N, 3, H, hd).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # each (B, H, N, hd)
 
-        attn = q @ k.permute(0, 1, 3, 2) * self.scale  # (B, H, N, N)
-
-        # Add relative position bias: (1, H, N, N)
-        bias = cast(Tensor, self.rel_pos())
-        attn = attn + bias
-
-        attn = F.softmax(attn, dim=-1)  # (B, H, N, N)
-
-        out = attn @ v  # (B, H, N, hd)
+        # Fused SDPA with the relative-position bias as an additive mask.
+        bias = cast(Tensor, self.rel_pos())  # (1, H, N, N)
+        out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(out))
 

@@ -162,9 +162,10 @@ class _SRAttention(nn.Module):
         kv = kv.reshape(B, N2, 2, self.num_heads, head_dim).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
 
-        attn = (q @ k.permute(0, 1, 3, 2)) * self.scale
-        attn = F.softmax(attn, dim=-1)
-        x = (attn @ v).permute(0, 2, 1, 3).reshape(B, N, C)
+        # Fused SDPA — never forms the (B,H,N,N2) score matrix; ``scale``
+        # reproduces the manual ``* self.scale`` (no attention dropout here).
+        out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        x = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(x))
 
 

@@ -106,7 +106,6 @@ class _GPTSelfAttention(nn.Module):
             k.shape[2]
         )  # DynamicCache: past_len+T; StaticCache: max_cache_len
 
-        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, T, t_total)
         if isinstance(past_key_value, StaticCache) and cache_position is not None:
             # StaticCache returns the fixed max_len buffer with a dynamic write
             # position.  Row p of the lower-triangular causal_mask is exactly the
@@ -118,15 +117,28 @@ class _GPTSelfAttention(nn.Module):
             # Causal slice for query positions [past_len, past_len+T) over keys
             # [0, t_total); with no cache this is the original [:, :, :T, :T] block.
             causal = self.causal_mask[:, :, past_len : past_len + T, :t_total]
-        # ``(1 - causal) * -1e4`` blocks attention to the upper triangle.
-        scores = scores + (1.0 - causal) * -1e4
+        # Additive attention bias: ``(1 - causal) * -1e4`` blocks the upper
+        # triangle; add any padding mask on top.
+        bias: Tensor = (1.0 - causal) * -1e4
         if attention_mask is not None:
-            scores = scores + attention_mask
+            bias = bias + attention_mask
 
-        probs = F.softmax(scores, dim=-1)
-        probs = cast(Tensor, self.attn_dropout(probs))
+        # Fused SDPA on the memory-heavy path (large T forms a (B,H,T,t_total)
+        # score matrix).  Keep the explicit path for attention dropout (the fused
+        # kernel has none) and for the compiled StaticCache decode trace, whose
+        # fixed-shape masking must stay bit-identical to the traced graph.
+        from lucid.compile._entry.decode_step import is_compiled_decode_tracing
 
-        out: Tensor = probs @ v  # (B, H, T, D)
+        out: Tensor
+        if (self.training and self.attn_dropout.p > 0) or is_compiled_decode_tracing():
+            scores = q @ k.permute(0, 1, 3, 2) / self.scale + bias
+            probs = F.softmax(scores, dim=-1)
+            probs = cast(Tensor, self.attn_dropout(probs))
+            out = probs @ v  # (B, H, T, D)
+        else:
+            out = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=bias, scale=1.0 / self.scale
+            )
         out = out.permute(0, 2, 1, 3).reshape(B, T, H * D)  # (B, T, hidden)
         out = cast(Tensor, self.c_proj(out))
         return cast(Tensor, self.resid_dropout(out))

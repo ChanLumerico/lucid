@@ -171,12 +171,20 @@ class _RoFormerSelfAttention(nn.Module):
         # RoFormer uses the original interleaved RoPE pairing (x_2i, x_2i+1).
         q, k = apply_rotary_emb(q, k, cos, sin, interleaved=True)
 
-        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
-        if attention_mask is not None:
-            scores = scores + attention_mask
-        probs = cast(Tensor, self.dropout(F.softmax(scores, dim=-1)))
-
-        ctx: Tensor = probs @ v
+        # Fused SDPA on the memory-heavy path; keep the explicit-weights path
+        # only when attention dropout is active in training (fused kernel has
+        # none).  RoPE is already applied above, so SDPA sees rotated q/k.
+        ctx: Tensor
+        if self.training and self.dropout.p > 0:
+            scores = q @ k.permute(0, 1, 3, 2) / self.scale
+            if attention_mask is not None:
+                scores = scores + attention_mask
+            probs = cast(Tensor, self.dropout(F.softmax(scores, dim=-1)))
+            ctx = probs @ v
+        else:
+            ctx = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=attention_mask, scale=1.0 / self.scale
+            )
         return ctx.permute(0, 2, 1, 3).reshape(B, T, self.num_heads * self.head_dim)
 
 

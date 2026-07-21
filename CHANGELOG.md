@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 
 - route ViT attention through the fused memory-efficient SDPA
+- route model-zoo attention through fused SDPA
 
 ---
 

@@ -231,11 +231,11 @@ class _Attention(nn.Module):
         k = qkv[:, :, :, self.key_dim : 2 * self.key_dim]
         v = qkv[:, :, :, 2 * self.key_dim :]
 
-        attn = (q @ k.permute(0, 1, 3, 2)) * self.scale  # (B, heads, N, N)
-        attn = attn + self._bias().reshape(1, self.num_heads, N, N)
-        attn = F.softmax(attn, dim=-1)
-
-        out = attn @ v  # (B, heads, N, val_dim)
+        # Fused SDPA with the learned attention-bias table as an additive mask.
+        # ``scale=key_dim**-0.5`` matches q's per-head dim; v carries a distinct
+        # ``val_dim`` head width, which SDPA supports.
+        bias = self._bias().reshape(1, self.num_heads, N, N)
+        out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, N, self.val_attn_dim)
         return cast(Tensor, self.proj(out))
 

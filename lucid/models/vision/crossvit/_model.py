@@ -92,10 +92,17 @@ class _Attention(nn.Module):
         qkv = cast(Tensor, self.qkv(x)).reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, H, N, D)
         q, k, v = qkv[0], qkv[1], qkv[2]
-        attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, N, N)
-        attn = F.softmax(attn, dim=-1)
-        attn = cast(Tensor, self.attn_drop(attn))
-        x = (attn @ v).swapaxes(1, 2).reshape(B, N, C)
+        # Fused SDPA when no attention dropout is active; the fused kernel has
+        # no dropout, so keep the explicit-weights path for training-time drop.
+        out: Tensor
+        if self.training and self.attn_drop.p > 0:
+            attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, N, N)
+            attn = F.softmax(attn, dim=-1)
+            attn = cast(Tensor, self.attn_drop(attn))
+            out = attn @ v
+        else:
+            out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        x = out.swapaxes(1, 2).reshape(B, N, C)
         x = cast(Tensor, self.proj(x))
         return cast(Tensor, self.proj_drop(x))
 
@@ -214,10 +221,16 @@ class _CrossAttention(nn.Module):
             .reshape(B, N, self.num_heads, self.head_dim)
             .permute(0, 2, 1, 3)
         )
-        attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, 1, N)
-        attn = F.softmax(attn, dim=-1)
-        attn = cast(Tensor, self.attn_drop(attn))
-        x = (attn @ v).swapaxes(1, 2).reshape(B, 1, C)
+        # Fused SDPA (cross-attention: 1 query token, N keys) unless dropout.
+        out: Tensor
+        if self.training and self.attn_drop.p > 0:
+            attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, 1, N)
+            attn = F.softmax(attn, dim=-1)
+            attn = cast(Tensor, self.attn_drop(attn))
+            out = attn @ v
+        else:
+            out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        x = out.swapaxes(1, 2).reshape(B, 1, C)
         x = cast(Tensor, self.proj(x))
         return cast(Tensor, self.proj_drop(x))
 
