@@ -27,10 +27,15 @@ inline MPSDataType lucid_dtype_to_mps(Dtype dt) {
             return MPSDataTypeFloat32;
         case Dtype::F16:
             return MPSDataTypeFloat16;
-        case Dtype::I32:
-            return MPSDataTypeInt32;
         case Dtype::I64:
             return MPSDataTypeInt64;
+        case Dtype::I32:
+            return MPSDataTypeInt32;
+        case Dtype::I16:
+            return MPSDataTypeInt16;
+        // int8 (de)quantization cast: int8 codes ⇄ float weight.
+        case Dtype::I8:
+            return MPSDataTypeInt8;
         case Dtype::Bool:
             return MPSDataTypeBool;
         default:

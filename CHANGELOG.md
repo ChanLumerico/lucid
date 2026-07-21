@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep observers and qparams on the observed device
 
+- support int8 tensors so static-quant graphs compile
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

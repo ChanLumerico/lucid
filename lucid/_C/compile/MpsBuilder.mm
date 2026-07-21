@@ -38,10 +38,16 @@ inline MPSDataType to_mps_dtype(Dtype dt) {
         return MPSDataTypeFloat32;
     case Dtype::F16:
         return MPSDataTypeFloat16;
-    case Dtype::I32:
-        return MPSDataTypeInt32;
     case Dtype::I64:
         return MPSDataTypeInt64;
+    case Dtype::I32:
+        return MPSDataTypeInt32;
+    case Dtype::I16:
+        return MPSDataTypeInt16;
+    // int8 codes (quantized weights) enter the graph only as a feed that is
+    // immediately cast to float — MPSGraph supports the placeholder + cast.
+    case Dtype::I8:
+        return MPSDataTypeInt8;
     case Dtype::Bool:
         return MPSDataTypeBool;
     default:
