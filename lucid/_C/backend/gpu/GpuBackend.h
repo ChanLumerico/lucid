@@ -2271,9 +2271,51 @@ public:
                         bool keepdims,
                         Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        std::optional<std::vector<int>> axis_opt;
-        if (!axes.empty())
-            axis_opt = axes;
+        if (axes.empty()) {
+            // A full reduction is ENTRYWISE: the documented contract for
+            // ``lucid.linalg.norm`` is the vector definition applied over every
+            // element (Frobenius for a matrix, l2 for a vector) — the Python
+            // wrapper maps ord="fro" to 2.0 and has no matrix-norm dispatch
+            // (``matrix_norm`` implements spectral / nuclear itself).  MLX's
+            // linalg::norm with no axis instead applies *matrix* semantics to a
+            // 2-D input (ord=2 -> largest singular value, ord=1 -> max column
+            // sum), which silently disagreed with the CPU (Accelerate) stream —
+            // same call, different number, device-dependent.  Flatten first so
+            // both streams evaluate the same vector norm.
+            auto flat = ::mlx::core::reshape(*ga.arr, ::mlx::core::Shape{-1});
+            auto raw = ::mlx::core::linalg::norm(flat, ord, std::nullopt, /*keepdims=*/false,
+                                                 k_linalg_stream);
+            if (keepdims)
+                raw = ::mlx::core::reshape(
+                    raw, ::mlx::core::Shape(static_cast<int>(ga.arr->ndim()), 1));
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(raw), dt)};
+        }
+        if (axes.size() >= 2) {
+            // MLX likewise switches to *matrix* norms as soon as two axes are
+            // reduced together (``dim=[0, 1]``), so evaluate the entrywise
+            // p-norm directly to stay consistent with the CPU stream.
+            auto absx = ::mlx::core::abs(*ga.arr, k_linalg_stream);
+            ::mlx::core::array red = absx;
+            if (std::isinf(ord)) {
+                red = ord > 0 ? ::mlx::core::max(absx, axes, keepdims, k_linalg_stream)
+                              : ::mlx::core::min(absx, axes, keepdims, k_linalg_stream);
+            } else if (ord == 1.0) {
+                red = ::mlx::core::sum(absx, axes, keepdims, k_linalg_stream);
+            } else if (ord == 2.0) {
+                red = ::mlx::core::sqrt(
+                    ::mlx::core::sum(::mlx::core::square(absx, k_linalg_stream), axes, keepdims,
+                                     k_linalg_stream),
+                    k_linalg_stream);
+            } else {
+                auto p = ::mlx::core::power(absx, ::mlx::core::array(static_cast<float>(ord)),
+                                            k_linalg_stream);
+                red = ::mlx::core::power(
+                    ::mlx::core::sum(p, axes, keepdims, k_linalg_stream),
+                    ::mlx::core::array(static_cast<float>(1.0 / ord)), k_linalg_stream);
+            }
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(red), dt)};
+        }
+        std::optional<std::vector<int>> axis_opt = axes;
         auto raw = ::mlx::core::linalg::norm(*ga.arr, ord, axis_opt, keepdims, k_linalg_stream);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(raw), dt)};
     }
@@ -4750,8 +4792,6 @@ public:
         for (int i = 0; i < N; ++i)
             perm.push_back(2 + i);
         perm.push_back(0);
-        std::vector<int> conv_s(N, 1);
-
         // The dx-as-flipped-conv and dW-as-channel-permute tricks both
         // rearrange channels in a way that does NOT compose with MLX's
         // grouped conv (the rearranged "input Cin" is the original batch B
@@ -4781,7 +4821,15 @@ public:
                               int local_Cin_g, int local_Cout) -> ::mlx::core::array {
             auto x_perm = ::mlx::core::transpose(x_arr, perm);
             auto g_perm = ::mlx::core::transpose(grad_arr, perm);
-            auto dW_raw = ::mlx::core::conv_general(x_perm, g_perm, conv_s, pv, pv, sv, dv,
+            // dW[k] = sum_o x[k*dilation + o*stride] * grad[o].  As a convolution
+            // of x by grad that means the OUTPUT index k steps by the original
+            // dilation (conv stride = dv) while consecutive grad taps sit stride
+            // apart in the input (kernel_dilation = sv); the input itself is not
+            // dilated.  This was previously stride=1 / input_dilation=dv, which
+            // coincides with the correct mapping ONLY when dilation == 1 — every
+            // dilated conv silently produced wrong weight gradients (the forward
+            // and dx were correct, so it never surfaced).
+            auto dW_raw = ::mlx::core::conv_general(x_perm, g_perm, dv, pv, pv, sv, ones_n,
                                                     /*groups=*/1, /*flip=*/false);
             ::mlx::core::Shape crop_lo(N + 2, 0), crop_hi;
             crop_hi.push_back(local_Cin_g);

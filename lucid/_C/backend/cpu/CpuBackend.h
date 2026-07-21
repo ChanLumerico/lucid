@@ -9467,6 +9467,15 @@ private:
                     out_shape[static_cast<std::size_t>(i) + 1];
         }
 
+        // ``out_shape`` keeps the reduced axes as size-1 under keepdims and drops
+        // them otherwise.  A surviving input axis therefore maps to output axis
+        // ``d`` in the keepdims layout, but to "number of surviving axes before
+        // d" when they were dropped.  Using the packed counter for BOTH (the
+        // previous behaviour) over-counted the stride under keepdims and wrote
+        // past ``acc`` — e.g. (2,3,4) reduced over dim 1 with keepdims indexes up
+        // to 16 into an 8-element buffer: a heap overflow that segfaulted.  A 2-D
+        // input happened to survive because the mis-picked stride equals 1 there.
+        const bool keepdims_layout = out_shape.size() == nd;
         std::vector<std::int64_t> coord(nd, 0);
         const std::size_t in_numel = shape_numel(shape);
         for (std::size_t f = 0; f < in_numel; ++f) {
@@ -9477,8 +9486,9 @@ private:
                 in_flat +=
                     static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
                 if (!reduce_mask[d]) {
+                    const std::size_t oa = keepdims_layout ? d : out_axis;
                     out_flat += static_cast<std::size_t>(coord[d]) *
-                                static_cast<std::size_t>(out_stride[out_axis]);
+                                static_cast<std::size_t>(out_stride[oa]);
                     ++out_axis;
                 }
             }

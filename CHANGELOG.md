@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - support int8 tensors so static-quant graphs compile
 
+- correct dilated conv dW and linalg.norm numerics
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
