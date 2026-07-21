@@ -16,6 +16,7 @@
 #include <mlx/ops.h>
 
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Dtype.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Helpers.h"
@@ -83,7 +84,22 @@ TensorImplPtr quantized_matmul_op(const TensorImplPtr& x, const TensorImplPtr& w
                : std::nullopt;
     ::mlx::core::array out =
         ::mlx::core::quantized_matmul(xa, wa, sa, ba, transpose, group_size, bits);
-    return wrap(std::move(out), Dtype::F32);
+    TensorImplPtr result = wrap(std::move(out), Dtype::F32);
+
+    // 3.5 lucid.compile(): make this fused low-precision GEMM visible to the
+    // active tracer.  It has no MPSGraph emitter AND its result depends on the
+    // *live activation* x — so a compiled graph that silently baked it as a
+    // trace-time constant would ignore new inputs (compiled(x2) == compiled(x1),
+    // a silently-wrong output).  Recording it with a non-empty input list makes
+    // the MpsBuilder find no emitter and abort the build, so the whole signature
+    // falls back cleanly to eager (see MpsBuilder.mm's find_emitter gate).
+    // dequantize is deliberately NOT recorded: its inputs are constant weights,
+    // so baking its result is harmless and keeps that path compilable.
+    if (auto* t = ::lucid::compile::current_tracer()) {
+        t->on_op_enter("quantized_matmul", Device::GPU, Dtype::F32, result->shape());
+        t->on_op_io({x, w, scales, biases}, result);
+    }
+    return result;
 }
 
 }  // namespace lucid

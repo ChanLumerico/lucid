@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - max_pool2d backward mis-placed gradients on metal for non-divisible input
 
+- trace quantized_matmul so compiled quantized layers fall back to eager
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
