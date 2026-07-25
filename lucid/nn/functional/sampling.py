@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid.nn.functional.sparse import check_embedding_indices
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -526,6 +527,9 @@ def embedding_bag(
     _mode_map = {"sum": 0, "mean": 1, "max": 2}
     mode_int = _mode_map.get(mode, 1)
     pad_idx = int(padding_idx) if padding_idx is not None else -1
+
+    # Same bounds contract as ``embedding`` — the engine gather does not check.
+    check_embedding_indices(x, weight, "embedding_bag")
 
     x_impl = _unwrap(x)
     w_impl = _unwrap(weight)

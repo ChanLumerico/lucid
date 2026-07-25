@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep crossvit's bicubic-resize coordinates on the input device
 
+- apply the embedding bounds check to EmbeddingBag too
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

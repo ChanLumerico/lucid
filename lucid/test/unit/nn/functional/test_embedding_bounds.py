@@ -105,3 +105,34 @@ def test_training_through_embedding_is_unaffected(device):
     assert np.allclose(grad[1], 2.0)
     assert np.allclose(grad[2], 1.0)
     assert np.allclose(grad[0], 0.0)
+
+
+# ── EmbeddingBag shares the contract ─────────────────────────────────────────
+# The first fix covered F.embedding only; EmbeddingBag went through a separate
+# engine entry point and kept the unchecked gather.  Both now call the same
+# check_embedding_indices helper so they cannot disagree on what is valid.
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_embedding_bag_in_range(device):
+    lucid.manual_seed(0)
+    bag = nn.EmbeddingBag(10, 4).to(device)
+    assert bag(_ids([[0, 1, 2]], device)).shape == (1, 4)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("bad", [10, 999, -1])
+def test_embedding_bag_rejects_out_of_range(device, bad):
+    lucid.manual_seed(0)
+    bag = nn.EmbeddingBag(10, 4).to(device)
+    with pytest.raises(IndexError, match="out of range"):
+        bag(_ids([[0, 1, bad]], device))
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_functional_embedding_bag_rejects_out_of_range(device):
+    lucid.manual_seed(0)
+    table = lucid.randn(6, 3).to(device)
+    assert F.embedding_bag(_ids([[0, 5]], device), table).shape == (1, 3)
+    with pytest.raises(IndexError, match="out of range"):
+        F.embedding_bag(_ids([[0, 6]], device), table)

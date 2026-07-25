@@ -3,11 +3,42 @@ nn.functional sparse / embedding operations.
 """
 
 from typing import TYPE_CHECKING
+
+import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+
+
+def check_embedding_indices(x: Tensor, weight: Tensor, op: str) -> None:
+    """Raise ``IndexError`` if any index falls outside the embedding table.
+
+    The engine gather does no bounds checking: an out-of-range index reads past
+    the table and returns whatever is there — zeros for a small overrun (so a
+    wrong ``vocab_size`` or an unclamped token id silently trains on empty
+    embeddings) and a SIGSEGV once the offset is large.  One reduction over the
+    index tensor is negligible next to the gather it guards.
+
+    Shared by :func:`embedding` and :func:`~lucid.nn.functional.embedding_bag`
+    so the two cannot disagree on what a valid index is.
+    """
+    if x.numel() == 0:
+        return
+    num_embeddings = int(weight.shape[0])
+    # The CPU reduce kernels do not cover every integer width (int32 min/max
+    # raises), and index tensors legitimately arrive as int32 — normalise to
+    # the canonical index dtype before reducing.
+    idx = x if x.dtype == lucid.int64 else x.to(lucid.int64)
+    lo = int(idx.min().item())
+    hi = int(idx.max().item())
+    if lo < 0 or hi >= num_embeddings:
+        bad = lo if lo < 0 else hi
+        raise IndexError(
+            f"{op}: index {bad} is out of range for a table with "
+            f"{num_embeddings} entries (valid range [0, {num_embeddings - 1}])"
+        )
 
 
 def embedding(
@@ -82,21 +113,7 @@ def embedding(
     >>> out.shape
     (2, 3, 4)
     """
-    # Bounds check.  The engine gather does none: an out-of-range index reads
-    # past the table and returns whatever is there — zeros for a small overrun
-    # (so a wrong vocab_size or an unclamped token id silently trains on empty
-    # embeddings) and a SIGSEGV once the offset is large.  One reduction over
-    # the index tensor is negligible next to the gather it guards.
-    num_embeddings = int(weight.shape[0])
-    if x.numel() > 0:
-        lo = int(x.min().item())
-        hi = int(x.max().item())
-        if lo < 0 or hi >= num_embeddings:
-            bad = lo if lo < 0 else hi
-            raise IndexError(
-                f"embedding: index {bad} is out of range for a table with "
-                f"{num_embeddings} entries (valid range [0, {num_embeddings - 1}])"
-            )
+    check_embedding_indices(x, weight, "embedding")
     pad = padding_idx if padding_idx is not None else -1
     return _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(x), pad))
 
