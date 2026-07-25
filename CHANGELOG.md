@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - restore pad_packed_sequence data and put helpers on the input device
 
+- make LBFGS converge instead of stalling after one step
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

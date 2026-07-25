@@ -200,7 +200,7 @@ class LBFGS(Optimizer):
         for group in self.param_groups:
             for p in cast(list[Tensor], group["params"]):
                 if p.grad is None:
-                    views.append(lucid.zeros(p.numel()))
+                    views.append(lucid.zeros(p.numel(), device=p.device))
                 else:
                     views.append(p.grad.detach().flatten())
         return lucid.cat(views)
@@ -221,7 +221,24 @@ class LBFGS(Optimizer):
                 chunk = lucid.reshape(
                     update_flat[offset : offset + n], list(p._impl.shape)
                 )
-                p._impl = lucid.add(p, lucid.mul(lucid.tensor(alpha), chunk))._impl
+                # Two things this line has to get right:
+                #  1. ``add``/``mul`` are differentiable, so the result carries a
+                #     grad_fn and the parameter stops being a LEAF.  Backward
+                #     then flowed *through* it and accumulated nothing, so every
+                #     step after the first read a zero gradient, tripped the
+                #     ``g_norm <= tol_grad`` early return, and LBFGS stalled far
+                #     from the optimum.  Update under ``no_grad`` and detach.
+                #  2. the ``alpha`` scalar must be created on the parameter's
+                #     device, or a Metal parameter raises DeviceMismatch.
+                with lucid.no_grad():
+                    updated = lucid.add(
+                        p,
+                        lucid.mul(
+                            lucid.tensor(alpha, device=p.device), chunk
+                        ),
+                    ).detach()
+                p._impl = updated._impl
+                p.requires_grad = True
                 offset += n
 
     def _two_loop_recursion(self, flat_grad: Tensor) -> Tensor:
@@ -250,9 +267,9 @@ class LBFGS(Optimizer):
             rhos.append(rho)
             alpha = rho * float(lucid.linalg.dot(s.flatten(), q.flatten()).item())
             alphas.append(alpha)
-            q = lucid.sub(q, lucid.mul(lucid.tensor(alpha), y))
+            q = lucid.sub(q, lucid.mul(lucid.tensor(alpha, device=q.device), y))
 
-        r = lucid.mul(lucid.tensor(H_diag), q)
+        r = lucid.mul(lucid.tensor(H_diag, device=q.device), q)
 
         for i in range(num_old):
             j = num_old - 1 - i
@@ -261,7 +278,9 @@ class LBFGS(Optimizer):
             if rhos[j] == 0.0:
                 continue
             beta = rhos[j] * float(lucid.linalg.dot(y.flatten(), r.flatten()).item())
-            r = lucid.add(r, lucid.mul(lucid.tensor(alphas[j] - beta), s))
+            r = lucid.add(
+                r, lucid.mul(lucid.tensor(alphas[j] - beta, device=r.device), s)
+            )
 
         return r.neg()
 
@@ -283,7 +302,9 @@ class LBFGS(Optimizer):
         float(lucid.linalg.dot(g_k.flatten(), d.flatten()).item())
 
         for _ in range(max_ls):
-            x_new = lucid.add(x_k, lucid.mul(lucid.tensor(alpha), d))
+            x_new = lucid.add(
+                x_k, lucid.mul(lucid.tensor(alpha, device=x_k.device), d)
+            )
             float(cast(Tensor, f(x_new)).item()) if callable(f) else f_k
             break
 
