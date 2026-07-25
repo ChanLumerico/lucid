@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - run every image transform on the input's device
 
+- reject out-of-range embedding indices instead of reading past the table
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

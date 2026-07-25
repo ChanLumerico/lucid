@@ -447,8 +447,10 @@ class TestBERTForCausalLM:
 
     def test_causal_mask_prevents_leak(self) -> None:
         m = BERTForCausalLM(_tiny_config()).eval()
+        # Every id must stay inside ``_VOCAB``; ids 40..80 used to run past the
+        # embedding table, and the out-of-bounds read made this test flaky.
         ids_a = lucid.tensor([[1, 2, 3, 4, 5, 6, 7, 8]]).long()
-        ids_b = lucid.tensor([[1, 2, 3, 40, 50, 60, 70, 80]]).long()
+        ids_b = lucid.tensor([[1, 2, 3, 40, 50, 60, 61, 62]]).long()
         h_a = m(ids_a).logits
         h_b = m(ids_b).logits
         diff = float(((h_a[:, :3, :] - h_b[:, :3, :]) ** 2).sum().item())

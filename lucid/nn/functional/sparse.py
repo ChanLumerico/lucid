@@ -82,6 +82,21 @@ def embedding(
     >>> out.shape
     (2, 3, 4)
     """
+    # Bounds check.  The engine gather does none: an out-of-range index reads
+    # past the table and returns whatever is there — zeros for a small overrun
+    # (so a wrong vocab_size or an unclamped token id silently trains on empty
+    # embeddings) and a SIGSEGV once the offset is large.  One reduction over
+    # the index tensor is negligible next to the gather it guards.
+    num_embeddings = int(weight.shape[0])
+    if x.numel() > 0:
+        lo = int(x.min().item())
+        hi = int(x.max().item())
+        if lo < 0 or hi >= num_embeddings:
+            bad = lo if lo < 0 else hi
+            raise IndexError(
+                f"embedding: index {bad} is out of range for a table with "
+                f"{num_embeddings} entries (valid range [0, {num_embeddings - 1}])"
+            )
     pad = padding_idx if padding_idx is not None else -1
     return _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(x), pad))
 
