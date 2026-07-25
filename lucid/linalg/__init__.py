@@ -793,11 +793,15 @@ class _QRQGrad(_AutogradFunction):
     """Backward: Q contribution to dA.
 
     From A = Q R with Q^T Q = I (Stiefel manifold constraint):
-      dA from G_Q = G_Q R^{-T} - Q skew(Q^T G_Q) R^{-T}
-                  = (G_Q - Q sym(Q^T G_Q)) R^{-T}
-    where sym(M) = (M + M^T)/2.
+      dA from G_Q = (G_Q + Q copyltu(-G_Q^T Q)) R^{-T}
+    where copyltu(M) mirrors the strict lower triangle into the upper one
+    and keeps the diagonal:
+      copyltu(M) = tril(M, -1) + tril(M, -1)^T + diag(diag(M)).
 
-    For m > n: add the off-range projection (I - QQ^T) G_Q R^{-T}.
+    copyltu is *not* the same as sym(M) = (M + M^T)/2 — they agree only for
+    symmetric M, and Q^T G_Q is not symmetric in general.  This form is exact
+    for square and tall (m >= n) reduced QR, so no separate off-range term is
+    needed.
     """
 
     @override
@@ -817,17 +821,16 @@ class _QRQGrad(_AutogradFunction):
     def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:  # type: ignore[override]
         Q = _wrap(ctx.q_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
-        m, n = int(Q.shape[-2]), int(Q.shape[-1])
-        # Stiefel gradient: project G_Q onto tangent space at Q
-        QtGQ = Q.mT @ G_Q  # n×n
-        sym_QtGQ = (QtGQ + QtGQ.mT) * 0.5
-        numerator = G_Q - Q @ sym_QtGQ  # m×n: tangent-space component
-        dA = solve_triangular(R, numerator.mT, upper=True).mT
-        if m > n:
-            # Off-range: (I - QQ^T) G_Q R^{-T}
-            proj = G_Q - Q @ (Q.mT @ G_Q)
-            dA = dA + solve_triangular(R, proj.mT, upper=True).mT
-        return dA
+        # M = -G_Q^T Q, then mirror its strict lower triangle upward.
+        M = -(G_Q.mT @ Q)  # n×n
+        strict_lower = lucid.tril(M, -1)
+        copyltu = (
+            strict_lower
+            + strict_lower.mT
+            + lucid.diag_embed(M.diagonal(dim1=-2, dim2=-1))
+        )
+        numerator = G_Q + Q @ copyltu  # m×n
+        return solve_triangular(R, numerator.mT, upper=True).mT
 
 
 def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:

@@ -399,6 +399,18 @@ TensorImplPtr fold_op(const TensorImplPtr& x,
     const int N = static_cast<int>(x->shape()[0]);
     const int C = static_cast<int>(x->shape()[1]) / (kH * kW);
 
+    // The block count must match the column axis exactly; otherwise the
+    // backends walk past the end of the column buffer.
+    const int effH = dilation[0] * (kH - 1) + 1;
+    const int effW = dilation[1] * (kW - 1) + 1;
+    const int blocks_h = (outH + 2 * padding[0] - effH) / stride[0] + 1;
+    const int blocks_w = (outW + 2 * padding[1] - effW) / stride[1] + 1;
+    if (blocks_h <= 0 || blocks_w <= 0)
+        ErrorBuilder("fold").fail("output_size too small for the given kernel/stride/dilation");
+    if (static_cast<std::int64_t>(blocks_h) * blocks_w != x->shape()[2])
+        ErrorBuilder("fold").shape_mismatch(
+            Shape{static_cast<std::int64_t>(blocks_h) * blocks_w}, Shape{x->shape()[2]});
+
     Shape out_shape = {static_cast<std::int64_t>(N), static_cast<std::int64_t>(C),
                        static_cast<std::int64_t>(outH), static_cast<std::int64_t>(outW)};
     OpScopeFull scope{"fold", x->device(), x->dtype(), out_shape};
@@ -423,7 +435,42 @@ TensorImplPtr fold_op(const TensorImplPtr& x,
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({x}, result);
     }
+
+    {
+        auto bwd = std::make_shared<FoldBackward>();
+        bwd->output_size_ = output_size;
+        bwd->kernel_ = kernel_size;
+        bwd->stride_ = stride;
+        bwd->pad_ = padding;
+        bwd->dilation_ = dilation;
+        kernel::NaryKernel<FoldBackward, 1>::wire_autograd(std::move(bwd), {x}, result);
+    }
     return result;
 }
+
+std::vector<Storage> FoldBackward::apply(Storage grad_out) {
+    // fold is the adjoint of unfold: d/dx = unfold(grad_out) with the same
+    // hyper-parameters, recovering the (B, C*prod(K), prod(O)) column matrix.
+    const int N = static_cast<int>(output_size_.size());
+    const int B = static_cast<int>(this->input_shapes_[0][0]);
+    int kprod = 1;
+    for (int i = 0; i < N; ++i)
+        kprod *= kernel_[i];
+    const int C = static_cast<int>(this->input_shapes_[0][1]) / kprod;
+
+    std::vector<int> S = output_size_, K = kernel_, O(N);
+    for (int i = 0; i < N; ++i) {
+        const int eff = dilation_[i] * (K[i] - 1) + 1;
+        O[i] = (S[i] + 2 * pad_[i] - eff) / stride_[i] + 1;
+    }
+    Shape out_shape = this->input_shapes_[0];
+    auto& be = backend::Dispatcher::for_device(this->device_);
+    return {be.unfold_forward(grad_out, B, C, S, K, O, stride_, pad_, dilation_, out_shape,
+                              this->dtype_)};
+}
+
+const OpSchema FoldBackward::schema_v1{"fold", 1, AmpPolicy::KeepInput, true};
+
+LUCID_REGISTER_OP(FoldBackward)
 
 }  // namespace lucid

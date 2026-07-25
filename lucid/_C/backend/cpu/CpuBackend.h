@@ -4656,10 +4656,15 @@ public:
         auto out_ptr = allocate_aligned_bytes(total_out * dtype_size(dt), Device::CPU);
         std::memset(out_ptr.get(), 0, total_out * dtype_size(dt));
 
+        // Block counts must use the *effective* (dilated) kernel extent.  Using
+        // the raw kernel size overcounts blocks whenever dilation > 1, which
+        // both mis-maps l_idx and reads past the end of the column buffer.
+        const int effH = dH * (kH - 1) + 1;
+        const int effW = dW * (kW - 1) + 1;
         auto run = [&](auto* op, const auto* xp) {
             int l_idx = 0;
-            for (int oh = 0; oh < (H_pad - kH) / sH + 1; ++oh) {
-                for (int ow = 0; ow < (W_pad - kW) / sW + 1; ++ow) {
+            for (int oh = 0; oh < (H_pad - effH) / sH + 1; ++oh) {
+                for (int ow = 0; ow < (W_pad - effW) / sW + 1; ++ow) {
                     for (int n = 0; n < N; ++n) {
                         for (int c = 0; c < C; ++c) {
                             for (int ki = 0; ki < kH; ++ki) {

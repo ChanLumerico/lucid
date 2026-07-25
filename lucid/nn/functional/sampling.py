@@ -1179,7 +1179,9 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     full = _lucid.cdist(x, x, p=p)  # (N, N)
     # Pull out the strict upper triangle (i < j) in row-major order via the
     # index pair generator from ``triu_indices``.
-    pairs = _lucid.triu_indices(n, n, offset=1)  # shape (2, N·(N-1)/2)
+    # ``device=`` matters: a CPU-default index tensor fed to ``gather`` on a
+    # Metal tensor raises bad_variant_access.
+    pairs = _lucid.triu_indices(n, n, offset=1, device=x.device)
     flat = full.reshape(n * n)
     flat_idx = pairs[0] * n + pairs[1]
     return _lucid.gather(flat, flat_idx, dim=0)

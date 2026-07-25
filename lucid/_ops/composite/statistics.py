@@ -334,7 +334,14 @@ def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
         cross = lucid.matmul(x1, x2.swapaxes(-1, -2))  # (..., P, R)
         sq = x1_sq + x2_sq.swapaxes(-1, -2) - 2.0 * cross
         sq = lucid.clamp(sq, 0.0, float("inf"))  # clamp numerical noise
-        return lucid.sqrt(sq)
+        # sqrt has an infinite derivative at 0, so coincident points (any
+        # self-distance, e.g. every diagonal entry of cdist(x, x) as used by
+        # pdist) would backprop 0 * inf = NaN.  Route those entries around the
+        # sqrt and restore the exact zero, giving the standard 0 subgradient.
+        zero = lucid.zeros_like(sq)
+        is_zero = sq == zero
+        safe = lucid.where(is_zero, lucid.ones_like(sq), sq)
+        return lucid.where(is_zero, zero, lucid.sqrt(safe))
     elif p == 1.0:
         diff = x1.unsqueeze(-2) - x2.unsqueeze(-3)  # (..., P, R, M)
         return lucid.abs(diff).sum(dim=-1)

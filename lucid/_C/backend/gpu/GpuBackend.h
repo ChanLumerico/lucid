@@ -1600,30 +1600,34 @@ public:
         const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(dim)]);
         const int L = (dim_size - size) / step + 1;
 
-        // Build index array of shape (*in_shape[:dim], L, *in_shape[dim+1:], size)
-        // indices[..., l, ..., s] = l * step + s  (broadcast over other dims)
+        // ``take`` splices *all* of the index array's axes into the output at
+        // ``dim``, so a broadcast-shaped (rank ndim+1) index would yield rank
+        // 2*ndim — the extra singleton axes desync the MLX array from the Shape
+        // Lucid reports, and for dim < ndim-1 the window axis also lands in the
+        // wrong position.  Index with the plain (L, size) array instead and move
+        // the window axis to the end, matching the CPU contract:
+        //   out_shape = in_shape[:dim] + [L] + in_shape[dim+1:] + [size]
         auto starts = ::mlx::core::arange(0, L, 1, ::mlx::core::int32);  // (L,)
         starts = ::mlx::core::multiply(starts, ::mlx::core::array(step, ::mlx::core::int32));
         auto offsets = ::mlx::core::arange(0, size, 1, ::mlx::core::int32);  // (size,)
         // starts: (L,1) + offsets: (1,size) → (L, size)
         starts = ::mlx::core::reshape(starts, {L, 1});
         offsets = ::mlx::core::reshape(offsets, {1, size});
-        auto idx_2d = ::mlx::core::add(starts, offsets);  // (L, size)
+        auto idx = ::mlx::core::add(starts, offsets);  // (L, size)
 
-        // Reshape to be broadcastable for gather: insert leading dims for outer
-        // and trailing dims for inner
-        std::vector<int> idx_shape_v;
-        for (int d = 0; d < dim; ++d)
-            idx_shape_v.push_back(1);
-        idx_shape_v.push_back(L);
-        for (int d = dim + 1; d < ndim; ++d)
-            idx_shape_v.push_back(1);
-        idx_shape_v.push_back(size);
-        auto idx = ::mlx::core::reshape(idx_2d,
-                                        ::mlx::core::Shape(idx_shape_v.begin(), idx_shape_v.end()));
+        auto out = ::mlx::core::take(*ga.arr, idx, dim);  // (..., L, size, ...)
 
-        // Gather along dim
-        auto out = ::mlx::core::take(*ga.arr, idx, dim);
+        // Move the window axis from dim+1 past the trailing input dims.
+        // Identity when dim is already the last axis.
+        const int out_rank = ndim + 1;
+        std::vector<int> perm;
+        perm.reserve(static_cast<std::size_t>(out_rank));
+        for (int d = 0; d <= dim; ++d)
+            perm.push_back(d);
+        for (int d = dim + 2; d < out_rank; ++d)
+            perm.push_back(d);
+        perm.push_back(dim + 1);
+        out = ::mlx::core::transpose(out, perm);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
@@ -2434,16 +2438,29 @@ public:
     std::vector<Storage> linalg_svd(const Storage& a,
                                     const Shape&,
                                     bool compute_uv,
+                                    const Shape& u_shape,
                                     const Shape&,
-                                    const Shape&,
-                                    const Shape&,
+                                    const Shape& vt_shape,
                                     Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto pieces = ::mlx::core::linalg::svd(*ga.arr, compute_uv, k_linalg_stream);
         std::vector<Storage> out;
         out.reserve(pieces.size());
-        for (auto& p : pieces)
+        // MLX returns the FULL decomposition (U is m×m, Vh is n×n) whereas the
+        // op wrapper's shapes describe the REDUCED one (U m×k, Vh k×n with
+        // k = min(m, n)).  Without slicing, the TensorImpl's Shape disagrees
+        // with its MLX array and later engine ops read the wrong extents.
+        for (std::size_t i = 0; i < pieces.size(); ++i) {
+            auto p = pieces[i];
+            if (compute_uv && (i == 0 || i == 2)) {
+                const Shape& want = (i == 0) ? u_shape : vt_shape;
+                ::mlx::core::Shape lo(want.size(), 0);
+                ::mlx::core::Shape hi = gpu::to_mlx_shape(want);
+                if (hi != p.shape())
+                    p = ::mlx::core::slice(p, lo, hi);
+            }
             out.push_back(Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(p), dt)});
+        }
         return out;
     }
 
@@ -2484,8 +2501,17 @@ public:
                     ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
         }
-        return {Storage{CpuStorage{lu_ptr, nbytes, dt}},
-                Storage{CpuStorage{ipiv_ptr, ipiv_nbytes, Dtype::I32}}};
+        // Must upload: the op wrapper tags both outputs with the *input* device
+        // (Metal), so returning CPU storage desyncs the device tag from the
+        // storage variant and every later engine op hits bad_variant_access.
+        // Shapes mirror lu_factor_op: LU keeps the input shape, pivots are
+        // batch dims + n.
+        Shape pivot_shape(shape.begin(), shape.end() - 2);
+        pivot_shape.push_back(static_cast<std::int64_t>(n));
+        CpuStorage lu_cs{lu_ptr, nbytes, dt};
+        CpuStorage piv_cs{ipiv_ptr, ipiv_nbytes, Dtype::I32};
+        return {Storage{gpu::upload_cpu_to_gpu(lu_cs, shape)},
+                Storage{gpu::upload_cpu_to_gpu(piv_cs, pivot_shape)}};
     }
 
     // solve_triangular: delegate to CPU LAPACK (MLX has no native dtrtrs).
@@ -2527,7 +2553,11 @@ public:
                 cpu::lapack_solve_triangular_f64(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
                                                  unitriangular, &info);
         }
-        return Storage{CpuStorage{out_ptr, out_bytes, dt}};
+        // Must upload: the op wrapper tags the result with the *input* device
+        // (Metal), so returning CpuStorage here desyncs the device tag from the
+        // storage variant and every later engine op hits bad_variant_access.
+        CpuStorage out_cs{out_ptr, out_bytes, dt};
+        return Storage{gpu::upload_cpu_to_gpu(out_cs, b_shape)};
     }
 
     // lstsq: fall back to CPU LAPACK (MLX has no lstsq)
@@ -2548,8 +2578,20 @@ public:
         std::memcpy(a_cpu.get(), ca_mlx.data<void>(), a_nb);
         std::memcpy(b_cpu.get(), cb_mlx.data<void>(), b_nb);
         CpuStorage a_cs{a_cpu, a_nb, dt}, b_cs{b_cpu, b_nb, dt};
-        return Dispatcher::for_device(Device::CPU)
-            .linalg_lstsq(Storage{a_cs}, Storage{b_cs}, a_shape, b_shape, dt);
+        auto res = Dispatcher::for_device(Device::CPU)
+                       .linalg_lstsq(Storage{a_cs}, Storage{b_cs}, a_shape, b_shape, dt);
+        // Must upload: the op wrapper tags the solution with the *input* device
+        // (Metal), so returning CPU storage desyncs the device tag from the
+        // storage variant and every later engine op hits bad_variant_access.
+        // Solution shape mirrors lstsq_op: (n,) or (n, nrhs).
+        Shape sol_shape = {a_shape[a_shape.size() - 1]};
+        if (b_shape.size() > 1)
+            sol_shape.push_back(b_shape[b_shape.size() - 1]);
+        std::vector<Storage> out;
+        out.reserve(res.size());
+        for (const auto& r : res)
+            out.push_back(Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(r), sol_shape)});
+        return out;
     }
 
     // lu_solve: fall back to CPU LAPACK
@@ -2670,7 +2712,10 @@ public:
         const int H_pad = outH + 2 * pH;
         const int W_pad = outW + 2 * pW;
         (void)H_pad;  // outH_blocks computed below uses outW_blocks only
-        const int outW_blocks = (W_pad - kW) / sW + 1;
+        // Must use the *effective* (dilated) kernel extent — the raw kernel
+        // size overcounts blocks when dilation > 1 and mis-maps l → (oh, ow).
+        const int effW = dW * (kW - 1) + 1;
+        const int outW_blocks = (W_pad - effW) / sW + 1;
         const int K = kH * kW;
         const int M = K * L;  // total source positions per (n, c)
 

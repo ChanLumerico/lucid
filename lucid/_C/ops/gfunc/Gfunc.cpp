@@ -56,7 +56,9 @@
 #include "../../ops/bfunc/Compare.h"
 #include "../../ops/bfunc/Div.h"
 #include "../../ops/bfunc/Mul.h"
+#include "../../ops/ufunc/Transpose.h"
 #include "../../ops/utils/Select.h"
+#include "../../ops/utils/View.h"
 
 namespace lucid {
 
@@ -830,7 +832,47 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
 }
 
 // ── unfold_dim ─────────────────────────────────────────────────────────────────
-// No autograd (view-like: callers compose with existing autograd-tracked ops).
+// Autograd: d/d(a) scatter-adds each window slot back to the position it read.
+// Overlapping windows (step < size) accumulate, which is why this is a
+// scatter_add rather than a reshape.
+
+namespace {
+
+// Scatter index for the unfold_dim backward.  ``flat_shape`` is the incoming
+// gradient with the (L, size) window axes already folded into one axis of
+// length L*size at ``dim``; the value stored at position k along that axis is
+// the input offset that slot read from, i.e. (k / size) * step + (k % size).
+//
+// Materialised in full (rather than broadcast from a 1-D pattern) because the
+// CPU scatter_add reads the index buffer as densely contiguous over the whole
+// index shape.  Dtype is I32 to match that reader.
+TensorImplPtr make_unfold_scatter_index(
+    const Shape& flat_shape, int dim, int size, int step, Device device) {
+    const int ndim = static_cast<int>(flat_shape.size());
+    std::size_t outer = 1;
+    for (int i = 0; i < dim; ++i)
+        outer *= static_cast<std::size_t>(flat_shape[static_cast<std::size_t>(i)]);
+    std::size_t inner = 1;
+    for (int i = dim + 1; i < ndim; ++i)
+        inner *= static_cast<std::size_t>(flat_shape[static_cast<std::size_t>(i)]);
+    const auto mid = static_cast<std::size_t>(flat_shape[static_cast<std::size_t>(dim)]);
+    const auto usize = static_cast<std::size_t>(size);
+    const auto ustep = static_cast<std::size_t>(step);
+
+    auto cpu = allocate_cpu(flat_shape, Dtype::I32);
+    auto* p = reinterpret_cast<std::int32_t*>(cpu.ptr.get());
+    for (std::size_t o = 0; o < outer; ++o) {
+        for (std::size_t k = 0; k < mid; ++k) {
+            const auto v = static_cast<std::int32_t>((k / usize) * ustep + (k % usize));
+            for (std::size_t j = 0; j < inner; ++j)
+                p[(o * mid + k) * inner + j] = v;
+        }
+    }
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), flat_shape),
+                    flat_shape, Dtype::I32, device, false);
+}
+
+}  // namespace
 
 TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step) {
     Validator::input(a, "unfold_dim.a").non_null();
@@ -865,6 +907,70 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({a}, result);
     }
+
+    // Autograd wiring
+    const bool needs_grad = GradMode::is_enabled() && a->requires_grad();
+    if (!needs_grad)
+        return result;
+
+    auto a_edge = lucid::detail::ensure_grad_fn(a);
+
+    struct UnfoldDimNode : Node {
+        int dim_ = 0;
+        int size_ = 0;
+        int step_ = 0;
+        Shape in_shape_;
+        Shape out_shape_;
+        Dtype dtype_ = Dtype::F32;
+        Device device_ = Device::CPU;
+        std::string node_name() const override { return "unfold_dim"; }
+
+        std::vector<Storage> apply(Storage g) override {
+            const int ndim = static_cast<int>(in_shape_.size());
+            auto g_impl = std::make_shared<TensorImpl>(g, out_shape_, dtype_, device_, false);
+
+            // Incoming grad axes are [pre..., L (at dim), post..., size (last)].
+            // Move the window axis next to L: [pre..., L, size, post...].
+            std::vector<int> perm;
+            perm.reserve(static_cast<std::size_t>(ndim) + 1);
+            for (int i = 0; i <= dim_; ++i)
+                perm.push_back(i);
+            perm.push_back(ndim);
+            for (int i = dim_ + 1; i < ndim; ++i)
+                perm.push_back(i);
+            auto moved = permute_op(g_impl, perm);
+
+            // Fold the now-adjacent (L, size) pair into one axis.
+            Shape flat_shape;
+            for (int i = 0; i < dim_; ++i)
+                flat_shape.push_back(in_shape_[static_cast<std::size_t>(i)]);
+            flat_shape.push_back(out_shape_[static_cast<std::size_t>(dim_)] *
+                                 out_shape_[static_cast<std::size_t>(ndim)]);
+            for (int i = dim_ + 1; i < ndim; ++i)
+                flat_shape.push_back(in_shape_[static_cast<std::size_t>(i)]);
+            auto src = reshape_op(moved, flat_shape);
+
+            auto idx = make_unfold_scatter_index(flat_shape, dim_, size_, step_, device_);
+            auto base = zeros_op(in_shape_, dtype_, device_);
+            auto grad_in = scatter_add_op(base, idx, src, dim_);
+            return {grad_in->storage()};
+        }
+    };
+
+    auto bwd = std::make_shared<UnfoldDimNode>();
+    bwd->dim_ = d;
+    bwd->size_ = size;
+    bwd->step_ = step;
+    bwd->in_shape_ = in_shape;
+    bwd->out_shape_ = out_shape;
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
+    bwd->set_next_edges({Edge(a_edge, a->grad_output_nr())});
+    bwd->set_saved_versions({a->version()});
+
+    result->set_grad_fn(std::move(bwd));
+    result->set_leaf(false);
+    result->set_requires_grad(true);
     return result;
 }
 

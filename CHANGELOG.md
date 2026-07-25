@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - correct dilated conv dW and linalg.norm numerics
 
+- sync TensorImpl metadata with its backing storage
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

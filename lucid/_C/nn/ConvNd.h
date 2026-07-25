@@ -345,6 +345,42 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+// Autograd node for Fold (col2im), the adjoint of Unfold.
+//
+// ``fold`` scatter-adds patches back into an image, so its transpose is
+// exactly the ``unfold`` gather — the backward runs ``unfold_forward`` with
+// the same hyper-parameters.
+//
+// Members
+// -------
+// output_size_ : vector<int>
+//     Spatial extent of the folded output, per axis.
+// kernel_, stride_, pad_, dilation_ : vector<int>
+//     Per-axis hyper-parameters, as for :class:`UnfoldBackward`.
+class LUCID_API FoldBackward : public FuncOp<FoldBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    std::vector<int> output_size_;  // Spatial extent of the folded output.
+    std::vector<int> kernel_;       // Kernel sizes per spatial axis.
+    std::vector<int> stride_;       // Strides per spatial axis.
+    std::vector<int> pad_;          // Padding per spatial axis.
+    std::vector<int> dilation_;     // Dilations per spatial axis.
+
+    // Backward — the im2col gather that recovers the column-matrix gradient.
+    //
+    // Parameters
+    // ----------
+    // grad_out : Storage
+    //     Upstream gradient shaped like the folded image.
+    //
+    // Returns
+    // -------
+    // vector<Storage>
+    //     Single-element vector containing ``dx`` shaped
+    //     ``(B, C * prod(K), prod(O))``.
+    std::vector<Storage> apply(Storage grad_out) override;
+};
+
 // Public entry point for Unfold (im2col).
 //
 // Functional wrapper around ``UnfoldBackward::forward`` for building

@@ -7,10 +7,18 @@
 
 #include "Arith.h"
 
+#include <limits>
+
+#include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
 #include "../bfunc/Add.h"
 #include "../bfunc/Div.h"
+#include "../bfunc/Maximum.h"
 #include "../bfunc/Mul.h"
+#include "../complex/Imag.h"
+#include "../complex/Real.h"
+#include "Exponential.h"
+#include "ScalarParam.h"
 
 namespace lucid {
 
@@ -43,6 +51,44 @@ Storage AbsBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr abs_op(const TensorImplPtr& a) {
+    if (!a)
+        ErrorBuilder("abs").fail("null input tensor");
+    // Complex magnitude |z| = sqrt(Re(z)² + Im(z)²) is a complex→REAL map, so
+    // it cannot go through UnaryKernel: that path tags the output with the
+    // *input* dtype, which left the real result labelled C64 — the reader then
+    // paired consecutive magnitudes into (re, im) and ran off the end of the
+    // buffer.  Compose from the real/imag primitives instead, exactly as the
+    // sibling `angle` composite does.  Like real/imag/angle (and unlike abs on
+    // a real tensor, which keeps its full UnaryKernel gradient), this path is
+    // forward-only — Lucid has no complex autograd.
+    //
+    // Cost: ~9 element-wise kernels instead of one native complex-abs (measured
+    // 26 us for 64x1024 on Metal, ~2x the FFT that produced the input).  Going
+    // native would need a UnaryKernel hook for a complex->real output dtype
+    // *and* a hand-written C64 branch in the CPU backend; reusing ops that are
+    // already device-parity tested is the better trade until a profile says
+    // otherwise.
+    if (a->dtype() == Dtype::C64) {
+        auto re = real_op(a);
+        auto im = imag_op(a);
+        // Scale by m = max(|Re|, |Im|) before squaring: the naive
+        // sqrt(Re² + Im²) overflows to inf once |z| > ~1.8e19 and underflows to
+        // 0 below ~1e-19, even though both results are representable in F32.
+        // |z| = m · sqrt((Re/m)² + (Im/m)²) is exact and overflow-safe.
+        auto m = maximum_op(abs_op(re), abs_op(im));
+        // Clamping the divisor keeps m == 0 (z == 0) from dividing 0/0; the
+        // trailing multiply by the *unclamped* m still yields exactly 0 there.
+        // The upper clamp is FLT_MAX, not infinity, so an infinite component
+        // divides by a finite scale (inf/inf would be NaN) and propagates inf —
+        // matching hypot's contract that |z| is inf if either lane is.  Any
+        // finite m is already <= FLT_MAX, so this never perturbs normal inputs.
+        const double tiny = static_cast<double>(std::numeric_limits<float>::min());
+        const double huge = static_cast<double>(std::numeric_limits<float>::max());
+        auto safe_m = clip_op(m, tiny, huge);
+        auto r_re = div_op(re, safe_m);
+        auto r_im = div_op(im, safe_m);
+        return mul_op(m, sqrt_op(add_op(square_op(r_re), square_op(r_im))));
+    }
     return AbsBackward::forward(a);
 }
 LUCID_REGISTER_OP(AbsBackward)
