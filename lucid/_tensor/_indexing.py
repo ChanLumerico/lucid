@@ -94,6 +94,16 @@ def _select_slice(
     length = impl.shape[dim]
     start, stop, step = s.indices(length)
 
+    # Empty result.  Must be handled before the step == 1 fast path: a
+    # backwards range like ``x[5:2]`` reached ``split_at(impl, [5, 2])`` with
+    # DESCENDING split points and segfaulted.  (``x[2:2]`` survived because the
+    # points were equal.)  ``s.indices`` has already clamped both bounds into
+    # [0, length], so this single test covers every empty case for both signs.
+    if (step > 0 and stop <= start) or (step < 0 and stop >= start):
+        empty_shape = list(impl.shape)
+        empty_shape[dim] = 0
+        return _C_engine.zeros(empty_shape, impl.dtype, impl.device)
+
     if step == 1:
         if start == 0 and stop == length:
             return impl
@@ -103,7 +113,14 @@ def _select_slice(
             return _C_engine.split_at(impl, [start], dim)[1]
         return _C_engine.split_at(impl, [start, stop], dim)[1]
     else:
-        n = max(0, (stop - start + (1 if step > 0 else -1)) // step)
+        # Element count of the slice.  The hand-rolled ceil-division dropped
+        # the ``step`` term from the numerator, so it was wrong for **both**
+        # signs once |step| > 1, and wrong for *every* negative step: the
+        # canonical ``x[::-1]`` over-counted by one, asked ``arange`` for n+1
+        # indices, and raised ShapeMismatch. (Positive steps mostly survived
+        # because the error only bites when the range does not divide evenly.)
+        # ``range`` computes the count exactly; do not re-derive it.
+        n = len(range(start, stop, step))
         if n <= 0:
             out_shape = list(impl.shape)
             out_shape[dim] = 0

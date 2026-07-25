@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - accept non-divisible sizes in adaptive max pooling
 
+- correct negative-step slicing and stop empty ranges segfaulting
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
