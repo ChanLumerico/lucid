@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - reject out-of-range embedding indices instead of reading past the table
 
+- keep crossvit's bicubic-resize coordinates on the input device
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

@@ -402,9 +402,11 @@ def _bicubic_2d(x: Tensor, oh: int, ow: int) -> Tensor:
     a = -0.75
 
     def _coords(out_size: int, in_size: int) -> tuple[Tensor, Tensor]:
-        src = (lucid.arange(out_size, dtype=lucid.float32) + 0.5) * (
-            in_size / out_size
-        ) - 0.5
+        # ``device=x.device``: the coordinates index ``x`` a few lines below,
+        # and a CPU index tensor against GPU data raises bad_variant_access.
+        src = (
+            lucid.arange(out_size, dtype=lucid.float32, device=x.device) + 0.5
+        ) * (in_size / out_size) - 0.5
         idx = src.floor().to(lucid.int64)
         frac = src - idx.to(lucid.float32)
         return idx, frac
