@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - return nonzero / unique on the input's device
 
+- keep cast parameters as leaves so .double() models can train
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
