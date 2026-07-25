@@ -105,12 +105,18 @@ def test_optimizer_actually_updates_a_float64_model():
     model = model.to(lucid.float64)
     before = model[0].weight.numpy().copy()
     optimizer = lucid.optim.SGD(model.parameters(), lr=0.1)
-    x = lucid.tensor(np.random.default_rng(0).standard_normal((16, 4)), dtype=lucid.float64)
-    y = lucid.tensor(np.random.default_rng(1).standard_normal((16, 1)), dtype=lucid.float64)
+    x = lucid.tensor(
+        np.random.default_rng(0).standard_normal((16, 4)), dtype=lucid.float64
+    )
+    y = lucid.tensor(
+        np.random.default_rng(1).standard_normal((16, 1)), dtype=lucid.float64
+    )
     for _ in range(5):
         loss = ((model(x) - y) ** 2).mean()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
     after = model[0].weight.numpy()
-    assert np.abs(after - before).max() > 1e-6, "float64 training did not move the weights"
+    assert (
+        np.abs(after - before).max() > 1e-6
+    ), "float64 training did not move the weights"

@@ -88,6 +88,77 @@
 namespace lucid {
 namespace backend {
 
+namespace detail {
+
+// IEEE-754 binary16 <-> float, done by hand so this header does not depend on
+// ``__fp16`` / ``_Float16`` availability.  Used only by ``CpuBackend::astype``:
+// F16 has no ``static_cast``-able host scalar, so it cannot ride the generic
+// cast table.
+inline float half_bits_to_float(std::uint16_t bits) {
+    const std::uint32_t sign = static_cast<std::uint32_t>(bits >> 15) & 0x1u;
+    const std::uint32_t exp = static_cast<std::uint32_t>(bits >> 10) & 0x1fu;
+    const std::uint32_t mant = static_cast<std::uint32_t>(bits) & 0x3ffu;
+    std::uint32_t f;
+    if (exp == 0) {
+        if (mant == 0) {
+            f = sign << 31;  // +/- zero
+        } else {
+            // Subnormal half: renormalise into a float's exponent range.
+            std::uint32_t e = 1;
+            std::uint32_t m = mant;
+            while ((m & 0x400u) == 0) {
+                m <<= 1;
+                --e;
+            }
+            m &= 0x3ffu;
+            f = (sign << 31) | ((e + 112u) << 23) | (m << 13);
+        }
+    } else if (exp == 31) {
+        f = (sign << 31) | (0xffu << 23) | (mant << 13);  // inf / NaN
+    } else {
+        f = (sign << 31) | ((exp + 112u) << 23) | (mant << 13);
+    }
+    float out;
+    std::memcpy(&out, &f, sizeof(out));
+    return out;
+}
+
+// Round-to-nearest-even, with overflow to inf and graceful subnormal handling.
+inline std::uint16_t float_to_half_bits(float value) {
+    std::uint32_t f;
+    std::memcpy(&f, &value, sizeof(f));
+    const std::uint32_t sign = (f >> 16) & 0x8000u;
+    std::int32_t exp = static_cast<std::int32_t>((f >> 23) & 0xffu) - 127 + 15;
+    std::uint32_t mant = f & 0x7fffffu;
+
+    if (((f >> 23) & 0xffu) == 0xffu)  // inf / NaN
+        return static_cast<std::uint16_t>(sign | 0x7c00u | (mant ? 0x200u : 0u));
+    if (exp >= 0x1f)  // overflow -> inf
+        return static_cast<std::uint16_t>(sign | 0x7c00u);
+    if (exp <= 0) {
+        if (exp < -10)  // underflow -> signed zero
+            return static_cast<std::uint16_t>(sign);
+        mant |= 0x800000u;  // restore the implicit bit, then shift into place
+        const std::uint32_t shift = static_cast<std::uint32_t>(14 - exp);
+        const std::uint32_t half = 1u << (shift - 1);
+        const std::uint32_t rounded =
+            (mant + half - 1u + ((mant >> shift) & 1u)) >> shift;
+        return static_cast<std::uint16_t>(sign | rounded);
+    }
+    const std::uint32_t half = 0x1000u;
+    const std::uint32_t rounded = mant + half - 1u + ((mant >> 13) & 1u);
+    if (rounded & 0x800000u) {  // rounding carried into the exponent
+        ++exp;
+        if (exp >= 0x1f)
+            return static_cast<std::uint16_t>(sign | 0x7c00u);
+        return static_cast<std::uint16_t>(sign | (static_cast<std::uint32_t>(exp) << 10));
+    }
+    return static_cast<std::uint16_t>(
+        sign | (static_cast<std::uint32_t>(exp) << 10) | (rounded >> 13));
+}
+
+}  // namespace detail
+
 // CPU (Apple Accelerate-backed) concrete :class:`IBackend`.
 //
 // Every public method satisfies the :class:`IBackend` contract; the
@@ -4828,21 +4899,37 @@ public:
 
 #define CPU_CAST(F, T) run.template operator()<F, T>()
 
-        // F16 needs a per-element decoder; rather than wire that into every
-        // cast pair, we round-trip through F32 in two passes for F16 sources
-        // and destinations.  This keeps the main dispatch table simple.  The
-        // half-precision decoder is intentionally exported through
-        // ``TensorImpl::item()`` already; here we just delegate to a static
-        // local helper.
-        auto needs_f16_bridge = [](Dtype s, Dtype d) { return s == Dtype::F16 || d == Dtype::F16; };
-
-        if (needs_f16_bridge(src_dt, dst_dt) && src_dt != dst_dt) {
-            // Two-step: src -> F32 -> dst.  Recursive call into astype itself
-            // resolves each leg via the main switch below.
-            Storage as_f32 = (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
-            if (dst_dt == Dtype::F32)
-                return as_f32;
-            return astype(as_f32, shape, Dtype::F32, dst_dt);
+        // F16 has no ``static_cast``-able host scalar, so the main table below
+        // cannot express it.  The legs are converted explicitly here.
+        //
+        // The previous version delegated both legs back into ``astype`` and
+        // claimed the recursion would land in the main switch — it never did:
+        // every recursive call still had F16 on one side, so it re-entered this
+        // same branch and the process died of stack exhaustion.  CPU F16 casts
+        // (``.half()``, ``.to(float16)``, and the way back) therefore SIGSEGV'd
+        // in both directions and had never worked.  Recurse only on the
+        // F16-free leg, which the main table does handle.
+        if (src_dt != dst_dt && (src_dt == Dtype::F16 || dst_dt == Dtype::F16)) {
+            if (src_dt == Dtype::F16) {
+                auto f32_ptr = allocate_aligned_bytes(n * sizeof(float), Device::CPU);
+                const auto* bits = reinterpret_cast<const std::uint16_t*>(ca.ptr.get());
+                auto* f32 = reinterpret_cast<float*>(f32_ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    f32[i] = detail::half_bits_to_float(bits[i]);
+                Storage as_f32{CpuStorage{f32_ptr, n * sizeof(float), Dtype::F32}};
+                if (dst_dt == Dtype::F32)
+                    return as_f32;
+                return astype(as_f32, shape, Dtype::F32, dst_dt);  // F16-free leg
+            }
+            // dst is F16: bring the source to F32 first (F16-free leg), encode.
+            Storage as_f32 =
+                (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
+            const auto& cf = std::get<CpuStorage>(as_f32);
+            const auto* f32 = reinterpret_cast<const float*>(cf.ptr.get());
+            auto* out16 = reinterpret_cast<std::uint16_t*>(out_ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                out16[i] = detail::float_to_half_bits(f32[i]);
+            return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
         }
 
         // Main Cartesian dispatch.  Outer = src, inner = dst.  Every

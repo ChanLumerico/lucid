@@ -148,9 +148,7 @@ def random_unstructured(
     weight: Parameter = getattr(module, name)
     # The mask multiplies ``weight`` — it must be created on the weight's
     # device, not the default one.
-    rand_t: Tensor = lucid.rand(
-        *weight.shape, dtype=weight.dtype, device=weight.device
-    )
+    rand_t: Tensor = lucid.rand(*weight.shape, dtype=weight.dtype, device=weight.device)
     mask: Tensor = rand_t >= amount  # True where we keep
     # bool -> dtype conversion via where + ones/zeros so multiplication works.
     mask = lucid.where(mask, lucid.ones_like(weight), lucid.zeros_like(weight))

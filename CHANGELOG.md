@@ -54,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make LBFGS converge instead of stalling after one step
 
+- stop CPU float16 casts from crashing the process
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

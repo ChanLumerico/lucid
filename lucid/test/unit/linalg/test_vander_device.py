@@ -23,8 +23,9 @@ def test_vander_matches_numpy(device, increasing, n_cols):
     got = LA.vander(
         lucid.tensor(values, device=device), N=n_cols, increasing=increasing
     )
-    ref = np.vander(values, n_cols if n_cols is not None else len(values),
-                    increasing=increasing)
+    ref = np.vander(
+        values, n_cols if n_cols is not None else len(values), increasing=increasing
+    )
     assert str(got.device) == f"device('{device}')"
     assert got.shape == ref.shape
     # ``pow`` goes through exp/log, so 3**4 lands at 81.000008 in f32 — this is

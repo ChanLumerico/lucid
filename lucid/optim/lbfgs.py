@@ -233,9 +233,7 @@ class LBFGS(Optimizer):
                 with lucid.no_grad():
                     updated = lucid.add(
                         p,
-                        lucid.mul(
-                            lucid.tensor(alpha, device=p.device), chunk
-                        ),
+                        lucid.mul(lucid.tensor(alpha, device=p.device), chunk),
                     ).detach()
                 p._impl = updated._impl
                 p.requires_grad = True
@@ -302,9 +300,7 @@ class LBFGS(Optimizer):
         float(lucid.linalg.dot(g_k.flatten(), d.flatten()).item())
 
         for _ in range(max_ls):
-            x_new = lucid.add(
-                x_k, lucid.mul(lucid.tensor(alpha, device=x_k.device), d)
-            )
+            x_new = lucid.add(x_k, lucid.mul(lucid.tensor(alpha, device=x_k.device), d))
             float(cast(Tensor, f(x_new)).item()) if callable(f) else f_k
             break
 
