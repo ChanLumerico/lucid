@@ -44,17 +44,28 @@ _ENVELOPE: tuple[tuple[int, int, int, int], ...] = (
 )
 
 
-def maybe_probe_for_graph(graph: TraceGraph) -> None:
-    """Run the capability probe iff ``graph`` contains a softmax op.
+# Ops whose emitters consult the workaround flag.  ``softmax`` covers manual
+# attention (softmax feeding a matmul); ``scaled_dot_product_attention`` covers
+# the fused op, whose graph contains no softmax node at all — without it a
+# fused-SDPA graph never probes, so the flag stays at its conservative -1 and
+# unaffected hardware pays the transpose tax (and the native fused emitter,
+# which is gated on the same flag, never engages).
+_PROBE_TRIGGER_OPS: frozenset[str] = frozenset(
+    {"softmax", "scaled_dot_product_attention"}
+)
 
-    The probe only matters for attention (a ``softmax`` feeding a matmul), so
-    skip it entirely for attention-free graphs (pure CNN / MLP) — they never
-    hit the workaround and should not pay the one-time probe cost.
+
+def maybe_probe_for_graph(graph: TraceGraph) -> None:
+    """Run the capability probe iff ``graph`` contains an attention op.
+
+    The probe only matters for attention, so skip it entirely for
+    attention-free graphs (pure CNN / MLP) — they never hit the workaround and
+    should not pay the one-time probe cost.
     """
     if _probed:
         return
     for node in graph.ops:
-        if node.name == "softmax":
+        if node.name in _PROBE_TRIGGER_OPS:
             ensure_attention_workaround_probed()
             return
 
