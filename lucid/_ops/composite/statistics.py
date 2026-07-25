@@ -585,7 +585,12 @@ def poisson(
             s: int = int(math.floor(r + math.sqrt(r) * z + 0.5))
             out.append(max(0, s))
 
-    return lucid.tensor(out, dtype=lucid.int64).reshape(input.shape)
+    # Knuth sampling runs on the host, but the result must ride the input's
+    # device — a CPU return device-mismatched every downstream op (e.g.
+    # ``Poisson.log_prob`` combining the sample with a Metal ``rate``).
+    return lucid.tensor(out, dtype=lucid.int64, device=input.device).reshape(
+        input.shape
+    )
 
 
 def histogram2d(
