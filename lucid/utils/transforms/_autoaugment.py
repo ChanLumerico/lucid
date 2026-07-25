@@ -187,6 +187,7 @@ def _apply_affine(
         shear_y_deg=shear_y_deg,
         translate_x=translate_x,
         translate_y=translate_y,
+        device=img.device,
     )
     mode = "nearest" if interpolation is Interpolation.NEAREST else "bilinear"
     warped = F.warp_affine(img, matrix, (h, w), mode=mode, fill=0.0)

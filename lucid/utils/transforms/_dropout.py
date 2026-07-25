@@ -35,9 +35,9 @@ def _apply_holes(
         return img
     h, w = F._spatial_hw(img)
     c = int(img.shape[-3])
-    keep = lucid.ones(1, h, w, dtype=img.dtype)
+    keep = lucid.ones(1, h, w, dtype=img.dtype, device=img.device)
     for top, left, hh, ww in holes:
-        inner = lucid.zeros(1, hh, ww, dtype=img.dtype)
+        inner = lucid.zeros(1, hh, ww, dtype=img.dtype, device=img.device)
         block = F.pad(inner, (left, w - left - ww, top, h - top - hh), value=1.0)
         keep = keep * block
     keep_c = F._cat([keep] * c, 0)

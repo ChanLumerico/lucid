@@ -340,7 +340,9 @@ class Rotate(_WarpTransform):
         """
         h, w = F._spatial_hw(img)
         angle = _random.uniform(self.limit[0], self.limit[1])
-        matrix = F.rotation_matrix(angle, (w - 1) / 2.0, (h - 1) / 2.0)
+        matrix = F.rotation_matrix(
+            angle, (w - 1) / 2.0, (h - 1) / 2.0, device=img.device
+        )
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
     @override
@@ -423,6 +425,7 @@ class ShiftScaleRotate(_WarpTransform):
             angle_deg=-angle,
             translate_x=dx,
             translate_y=dy,
+            device=img.device,
         )
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
@@ -515,6 +518,7 @@ class Affine(_WarpTransform):
             shear_x_deg=shear,
             translate_x=dx,
             translate_y=dy,
+            device=img.device,
         )
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
@@ -580,7 +584,7 @@ class Perspective(_WarpTransform):
             for sx, sy in src
         ]
         # Homography mapping the perturbed corners back to the canvas.
-        matrix = F.perspective_matrix(dst, src)
+        matrix = F.perspective_matrix(dst, src, device=img.device)
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
     @override
@@ -857,12 +861,13 @@ class SafeRotate(_WarpTransform):
         new_w = int(round(w * cos + h * sin))
         new_h = int(round(w * sin + h * cos))
         # Rotate about the old center, then translate into the new canvas.
-        rot = F.rotation_matrix(angle, (w - 1) / 2.0, (h - 1) / 2.0)
+        rot = F.rotation_matrix(angle, (w - 1) / 2.0, (h - 1) / 2.0, device=img.device)
         shift = F.affine_matrix(
             cx=0.0,
             cy=0.0,
             translate_x=(new_w - w) / 2.0,
             translate_y=(new_h - h) / 2.0,
+            device=img.device,
         )
         matrix = lucid.matmul(shift, rot)
         return WarpParams(matrix=matrix, out_hw=(new_h, new_w))

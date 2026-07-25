@@ -409,12 +409,12 @@ def bincount(
         result: list[object] = [0.0] * length
         for i, v in enumerate(vals):
             result[v] += float(wflat[i].item())
-        return lucid.tensor(result, dtype=lucid.float64)
+        return lucid.tensor(result, dtype=lucid.float64, device=input.device)
     else:
         counts: list[object] = [0] * length
         for v in vals:
             counts[v] += 1
-        return lucid.tensor(counts, dtype=lucid.int64)
+        return lucid.tensor(counts, dtype=lucid.int64, device=input.device)
 
 
 def multinomial(
@@ -811,6 +811,10 @@ def histogram(
         wflat = weight.reshape(-1)
         w_list = [float(wflat[i].item()) for i in py_range(int(wflat.shape[0]))]
 
+    # The result rides the input's device.  MLX-Metal has no float64, so a
+    # GPU histogram is emitted at float32 — the alternative is refusing to
+    # return on the caller's device at all.
+    _f = lucid.float64 if input.device.type == "cpu" else lucid.float32
     if density:
         counts: list[float] = [0.0] * n_bins
     else:
@@ -829,11 +833,11 @@ def histogram(
             counts = [
                 c / (total * (edges[j + 1] - edges[j])) for j, c in enumerate(counts)
             ]
-        hist_t = lucid.tensor(counts, dtype=lucid.float64)
+        hist_t = lucid.tensor(counts, dtype=_f, device=input.device)
     else:
-        hist_t = lucid.tensor(counts, dtype=lucid.int64)
+        hist_t = lucid.tensor(counts, dtype=lucid.int64, device=input.device)
 
-    edges_t = lucid.tensor(edges, dtype=lucid.float64)
+    edges_t = lucid.tensor(edges, dtype=_f, device=input.device)
     return hist_t, edges_t
 
 

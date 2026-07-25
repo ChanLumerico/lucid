@@ -165,8 +165,8 @@ class ElasticTransform(_DisplacementTransform):
             the input ``(H, W)``.
         """
         h, w = F._spatial_hw(img)
-        rx = lucid.rand(1, 1, h, w) * 2.0 - 1.0
-        ry = lucid.rand(1, 1, h, w) * 2.0 - 1.0
+        rx = lucid.rand(1, 1, h, w, device=img.device) * 2.0 - 1.0
+        ry = lucid.rand(1, 1, h, w, device=img.device) * 2.0 - 1.0
         dx = F.gaussian_blur(rx, self.sigma)[0, 0] * self.alpha
         dy = F.gaussian_blur(ry, self.sigma)[0, 0] * self.alpha
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
@@ -239,8 +239,12 @@ class GridDistortion(_DisplacementTransform):
             ]
             for _ in range(n)
         ]
-        coarse_dx = lucid.tensor(cdx).reshape(1, 1, n, n) * (w / self.num_steps)
-        coarse_dy = lucid.tensor(cdy).reshape(1, 1, n, n) * (h / self.num_steps)
+        coarse_dx = lucid.tensor(cdx, device=img.device).reshape(1, 1, n, n) * (
+            w / self.num_steps
+        )
+        coarse_dy = lucid.tensor(cdy, device=img.device).reshape(1, 1, n, n) * (
+            h / self.num_steps
+        )
         from lucid.nn.functional import interpolate
 
         dx = interpolate(coarse_dx, size=(h, w), mode="bilinear", align_corners=True)[
@@ -311,7 +315,7 @@ class OpticalDistortion(_DisplacementTransform):
         k = _random.uniform(self.distort_limit[0], self.distort_limit[1])
         cx = w / 2.0 + _random.uniform(self.shift_limit[0], self.shift_limit[1]) * w
         cy = h / 2.0 + _random.uniform(self.shift_limit[0], self.shift_limit[1]) * h
-        yy, xx = F._pixel_grid(h, w)
+        yy, xx = F._pixel_grid(h, w, img.device)
         nx = (xx - cx) / (w / 2.0)
         ny = (yy - cy) / (h / 2.0)
         r2 = nx * nx + ny * ny
@@ -390,13 +394,13 @@ class GridElasticDeform(_DisplacementTransform):
             for _ in range(gy)
         ]
         dx = interpolate(
-            lucid.tensor(cdx).reshape(1, 1, gy, gx),
+            lucid.tensor(cdx, device=img.device).reshape(1, 1, gy, gx),
             size=(h, w),
             mode="bilinear",
             align_corners=True,
         )[0, 0]
         dy = interpolate(
-            lucid.tensor(cdy).reshape(1, 1, gy, gx),
+            lucid.tensor(cdy, device=img.device).reshape(1, 1, gy, gx),
             size=(h, w),
             mode="bilinear",
             align_corners=True,

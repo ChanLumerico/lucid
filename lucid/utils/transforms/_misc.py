@@ -338,7 +338,11 @@ class MaskDropout(_NoParams, Transform[Empty]):
             k = _random.randint(0, len(pool))
             chosen.append(pool.pop(k))
 
-        keep = lucid.ones(*mask_obj.data.shape, dtype=mask_obj.data.dtype)
+        keep = lucid.ones(
+            *mask_obj.data.shape,
+            dtype=mask_obj.data.dtype,
+            device=mask_obj.data.device,
+        )
         for lab in chosen:
             keep = keep * (mask_obj.data != lab).to(mask_obj.data.dtype)
 

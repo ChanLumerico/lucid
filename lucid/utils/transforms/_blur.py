@@ -441,7 +441,9 @@ class GaussNoise(PhotometricTransform[NoiseParam]):
 
     @override
     def _apply_image(self, img: Tensor, params: NoiseParam) -> Tensor:
-        noise = lucid.randn(*img.shape) * params.std + self.mean / 255.0
+        noise = (
+            lucid.randn(*img.shape, device=img.device) * params.std + self.mean / 255.0
+        )
         return lucid.clip(img + noise, 0.0, 1.0)
 
     @override
@@ -501,7 +503,10 @@ class MultiplicativeNoise(PhotometricTransform[MultiplierParam]):
     @override
     def _apply_image(self, img: Tensor, params: MultiplierParam) -> Tensor:
         if self.elementwise:
-            mult = lucid.rand(*img.shape) * (params.hi - params.lo) + params.lo
+            mult = (
+                lucid.rand(*img.shape, device=img.device) * (params.hi - params.lo)
+                + params.lo
+            )
             return lucid.clip(img * mult, 0.0, 1.0)
         scalar = _random.uniform(params.lo, params.hi)
         return lucid.clip(img * scalar, 0.0, 1.0)
@@ -550,7 +555,7 @@ class ISONoise(PhotometricTransform[NoiseParam]):
     def _apply_image(self, img: Tensor, params: NoiseParam) -> Tensor:
         cs = _random.uniform(self.color_shift[0], self.color_shift[1])
         out = F.adjust_saturation(img, 1.0 + cs)
-        noise = lucid.randn(*out.shape) * (params.std * 0.1)
+        noise = lucid.randn(*out.shape, device=out.device) * (params.std * 0.1)
         return lucid.clip(out + noise, 0.0, 1.0)
 
     @override

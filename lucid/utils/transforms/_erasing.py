@@ -135,14 +135,14 @@ class RandomErasing(PhotometricTransform[_ErasingParams]):
         r"""Build the ``(C, eh, ew)`` fill tensor for the erase rectangle."""
         v = self.value
         if isinstance(v, str):  # "random"
-            return lucid.randn(c, eh, ew, dtype=img.dtype)
+            return lucid.randn(c, eh, ew, dtype=img.dtype, device=img.device)
         if isinstance(v, (int, float)):
-            return lucid.full((c, eh, ew), float(v), dtype=img.dtype)
+            return lucid.full((c, eh, ew), float(v), dtype=img.dtype, device=img.device)
         # per-channel tuple
         if len(v) != c:
             raise ValueError(f"value tuple length {len(v)} != image channels {c}")
-        col = lucid.tensor(list(v), dtype=img.dtype).reshape(c, 1, 1)
-        return col * lucid.ones(c, eh, ew, dtype=img.dtype)
+        col = lucid.tensor(list(v), dtype=img.dtype, device=img.device).reshape(c, 1, 1)
+        return col * lucid.ones(c, eh, ew, dtype=img.dtype, device=img.device)
 
     @override
     def _apply_image(self, img: Tensor, params: _ErasingParams) -> Tensor:
@@ -151,7 +151,7 @@ class RandomErasing(PhotometricTransform[_ErasingParams]):
         h, w = F._spatial_hw(img)
         c = int(img.shape[-3])
         # Keep mask: 1 outside the erase rectangle, 0 inside.
-        inner = lucid.zeros(1, params.h, params.w, dtype=img.dtype)
+        inner = lucid.zeros(1, params.h, params.w, dtype=img.dtype, device=img.device)
         keep_1c = F.pad(
             inner,
             (

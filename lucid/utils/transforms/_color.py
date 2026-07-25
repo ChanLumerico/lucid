@@ -428,7 +428,9 @@ class RGBShift(PhotometricTransform[TripletParams]):
     @override
     def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
         self._require_channels(img, 3)
-        shift = lucid.tensor([params.a, params.b, params.c], dtype=img.dtype)
+        shift = lucid.tensor(
+            [params.a, params.b, params.c], dtype=img.dtype, device=img.device
+        )
         shift = shift.reshape(1, 3, 1, 1) if img.ndim == 4 else shift.reshape(3, 1, 1)
         return lucid.clip(img + shift, 0.0, 1.0)
 
@@ -579,7 +581,7 @@ class ChannelDropout(PhotometricTransform[ChannelDropParams]):
     def _apply_image(self, img: Tensor, params: ChannelDropParams) -> Tensor:
         c = int(img.shape[-3])
         keep = [0.0 if i in params.channels else 1.0 for i in range(c)]
-        mask = lucid.tensor(keep, dtype=img.dtype)
+        mask = lucid.tensor(keep, dtype=img.dtype, device=img.device)
         mask = mask.reshape(1, c, 1, 1) if img.ndim == 4 else mask.reshape(c, 1, 1)
         return img * mask + self.fill_value * (1.0 - mask)
 
@@ -1548,9 +1550,9 @@ class FancyPCA(PhotometricTransform[Empty]):
         )
         evals, evecs = lucid.linalg.eigh(cov)
         alphas = [self.alpha * _random.uniform(-1.0, 1.0) for _ in range(c)]
-        scaled = lucid.tensor([alphas[i] for i in range(c)], dtype=img.dtype).reshape(
-            c, 1
-        ) * evals.reshape(c, 1)
+        scaled = lucid.tensor(
+            [alphas[i] for i in range(c)], dtype=img.dtype, device=img.device
+        ).reshape(c, 1) * evals.reshape(c, 1)
         delta = lucid.matmul(evecs, scaled).reshape(c, 1, 1)  # (3,1,1)
         if img.ndim == 4:
             delta = delta[None]
@@ -1633,7 +1635,9 @@ class PixelDropout(PhotometricTransform[PixelMaskParams]):
         """
         c, h, w = int(img.shape[-3]), *F._spatial_hw(img)
         shape = (c, h, w) if self.per_channel else (1, h, w)
-        keep = (lucid.rand(*shape) >= self.dropout_prob).to(img.dtype)
+        keep = (lucid.rand(*shape, device=img.device) >= self.dropout_prob).to(
+            img.dtype
+        )
         return PixelMaskParams(mask=keep)
 
     @override
@@ -1744,17 +1748,17 @@ class XYMasking(PhotometricTransform[BandParams]):
     @override
     def _apply_image(self, img: Tensor, params: BandParams) -> Tensor:
         h, w = F._spatial_hw(img)
-        keep = lucid.ones(1, h, w, dtype=img.dtype)
+        keep = lucid.ones(1, h, w, dtype=img.dtype, device=img.device)
         for r0, r1 in params.rows:
             band = F.pad(
-                lucid.zeros(1, r1 - r0, w, dtype=img.dtype),
+                lucid.zeros(1, r1 - r0, w, dtype=img.dtype, device=img.device),
                 (0, 0, r0, h - r1),
                 value=1.0,
             )
             keep = keep * band
         for c0, c1 in params.cols:
             band = F.pad(
-                lucid.zeros(1, h, c1 - c0, dtype=img.dtype),
+                lucid.zeros(1, h, c1 - c0, dtype=img.dtype, device=img.device),
                 (c0, w - c1, 0, 0),
                 value=1.0,
             )

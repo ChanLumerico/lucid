@@ -14,6 +14,7 @@ from typing import cast
 import lucid
 import lucid.nn.functional as F
 from lucid._tensor import Tensor
+from lucid._types import DeviceLike
 
 _RESIZE_ALIGN_MODES = frozenset({"bilinear", "bicubic", "linear", "trilinear"})
 
@@ -237,8 +238,12 @@ def normalize(
         Normalized image with the same shape and dtype as ``img``.
     """
     c = int(img.shape[-3])
-    mean_t = lucid.tensor(list(mean), dtype=img.dtype).reshape(1, c, 1, 1)
-    std_t = lucid.tensor(list(std), dtype=img.dtype).reshape(1, c, 1, 1)
+    mean_t = lucid.tensor(list(mean), dtype=img.dtype, device=img.device).reshape(
+        1, c, 1, 1
+    )
+    std_t = lucid.tensor(list(std), dtype=img.dtype, device=img.device).reshape(
+        1, c, 1, 1
+    )
     if img.ndim == 3:
         mean_t = mean_t[0]
         std_t = std_t[0]
@@ -619,7 +624,7 @@ def adjust_hsv(
 # keypoints apply M to their coordinates directly.
 
 
-def _norm_to_pixel(h: int, w: int) -> Tensor:
+def _norm_to_pixel(h: int, w: int, device: DeviceLike = None) -> Tensor:
     """3x3 matrix mapping ``align_corners=True`` normalized coords → pixels.
 
     With ``align_corners=True`` the corner pixels map to ``-1`` / ``+1``:
@@ -632,7 +637,8 @@ def _norm_to_pixel(h: int, w: int) -> Tensor:
             [(w - 1) / 2.0, 0.0, (w - 1) / 2.0],
             [0.0, (h - 1) / 2.0, (h - 1) / 2.0],
             [0.0, 0.0, 1.0],
-        ]
+        ],
+        device=device,
     )
 
 
@@ -661,8 +667,8 @@ def affine_theta(
     """
     ih, iw = in_hw
     oh, ow = out_hw
-    no = _norm_to_pixel(oh, ow)
-    ni_inv = _inv(_norm_to_pixel(ih, iw))
+    no = _norm_to_pixel(oh, ow, matrix.device)
+    ni_inv = _inv(_norm_to_pixel(ih, iw, matrix.device))
     m_inv = _inv(matrix)
     theta = lucid.matmul(lucid.matmul(ni_inv, m_inv), no)  # norm_out → norm_in
     return theta[:2].reshape(1, 2, 3)
@@ -735,14 +741,18 @@ def affine_points(pts: Tensor, matrix: Tensor) -> Tensor:
         Transformed points of shape ``(N, 2)``.
     """
     n = int(pts.shape[0])
-    ones = lucid.ones(n, 1, dtype=pts.dtype)
+    ones = lucid.ones(n, 1, dtype=pts.dtype, device=pts.device)
     hom = _cat([pts, ones], 1)  # (N, 3)
     out = lucid.matmul(hom, lucid.swapaxes(matrix, 0, 1))  # (N, 3)
     return out[:, :2] / out[:, 2:3]  # perspective divide (no-op for affine)
 
 
 def rotation_matrix(
-    angle_deg: float, cx: float, cy: float, scale: float = 1.0
+    angle_deg: float,
+    cx: float,
+    cy: float,
+    scale: float = 1.0,
+    device: DeviceLike = None,
 ) -> Tensor:
     """OpenCV ``getRotationMatrix2D`` forward matrix (CCW degrees) about ``(cx, cy)``.
 
@@ -773,7 +783,8 @@ def rotation_matrix(
             [alpha, beta, (1.0 - alpha) * cx - beta * cy],
             [-beta, alpha, beta * cx + (1.0 - alpha) * cy],
             [0.0, 0.0, 1.0],
-        ]
+        ],
+        device=device,
     )
 
 
@@ -787,6 +798,7 @@ def affine_matrix(
     shear_y_deg: float = 0.0,
     translate_x: float = 0.0,
     translate_y: float = 0.0,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Compose a forward affine matrix about ``(cx, cy)`` then translate.
 
@@ -824,10 +836,12 @@ def affine_matrix(
     # Translate so the center maps to itself, then add the requested shift.
     e = cx - a * cx - bb * cy + translate_x
     f = cy - cc * cx - dd * cy + translate_y
-    return lucid.tensor([[a, bb, e], [cc, dd, f], [0.0, 0.0, 1.0]])
+    return lucid.tensor([[a, bb, e], [cc, dd, f], [0.0, 0.0, 1.0]], device=device)
 
 
-def perspective_matrix(src: list[list[float]], dst: list[list[float]]) -> Tensor:
+def perspective_matrix(
+    src: list[list[float]], dst: list[list[float]], device: DeviceLike = None
+) -> Tensor:
     """Forward homography mapping the 4 ``src`` corners to ``dst`` (xy each).
 
     Solves the 8-DoF system for the 3x3 matrix (``h33 = 1``).
@@ -851,12 +865,13 @@ def perspective_matrix(src: list[list[float]], dst: list[list[float]]) -> Tensor
         rhs.append(dx)
         rows.append([0.0, 0.0, 0.0, sx, sy, 1.0, -dy * sx, -dy * sy])
         rhs.append(dy)
-    a: Tensor = lucid.tensor(rows)
-    b: Tensor = lucid.tensor([[v] for v in rhs])
+    a: Tensor = lucid.tensor(rows, device=device)
+    b: Tensor = lucid.tensor([[v] for v in rhs], device=device)
     h = lucid.matmul(_inv(a), b).reshape(-1)
     hl = h.numpy().tolist()
     return lucid.tensor(
-        [[hl[0], hl[1], hl[2]], [hl[3], hl[4], hl[5]], [hl[6], hl[7], 1.0]]
+        [[hl[0], hl[1], hl[2]], [hl[3], hl[4], hl[5]], [hl[6], hl[7], 1.0]],
+        device=device,
     )
 
 
@@ -898,18 +913,18 @@ def gaussian_blur(img: Tensor, sigma: float, ksize: int | None = None) -> Tensor
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     c = int(x.shape[1])
-    kx = _cat([lucid.tensor(w1).reshape(1, 1, 1, ksize)] * c, 0)
-    ky = _cat([lucid.tensor(w1).reshape(1, 1, ksize, 1)] * c, 0)
+    kx = _cat([lucid.tensor(w1, device=x.device).reshape(1, 1, 1, ksize)] * c, 0)
+    ky = _cat([lucid.tensor(w1, device=x.device).reshape(1, 1, ksize, 1)] * c, 0)
     x = F.conv2d(x, kx, padding=(0, half), groups=c)
     x = F.conv2d(x, ky, padding=(half, 0), groups=c)
     return x[0] if unbatched else x
 
 
-def _pixel_grid(h: int, w: int) -> tuple[Tensor, Tensor]:
+def _pixel_grid(h: int, w: int, device: DeviceLike = None) -> tuple[Tensor, Tensor]:
     """Return ``(yy, xx)`` float pixel-coordinate grids of shape ``(H, W)``."""
     yy, xx = lucid.meshgrid(
-        lucid.arange(0, h, dtype=lucid.float32),
-        lucid.arange(0, w, dtype=lucid.float32),
+        lucid.arange(0, h, dtype=lucid.float32, device=device),
+        lucid.arange(0, w, dtype=lucid.float32, device=device),
         indexing="ij",
     )
     return yy, xx
@@ -941,7 +956,7 @@ def remap(img: Tensor, dx: Tensor, dy: Tensor, *, mode: str = "bilinear") -> Ten
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     b, _, h, w = (int(d) for d in x.shape)
-    yy, xx = _pixel_grid(h, w)
+    yy, xx = _pixel_grid(h, w, x.device)
     gx = 2.0 * (xx + dx) / (w - 1) - 1.0
     gy = 2.0 * (yy + dy) / (h - 1) - 1.0
     grid = lucid.stack([gx, gy], dim=-1)[None]  # (1, H, W, 2)
@@ -1007,7 +1022,7 @@ def _equalize_channel(ch: Tensor, clip_limit: float | None = None) -> Tensor:
         excess = (hist - clipped).sum() / 256.0
         hist = clipped + excess
     cdf = lucid.cumsum(hist)
-    big = lucid.ones(256, dtype=lucid.float32) * float(h * w + 1)
+    big = lucid.ones(256, dtype=lucid.float32, device=ch.device) * float(h * w + 1)
     cdf_min = lucid.min(lucid.where(cdf > 0.0, cdf, big))
     total = cdf[255]
     denom = float(total.item()) - float(cdf_min.item())
@@ -1130,8 +1145,8 @@ def _clahe_channel(ch: Tensor, clip_limit: float, grid_h: int, grid_w: int) -> T
 
     v_idx = lucid.clip(lucid.round(ch * 255.0), 0.0, 255.0).long()  # (H, W)
 
-    rows = lucid.arange(0, h).reshape(h, 1)
-    cols = lucid.arange(0, w).reshape(1, w)
+    rows = lucid.arange(0, h, device=ch.device).reshape(h, 1)
+    cols = lucid.arange(0, w, device=ch.device).reshape(1, w)
     fy = lucid.clip((rows + 0.5) * (grid_h / h) - 0.5, 0.0, float(grid_h - 1))
     fx = lucid.clip((cols + 0.5) * (grid_w / w) - 0.5, 0.0, float(grid_w - 1))
     ty0f, tx0f = lucid.floor(fy), lucid.floor(fx)
@@ -1246,7 +1261,7 @@ def depthwise_conv2d(img: Tensor, kernel2d: list[list[float]]) -> Tensor:
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     c = int(x.shape[1])
-    k = lucid.tensor(kernel2d).reshape(1, 1, kh, kw)
+    k = lucid.tensor(kernel2d, device=x.device).reshape(1, 1, kh, kw)
     weight = _cat([k] * c, 0)
     y = F.conv2d(x, weight, padding=(kh // 2, kw // 2), groups=c)
     return y[0] if unbatched else y
@@ -1303,7 +1318,7 @@ def adjust_sharpness(img: Tensor, factor: float) -> Tensor:
     # Build a ``(1, H, W)`` interior mask: 1 in interior, 0 on the
     # 1-pixel border.  Broadcast-friendly: works for both ``(C, H, W)``
     # and ``(B, C, H, W)`` ``blurred``.
-    inner_ones = lucid.ones(1, h - 2, w - 2, dtype=img.dtype)
+    inner_ones = lucid.ones(1, h - 2, w - 2, dtype=img.dtype, device=img.device)
     interior_mask = F.pad(inner_ones, (1, 1, 1, 1), value=0.0)
     border_mask = 1.0 - interior_mask
     smoothed = blurred * interior_mask + img * border_mask

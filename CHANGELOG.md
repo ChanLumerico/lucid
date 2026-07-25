@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - correct negative-step slicing and stop empty ranges segfaulting
 
+- run every image transform on the input's device
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
