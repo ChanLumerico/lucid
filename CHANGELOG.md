@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sync TensorImpl metadata with its backing storage
 
+- accept non-divisible sizes in adaptive max pooling
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

@@ -30,14 +30,23 @@ def _check_return_indices(return_indices: bool, op_name: str) -> None:
         )
 
 
-def _adaptive_pool_python_avg(x: Tensor, output_size: tuple[int, ...]) -> Tensor:
-    """Engine fallback for adaptive average pooling with non-divisible sizes.
+def _adaptive_pool_python(
+    x: Tensor,
+    output_size: tuple[int, ...],
+    reduce: str,
+) -> Tensor:
+    """Engine fallback for adaptive pooling with non-divisible sizes.
 
-    Computes per-output-slot mean over ``input[..., start:end]`` where
+    Computes a per-output-slot reduction over ``input[..., start:end]`` where
     ``start = floor(i * Hin / Hout)`` and ``end = ceil((i+1) * Hin / Hout)``,
     matching the reference framework's contract.  Iterates per output slot
-    via ``narrow`` + ``mean`` — each step is an engine op so the result
+    via ``narrow`` + the reduction — each step is an engine op so the result
     stays on the original device with no host round-trip.
+
+    ``reduce`` selects the cell reduction: ``"mean"`` for average pooling,
+    ``"max"`` for max pooling.  The window geometry is identical between the
+    two, which is why they share this routine — the divisible fast path in the
+    engine differs only in the same way.
     """
     n_spatial: int = len(output_size)
     in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])
@@ -58,10 +67,15 @@ def _adaptive_pool_python_avg(x: Tensor, output_size: tuple[int, ...]) -> Tensor
     def _abs(ax: int) -> int:
         return ndim - n_spatial + ax
 
+    def _cell(window: Tensor, dims: int | tuple[int, ...]) -> Tensor:
+        if reduce == "max":
+            return window.max(dim=dims)
+        return window.mean(dim=dims)
+
     if n_spatial == 1:
         cols: list[Tensor] = []
         for s, e in _ranges(0):
-            cols.append(x.narrow(_abs(0), s, e - s).mean(dim=_abs(0)))
+            cols.append(_cell(x.narrow(_abs(0), s, e - s), _abs(0)))
         # Each ``cols[i]`` has shape == ``x.shape[:-1]``; stack along last dim.
         return _lucid.stack(cols, dim=-1)
 
@@ -72,7 +86,7 @@ def _adaptive_pool_python_avg(x: Tensor, output_size: tuple[int, ...]) -> Tensor
             cols2: list[Tensor] = []
             for sj, ej in _ranges(1):
                 pane: Tensor = slab.narrow(_abs(1), sj, ej - sj)
-                cols2.append(pane.mean(dim=(_abs(0), _abs(1))))
+                cols2.append(_cell(pane, (_abs(0), _abs(1))))
             rows.append(_lucid.stack(cols2, dim=-1))
         return _lucid.stack(rows, dim=-2)
 
@@ -86,23 +100,30 @@ def _adaptive_pool_python_avg(x: Tensor, output_size: tuple[int, ...]) -> Tensor
             cols3: list[Tensor] = []
             for sk, ek in _ranges(2):
                 cube: Tensor = slab_ij.narrow(_abs(2), sk, ek - sk)
-                cols3.append(cube.mean(dim=(_abs(0), _abs(1), _abs(2))))
+                cols3.append(_cell(cube, (_abs(0), _abs(1), _abs(2))))
             rows3.append(_lucid.stack(cols3, dim=-1))
         planes.append(_lucid.stack(rows3, dim=-2))
     return _lucid.stack(planes, dim=-3)
 
 
-def _adaptive_avg_call(
+def _adaptive_call(
     x: Tensor,
     output_size: tuple[int, ...],
     engine_fn: Callable[..., _C_engine.TensorImpl],
+    reduce: str,
 ) -> Tensor:
-    """Engine call with Python fallback when the input dims aren't divisible."""
+    """Engine call with Python fallback when the input dims aren't divisible.
+
+    The engine op reduces adaptive pooling to a fixed-kernel pool, which only
+    expresses the case where every input axis divides its output evenly; the
+    fallback covers the rest.  Both avg and max route through here so the two
+    cannot drift apart on which sizes they accept.
+    """
     n_spatial: int = len(output_size)
     in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])
     if all(in_spatial[i] % int(output_size[i]) == 0 for i in range(n_spatial)):
         return _wrap(engine_fn(_unwrap(x), *output_size))
-    return _adaptive_pool_python_avg(x, output_size)
+    return _adaptive_pool_python(x, output_size, reduce)
 
 
 def max_pool1d(
@@ -427,7 +448,7 @@ def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor
     (2, 32, 5)
     """
     sz: tuple[int, ...] = (_int_or_tuple(output_size, 1)[0],)
-    return _adaptive_avg_call(x, sz, _C_engine.nn.adaptive_avg_pool1d)
+    return _adaptive_call(x, sz, _C_engine.nn.adaptive_avg_pool1d, "mean")
 
 
 def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor:
@@ -478,7 +499,7 @@ def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor
     (1, 512, 1, 1)
     """
     oh, ow = _int_or_tuple(output_size, 2)
-    return _adaptive_avg_call(x, (oh, ow), _C_engine.nn.adaptive_avg_pool2d)
+    return _adaptive_call(x, (oh, ow), _C_engine.nn.adaptive_avg_pool2d, "mean")
 
 
 def adaptive_max_pool2d(
@@ -529,7 +550,7 @@ def adaptive_max_pool2d(
     """
     _check_return_indices(return_indices, "adaptive_max_pool2d")
     oh, ow = _int_or_tuple(output_size, 2)
-    return _wrap(_C_engine.nn.adaptive_max_pool2d(_unwrap(x), oh, ow))
+    return _adaptive_call(x, (oh, ow), _C_engine.nn.adaptive_max_pool2d, "max")
 
 
 def adaptive_max_pool1d(
@@ -581,8 +602,8 @@ def adaptive_max_pool1d(
     (2, 8, 4)
     """
     _check_return_indices(return_indices, "adaptive_max_pool1d")
-    sz = _int_or_tuple(output_size, 1)[0]
-    return _wrap(_C_engine.nn.adaptive_max_pool1d(_unwrap(x), sz))
+    sz: tuple[int, ...] = (_int_or_tuple(output_size, 1)[0],)
+    return _adaptive_call(x, sz, _C_engine.nn.adaptive_max_pool1d, "max")
 
 
 def adaptive_max_pool3d(
@@ -632,7 +653,7 @@ def adaptive_max_pool3d(
     """
     _check_return_indices(return_indices, "adaptive_max_pool3d")
     od, oh, ow = _int_or_tuple(output_size, 3)
-    return _wrap(_C_engine.nn.adaptive_max_pool3d(_unwrap(x), od, oh, ow))
+    return _adaptive_call(x, (od, oh, ow), _C_engine.nn.adaptive_max_pool3d, "max")
 
 
 def adaptive_avg_pool3d(
@@ -682,7 +703,7 @@ def adaptive_avg_pool3d(
     (1, 16, 2, 2, 2)
     """
     od, oh, ow = _int_or_tuple(output_size, 3)
-    return _adaptive_avg_call(x, (od, oh, ow), _C_engine.nn.adaptive_avg_pool3d)
+    return _adaptive_call(x, (od, oh, ow), _C_engine.nn.adaptive_avg_pool3d, "mean")
 
 
 def max_pool3d(
