@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep cast parameters as leaves so .double() models can train
 
+- restore pad_packed_sequence data and put helpers on the input device
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

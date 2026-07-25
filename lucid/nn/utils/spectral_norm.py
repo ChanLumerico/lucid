@@ -152,8 +152,11 @@ def spectral_norm(
     weight_mat: Tensor = _flatten_weight(weight.detach(), dim)
     rows: int = int(weight_mat.shape[0])
     cols: int = int(weight_mat.shape[1])
-    u_init: Tensor = _l2_normalize(lucid.randn(rows), eps=eps)
-    v_init: Tensor = _l2_normalize(lucid.randn(cols), eps=eps)
+    # Power-iteration vectors are contracted with the weight every forward,
+    # so they must start on the weight's device.
+    dev = weight.device
+    u_init: Tensor = _l2_normalize(lucid.randn(rows, device=dev), eps=eps)
+    v_init: Tensor = _l2_normalize(lucid.randn(cols, device=dev), eps=eps)
 
     del module._parameters[name]
     module.register_parameter(name + "_orig", Parameter(weight.detach()))

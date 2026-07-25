@@ -1702,12 +1702,14 @@ def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
     if N is None:
         N = n
     x_impl = _unwrap(x)
+    # The exponent row is combined with ``x`` by ``pow``, so it must live on the
+    # input's device — a hardcoded CPU exponent raised DeviceMismatch for any
+    # Metal input.
+    dev = x_impl.device
     if increasing:
-        exp_impl = _C_engine.arange(0.0, float(N), 1.0, _C_engine.F32, _C_engine.CPU)
+        exp_impl = _C_engine.arange(0.0, float(N), 1.0, _C_engine.F32, dev)
     else:
-        exp_impl = _C_engine.arange(
-            float(N - 1), -1.0, -1.0, _C_engine.F32, _C_engine.CPU
-        )
+        exp_impl = _C_engine.arange(float(N - 1), -1.0, -1.0, _C_engine.F32, dev)
     x_col = _C_engine.reshape(x_impl, [n, 1])
     exp_row = _C_engine.reshape(exp_impl, [1, N])
     return _wrap(_C_engine.pow(x_col, exp_row))

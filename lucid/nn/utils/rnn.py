@@ -287,8 +287,11 @@ def pad_packed_sequence(
     for t, bs in enumerate(batch_sizes_list):
         # data[offset:offset+bs] → place into out_t[t, :bs]
         src = data[offset : offset + bs]  # (bs, *feat)
-        # Assign via index (Python-level setitem calls copy_from internally)
-        out_t[t, :bs].copy_(src)
+        # ``out_t[t, :bs]`` materialises a NEW tensor, so ``.copy_()`` on it
+        # wrote into that temporary and never reached ``out_t`` — the whole
+        # round trip returned the padding value.  Assign through __setitem__,
+        # which writes back.
+        out_t[t, :bs] = src
         offset += bs
 
     # Compute lengths from batch_sizes.
@@ -302,7 +305,9 @@ def pad_packed_sequence(
     if sequence.unsorted_indices is not None:
         # Reorder batch dim by unsorted_indices (numpy-free metadata read).
         ui_list = _int_tensor_to_list(sequence.unsorted_indices)
-        ui_t = _Tensor(cast(list[object], ui_list))
+        # ``device=`` matters: this index gathers from ``out_t``, so a
+        # default-CPU index against GPU data raises bad_variant_access.
+        ui_t = _Tensor(cast(list[object], ui_list), device=out_t.device)
         ui_impl_i32 = _C_engine.astype(ui_t._impl, _C_engine.I32)
         full_shape = list(out_t.shape)
         bcast_shape = [1, B] + [1] * (out_t.ndim - 2)
