@@ -195,6 +195,11 @@ TensorImplPtr argmin_op(const TensorImplPtr& a, int axis, bool keepdims) {
 // elements) can be determined before allocating the output buffer.
 // Returns a 2-D tensor of shape (count, ndim) with dtype I64, where each row
 // is the multi-dimensional index of one non-zero element in row-major order.
+//
+// The host round-trip is forced by the data-dependent output size, but the
+// RESULT rides the input's device: returning CPU storage for a GPU input made
+// every downstream op device-mismatch, so callers had to insert a manual
+// ``.to()`` — which is the transfer the round-trip was already paying for.
 TensorImplPtr nonzero_op(const TensorImplPtr& a) {
     Validator::input(a, "nonzero.a").non_null();
     const std::size_t ndim = a->shape().size();
@@ -208,12 +213,18 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
                          .nonzero_forward(Storage{cpu}, a->shape(), a->dtype(), count);
 
     Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
+    if (a->device() != Device::CPU) {
+        Storage up = backend::Dispatcher::for_device(a->device())
+                         .from_cpu(std::move(out), out_shape);
+        return fresh(std::move(up), std::move(out_shape), Dtype::I64, a->device());
+    }
     return fresh(Storage{std::move(out)}, std::move(out_shape), Dtype::I64, Device::CPU);
 }
 
-// Sort and deduplicate all elements of `a`, returning them as a 1-D CPU
-// tensor of the same dtype.  Always produces output on Device::CPU regardless
-// of the input device, since std::sort and std::unique operate on host memory.
+// Sort and deduplicate all elements of `a`, returning them as a 1-D tensor of
+// the same dtype.  The computation runs on the host (std::sort / std::unique
+// need host memory, and the output length is data-dependent), but the RESULT
+// rides the input's device — see the note on ``nonzero_op``.
 //
 // The template lambda `run` is instantiated for each supported element type
 // (F32, F64, I32, I64) via explicit casts from the raw byte buffer.
@@ -256,6 +267,11 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
         wrap(run(reinterpret_cast<const std::int64_t*>(cpu.ptr.get())));
     else
         ErrorBuilder("unique").not_implemented("dtype not supported");
+    if (a->device() != Device::CPU) {
+        Storage up = backend::Dispatcher::for_device(a->device())
+                         .from_cpu(std::move(out_cpu), out_shape);
+        return fresh(std::move(up), std::move(out_shape), dt, a->device());
+    }
     return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, Device::CPU);
 }
 

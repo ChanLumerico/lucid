@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - apply the embedding bounds check to EmbeddingBag too
 
+- return nonzero / unique on the input's device
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
