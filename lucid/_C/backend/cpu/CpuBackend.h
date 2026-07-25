@@ -769,9 +769,19 @@ public:
         static constexpr double kA = 0.147;  // Winitzki constant
 
         auto scalar_erfinv = [&](double x) -> double {
-            if (x >= 1.0)
+            // erf maps onto (-1, 1), so only the two endpoints are infinite;
+            // anything outside is undefined and must be NaN.  Collapsing
+            // ``x >= 1`` to +inf swallowed the whole out-of-domain half, and
+            // an inf is more dangerous than a NaN downstream — ``1/inf`` and
+            // ``exp(-inf)`` quietly become finite, so a domain error could
+            // vanish instead of propagating.  (Metal already matched SciPy.)
+            if (std::isnan(x))
+                return x;
+            if (x > 1.0 || x < -1.0)
+                return std::numeric_limits<double>::quiet_NaN();
+            if (x == 1.0)
                 return std::numeric_limits<double>::infinity();
-            if (x <= -1.0)
+            if (x == -1.0)
                 return -std::numeric_limits<double>::infinity();
             if (x == 0.0)
                 return 0.0;

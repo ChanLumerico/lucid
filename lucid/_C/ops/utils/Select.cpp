@@ -442,6 +442,20 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
     if (a->shape().size() != indices->shape().size())
         throw ShapeMismatch(a->shape(), indices->shape(),
                             "gather: a and indices must have same rank");
+    // Index dtype has to be validated here, not in the backends: the CPU
+    // kernel happened to reject a float index with NotImplementedError while
+    // the GPU one silently reinterpreted it and returned plausible-looking
+    // garbage.  One check at the op layer keeps the two honest.
+    switch (indices->dtype()) {
+    case Dtype::I8:
+    case Dtype::I16:
+    case Dtype::I32:
+    case Dtype::I64:
+        break;
+    default:
+        ErrorBuilder("gather").fail("indices must be an integer tensor, got " +
+                                    std::string(dtype_name(indices->dtype())));
+    }
     const std::size_t ndim = a->shape().size();
     int ax = wrap_axis(axis, static_cast<int>(ndim));
     Shape out_shape = indices->shape();

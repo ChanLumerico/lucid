@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sample and score on the parameter's device
 
+- correct erfinv's domain and reject float gather indices
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
