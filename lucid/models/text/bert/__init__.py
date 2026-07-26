@@ -28,8 +28,32 @@ from lucid.models.text.bert._pretrained import (
     bert_small,
     bert_tiny,
 )
+from lucid.models.text.bert._weights import (
+    BERTBaseMLMWeights,
+    BERTBaseNERWeights,
+    BERTBaseQAWeights,
+    BERTBaseWeights,
+    BERTLargeMLMWeights,
+    BERTLargeQAWeights,
+    BERTLargeWeights,
+    BERTMediumWeights,
+    BERTMiniWeights,
+    BERTSmallWeights,
+    BERTTinyWeights,
+)
 
 __all__ = [
+    "BERTBaseMLMWeights",
+    "BERTBaseNERWeights",
+    "BERTBaseQAWeights",
+    "BERTBaseWeights",
+    "BERTLargeMLMWeights",
+    "BERTLargeQAWeights",
+    "BERTLargeWeights",
+    "BERTMediumWeights",
+    "BERTMiniWeights",
+    "BERTSmallWeights",
+    "BERTTinyWeights",
     "BERTConfig",
     "BERTModel",
     "BERTForCausalLM",

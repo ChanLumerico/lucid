@@ -14,8 +14,14 @@ from lucid.models.text.gpt._pretrained import (
     gpt_cls,
     gpt_lm,
 )
+from lucid.models.text.gpt._weights import (
+    GPTLMWeights,
+    GPTWeights,
+)
 
 __all__ = [
+    "GPTLMWeights",
+    "GPTWeights",
     "GPTConfig",
     "GPTModel",
     "GPTLMHeadModel",

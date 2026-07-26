@@ -20,8 +20,26 @@ from lucid.models.text.gpt2._pretrained import (
     gpt2_xlarge,
     gpt2_xlarge_lm,
 )
+from lucid.models.text.gpt2._weights import (
+    GPT2LargeLMWeights,
+    GPT2LargeWeights,
+    GPT2MediumLMWeights,
+    GPT2MediumWeights,
+    GPT2SmallLMWeights,
+    GPT2SmallWeights,
+    GPT2XLargeLMWeights,
+    GPT2XLargeWeights,
+)
 
 __all__ = [
+    "GPT2LargeLMWeights",
+    "GPT2LargeWeights",
+    "GPT2MediumLMWeights",
+    "GPT2MediumWeights",
+    "GPT2SmallLMWeights",
+    "GPT2SmallWeights",
+    "GPT2XLargeLMWeights",
+    "GPT2XLargeWeights",
     "GPT2Config",
     "GPT2Model",
     "GPT2LMHeadModel",

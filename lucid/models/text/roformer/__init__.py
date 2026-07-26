@@ -19,8 +19,14 @@ from lucid.models.text.roformer._pretrained import (
     roformer_mlm,
     roformer_token_cls,
 )
+from lucid.models.text.roformer._weights import (
+    RoFormerMLMWeights,
+    RoFormerWeights,
+)
 
 __all__ = [
+    "RoFormerMLMWeights",
+    "RoFormerWeights",
     "RoFormerConfig",
     "RoFormerModel",
     "RoFormerForMaskedLM",

@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - correct erfinv's domain and reject float gather indices
 
+- re-export the weight enums for bert, gpt, gpt2, roformer and ddpm
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

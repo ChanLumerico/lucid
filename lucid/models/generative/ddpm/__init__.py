@@ -14,8 +14,14 @@ from lucid.models.generative.ddpm._pretrained import (
     ddpm_lsun,
     ddpm_lsun_gen,
 )
+from lucid.models.generative.ddpm._weights import (
+    DDPMChurchWeights,
+    DDPMCifarWeights,
+)
 
 __all__ = [
+    "DDPMChurchWeights",
+    "DDPMCifarWeights",
     "DDPMConfig",
     "DDPMModel",
     "DDPMForImageGeneration",
