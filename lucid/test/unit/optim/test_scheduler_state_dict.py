@@ -89,9 +89,7 @@ def test_lambda_scheduler_needs_its_lambda_supplied_again():
     sched_b.load_state_dict(saved)
     # Already advanced 6 steps' worth of state, so the next lr repeats the last.
     assert round(float(opt_b.param_groups[0]["lr"]), 8) is not None
-    assert reference[-1] == round(
-        float(opt_a.param_groups[0]["lr"]), 8
-    )
+    assert reference[-1] == round(float(opt_a.param_groups[0]["lr"]), 8)
 
 
 def _sequential():
