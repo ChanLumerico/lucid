@@ -123,16 +123,21 @@ fi
 #
 # Skip with ``LUCID_SKIP_API_DATA=1`` (per-commit override) when the
 # regeneration cost is unwanted (e.g. partial commits, infra fix-ups).
+# Measured 2026-07-26: ~4 min via the cached wrapper for a one-file change
+# (the Griffe walk loads the whole tree no matter how few slugs are stale),
+# ~13 min uncached.  That cost is why this is bypassed in practice, so the
+# ``Docs api-data refresh`` workflow is the real backstop — it re-checks
+# nightly and regenerates whatever was skipped here.
 
 if [[ "${LUCID_SKIP_API_DATA:-0}" != "1" ]]; then
     STAGED_LUCID="$(git diff --cached --name-only --diff-filter=ACMR \
         | grep -E '^lucid/.*\.(py|pyi)$' || true)"
-    BUILD_SCRIPT="${REPO_ROOT}/web/scripts/build-api-data.py"
+    BUILD_SCRIPT="${REPO_ROOT}/web/scripts/build-api-data-cached.py"
     if [[ -n "$STAGED_LUCID" && -f "$BUILD_SCRIPT" ]]; then
         echo "  [api-data] lucid/ source changed — rebuilding web/public/api-data/…"
         if (
             cd "$REPO_ROOT" && \
-            PYTHONPATH="${REPO_ROOT}" python3 web/scripts/build-api-data.py \
+            PYTHONPATH="${REPO_ROOT}" python3 web/scripts/build-api-data-cached.py \
                 >/tmp/lucid-api-data.log 2>&1 && \
             # Mirror ``pnpm prebuild``: post-process so the committed JSON is the
             # FULL deployable artifact (cross-links / used-by / citations /

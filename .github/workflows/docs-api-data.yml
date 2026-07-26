@@ -1,0 +1,108 @@
+name: Docs api-data refresh
+
+# ``web/public/api-data/`` is a committed build artifact derived from
+# ``lucid/**``.  The pre-commit hook can regenerate it, but a full regen costs
+# ~13 min (and ~4 min even for a one-file change — the Griffe walk loads the
+# whole tree regardless of how many slugs are stale), so in practice it is
+# bypassed with ``LUCID_SKIP_API_DATA=1`` on every commit.
+#
+# The result: Python commits accumulate invisible drift, because the Docs
+# workflow only triggers on ``web/**`` and never sees them.  Drift went
+# unnoticed from 2026-07-06 to 2026-07-26 and then failed the deploy in 13s.
+#
+# This job removes the reliance on that discipline.  It is cheap on the common
+# path: the drift check is pure stdlib content hashing and exits in seconds
+# when nothing is stale.  Only a real drift pays for the rebuild.
+
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 03:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write           # to dispatch Docs after pushing
+
+concurrency:
+  group: docs-api-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Regenerate api-data if the Lucid source has drifted
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # build-api-data.py is pure static analysis — Griffe reads the source
+      # tree, nothing imports Lucid.  That matters here: Lucid is an Apple
+      # Silicon / MLX extension and cannot be built on this runner at all.
+      - name: Install Griffe
+        run: pip install griffe
+
+      # Content-hash comparison against the committed baseline.  Seconds, and
+      # on most days it is the only step that runs.
+      - name: Check for drift
+        id: drift
+        working-directory: web
+        run: |
+          if python3 scripts/build-api-data-cached.py --check; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            echo "api-data is in sync — nothing to do"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate api-data
+        if: steps.drift.outputs.stale == 'true'
+        working-directory: web
+        env:
+          FORCE_API_BUILD: "1"
+        run: python3 scripts/build-api-data-cached.py
+
+      # Mirror ``pnpm prebuild`` so the committed tree is the FULL deployable
+      # artifact, not Griffe-only.  Skipping these would leave the Docs
+      # workflow's post-processor drift gate failing.
+      - name: Run post-processors
+        if: steps.drift.outputs.stale == 'true'
+        working-directory: web
+        run: |
+          python3 scripts/build-cross-links.py
+          python3 scripts/build-usedby.py
+          python3 scripts/link-citations.py
+          python3 scripts/build-bibtex.py
+          python3 scripts/build-meta.py
+
+      - name: Re-baseline the drift cache
+        if: steps.drift.outputs.stale == 'true'
+        working-directory: web
+        run: python3 scripts/build-api-data-cached.py --write-cache
+
+      - name: Commit and push
+        if: steps.drift.outputs.stale == 'true'
+        id: push
+        run: |
+          if git diff --quiet -- web/public/api-data; then
+            echo "drift check flagged staleness but regen produced no change"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/public/api-data
+          git commit -m "docs(api-data): nightly refresh against the current source"
+          git push
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      # A GITHUB_TOKEN push does not trigger other workflows, so the Docs
+      # deploy would otherwise wait for the next human ``web/**`` push.
+      - name: Dispatch the Docs deploy
+        if: steps.push.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docs.yml --ref main
