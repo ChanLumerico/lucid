@@ -98,7 +98,7 @@ def _move_to_front(x: Tensor, dim: int) -> Tensor:
     d = dim if dim >= 0 else ndim + dim
     if d == 0:
         return x
-    return lucid.moveaxis(x, d, 0)  # type: ignore[arg-type]
+    return lucid.moveaxis(x, d, 0)
 
 
 def _move_from_front(x: Tensor, dim: int) -> Tensor:
@@ -106,7 +106,7 @@ def _move_from_front(x: Tensor, dim: int) -> Tensor:
 
     if dim == 0:
         return x
-    return lucid.moveaxis(x, 0, dim)  # type: ignore[arg-type]
+    return lucid.moveaxis(x, 0, dim)
 
 
 # ── vmap ─────────────────────────────────────────────────────────────────────
@@ -347,8 +347,7 @@ def _isolated_vmap(
                 [out_dims] * n_o if isinstance(out_dims, int) else list(out_dims)
             )
             return tuple(
-                lucid.stack([r[i] for r in items], dim=ods_l[i])  # type: ignore[index,arg-type]
-                for i in range(n_o)
+                lucid.stack([r[i] for r in items], dim=ods_l[i]) for i in range(n_o)
             )
         return lucid.stack(list(items), dim=od_i)  # type: ignore[arg-type]
 
@@ -360,8 +359,7 @@ def _isolated_vmap(
                 [out_dims] * n_o if isinstance(out_dims, int) else list(out_dims)
             )
             return tuple(
-                lucid.cat([p[i] for p in parts], dim=ods_c[i])  # type: ignore[index,arg-type]
-                for i in range(n_o)
+                lucid.cat([p[i] for p in parts], dim=ods_c[i]) for i in range(n_o)
             )
         return lucid.cat(list(parts), dim=od_i)  # type: ignore[arg-type]
 
