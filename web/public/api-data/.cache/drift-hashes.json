@@ -60,7 +60,7 @@
   "lucid.models.vision.xception": "780509eec1fe5d9994a3022746e02a505f7020fb5c25d513d1050b8f16d33bdd",
   "lucid.models.vision.yolo": "d60779652e7ba5f6277b6f1a1fda1871c259103edd562f27499dbe0ea9a14d02",
   "lucid.models.vision.zfnet": "c10306ce88a7a5157a38ec99381247b9bb0ca991ccd38c8a745222dbdc419ab1",
-  "lucid.nn": "25bb494951994058ad4f0bc0f50cadc30b4cb8457137d0a95053c89bb276d95d",
+  "lucid.nn": "5fca337634f431c8e87cb9872361900a79e1bfe75d74929230a3c047e97a1a66",
   "lucid.nn.functional": "477d1288c365f1944856fc8f699ddc9aeb790871a0bf0e337d6abf101aa79b5e",
   "lucid.nn.init": "009c16f72609ac219db3e522d04e241ebc3ffe29945b635f057cf314b3863a74",
   "lucid.nn.intrinsic": "df3d0552c9a1ef5d61eabdca6118cdd6c1cbef7898f89c6901f45a77ded58a12",
