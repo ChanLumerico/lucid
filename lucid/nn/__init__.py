@@ -1,3 +1,25 @@
+"""lucid.nn — neural-network layers, containers and parameter state.
+
+The stateful half of the network API.  ``Module`` owns parameters, buffers,
+submodules and the hook machinery; ``Parameter`` marks a tensor as trainable
+state that ``Module.parameters()`` collects and an optimizer steps.  176 names
+are exported here — layers, containers, losses and the subpackages below.
+
+Layers are deliberately thin: each holds its ``Parameter``s and delegates the
+computation to the matching ``lucid.nn.functional`` entry point, so a layer
+and its functional form are one implementation and one autograd path rather
+than two that can drift apart.
+
+Subpackages: ``functional`` (stateless ops), ``init`` (initialisation
+schemes), ``utils`` (gradient clipping, spectral norm, pruning, packed
+sequences), ``modules`` (the layer implementations re-exported here), and
+``quantized`` / ``qat`` / ``intrinsic`` for the quantization stack.
+
+Namespace discipline: ``Module``, ``Parameter`` and every layer live here and
+never leak into the ``lucid`` top level — ``lucid.Linear`` does not exist by
+design, so there is exactly one path to each name.
+"""
+
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid.nn.hooks import (

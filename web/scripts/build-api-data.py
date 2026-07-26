@@ -172,6 +172,54 @@ _SYNTH_SLUGS: dict[str, str] = {
     "lucid.ops.composite": "composite",
 }
 
+# These slugs have no module object behind them, so unlike every other page
+# there is no ``__init__`` docstring for the header to come from — without
+# this map their pages render with a blank summary.  Keep the voice matched
+# to the real module docstrings: what the group is, then what is non-obvious.
+#
+# Written in the POST-conversion form (markdown, single backticks): real
+# docstrings reach the JSON through the reST->markdown converter, but these
+# are injected straight into it and never pass through one.  Double backticks
+# here reach the page as literal reST and trip the audit's no-rest-leak rule.
+_SYNTH_SUMMARIES: dict[str, tuple[str, str]] = {
+    "lucid.creation": (
+        "Tensor construction, and the seeding of the default generator.",
+        "Thirty entry points: conversion (`tensor`, `as_tensor`, "
+        "`from_numpy`), filled and `*_like` constructors, the range "
+        "builders `arange` / `linspace`, the sampling family, the "
+        "generator controls (`seed`, `get_rng_state` / `set_rng_state`, "
+        "`initial_seed`, `randperm`) and DLPack exchange.\n\n"
+        "Every constructor takes `device=`, and passing it is what keeps a "
+        "pipeline on one device: a helper built without it lands on the CPU "
+        "and forces a round trip the moment it meets Metal data.\n\n"
+        "CPU and Metal draw from separate generators, so one seed does not "
+        "reproduce one stream across both — comparing devices means "
+        "comparing deterministic ops, or `eval()` for anything stochastic."
+    ),
+    "lucid.ops": (
+        "The engine-bound primitive ops, grouped by arity.",
+        "158 ops registered in `lucid/_ops/_registry.py` and bound onto the "
+        "top level at import time — elementwise maths, comparisons, "
+        "reductions, shape moves and their in-place `_`-suffixed forms.\n\n"
+        "These are the leaves of the autograd graph: each maps to one engine "
+        "kernel with a hand-written backward, which is what distinguishes "
+        "them from the composites in `lucid.ops.composite`.  The page is "
+        "split by arity (unary / binary / variadic) because a flat list of "
+        "158 is not navigable."
+    ),
+    "lucid.ops.composite": (
+        "Ops assembled from the primitives rather than from a kernel.",
+        "118 functions defined in `lucid/_ops/composite/` — the aliases "
+        "(`absolute`, `arctan2`, ...), the fused arithmetic helpers "
+        "(`addmm`, `addcdiv`, ...), and the statistical and linear-algebra "
+        "conveniences.\n\n"
+        "They carry no kernel and no backward of their own: gradients fall "
+        "out of the primitives they are written in.  That makes them cheap "
+        "to add and correct by construction, at the cost of materialising "
+        "the intermediates a fused kernel would not."
+    ),
+}
+
 
 def _discover_manifest() -> dict[str, str]:
     """Walk lucid/ to auto-discover all documentable subpackages.
@@ -2077,14 +2125,16 @@ def build_synth(slug: str, filter_subcat: str, lucid_data: dict[str, Any]) -> No
         for m in filtered:
             m["subcategory"] = None
 
+    summary, extended = _SYNTH_SUMMARIES.get(slug, (None, None))
+
     data = {
         "slug":    slug,
         "name":    slug.split(".")[-1],
         "path":    slug,
         "kind":    "module",
         "source":  None,
-        "summary": None,
-        "extended": None,
+        "summary": summary,
+        "extended": extended,
         "parameters": [],
         "returns": None,
         "raises": [],

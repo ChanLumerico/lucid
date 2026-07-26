@@ -1,3 +1,22 @@
+"""lucid.einops — shape manipulation written in named axes.
+
+Four entry points: ``rearrange`` (permute, reshape, split or merge axes),
+``reduce`` (the same, carrying a reduction), ``repeat`` (the same, carrying a
+broadcast expansion) and ``einsum``.
+
+Patterns are strings of axis names, so the intent is stated in the call
+rather than reconstructed from a run of anonymous ``transpose`` / ``reshape``
+steps::
+
+    lucid.einops.rearrange(x, "b c h w -> b (h w) c")   # (2,3,4,5) → (2,20,3)
+
+A mismatch fails with a message naming the axis that did not fit, instead of
+producing a silently wrong shape that only surfaces layers later.
+
+Reachable only as ``lucid.einops.*``: there is no top-level ``lucid.einsum``
+and no ``Tensor.rearrange`` method, so each op has exactly one path.
+"""
+
 from lucid._tensor.tensor import Tensor
 
 """

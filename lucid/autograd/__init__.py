@@ -1,3 +1,24 @@
+"""lucid.autograd — reverse-mode differentiation and the grad-mode controls.
+
+``backward`` and ``grad`` walk the tape the engine records as ops execute.
+``Function`` together with ``FunctionCtx`` lets Python define a new
+differentiable op by writing its forward and backward explicitly, for cases
+the composed ops cannot express.
+
+Grad modes: ``no_grad``, ``enable_grad``, ``inference_mode``, and the
+``set_grad_enabled`` / ``is_grad_enabled`` pair.  Note that
+``set_grad_enabled(flag)`` is a plain function returning ``None``, *not* a
+context manager — using it in a ``with`` statement turns grad off globally
+and never restores it, which then affects every later computation.
+
+Higher-order and verification: ``jacobian``, ``hessian``, ``vjp`` and ``jvp``
+for derivatives of derivatives, and ``gradcheck`` / ``gradgradcheck`` to
+verify a hand-written backward against finite differences — worth running on
+any new ``Function``, since a wrong backward produces plausible numbers
+rather than an error.  ``checkpoint`` trades recomputation for activation
+memory, and ``detect_anomaly`` traces the op that first produced a NaN.
+"""
+
 from lucid.autograd._grad_mode import (
     no_grad,
     enable_grad,

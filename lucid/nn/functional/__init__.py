@@ -1,3 +1,21 @@
+"""lucid.nn.functional — the stateless ops the layers are built from.
+
+122 functions across twelve areas: activations, convolution, pooling,
+normalisation, attention, losses, dropout, linear maps, metrics, sparse
+(embeddings), sampling and positional encodings.
+
+Every function is pure — weights, biases and running statistics arrive as
+arguments — so the same call works with or without a ``Module`` wrapped
+around it.  Each ``lucid.nn`` layer delegates here, which is what keeps the
+two views from diverging: ``nn.Linear`` and ``F.linear`` are the same
+computation and the same autograd node, not parallel implementations.
+
+Device contract: helper tensors an op builds internally (index grids,
+triangular masks, constants) are created on the input's device, so a call on
+a Metal tensor stays on Metal end to end.  A function that silently returned
+CPU state would force a round trip on every step of a training loop.
+"""
+
 from lucid.nn.functional.activations import (
     relu,
     leaky_relu,
