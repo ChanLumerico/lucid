@@ -415,10 +415,15 @@ def _load_lucid_name_overrides() -> dict[str, str]:
         except Exception:
             return set()
 
+    # ``sorted`` at every insertion point: this mapping's *insertion order*
+    # decides the member order of the synthetic slugs (``build_synth`` appends
+    # in ``_LUCID_NAME_OVERRIDES`` order).  Iterating a set of strings varies
+    # with PYTHONHASHSEED, so without this the emitted JSON differs run to run
+    # and the drift gates can't tell a real change from reshuffled output.
     for target_id, value_node in _iter_assigns(ast.walk(tree)):
         if target_id in NAME_TO_SLUG:
             slug = NAME_TO_SLUG[target_id]
-            for n in _extract_string_set(value_node):
+            for n in sorted(_extract_string_set(value_node)):
                 mapping[n] = slug
 
     # Composite ops: COMPOSITE_NAMES is built at runtime from each submodule's
@@ -426,14 +431,14 @@ def _load_lucid_name_overrides() -> dict[str, str]:
     # ``lucid/_ops/composite/*.py`` and union their ``__all__`` lists.
     comp_dir = LUCID_SRC / "lucid" / "_ops" / "composite"
     if comp_dir.exists():
-        for comp_file in comp_dir.glob("*.py"):
+        for comp_file in sorted(comp_dir.glob("*.py")):
             if comp_file.name == "__init__.py":
                 continue
             try:
                 comp_tree = ast.parse(comp_file.read_text(encoding="utf-8"))
                 for target_id, value_node in _iter_assigns(ast.walk(comp_tree)):
                     if target_id == "__all__":
-                        for n in _extract_string_set(value_node):
+                        for n in sorted(_extract_string_set(value_node)):
                             mapping[n] = "composite"
             except Exception:
                 pass

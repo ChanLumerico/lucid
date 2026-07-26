@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - re-export the weight enums for bert, gpt, gpt2, roformer and ddpm
 
+- make api-data member ordering deterministic
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA
