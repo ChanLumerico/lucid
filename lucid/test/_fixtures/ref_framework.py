@@ -51,6 +51,23 @@ def ref_module() -> ModuleType | None:
         return None
 
 
+@functools.lru_cache(maxsize=1)
+def ref_vision_module() -> ModuleType | None:
+    """Return the reference framework's vision package, or ``None``.
+
+    Separate from :func:`ref_module` because it is an independent install:
+    a parity run can have the core framework without the vision extras.
+    Tests that need real image data (rather than synthetic tensors) reach
+    for this and skip when it is absent.
+    """
+    try:
+        import torchvision  # noqa: PLC0415 — lazy import is the whole point
+
+        return torchvision
+    except ImportError:
+        return None
+
+
 def require_ref() -> ModuleType:
     """Return the reference module or skip the calling test when it's
     unavailable.  Use inside test bodies that need the reference but
@@ -61,10 +78,24 @@ def require_ref() -> ModuleType:
     return mod
 
 
+def require_ref_vision() -> ModuleType:
+    """Return the reference vision package or skip the calling test."""
+    mod = ref_vision_module()
+    if mod is None:
+        pytest.skip(f"reference vision package ({_REF_NAME}vision) is not installed")
+    return mod
+
+
 @pytest.fixture
 def ref() -> ModuleType:
     """Inject the reference framework module, or skip when missing."""
     return require_ref()
+
+
+@pytest.fixture
+def ref_vision() -> ModuleType:
+    """Inject the reference vision package, or skip when missing."""
+    return require_ref_vision()
 
 
 def collect_skip_if_missing() -> None:
