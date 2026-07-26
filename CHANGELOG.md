@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make api-data member ordering deterministic
 
+- let forward() annotations resolve at runtime
+
 ### Added
 
 - route masked/decode attention through fused memory-efficient SDPA

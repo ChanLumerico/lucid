@@ -6,6 +6,7 @@ import math
 from collections import OrderedDict
 from typing import TYPE_CHECKING, cast, override
 
+from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
@@ -18,8 +19,10 @@ from lucid.nn.functional.linear import linear
 from lucid.nn.functional.activations import tanh, relu, sigmoid
 from lucid import stack
 
-if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
+# ``Tensor`` is imported at runtime above rather than under TYPE_CHECKING so
+# the annotations on ``forward`` can be resolved.  PEP 649 keeps them lazy
+# only until something asks for the value, and ``inspect.signature`` /
+# ``help()`` / ``typing.get_type_hints`` all do — each raised ``NameError``.
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

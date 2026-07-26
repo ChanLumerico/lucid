@@ -16,8 +16,10 @@ from lucid.nn.modules.linear import Linear
 from lucid.nn.modules.dropout import Dropout
 from lucid.nn.functional.activations import gelu, relu
 
-if TYPE_CHECKING:
-    from lucid.utils.cache import Cache
+# Imported at runtime rather than under TYPE_CHECKING so the annotations on
+# ``forward`` resolve: PEP 649 defers them only until something asks for the
+# value, and ``inspect.signature`` / ``help()`` both do.
+from lucid.utils.cache import Cache
 
 
 class TransformerEncoderLayer(Module):

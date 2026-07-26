@@ -5,6 +5,7 @@ Multi-head attention module.
 import math
 from typing import TYPE_CHECKING, cast, final, override
 
+from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
@@ -16,9 +17,14 @@ import lucid.nn.init as init
 from lucid.nn.functional.linear import linear
 from lucid.nn.functional.attention import repeat_kv, scaled_dot_product_attention
 
-if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
-    from lucid.utils.cache import Cache
+from lucid.utils.cache import Cache
+
+# ``Tensor`` and ``Cache`` are imported at runtime, not under TYPE_CHECKING,
+# so that the annotations on ``forward`` can actually be resolved.  Under
+# PEP 649 a deferred annotation is only lazy until something asks for its
+# value — ``inspect.signature``, ``help()`` and ``typing.get_type_hints`` all
+# do, and each raised ``NameError`` here.  ``transformer.py`` already imports
+# ``Tensor`` this way, so there is no cycle to avoid.
 
 
 _NEG_INF: float = float("-inf")
