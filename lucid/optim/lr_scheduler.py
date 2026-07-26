@@ -118,6 +118,45 @@ class _LRScheduler:
         """
         raise NotImplementedError
 
+    def state_dict(self) -> dict[str, object]:
+        """Serialisable scheduler state, for checkpoint / resume.
+
+        Mirrors the optimizer's contract: everything needed to continue the
+        schedule exactly, minus the ``optimizer`` itself (the caller already
+        holds it) and minus any callable hyper-parameter.
+
+        Callables — ``LambdaLR``'s and ``MultiplicativeLR``'s ``lr_lambda`` —
+        are **not** captured: a Python function is not reliably serialisable,
+        and silently pickling one would make a checkpoint that only reloads in
+        the process that wrote it.  Reconstruct the scheduler with the same
+        lambda, then :meth:`load_state_dict` the rest.
+
+        Returns
+        -------
+        dict
+            Attribute snapshot; feed it back to :meth:`load_state_dict`.
+        """
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if k != "optimizer" and not callable(v)
+        }
+
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`.
+
+        Parameters
+        ----------
+        state_dict : dict
+            A snapshot from :meth:`state_dict` of a scheduler of the same type.
+
+        Notes
+        -----
+        Without this the schedule silently restarted on resume while the
+        optimizer state restored correctly — the two went out of sync.
+        """
+        self.__dict__.update(state_dict)
+
     def get_last_lr(self) -> list[float]:
         """Return the last learning rate computed by the scheduler.
 
@@ -774,6 +813,22 @@ class ReduceLROnPlateau:
         self.min_lr = min_lr
         self._best: float = float("inf") if mode == "min" else float("-inf")
         self._num_bad_epochs = 0
+
+    def state_dict(self) -> dict[str, object]:
+        """Serialisable state — see :meth:`_LRScheduler.state_dict`.
+
+        ``ReduceLROnPlateau`` does not share the ``_LRScheduler`` base, so the
+        contract is spelled out again here rather than inherited.
+        """
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if k != "optimizer" and not callable(v)
+        }
+
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`."""
+        self.__dict__.update(state_dict)
 
     def step(self, metrics: float) -> None:
         """Update the scheduler with the latest monitored metric value.
@@ -1597,6 +1652,42 @@ class SequentialLR:
         self.last_epoch = last_epoch
         self._idx = 0
 
+    def state_dict(self) -> dict[str, object]:
+        """Serialisable state, including each wrapped scheduler's own state.
+
+        The children are live scheduler objects, so they are replaced by their
+        ``state_dict()`` under ``"schedulers"``; :meth:`load_state_dict` feeds
+        them back into the corresponding children.
+        """
+        own = {
+            k: v
+            for k, v in self.__dict__.items()
+            if k not in ("optimizer", "schedulers") and not callable(v)
+        }
+        own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
+        return own
+
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`.
+
+        ``schedulers`` must have the same length and order as when it was
+        saved — the children themselves are not reconstructed here.
+        """
+        incoming = dict(state_dict)
+        raw_children = incoming.pop("schedulers", None)
+        self.__dict__.update(incoming)
+        if raw_children is not None:
+            if not isinstance(raw_children, list):
+                raise TypeError("load_state_dict: 'schedulers' must be a list")
+            child_states: list[dict[str, object]] = raw_children
+            if len(child_states) != len(self.schedulers):
+                raise ValueError(
+                    f"SequentialLR.load_state_dict: got {len(child_states)} child states "
+                    f"for {len(self.schedulers)} schedulers"
+                )
+            for sch, child in zip(self.schedulers, child_states):
+                sch.load_state_dict(child)
+
     def step(self) -> None:
         """Advance the active scheduler by one epoch, switching if a milestone is reached.
 
@@ -1683,6 +1774,42 @@ class ChainedScheduler:
     def __init__(self, schedulers: list[_LRScheduler]) -> None:
         """Initialise the ChainedScheduler.  See the class docstring for parameter semantics."""
         self.schedulers = schedulers
+
+    def state_dict(self) -> dict[str, object]:
+        """Serialisable state, including each wrapped scheduler's own state.
+
+        The children are live scheduler objects, so they are replaced by their
+        ``state_dict()`` under ``"schedulers"``; :meth:`load_state_dict` feeds
+        them back into the corresponding children.
+        """
+        own = {
+            k: v
+            for k, v in self.__dict__.items()
+            if k not in ("optimizer", "schedulers") and not callable(v)
+        }
+        own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
+        return own
+
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`.
+
+        ``schedulers`` must have the same length and order as when it was
+        saved — the children themselves are not reconstructed here.
+        """
+        incoming = dict(state_dict)
+        raw_children = incoming.pop("schedulers", None)
+        self.__dict__.update(incoming)
+        if raw_children is not None:
+            if not isinstance(raw_children, list):
+                raise TypeError("load_state_dict: 'schedulers' must be a list")
+            child_states: list[dict[str, object]] = raw_children
+            if len(child_states) != len(self.schedulers):
+                raise ValueError(
+                    f"ChainedScheduler.load_state_dict: got {len(child_states)} child states "
+                    f"for {len(self.schedulers)} schedulers"
+                )
+            for sch, child in zip(self.schedulers, child_states):
+                sch.load_state_dict(child)
 
     def step(self) -> None:
         """Step all chained schedulers simultaneously.

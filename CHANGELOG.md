@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - route masked/decode attention through fused memory-efficient SDPA
 
+- add state_dict / load_state_dict to every LR scheduler
+
 ### Performance
 
 - route ViT attention through the fused memory-efficient SDPA
