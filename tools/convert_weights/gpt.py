@@ -16,8 +16,8 @@ from lucid.nn import Module
 from tools.convert_weights._base import Architecture, ConversionSpec, register_arch
 
 _CITATION = (
-    "Radford et al., \"Improving Language Understanding by Generative "
-    "Pre-Training\", 2018 (GPT)."
+    'Radford et al., "Improving Language Understanding by Generative '
+    'Pre-Training", 2018 (GPT).'
 )
 _PAPER_URL = "https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf"
 _HF_ID = "openai-community/openai-gpt"
@@ -66,9 +66,7 @@ class GPTArch(Architecture):
         self._model: Module = getattr(models, factory)()
 
     def source_state_dict(self) -> dict[str, object]:
-        return {
-            k: v.detach().cpu().numpy() for k, v in self._src.state_dict().items()
-        }
+        return {k: v.detach().cpu().numpy() for k, v in self._src.state_dict().items()}
 
     def target_model(self) -> Module:
         return self._model

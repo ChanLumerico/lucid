@@ -236,12 +236,8 @@ def write(
     file_size_mb = round(st_path.stat().st_size / (1024 * 1024), 2)
     spec.meta = {**spec.meta, "sha256": sha, "file_size_mb": file_size_mb}
 
-    (tag_dir / "config.json").write_text(
-        render_config_json(spec), encoding="utf-8"
-    )
-    (repo_dir / "README.md").write_text(
-        render_model_card(spec), encoding="utf-8"
-    )
+    (tag_dir / "config.json").write_text(render_config_json(spec), encoding="utf-8")
+    (repo_dir / "README.md").write_text(render_model_card(spec), encoding="utf-8")
     return tag_dir
 
 
@@ -291,9 +287,9 @@ def upload(tag_dir: Path, spec: ConversionSpec) -> str:
 _ARCH_BUILDERS: dict[str, Callable[[str], Architecture]] = {}
 
 
-def register_arch(model_name: str) -> Callable[
-    [Callable[[str], Architecture]], Callable[[str], Architecture]
-]:
+def register_arch(
+    model_name: str,
+) -> Callable[[Callable[[str], Architecture]], Callable[[str], Architecture]]:
     """Register an ``Architecture`` builder under a model name for the CLI."""
 
     def _decorator(

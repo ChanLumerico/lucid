@@ -36,7 +36,7 @@ def _git(*args: str) -> str | None:
         out = subprocess.check_output(
             ["git", *args], cwd=REPO_ROOT, text=True, stderr=subprocess.DEVNULL
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return None
     return out.strip() or None
 
@@ -56,20 +56,22 @@ def _lucid_version() -> str | None:
 
 def main() -> int:
     meta = {
-        "lucid_version":  _lucid_version(),
-        "git_sha":        _git("rev-parse", "--short", "HEAD"),
-        "git_sha_full":   _git("rev-parse", "HEAD"),
-        "git_branch":     _git("rev-parse", "--abbrev-ref", "HEAD"),
-        "built_at":       _dt.datetime.now(_dt.timezone.utc)
-                                       .replace(microsecond=0)
-                                       .isoformat()
-                                       .replace("+00:00", "Z"),
+        "lucid_version": _lucid_version(),
+        "git_sha": _git("rev-parse", "--short", "HEAD"),
+        "git_sha_full": _git("rev-parse", "HEAD"),
+        "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+        "built_at": _dt.datetime.now(_dt.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
     sha = meta["git_sha"] or "??"
     ver = meta["lucid_version"] or "?"
-    print(f"[build-meta] lucid {ver} @ {sha} ({meta['built_at']}) → {OUT.relative_to(WEB_ROOT)}")
+    print(
+        f"[build-meta] lucid {ver} @ {sha} ({meta['built_at']}) → {OUT.relative_to(WEB_ROOT)}"
+    )
     return 0
 
 

@@ -39,8 +39,7 @@ _SENET_CITATION = (
 )
 
 _SENET_PAPER_URL = (
-    "Hu et al., 2018 — *Squeeze-and-Excitation Networks* "
-    "(arXiv:1709.01507)"
+    "Hu et al., 2018 — *Squeeze-and-Excitation Networks* " "(arXiv:1709.01507)"
 )
 
 # arch -> (lucid_cls_factory, repo_id, title)

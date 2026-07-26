@@ -157,9 +157,7 @@ class EfficientNetArch(Architecture):
     def source_state_dict(self) -> dict[str, object]:
         model = self._builder(weights=self._tv_weights)
         model.eval()
-        sd = {
-            k: v.detach().cpu().numpy() for k, v in model.state_dict().items()
-        }
+        sd = {k: v.detach().cpu().numpy() for k, v in model.state_dict().items()}
         self._build_block_tables(sd)
         self._src = sd
         return sd

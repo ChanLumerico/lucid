@@ -89,8 +89,7 @@ class MaskFormerArch(Architecture):
 
     def source_state_dict(self) -> dict[str, object]:
         return {
-            k: v.detach().cpu().numpy()
-            for k, v in self._model.state_dict().items()
+            k: v.detach().cpu().numpy() for k, v in self._model.state_dict().items()
         }
 
     def target_model(self) -> Module:

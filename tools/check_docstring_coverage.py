@@ -92,9 +92,9 @@ _PARAM_BLOCK = re.compile(
 
 def _public_param_count(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     """Number of user-facing parameters — excludes ``self`` / ``cls``."""
-    return sum(
-        1 for a in node.args.args if a.arg not in ("self", "cls")
-    ) + len(node.args.kwonlyargs)
+    return sum(1 for a in node.args.args if a.arg not in ("self", "cls")) + len(
+        node.args.kwonlyargs
+    )
 
 
 def _public_param_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
@@ -186,7 +186,7 @@ def _extract_documented_param_names(doc: str) -> list[str] | None:
         re.MULTILINE,
     )
     m2 = end_re.search(doc, start)
-    body = doc[start:m2.start()] if m2 else doc[start:]
+    body = doc[start : m2.start()] if m2 else doc[start:]
 
     names: list[str] = []
     seen: set[str] = set()

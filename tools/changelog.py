@@ -206,7 +206,7 @@ def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
         for line in body.splitlines(keepends=True):
             if _is_placeholder(line.strip()):
                 continue
-            is_blank = (line.strip() == "")
+            is_blank = line.strip() == ""
             if is_blank and prev_blank:
                 continue  # collapse consecutive blanks
             kept.append(line)

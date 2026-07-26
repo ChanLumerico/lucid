@@ -41,12 +41,18 @@ _PAPER_URL = "https://arxiv.org/abs/2006.11239"
 # arch_key -> (lucid_factory, repo_slug, title, hf_model_id, dataset)
 _VARIANTS: dict[str, tuple[str, str, str, str, str]] = {
     "ddpm_cifar": (
-        "ddpm_cifar", "ddpm-cifar10", "DDPM (CIFAR-10 32×32)",
-        "google/ddpm-cifar10-32", "cifar10",
+        "ddpm_cifar",
+        "ddpm-cifar10",
+        "DDPM (CIFAR-10 32×32)",
+        "google/ddpm-cifar10-32",
+        "cifar10",
     ),
     "ddpm_lsun": (
-        "ddpm_lsun", "ddpm-church", "DDPM (LSUN-Church 256×256)",
-        "google/ddpm-church-256", "lsun-churches",
+        "ddpm_lsun",
+        "ddpm-church",
+        "DDPM (LSUN-Church 256×256)",
+        "google/ddpm-church-256",
+        "lsun-churches",
     ),
 }
 
@@ -95,9 +101,7 @@ class DDPMArch(Architecture):
     # ── key remap helpers ──────────────────────────────────────────────────
     @staticmethod
     def _resnet_field(field: str) -> str:
-        return {"time_emb_proj": "time_proj", "conv_shortcut": "skip"}.get(
-            field, field
-        )
+        return {"time_emb_proj": "time_proj", "conv_shortcut": "skip"}.get(field, field)
 
     def source_state_dict(self) -> dict[str, object]:
         sd = {k: _np(v) for k, v in self._src.state_dict().items()}
@@ -225,7 +229,9 @@ class DDPMArch(Architecture):
     def spec(self) -> ConversionSpec:
         cfg = self._model.config
         config = {k: _jsonable(v) for k, v in dataclasses.asdict(cfg).items()}
-        size = cfg.sample_size if isinstance(cfg.sample_size, int) else cfg.sample_size[0]
+        size = (
+            cfg.sample_size if isinstance(cfg.sample_size, int) else cfg.sample_size[0]
+        )
         preprocessing = {
             "sample_size": size,
             "in_channels": cfg.in_channels,

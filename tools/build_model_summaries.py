@@ -110,16 +110,21 @@ def main() -> int:
         type=float,
         default=2e9,
         help="when shadow construction fails and the runtime fallback would "
-             "allocate real Storage, skip factories whose declared 'params' "
-             "exceeds this value (default 2e9 ≈ avoid materializing >2B-param "
-             "models on hosted runners).  Does NOT affect the shadow path, "
-             "which never materializes regardless of param count.",
+        "allocate real Storage, skip factories whose declared 'params' "
+        "exceeds this value (default 2e9 ≈ avoid materializing >2B-param "
+        "models on hosted runners).  Does NOT affect the shadow path, "
+        "which never materializes regardless of param count.",
     )
-    p.add_argument("--out", default=str(CACHE_PATH),
-                   help=f"output JSON path (default: {CACHE_PATH})")
-    p.add_argument("--force", action="store_true",
-                   help="ignore the on-disk fingerprint cache and "
-                        "re-instantiate every factory")
+    p.add_argument(
+        "--out",
+        default=str(CACHE_PATH),
+        help=f"output JSON path (default: {CACHE_PATH})",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="ignore the on-disk fingerprint cache and " "re-instantiate every factory",
+    )
     args = p.parse_args()
 
     out_path = Path(args.out)
@@ -131,11 +136,11 @@ def main() -> int:
     if not args.force:
         try:
             prev_tree = json.loads(out_path.read_text())
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             pass
         try:
             prev_meta = json.loads(meta_path.read_text())
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             pass
 
     # When filtering to a subset (--family / --factory), SEED from the existing

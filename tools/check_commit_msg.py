@@ -95,9 +95,7 @@ def validate_subject(subject: str) -> tuple[list[str], list[str]]:
 
     ctype = m.group("type")
     if ctype not in ALLOWED_TYPES:
-        errors.append(
-            f"unknown type {ctype!r}. Allowed: {', '.join(ALLOWED_TYPES)}"
-        )
+        errors.append(f"unknown type {ctype!r}. Allowed: {', '.join(ALLOWED_TYPES)}")
 
     body_subject = m.group("subject").strip()
     if not body_subject:

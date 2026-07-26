@@ -53,8 +53,8 @@ API_DATA = WEB_ROOT / "public" / "api-data"
 _PROSE_FIELDS = frozenset({"extended", "summary", "description"})
 _PROSE_LIST_FIELDS = frozenset({"notes", "warns", "raises", "examples"})
 
-_ARXIV_RE  = re.compile(r"\barXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?)\b", re.IGNORECASE)
-_DOI_RE    = re.compile(r"\b(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+)")
+_ARXIV_RE = re.compile(r"\barXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?)\b", re.IGNORECASE)
+_DOI_RE = re.compile(r"\b(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+)")
 # "Vaswani et al., ..." or "Kingma & Ba, ..." up through the year-bearing
 # parenthesised tail.  Captures (first_author, year).  Greedy enough to
 # absorb a full citation line, anchored at a capital letter (start of a
@@ -98,9 +98,11 @@ def _mask_existing_links(text: str) -> tuple[str, list[tuple[int, str]]]:
     masked text and a list of ``(placeholder_index, original)`` pairs so
     we can restore."""
     placeholders: list[tuple[int, str]] = []
+
     def _sub(m: re.Match[str]) -> str:
         placeholders.append((len(placeholders), m.group(0)))
         return f"\x00LINK{len(placeholders) - 1}\x00"
+
     return _LINK_RE.sub(_sub, text), placeholders
 
 
@@ -112,21 +114,25 @@ def _restore_existing_links(text: str, placeholders: list[tuple[int, str]]) -> s
 
 def _link_arxiv(text: str) -> tuple[str, int]:
     n = 0
+
     def _sub(m: re.Match[str]) -> str:
         nonlocal n
         n += 1
         ident = m.group(1)
         return f"[arXiv:{ident}](https://arxiv.org/abs/{ident})"
+
     return _ARXIV_RE.sub(_sub, text), n
 
 
 def _link_doi(text: str) -> tuple[str, int]:
     n = 0
+
     def _sub(m: re.Match[str]) -> str:
         nonlocal n
         n += 1
         doi = m.group(1).rstrip(".,;)")
         return f"[{doi}](https://doi.org/{doi})"
+
     return _DOI_RE.sub(_sub, text), n
 
 
@@ -135,6 +141,7 @@ def _link_author_year(text: str, table: dict[str, dict[str, Any]]) -> tuple[str,
     matches that don't resolve to a URL — we don't want to wrap a refer-
     ence just to point at nothing."""
     n = 0
+
     def _sub(m: re.Match[str]) -> str:
         nonlocal n
         author = m.group("author").lower()
@@ -148,13 +155,20 @@ def _link_author_year(text: str, table: dict[str, dict[str, Any]]) -> tuple[str,
             return m.group(0)
         n += 1
         return f"[{m.group(0)}]({url})"
+
     return _AUTHOR_YEAR_RE.sub(_sub, text), n
 
 
 def _link_text(text: str, table: dict[str, dict[str, Any]]) -> tuple[str, int]:
-    if not isinstance(text, str) or "[" not in text and "(" not in text and \
-       "arXiv" not in text and "10." not in text and "et al" not in text and \
-       "&" not in text:
+    if (
+        not isinstance(text, str)
+        or "[" not in text
+        and "(" not in text
+        and "arXiv" not in text
+        and "10." not in text
+        and "et al" not in text
+        and "&" not in text
+    ):
         # Cheap pre-filter: skip strings that clearly don't contain a ref.
         return text, 0
     masked, ph = _mask_existing_links(text)
@@ -167,6 +181,7 @@ def _link_text(text: str, table: dict[str, dict[str, Any]]) -> tuple[str, int]:
 # ---------------------------------------------------------------------------
 # Recursive walk over the api-data tree
 # ---------------------------------------------------------------------------
+
 
 def _walk(node: Any, table: dict[str, dict[str, Any]], stats: dict[str, int]) -> Any:
     if isinstance(node, str):

@@ -90,9 +90,11 @@ class FCNArch(Architecture):
         from lucid.utils.transforms import Segmentation
 
         tf = self._tv_weights.transforms()
-        resize = int(getattr(tf, "resize_size", [520])[0]) if isinstance(
-            getattr(tf, "resize_size", 520), (list, tuple)
-        ) else int(getattr(tf, "resize_size", 520) or 520)
+        resize = (
+            int(getattr(tf, "resize_size", [520])[0])
+            if isinstance(getattr(tf, "resize_size", 520), (list, tuple))
+            else int(getattr(tf, "resize_size", 520) or 520)
+        )
         preset = Segmentation(
             crop_size=resize,
             resize_size=resize,

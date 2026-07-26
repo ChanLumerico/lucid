@@ -64,16 +64,18 @@ LUCID_ROOT = REPO_ROOT / "lucid"
 # ``_to_impl`` in ``tensor.py``) is enforced by code review, not by this
 # script.  The cost of a wider whitelist is one file's worth of slack;
 # the benefit is no false negatives across the rest of the tree.
-SANCTIONED: frozenset[str] = frozenset({
-    "_factories/converters.py",
-    "_tensor/tensor.py",
-    "_tensor/_repr.py",
-    "_types.py",
-    "serialization/__init__.py",
-    "optim/optimizer.py",
-    "optim/lbfgs.py",
-    "utils/data/dataloader.py",
-})
+SANCTIONED: frozenset[str] = frozenset(
+    {
+        "_factories/converters.py",
+        "_tensor/tensor.py",
+        "_tensor/_repr.py",
+        "_types.py",
+        "serialization/__init__.py",
+        "optim/optimizer.py",
+        "optim/lbfgs.py",
+        "utils/data/dataloader.py",
+    }
+)
 
 
 class Violation(NamedTuple):
@@ -113,10 +115,7 @@ def _collect_type_checking_blocks(tree: ast.AST) -> list[tuple[int, int]]:
         test = node.test
         if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
             pass
-        elif (
-            isinstance(test, ast.Attribute)
-            and test.attr == "TYPE_CHECKING"
-        ):
+        elif isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING":
             pass
         else:
             continue

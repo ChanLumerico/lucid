@@ -122,41 +122,144 @@ def _basename_index(paths: set[str]) -> dict[str, list[str]]:
 # Lucid-side typos.
 _PY_STDLIB_NAMES: set[str] = {
     # Exceptions
-    "Exception", "BaseException", "TypeError", "ValueError", "RuntimeError",
-    "NotImplementedError", "IndexError", "KeyError", "AttributeError",
-    "AssertionError", "ArithmeticError", "OverflowError", "ZeroDivisionError",
-    "FloatingPointError", "FileNotFoundError", "OSError", "IOError",
-    "StopIteration", "StopAsyncIteration", "GeneratorExit",
-    "ImportError", "ModuleNotFoundError", "MemoryError", "NameError",
-    "UnboundLocalError", "RecursionError",
+    "Exception",
+    "BaseException",
+    "TypeError",
+    "ValueError",
+    "RuntimeError",
+    "NotImplementedError",
+    "IndexError",
+    "KeyError",
+    "AttributeError",
+    "AssertionError",
+    "ArithmeticError",
+    "OverflowError",
+    "ZeroDivisionError",
+    "FloatingPointError",
+    "FileNotFoundError",
+    "OSError",
+    "IOError",
+    "StopIteration",
+    "StopAsyncIteration",
+    "GeneratorExit",
+    "ImportError",
+    "ModuleNotFoundError",
+    "MemoryError",
+    "NameError",
+    "UnboundLocalError",
+    "RecursionError",
     # typing / collections.abc
-    "Callable", "Iterable", "Iterator", "Sequence", "Mapping", "Generator",
-    "Optional", "Union", "Any", "Self", "TypeVar", "ParamSpec",
+    "Callable",
+    "Iterable",
+    "Iterator",
+    "Sequence",
+    "Mapping",
+    "Generator",
+    "Optional",
+    "Union",
+    "Any",
+    "Self",
+    "TypeVar",
+    "ParamSpec",
     # Builtins
-    "list", "dict", "set", "tuple", "frozenset", "str", "bytes",
-    "int", "float", "complex", "bool", "object", "type", "slice", "range",
-    "None", "Ellipsis", "True", "False",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "frozenset",
+    "str",
+    "bytes",
+    "int",
+    "float",
+    "complex",
+    "bool",
+    "object",
+    "type",
+    "slice",
+    "range",
+    "None",
+    "Ellipsis",
+    "True",
+    "False",
     # stdlib modules referenced via :mod:
-    "abc", "ast", "asyncio", "collections", "concurrent", "contextlib",
-    "copy", "ctypes", "dataclasses", "datetime", "enum", "functools",
-    "hashlib", "io", "itertools", "json", "logging", "math", "multiprocessing",
-    "operator", "os", "pathlib", "pickle", "platform", "queue", "random",
-    "re", "shutil", "signal", "socket", "ssl", "struct", "subprocess",
-    "sys", "tempfile", "textwrap", "threading", "time", "traceback",
-    "typing", "unittest", "urllib", "uuid", "warnings", "weakref", "zipfile",
+    "abc",
+    "ast",
+    "asyncio",
+    "collections",
+    "concurrent",
+    "contextlib",
+    "copy",
+    "ctypes",
+    "dataclasses",
+    "datetime",
+    "enum",
+    "functools",
+    "hashlib",
+    "io",
+    "itertools",
+    "json",
+    "logging",
+    "math",
+    "multiprocessing",
+    "operator",
+    "os",
+    "pathlib",
+    "pickle",
+    "platform",
+    "queue",
+    "random",
+    "re",
+    "shutil",
+    "signal",
+    "socket",
+    "ssl",
+    "struct",
+    "subprocess",
+    "sys",
+    "tempfile",
+    "textwrap",
+    "threading",
+    "time",
+    "traceback",
+    "typing",
+    "unittest",
+    "urllib",
+    "uuid",
+    "warnings",
+    "weakref",
+    "zipfile",
     # numpy / MLX bridge symbols — H4 allows numpy only at boundary; MLX
     # is the GPU stream backend.
-    "ndarray", "np.ndarray", "numpy.ndarray", "numpy", "np",
-    "mlx", "mlx.core", "mlx.core.array",
+    "ndarray",
+    "np.ndarray",
+    "numpy.ndarray",
+    "numpy",
+    "np",
+    "mlx",
+    "mlx.core",
+    "mlx.core.array",
     # C++ / Metal Performance Shaders types referenced from compile/
     # — engine internals, not Python-side symbols.
-    "MPSGraph", "MPSGraphExecutable", "MTLDevice", "MTLBuffer",
-    "MTLResourceStorageModeShared", "MpsBuilder", "CompiledStepBackward",
-    "compile_trace_with_backward", "_C_engine",
+    "MPSGraph",
+    "MPSGraphExecutable",
+    "MTLDevice",
+    "MTLBuffer",
+    "MTLResourceStorageModeShared",
+    "MpsBuilder",
+    "CompiledStepBackward",
+    "compile_trace_with_backward",
+    "_C_engine",
     # Builtin warning categories.
-    "UserWarning", "DeprecationWarning", "PendingDeprecationWarning",
-    "SyntaxWarning", "RuntimeWarning", "FutureWarning",
-    "ImportWarning", "UnicodeWarning", "BytesWarning", "ResourceWarning",
+    "UserWarning",
+    "DeprecationWarning",
+    "PendingDeprecationWarning",
+    "SyntaxWarning",
+    "RuntimeWarning",
+    "FutureWarning",
+    "ImportWarning",
+    "UnicodeWarning",
+    "BytesWarning",
+    "ResourceWarning",
 }
 
 
@@ -261,9 +364,7 @@ def _collect_source_symbols() -> set[str]:
             mod_path = mod_path[: -len(".__init__")]
         names.add(mod_path)
         for node in ast.iter_child_nodes(tree):
-            if isinstance(
-                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-            ):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 names.add(node.name)
                 names.add(f"{mod_path}.{node.name}")
                 # Class methods — surface bare method names so
@@ -276,9 +377,7 @@ def _collect_source_symbols() -> set[str]:
                 # explicitly.
                 if isinstance(node, ast.ClassDef):
                     for child in node.body:
-                        if isinstance(
-                            child, (ast.FunctionDef, ast.AsyncFunctionDef)
-                        ):
+                        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                             names.add(child.name)
                             names.add(f"{mod_path}.{node.name}.{child.name}")
                             names.add(f"{node.name}.{child.name}")
@@ -301,7 +400,8 @@ def _collect_source_symbols() -> set[str]:
                                     names.add(f"{node.name}.{attr_name}")
                         elif isinstance(child, (ast.Assign, ast.AnnAssign)):
                             tgts = (
-                                child.targets if isinstance(child, ast.Assign)
+                                child.targets
+                                if isinstance(child, ast.Assign)
                                 else [child.target]
                             )
                             for tgt in tgts:
@@ -392,8 +492,7 @@ def _resolve(
     if target in _PY_STDLIB_NAMES:
         return True
     suffix_hits = [
-        p for p in paths
-        if p.endswith("." + target) or p.endswith("::" + target)
+        p for p in paths if p.endswith("." + target) or p.endswith("::" + target)
     ]
     if suffix_hits:
         return True
@@ -471,9 +570,7 @@ def main() -> int:
     for rel, sym, role, target in unresolved[:limit]:
         sys.stderr.write(f"  {rel}: in `{sym}` — :{role}:`{target}` does not resolve\n")
     if len(unresolved) > limit:
-        sys.stderr.write(
-            f"  ... {len(unresolved) - limit} more (re-run with --list)\n"
-        )
+        sys.stderr.write(f"  ... {len(unresolved) - limit} more (re-run with --list)\n")
     return 1
 
 

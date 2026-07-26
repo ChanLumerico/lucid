@@ -93,9 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[write]   sha256 = {sha}")
     print(f"[write]   size   = {size} MB")
     arch_pkg = args.model.split("_")[0]
-    print(
-        f"\n  → paste into lucid/models/<domain>/{arch_pkg}/_weights.py:"
-    )
+    print(f"\n  → paste into lucid/models/<domain>/{arch_pkg}/_weights.py:")
     print(f'      sha256="{sha}",')
 
     if args.upload:

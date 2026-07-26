@@ -154,7 +154,7 @@ def _load_module_cache() -> dict[str, str]:
         return {}
     try:
         return json.loads(MODULE_CACHE.read_text())
-    except (OSError, json.JSONDecodeError):
+    except OSError, json.JSONDecodeError:
         return {}
 
 
@@ -223,7 +223,7 @@ def _check_drift() -> int:
     if DRIFT_CACHE.is_file():
         try:
             cached = json.loads(DRIFT_CACHE.read_text())
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             cached = {}
     current = _content_fingerprints()
     if not current:
@@ -245,7 +245,11 @@ def _check_drift() -> int:
         return 0
     print("[api-data] ✗ STALE — committed api-data is out of date with source:")
     for s in stale:
-        why = "source changed since last regen" if s in cached else "new slug, never built"
+        why = (
+            "source changed since last regen"
+            if s in cached
+            else "new slug, never built"
+        )
         print(f"    - {s}  ({why})")
     print("\n  Regenerate + commit:")
     print("    cd web && FORCE_API_BUILD=1 python3 scripts/build-api-data-cached.py")
@@ -334,7 +338,12 @@ def main() -> int:
     # slug from the cache so subsequent builds don't try to rebuild
     # ghosts.  Synth-slug names are exempt because their source dirs
     # don't map 1:1 to file system locations.
-    SYNTH_NAMES = {"lucid.ops", "lucid.creation", "lucid.ops.composite", "lucid._C.engine"}
+    SYNTH_NAMES = {
+        "lucid.ops",
+        "lucid.creation",
+        "lucid.ops.composite",
+        "lucid._C.engine",
+    }
     orphans: list[str] = []
     for slug in list(prev_fingerprints.keys()):
         if slug in SYNTH_NAMES:
@@ -388,13 +397,19 @@ def main() -> int:
         CACHE_FILE.write_text(current_key)
         return 0
     else:
-        print(f"[api-data] rebuilding {len(stale_slugs)} stale slug(s): "
-              f"{', '.join(stale_slugs[:5])}"
-              + (f" + {len(stale_slugs) - 5} more" if len(stale_slugs) > 5 else ""))
-        result = subprocess.run([
-            sys.executable, str(BUILD_SCRIPT),
-            "--slugs", *stale_slugs,
-        ])
+        print(
+            f"[api-data] rebuilding {len(stale_slugs)} stale slug(s): "
+            f"{', '.join(stale_slugs[:5])}"
+            + (f" + {len(stale_slugs) - 5} more" if len(stale_slugs) > 5 else "")
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(BUILD_SCRIPT),
+                "--slugs",
+                *stale_slugs,
+            ]
+        )
 
     if result.returncode == 0:
         OUT_DIR.mkdir(parents=True, exist_ok=True)

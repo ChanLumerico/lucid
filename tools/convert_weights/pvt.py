@@ -86,8 +86,7 @@ class PVTArch(Architecture):
 
     def source_state_dict(self) -> dict[str, object]:
         return {
-            k: v.detach().cpu().numpy()
-            for k, v in self._model.state_dict().items()
+            k: v.detach().cpu().numpy() for k, v in self._model.state_dict().items()
         }
 
     def target_model(self) -> Module:
@@ -124,9 +123,7 @@ class PVTArch(Architecture):
         meta = {
             "num_params": int(sum(p.numel() for p in self._model.parameters())),
             "recipe": str(cfg.get("url", "")),
-            "metrics": {
-                "ImageNet-1k": {"acc@1": _ACC1.get(self.arch, 0.0)}
-            },
+            "metrics": {"ImageNet-1k": {"acc@1": _ACC1.get(self.arch, 0.0)}},
         }
 
         return ConversionSpec(

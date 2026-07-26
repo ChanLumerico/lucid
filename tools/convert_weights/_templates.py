@@ -144,9 +144,7 @@ def _text_usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
     elif spec.task in ("masked-lm", "causal-lm", "seq2seq-lm"):
         tail = "logits = out.logits  # (B, T, vocab_size)\n"
     elif spec.task == "question-answering":
-        tail = (
-            "start, end = out.start_logits, out.end_logits  # (B, T) each\n"
-        )
+        tail = "start, end = out.start_logits, out.end_logits  # (B, T) each\n"
     else:  # sequence-classification / token-classification
         tail = "logits = out.logits  # classification logits\n"
     return preamble + tail
@@ -239,9 +237,7 @@ def render_model_card(spec: "ConversionSpec") -> str:
         if _enum is not None
         else "".join(p.capitalize() for p in spec.architecture.split("_")) + "Weights"
     )
-    paper_line = (
-        f"\n> {spec.paper_url}\n" if spec.paper_url else ""
-    )
+    paper_line = f"\n> {spec.paper_url}\n" if spec.paper_url else ""
 
     frontmatter = [
         "---",

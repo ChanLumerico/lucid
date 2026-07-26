@@ -30,13 +30,19 @@ _CSPNET_CITATION = (
 # arch -> (lucid_cls_factory, repo_id, title)
 _CSPNET_VARIANTS: dict[str, tuple[str, str, str]] = {
     "cspresnet_50": (
-        "cspresnet_50_cls", "lucid-dl/cspresnet-50", "CSPResNet-50",
+        "cspresnet_50_cls",
+        "lucid-dl/cspresnet-50",
+        "CSPResNet-50",
     ),
     "cspresnext_50": (
-        "cspresnext_50_cls", "lucid-dl/cspresnext-50", "CSPResNeXt-50",
+        "cspresnext_50_cls",
+        "lucid-dl/cspresnext-50",
+        "CSPResNeXt-50",
     ),
     "cspdarknet_53": (
-        "cspdarknet_53_cls", "lucid-dl/cspdarknet-53", "CSPDarknet-53",
+        "cspdarknet_53_cls",
+        "lucid-dl/cspdarknet-53",
+        "CSPDarknet-53",
     ),
 }
 

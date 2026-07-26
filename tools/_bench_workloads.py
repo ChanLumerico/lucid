@@ -30,7 +30,6 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
-
 # ── Workload record ─────────────────────────────────────────────────
 
 
@@ -147,6 +146,7 @@ class _UnwrappingResNet18(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         import lucid.models as M  # local to avoid heavy import at module load
+
         self.inner = M.resnet_18_cls(num_classes=10)
 
     def forward(self, x: lucid.Tensor) -> lucid.Tensor:

@@ -144,8 +144,7 @@ class SwinArch(Architecture):
                     )
                 if inner.startswith("norm."):
                     return (
-                        f"stages.{luc_stage}.downsample.norm."
-                        + inner[len("norm.") :]
+                        f"stages.{luc_stage}.downsample.norm." + inner[len("norm.") :]
                     )
                 return None
         return None
@@ -344,8 +343,7 @@ class SwinTimmArch(Architecture):
                     )
                 if inner.startswith("norm."):
                     return (
-                        f"stages.{tgt_stage}.downsample.norm."
-                        + inner[len("norm.") :]
+                        f"stages.{tgt_stage}.downsample.norm." + inner[len("norm.") :]
                     )
                 return None
         return None

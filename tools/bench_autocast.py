@@ -34,7 +34,6 @@ import lucid.nn.functional as F
 import lucid.optim as optim
 from lucid.compile import fused_step
 
-
 COMPILE_DEVICE = "metal"
 
 
@@ -112,7 +111,12 @@ class _GPT2Block(nn.Module):
 WORKLOADS = [
     ("mlp", _MLP, lambda bs: lucid.randn(bs, 64), lambda bs: lucid.randn(bs, 10)),
     ("ln_mlp", _LNMLP, lambda bs: lucid.randn(bs, 64), lambda bs: lucid.randn(bs, 10)),
-    ("bn1d_mlp", _BN1DMLP, lambda bs: lucid.randn(bs, 64), lambda bs: lucid.randn(bs, 10)),
+    (
+        "bn1d_mlp",
+        _BN1DMLP,
+        lambda bs: lucid.randn(bs, 64),
+        lambda bs: lucid.randn(bs, 10),
+    ),
     # gpt2_block + autocast currently fails on GELU's F32 constants
     # vs F16 activations (constantWithScalar:dataType: in the GELU
     # emitter defaults to F32 without matching the input).  Tracked
@@ -175,7 +179,9 @@ def _bench_fused_step(
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--batch", type=str, default="8,32,128", help="Comma-separated BS list")
+    ap.add_argument(
+        "--batch", type=str, default="8,32,128", help="Comma-separated BS list"
+    )
     ap.add_argument("--csv", type=str, default="out/bench_autocast.csv")
     ap.add_argument("--iter", type=int, default=10)
     args = ap.parse_args()
@@ -186,8 +192,10 @@ def main() -> int:
     rows: list[dict[str, object]] = []
 
     print(f"# Autocast bench — {args.csv}")
-    print(f"# {len(WORKLOADS)} workloads × {len(batches)} batches × 2 precisions = "
-          f"{len(WORKLOADS) * len(batches) * 2} rows")
+    print(
+        f"# {len(WORKLOADS)} workloads × {len(batches)} batches × 2 precisions = "
+        f"{len(WORKLOADS) * len(batches) * 2} rows"
+    )
 
     for name, mk_model, mk_input, mk_target in WORKLOADS:
         for bs in batches:
@@ -196,8 +204,12 @@ def main() -> int:
                 sys.stdout.flush()
                 try:
                     cold, warm, p95 = _bench_fused_step(
-                        mk_model, mk_input, mk_target, bs,
-                        autocast=autocast, n_iter=args.iter,
+                        mk_model,
+                        mk_input,
+                        mk_target,
+                        bs,
+                        autocast=autocast,
+                        n_iter=args.iter,
                     )
                     sys.stdout.write(f"warm={warm:.2f}ms cold={cold:.1f}ms\n")
                     note = "ok"
@@ -206,27 +218,40 @@ def main() -> int:
                     note = f"error:{type(e).__name__}:{str(e)[:60]}"
                     sys.stdout.write(f"FAIL: {note}\n")
                 sys.stdout.flush()
-                rows.append({
-                    "workload": name,
-                    "precision": prec_label,
-                    "batch": bs,
-                    "cold_ms": cold,
-                    "warm_ms_median": warm,
-                    "warm_ms_p95": p95,
-                    "note": note,
-                })
+                rows.append(
+                    {
+                        "workload": name,
+                        "precision": prec_label,
+                        "batch": bs,
+                        "cold_ms": cold,
+                        "warm_ms_median": warm,
+                        "warm_ms_p95": p95,
+                        "note": note,
+                    }
+                )
 
     # Compute speedup: autocast_f16 vs f32 for the same workload/batch.
     f32_lookup: dict[tuple[str, int], float] = {}
     for r in rows:
-        if r["precision"] == "f32" and isinstance(r["warm_ms_median"], float) and r["warm_ms_median"] == r["warm_ms_median"]:
-            f32_lookup[(str(r["workload"]), int(r["batch"]))] = float(r["warm_ms_median"])
+        if (
+            r["precision"] == "f32"
+            and isinstance(r["warm_ms_median"], float)
+            and r["warm_ms_median"] == r["warm_ms_median"]
+        ):
+            f32_lookup[(str(r["workload"]), int(r["batch"]))] = float(
+                r["warm_ms_median"]
+            )
 
     for r in rows:
         if r["precision"] == "autocast_f16":
             f32_warm = f32_lookup.get((str(r["workload"]), int(r["batch"])))
             warm = r["warm_ms_median"]
-            if (f32_warm is not None and isinstance(warm, float) and warm == warm and warm > 0):
+            if (
+                f32_warm is not None
+                and isinstance(warm, float)
+                and warm == warm
+                and warm > 0
+            ):
                 r["speedup_vs_f32"] = f32_warm / warm
             else:
                 r["speedup_vs_f32"] = float("nan")
@@ -234,14 +259,25 @@ def main() -> int:
             r["speedup_vs_f32"] = 1.0
 
     # Write CSV.
-    fields = ["workload", "precision", "batch", "cold_ms", "warm_ms_median",
-              "warm_ms_p95", "speedup_vs_f32", "note"]
+    fields = [
+        "workload",
+        "precision",
+        "batch",
+        "cold_ms",
+        "warm_ms_median",
+        "warm_ms_p95",
+        "speedup_vs_f32",
+        "note",
+    ]
     with open(args.csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         for r in rows:
-            cleaned = {k: ("" if (isinstance(v, float) and v != v) else v)
-                       for k, v in r.items() if k in fields}
+            cleaned = {
+                k: ("" if (isinstance(v, float) and v != v) else v)
+                for k, v in r.items()
+                if k in fields
+            }
             for k in fields:
                 cleaned.setdefault(k, "")
             writer.writerow(cleaned)

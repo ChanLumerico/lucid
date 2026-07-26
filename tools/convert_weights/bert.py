@@ -28,57 +28,90 @@ from lucid.nn import Module
 from tools.convert_weights._base import Architecture, ConversionSpec, register_arch
 
 _CITATION = (
-    "Devlin et al., \"BERT: Pre-training of Deep Bidirectional Transformers "
-    "for Language Understanding\", NAACL 2019. Miniatures: Turc et al., "
-    "\"Well-Read Students Learn Better\", 2019."
+    'Devlin et al., "BERT: Pre-training of Deep Bidirectional Transformers '
+    'for Language Understanding", NAACL 2019. Miniatures: Turc et al., '
+    '"Well-Read Students Learn Better", 2019.'
 )
 _PAPER_URL = "https://arxiv.org/abs/1810.04805"
 
 # arch_key -> (lucid_factory, repo_slug, title, hf_model_id, kind)
 _VARIANTS: dict[str, tuple[str, str, str, str, str]] = {
     "bert_tiny": (
-        "bert_tiny", "bert-tiny", "BERT-Tiny",
-        "google/bert_uncased_L-2_H-128_A-2", "base",
+        "bert_tiny",
+        "bert-tiny",
+        "BERT-Tiny",
+        "google/bert_uncased_L-2_H-128_A-2",
+        "base",
     ),
     "bert_mini": (
-        "bert_mini", "bert-mini", "BERT-Mini",
-        "google/bert_uncased_L-4_H-256_A-4", "base",
+        "bert_mini",
+        "bert-mini",
+        "BERT-Mini",
+        "google/bert_uncased_L-4_H-256_A-4",
+        "base",
     ),
     "bert_small": (
-        "bert_small", "bert-small", "BERT-Small",
-        "google/bert_uncased_L-4_H-512_A-8", "base",
+        "bert_small",
+        "bert-small",
+        "BERT-Small",
+        "google/bert_uncased_L-4_H-512_A-8",
+        "base",
     ),
     "bert_medium": (
-        "bert_medium", "bert-medium", "BERT-Medium",
-        "google/bert_uncased_L-8_H-512_A-8", "base",
+        "bert_medium",
+        "bert-medium",
+        "BERT-Medium",
+        "google/bert_uncased_L-8_H-512_A-8",
+        "base",
     ),
     "bert_base": (
-        "bert_base", "bert-base", "BERT-Base",
-        "google-bert/bert-base-uncased", "base",
+        "bert_base",
+        "bert-base",
+        "BERT-Base",
+        "google-bert/bert-base-uncased",
+        "base",
     ),
     "bert_large": (
-        "bert_large", "bert-large", "BERT-Large",
-        "google-bert/bert-large-uncased", "base",
+        "bert_large",
+        "bert-large",
+        "BERT-Large",
+        "google-bert/bert-large-uncased",
+        "base",
     ),
     "bert_base_mlm": (
-        "bert_base_mlm", "bert-base-mlm", "BERT-Base (Masked-LM)",
-        "google-bert/bert-base-uncased", "mlm",
+        "bert_base_mlm",
+        "bert-base-mlm",
+        "BERT-Base (Masked-LM)",
+        "google-bert/bert-base-uncased",
+        "mlm",
     ),
     "bert_large_mlm": (
-        "bert_large_mlm", "bert-large-mlm", "BERT-Large (Masked-LM)",
-        "google-bert/bert-large-uncased", "mlm",
+        "bert_large_mlm",
+        "bert-large-mlm",
+        "BERT-Large (Masked-LM)",
+        "google-bert/bert-large-uncased",
+        "mlm",
     ),
     "bert_base_qa": (
-        "bert_base_qa", "bert-base-squad", "BERT-Base (SQuAD v1.1)",
-        "csarron/bert-base-uncased-squad-v1", "qa",
+        "bert_base_qa",
+        "bert-base-squad",
+        "BERT-Base (SQuAD v1.1)",
+        "csarron/bert-base-uncased-squad-v1",
+        "qa",
     ),
     "bert_large_qa": (
-        "bert_large_qa", "bert-large-squad", "BERT-Large WWM (SQuAD v1.1)",
-        "google-bert/bert-large-uncased-whole-word-masking-finetuned-squad", "qa",
+        "bert_large_qa",
+        "bert-large-squad",
+        "BERT-Large WWM (SQuAD v1.1)",
+        "google-bert/bert-large-uncased-whole-word-masking-finetuned-squad",
+        "qa",
     ),
     "bert_base_token_cls": (
-        "bert_base_token_cls", "bert-base-ner", "BERT-Base (CoNLL-2003 NER)",
-        "dslim/bert-base-NER", "token_cls",
+        "bert_base_token_cls",
+        "bert-base-ner",
+        "BERT-Base (CoNLL-2003 NER)",
+        "dslim/bert-base-NER",
+        "token_cls",
     ),
 }
 
@@ -149,9 +182,7 @@ class BERTArch(Architecture):
             )
 
             head_cls = (
-                BertForQuestionAnswering
-                if kind == "qa"
-                else BertForTokenClassification
+                BertForQuestionAnswering if kind == "qa" else BertForTokenClassification
             )
             # Fine-tuned head + encoder come from the task model; the pooler
             # (dropped by add_pooling_layer=False, but present in the file) is
@@ -181,9 +212,7 @@ class BERTArch(Architecture):
                 if k.startswith("pooler."):
                     combined[f"bert.{k}"] = v
             return {k: v.detach().cpu().numpy() for k, v in combined.items()}
-        return {
-            k: v.detach().cpu().numpy() for k, v in self._src.state_dict().items()
-        }
+        return {k: v.detach().cpu().numpy() for k, v in self._src.state_dict().items()}
 
     def target_model(self) -> Module:
         return self._model

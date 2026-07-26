@@ -32,7 +32,9 @@ list of emitted Lucid paths is already on disk; we union those with
 the imports map to suppress entries for non-public symbols.
 """
 
-from __future__ import annotations  # noqa: F401  — tooling script, runtime constraints don't apply
+from __future__ import (
+    annotations,
+)  # noqa: F401  — tooling script, runtime constraints don't apply
 
 import ast
 import json
@@ -61,7 +63,9 @@ def _module_path_of(p: Path) -> str:
 
 
 def _resolve_relative(
-    importer_pkg: str, level: int, module: str | None,
+    importer_pkg: str,
+    level: int,
+    module: str | None,
 ) -> str | None:
     """``from . import X`` / ``from ..foo import Y`` style.  Resolves the
     relative spec against the importing module's *package* path."""
@@ -164,7 +168,8 @@ def _emitted_symbol_paths() -> set[str]:
 
 
 def _invert(
-    imports: dict[str, set[str]], emitted: set[str],
+    imports: dict[str, set[str]],
+    emitted: set[str],
 ) -> dict[str, list[dict[str, str]]]:
     """Flip ``importer → imported`` to ``target → [{module, kind}]``.
 

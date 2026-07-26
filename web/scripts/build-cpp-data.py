@@ -66,7 +66,7 @@ def _git_sha() -> str:
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
         ).strip()
-    except Exception:                                            # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return "main"
 
 
@@ -106,11 +106,22 @@ def _collect_comment_above(source_lines: list[str], line0: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-_SECTION_HEADERS = frozenset((
-    "Parameters", "Returns", "Yields", "Raises", "Warns",
-    "Notes", "Examples", "Attributes", "Math", "Shape",
-    "References", "See Also",
-))
+_SECTION_HEADERS = frozenset(
+    (
+        "Parameters",
+        "Returns",
+        "Yields",
+        "Raises",
+        "Warns",
+        "Notes",
+        "Examples",
+        "Attributes",
+        "Math",
+        "Shape",
+        "References",
+        "See Also",
+    )
+)
 
 
 def _empty_doc() -> dict[str, Any]:
@@ -208,8 +219,10 @@ def _parse_field_list(block: str) -> list[dict[str, Any]]:
                 continue
             txt = raw.strip()
             current["description"] = (
-                current["description"] + " " + txt
-            ).strip() if current["description"] else txt
+                (current["description"] + " " + txt).strip()
+                if current["description"]
+                else txt
+            )
     if current is not None:
         items.append(current)
     return items
@@ -221,10 +234,12 @@ def _parse_raise_list(block: str) -> list[dict[str, Any]]:
     web renderer's :class:`DocstringRaise` schema is satisfied."""
     out: list[dict[str, Any]] = []
     for f in _parse_field_list(block):
-        out.append({
-            "annotation": f["annotation"] or f["name"],
-            "description": f["description"],
-        })
+        out.append(
+            {
+                "annotation": f["annotation"] or f["name"],
+                "description": f["description"],
+            }
+        )
     return out
 
 
@@ -270,9 +285,7 @@ def _rst_inline_markup(text: str) -> str:
     text = re.sub(r"``([^`]+)``", r"`\1`", text)
     # remove citations, then collapse any remaining role to inline code
     text = re.sub(r":cite:[a-z]*:?`[^`]+`", "", text)
-    text = re.sub(
-        r":[a-zA-Z][\w.+-]*(?::[a-zA-Z][\w.+-]*)*:`~?([^`]+)`", r"`\1`", text
-    )
+    text = re.sub(r":[a-zA-Z][\w.+-]*(?::[a-zA-Z][\w.+-]*)*:`~?([^`]+)`", r"`\1`", text)
     return text
 
 
@@ -301,7 +314,11 @@ def _split_sections(comment: str) -> dict[str, Any]:
     returns = _parse_returns(sections.get("Returns", ""))
 
     notes_text = sections.get("Notes", "").strip()
-    notes = [p.strip() for p in re.split(r"\n\s*\n", notes_text) if p.strip()] if notes_text else []
+    notes = (
+        [p.strip() for p in re.split(r"\n\s*\n", notes_text) if p.strip()]
+        if notes_text
+        else []
+    )
 
     examples = _parse_examples(sections.get("Examples", ""))
 
@@ -310,10 +327,10 @@ def _split_sections(comment: str) -> dict[str, Any]:
     # MathText already passes through ``$...$`` / ``$$...$$`` and rST
     # ``.. math::`` directives, so the author can write either form.
     for label, key in (
-        ("Math",       "Math"),
-        ("Shape",      "Shape"),
+        ("Math", "Math"),
+        ("Shape", "Shape"),
         ("References", "References"),
-        ("See Also",   "See Also"),
+        ("See Also", "See Also"),
     ):
         txt = sections.get(key, "").strip()
         if txt:
@@ -481,7 +498,11 @@ def _cpp_labels(c: Cursor) -> list[str]:
         labels.append("cpp-ctor")
     elif kind == CursorKind.DESTRUCTOR:
         labels.append("cpp-dtor")
-    elif c.spelling and c.spelling.startswith("operator") and not c.spelling[8:9].isalnum():
+    elif (
+        c.spelling
+        and c.spelling.startswith("operator")
+        and not c.spelling[8:9].isalnum()
+    ):
         # ``operator+`` / ``operator()`` / ``operator[]`` / ``operator=`` —
         # NOT ``operator_overload_helper`` (alphanumeric continuation).
         labels.append("cpp-operator")
@@ -491,17 +512,17 @@ def _cpp_labels(c: Cursor) -> list[str]:
                 labels.append("cpp-pure-virtual")
             elif c.is_virtual_method():
                 labels.append("cpp-virtual")
-        except Exception:                                            # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         try:
             if c.is_static_method():
                 labels.append("cpp-static")
-        except Exception:                                            # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         try:
             if c.is_const_method():
                 labels.append("cpp-const")
-        except Exception:                                            # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
     if kind == CursorKind.FUNCTION_TEMPLATE:
         labels.append("cpp-template")
@@ -516,12 +537,12 @@ def _serialise_function(
 ) -> dict[str, Any]:
     doc = _split_sections(_comment_for(c, source_lines))
     return {
-        "name":      c.spelling,
-        "path":      _qualified_name(c),
-        "kind":      "function",
-        "labels":    _cpp_labels(c),
+        "name": c.spelling,
+        "path": _qualified_name(c),
+        "kind": "function",
+        "labels": _cpp_labels(c),
         "signature": _build_signature(c),
-        "source":    _source_link(c, sha),
+        "source": _source_link(c, sha),
         "subcategory": subcategory,
         **doc,
     }
@@ -557,17 +578,20 @@ def _serialise_class(
             seen_method_names.add(child.spelling)
             methods.append(_serialise_function(child, sha, source_lines))
     return {
-        "name":       c.spelling,
-        "path":       _qualified_name(c),
-        "kind":       "class",
+        "name": c.spelling,
+        "path": _qualified_name(c),
+        "kind": "class",
         "class_kind": "regular",
-        "bases":      [b.spelling for b in c.get_children()
-                       if b.kind == CursorKind.CXX_BASE_SPECIFIER],
-        "labels":     [],
-        "signature":  _build_signature(c),
-        "source":     _source_link(c, sha),
+        "bases": [
+            b.spelling
+            for b in c.get_children()
+            if b.kind == CursorKind.CXX_BASE_SPECIFIER
+        ],
+        "labels": [],
+        "signature": _build_signature(c),
+        "source": _source_link(c, sha),
         "subcategory": subcategory,
-        "methods":    methods,
+        "methods": methods,
         **doc,
     }
 
@@ -627,7 +651,10 @@ def _process_translation_unit(
         if not _is_public(c):
             continue
         if c.kind in _FUNCTION_KINDS:
-            if c.semantic_parent is None or c.semantic_parent.kind == CursorKind.NAMESPACE:
+            if (
+                c.semantic_parent is None
+                or c.semantic_parent.kind == CursorKind.NAMESPACE
+            ):
                 key = _qualified_name(c)
                 if key not in functions:
                     functions[key] = _serialise_function(c, sha, src_lines, sub)
@@ -642,14 +669,15 @@ def _parse_header(idx: Index, header: Path) -> TranslationUnit | None:
         return idx.parse(
             str(header),
             args=[
-                "-x", "c++",
+                "-x",
+                "c++",
                 "-std=c++20",
                 f"-I{HEADERS_ROOT}",
                 f"-I{HEADERS_ROOT.parent}",
             ],
             options=TranslationUnit.PARSE_SKIP_FUNCTION_BODIES,
         )
-    except Exception as exc:                                     # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         print(f"  ✗ parse failed: {header.name} — {exc}")
         return None
 
@@ -661,8 +689,9 @@ def _parse_header(idx: Index, header: Path) -> TranslationUnit | None:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--root", default=str(HEADERS_ROOT),
-                   help="C++ headers root (default: lucid/_C)")
+    p.add_argument(
+        "--root", default=str(HEADERS_ROOT), help="C++ headers root (default: lucid/_C)"
+    )
     p.add_argument("--debug", action="store_true")
     args = p.parse_args()
 
@@ -705,17 +734,22 @@ def main() -> int:
         members.append(data)
 
     engine_json = {
-        "slug":    "lucid._C.engine",
-        "name":    "engine",
-        "path":    "lucid._C.engine",
-        "kind":    "module",
-        "source":  None,
+        "slug": "lucid._C.engine",
+        "name": "engine",
+        "path": "lucid._C.engine",
+        "kind": "module",
+        "source": None,
         "summary": "C++ engine — tensor storage, ops, autograd graph, "
-                   "backend dispatch (CPU=Accelerate / GPU=MLX).",
+        "backend dispatch (CPU=Accelerate / GPU=MLX).",
         "extended": "Lucid's compute core.  All Python-side ops route here "
-                    "via pybind11 bindings (`from lucid._C import engine`).",
-        "parameters": [], "returns": None, "raises": [],
-        "examples": [], "notes": [], "attributes": [], "warns": [],
+        "via pybind11 bindings (`from lucid._C import engine`).",
+        "parameters": [],
+        "returns": None,
+        "raises": [],
+        "examples": [],
+        "notes": [],
+        "attributes": [],
+        "warns": [],
         "members": members,
     }
     (OUT_DIR / "lucid._C.engine.json").write_text(

@@ -124,9 +124,7 @@ class ResNeXtArch(Architecture):
         if self.arch in _TORCHVISION_ARCHS:
             model = self._builder(weights=self._tv_weights)
             model.eval()
-            return {
-                k: v.detach().cpu().numpy() for k, v in model.state_dict().items()
-            }
+            return {k: v.detach().cpu().numpy() for k, v in model.state_dict().items()}
         return {
             k: v.detach().cpu().numpy() for k, v in self._model.state_dict().items()
         }

@@ -104,8 +104,7 @@ class Mask2FormerArch(Architecture):
 
     def source_state_dict(self) -> dict[str, object]:
         return {
-            k: v.detach().cpu().numpy()
-            for k, v in self._model.state_dict().items()
+            k: v.detach().cpu().numpy() for k, v in self._model.state_dict().items()
         }
 
     def target_model(self) -> Module:
@@ -133,8 +132,12 @@ class Mask2FormerArch(Architecture):
             # ``out_proj_weight`` / ``out_proj_bias`` attributes (its load hook
             # also accepts the sub-module ``out_proj.*`` names, but the
             # converter's key-set check runs against the flat state_dict keys).
-            mapped = mapped.replace(".cross_attn.out_proj.weight", ".cross_attn.out_proj_weight")
-            mapped = mapped.replace(".cross_attn.out_proj.bias", ".cross_attn.out_proj_bias")
+            mapped = mapped.replace(
+                ".cross_attn.out_proj.weight", ".cross_attn.out_proj_weight"
+            )
+            mapped = mapped.replace(
+                ".cross_attn.out_proj.bias", ".cross_attn.out_proj_bias"
+            )
             return mapped
         # class_predictor → identity.
         return src_key

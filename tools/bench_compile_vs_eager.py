@@ -108,7 +108,9 @@ def _unwrap(out: object) -> lucid.Tensor:
 # ── Precision helper ───────────────────────────────────────────────
 
 
-def _cast_inputs(inputs: tuple[lucid.Tensor, ...], dtype: object) -> tuple[lucid.Tensor, ...]:
+def _cast_inputs(
+    inputs: tuple[lucid.Tensor, ...], dtype: object
+) -> tuple[lucid.Tensor, ...]:
     """Cast float inputs to ``dtype``.  Integer targets (CE indices) untouched."""
     out: list[lucid.Tensor] = []
     for t in inputs:
@@ -144,7 +146,9 @@ def _time_cold(call: Callable[[], object]) -> float:
     return (time.perf_counter() - t0) * 1000.0
 
 
-def _time_warm(call: Callable[[], object], n_warmup: int, n_iter: int) -> tuple[float, float, float]:
+def _time_warm(
+    call: Callable[[], object], n_warmup: int, n_iter: int
+) -> tuple[float, float, float]:
     """Return (median, p5, p95) wall-ms over ``n_iter`` calls after warmup."""
     for _ in range(n_warmup):
         call()
@@ -386,8 +390,13 @@ def _bench_one_row(
     try:
         if path == "eager":
             cold, med, p5, p95, _ = _bench_forward_eager(w, bs, dtype, n_iter_hint)
-            base.update(cold_ms=cold, warm_ms_median=med, warm_ms_p5=p5,
-                        warm_ms_p95=p95, note="ok")
+            base.update(
+                cold_ms=cold,
+                warm_ms_median=med,
+                warm_ms_p5=p5,
+                warm_ms_p95=p95,
+                note="ok",
+            )
         elif path == "compile":
             # First get the eager output for parity check.
             _, _, _, _, eager_out = _bench_forward_eager(w, bs, dtype, n_iter=2)
@@ -399,17 +408,32 @@ def _bench_one_row(
             if not ok:
                 base["note"] = "parity-diverged"
             else:
-                base.update(cold_ms=cold, warm_ms_median=med, warm_ms_p5=p5,
-                            warm_ms_p95=p95, note=comp_note)
+                base.update(
+                    cold_ms=cold,
+                    warm_ms_median=med,
+                    warm_ms_p5=p5,
+                    warm_ms_p95=p95,
+                    note=comp_note,
+                )
         elif path == "fused_step":
             # Skip dropout workload at f16 (X4.3 GradScaler missing).
             cold, med, p5, p95, note = _bench_fused_step(w, bs, dtype, n_iter_hint)
-            base.update(cold_ms=cold, warm_ms_median=med, warm_ms_p5=p5,
-                        warm_ms_p95=p95, note=note)
+            base.update(
+                cold_ms=cold,
+                warm_ms_median=med,
+                warm_ms_p5=p5,
+                warm_ms_p95=p95,
+                note=note,
+            )
         elif path == "eager_train":
             cold, med, p5, p95, note = _bench_eager_train(w, bs, dtype, n_iter_hint)
-            base.update(cold_ms=cold, warm_ms_median=med, warm_ms_p5=p5,
-                        warm_ms_p95=p95, note=note)
+            base.update(
+                cold_ms=cold,
+                warm_ms_median=med,
+                warm_ms_p5=p5,
+                warm_ms_p95=p95,
+                note=note,
+            )
         else:
             base["note"] = f"unknown-path:{path}"
     except Exception as e:
@@ -466,10 +490,15 @@ _CSV_FIELDS = [
 ]
 
 
-def _emit_row(writer: csv.DictWriter, row: dict[str, object], file_handle: object) -> None:
+def _emit_row(
+    writer: csv.DictWriter, row: dict[str, object], file_handle: object
+) -> None:
     """Write one row and flush — partial CSV is still useful on crash."""
-    cleaned = {k: ("" if (isinstance(v, float) and v != v) else v) for k, v in row.items()
-               if k in _CSV_FIELDS}
+    cleaned = {
+        k: ("" if (isinstance(v, float) and v != v) else v)
+        for k, v in row.items()
+        if k in _CSV_FIELDS
+    }
     for k in _CSV_FIELDS:
         cleaned.setdefault(k, "")
     writer.writerow(cleaned)
@@ -555,6 +584,7 @@ def main() -> int:
 
     # Open CSV
     import os
+
     os.makedirs(os.path.dirname(args.csv) or ".", exist_ok=True)
     f = open(args.csv, "w", newline="", encoding="utf-8")
     writer = csv.DictWriter(f, fieldnames=_CSV_FIELDS)
@@ -562,9 +592,11 @@ def main() -> int:
     f.flush()
 
     print(f"# Lucid compile-vs-eager sweep — {args.csv}")
-    print(f"# {len(workloads)} workloads × {len(precisions)} precisions × "
-          f"{len(batches)} batches × {len(paths)} paths "
-          f"= {len(workloads) * len(precisions) * len(batches) * len(paths)} rows")
+    print(
+        f"# {len(workloads)} workloads × {len(precisions)} precisions × "
+        f"{len(batches)} batches × {len(paths)} paths "
+        f"= {len(workloads) * len(precisions) * len(batches) * len(paths)} rows"
+    )
 
     all_rows: list[dict[str, object]] = []
     for w in workloads:

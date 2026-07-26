@@ -228,9 +228,7 @@ class InceptionArch(Architecture):
         # torchvision reports num_params for the aux-enabled build
         # (~27.2 M); the shipped Lucid head has aux_logits=False, so count
         # the actual converted model's parameters instead.
-        num_params = sum(
-            math.prod(int(d) for d in p.shape) for p in model.parameters()
-        )
+        num_params = sum(math.prod(int(d) for d in p.shape) for p in model.parameters())
         meta = {
             "num_params": num_params,
             "gflops": float(tv_meta.get("_ops", 0.0)),

@@ -162,9 +162,7 @@ class MobileNetV3Arch(Architecture):
             else:
                 lfi = fi + 2
                 children = list(feats[fi].block)
-                nse = [type(c).__name__ for c in children].count(
-                    "SqueezeExcitation"
-                )
+                nse = [type(c).__name__ for c in children].count("SqueezeExcitation")
                 has_expand = (len(children) - nse) == 3
                 roles = (
                     (["expand"] if has_expand else [])

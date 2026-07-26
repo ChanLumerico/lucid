@@ -50,8 +50,7 @@ _MAXVIT_CITATION = (
 )
 
 _MAXVIT_PAPER_URL = (
-    "Tu et al., 2022 — *MaxViT: Multi-Axis Vision Transformer* "
-    "(arXiv:2204.01697)"
+    "Tu et al., 2022 — *MaxViT: Multi-Axis Vision Transformer* " "(arXiv:2204.01697)"
 )
 
 # arch -> (timm_arch, lucid_cls_factory, repo_id, title, paper_acc1, paper_acc5)

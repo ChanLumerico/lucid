@@ -47,9 +47,17 @@ _CONVNEXT_CITATION = (
 _CONVNEXT_VARIANTS: dict[str, tuple[str, str, str]] = {
     # arch -> (lucid_cls_factory, repo_id, title)
     "convnext_tiny": ("convnext_tiny_cls", "lucid-dl/convnext-tiny", "ConvNeXt-Tiny"),
-    "convnext_small": ("convnext_small_cls", "lucid-dl/convnext-small", "ConvNeXt-Small"),
+    "convnext_small": (
+        "convnext_small_cls",
+        "lucid-dl/convnext-small",
+        "ConvNeXt-Small",
+    ),
     "convnext_base": ("convnext_base_cls", "lucid-dl/convnext-base", "ConvNeXt-Base"),
-    "convnext_large": ("convnext_large_cls", "lucid-dl/convnext-large", "ConvNeXt-Large"),
+    "convnext_large": (
+        "convnext_large_cls",
+        "lucid-dl/convnext-large",
+        "ConvNeXt-Large",
+    ),
 }
 
 _TV_BUILDERS = {
@@ -337,9 +345,7 @@ class ConvNeXtTimmArch(Architecture):
         preprocessing = preset.to_dict()
 
         meta = {
-            "num_params": int(
-                sum(p.numel() for p in self._model.parameters())
-            ),
+            "num_params": int(sum(p.numel() for p in self._model.parameters())),
             "recipe": str(cfg.get("url", "")),
             # timm's default_cfg doesn't carry accuracy numbers directly; the
             # tag is the convention (paper Table 11 reports 87.0% top-1 for

@@ -42,8 +42,7 @@ _RESNET_PAPER_URL = (
     "Recognition* (arXiv:1512.03385)"
 )
 _WIDE_RESNET_PAPER_URL = (
-    "Zagoruyko & Komodakis, 2016 — *Wide Residual Networks* "
-    "(arXiv:1605.07146)"
+    "Zagoruyko & Komodakis, 2016 — *Wide Residual Networks* " "(arXiv:1605.07146)"
 )
 
 # Lucid factory + torchvision (builder, weights-enum) per architecture.

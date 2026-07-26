@@ -49,7 +49,9 @@ _CVT_VARIANTS: dict[str, tuple[str, str, str, str]] = {
     "cvt_13": ("cvt_13_cls", "lucid-dl/cvt-13", "CvT-13", "microsoft/cvt-13"),
     "cvt_21": ("cvt_21_cls", "lucid-dl/cvt-21", "CvT-21", "microsoft/cvt-21"),
     "cvt_w24": (
-        "cvt_w24_cls", "lucid-dl/cvt-w24", "CvT-W24",
+        "cvt_w24_cls",
+        "lucid-dl/cvt-w24",
+        "CvT-W24",
         "microsoft/cvt-w24-384-22k",
     ),
 }
@@ -89,8 +91,7 @@ class CvTArch(Architecture):
 
     def source_state_dict(self) -> dict[str, object]:
         return {
-            k: v.detach().cpu().numpy()
-            for k, v in self._model.state_dict().items()
+            k: v.detach().cpu().numpy() for k, v in self._model.state_dict().items()
         }
 
     def target_model(self) -> Module:
@@ -156,15 +157,9 @@ class CvTArch(Architecture):
             "attn.proj_v.bn.",
         )
         # Final linear projections of Q/K/V (``projection_query/key/value``).
-        s = s.replace(
-            "attention.attention.projection_query.", "attn.proj_q.proj."
-        )
-        s = s.replace(
-            "attention.attention.projection_key.", "attn.proj_k.proj."
-        )
-        s = s.replace(
-            "attention.attention.projection_value.", "attn.proj_v.proj."
-        )
+        s = s.replace("attention.attention.projection_query.", "attn.proj_q.proj.")
+        s = s.replace("attention.attention.projection_key.", "attn.proj_k.proj.")
+        s = s.replace("attention.attention.projection_value.", "attn.proj_v.proj.")
         # Attention output dense.
         s = s.replace("attention.output.dense.", "attn.out_proj.")
         # MLP: ``intermediate.dense`` → ``mlp.fc1``, ``output.dense`` → ``mlp.fc2``.

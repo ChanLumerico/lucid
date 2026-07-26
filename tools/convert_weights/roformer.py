@@ -32,18 +32,25 @@ from lucid.nn import Module
 from tools.convert_weights._base import Architecture, ConversionSpec, register_arch
 
 _CITATION = (
-    "Su et al., \"RoFormer: Enhanced Transformer with Rotary Position "
-    "Embedding\", 2021."
+    'Su et al., "RoFormer: Enhanced Transformer with Rotary Position '
+    'Embedding", 2021.'
 )
 _PAPER_URL = "https://arxiv.org/abs/2104.09864"
 _HF_ID = "junnyu/roformer_chinese_base"
 
 # arch_key -> (lucid_factory, repo_slug, title, kind)
 _VARIANTS: dict[str, tuple[str, str, str, str]] = {
-    "roformer": ("roformer", "roformer-chinese-base", "RoFormer (Chinese base)", "base"),
+    "roformer": (
+        "roformer",
+        "roformer-chinese-base",
+        "RoFormer (Chinese base)",
+        "base",
+    ),
     "roformer_mlm": (
-        "roformer_mlm", "roformer-chinese-base-mlm",
-        "RoFormer (Chinese base, Masked-LM)", "mlm",
+        "roformer_mlm",
+        "roformer-chinese-base-mlm",
+        "RoFormer (Chinese base, Masked-LM)",
+        "mlm",
     ),
 }
 

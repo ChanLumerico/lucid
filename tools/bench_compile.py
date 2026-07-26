@@ -35,7 +35,6 @@ import lucid.nn.functional as F
 import lucid.optim as optim
 from lucid.compile import fused_step
 
-
 COMPILE_DEVICE = "metal"
 
 
@@ -70,7 +69,9 @@ def _bench_once(call: callable, n: int) -> float:
 
 
 class _LstmHead(nn.Module):
-    def __init__(self, input_size: int = 64, hidden_size: int = 128, n_classes: int = 10) -> None:
+    def __init__(
+        self, input_size: int = 64, hidden_size: int = 128, n_classes: int = 10
+    ) -> None:
         super().__init__()
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size)
         self.fc = nn.Linear(hidden_size, n_classes)
@@ -143,47 +144,57 @@ def _cases(quick: bool) -> list[tuple[str, callable, callable]]:
     """Bench cases.  ``--quick`` keeps the runtime under 30s."""
     if quick:
         return [
-            ("lenet_5 (1×1×32×32)",
-             lambda: M.lenet_5(num_classes=10),
-             lambda: lucid.randn(1, 1, 32, 32)),
-            ("vit_base_16 (1×3×64²)",
-             lambda: M.vit_base_16(image_size=64, num_classes=10),
-             lambda: lucid.randn(1, 3, 64, 64)),
-            ("lstm_head (50×16×64)",
-             _LstmHead,
-             lambda: lucid.randn(50, 16, 64)),
-            ("seq2cls (100×32×64)",
-             _seq_to_cls,
-             lambda: lucid.randn(100, 32, 64)),
+            (
+                "lenet_5 (1×1×32×32)",
+                lambda: M.lenet_5(num_classes=10),
+                lambda: lucid.randn(1, 1, 32, 32),
+            ),
+            (
+                "vit_base_16 (1×3×64²)",
+                lambda: M.vit_base_16(image_size=64, num_classes=10),
+                lambda: lucid.randn(1, 3, 64, 64),
+            ),
+            ("lstm_head (50×16×64)", _LstmHead, lambda: lucid.randn(50, 16, 64)),
+            ("seq2cls (100×32×64)", _seq_to_cls, lambda: lucid.randn(100, 32, 64)),
         ]
     return [
-        ("lenet_5 (1×1×32×32)",
-         lambda: M.lenet_5(num_classes=10),
-         lambda: lucid.randn(1, 1, 32, 32)),
-        ("resnet_18 (1×3×224²)",
-         lambda: M.resnet_18(num_classes=10),
-         lambda: lucid.randn(1, 3, 224, 224)),
-        ("mobilenet_v1 (1×3×224²)",
-         lambda: M.mobilenet_v1(num_classes=10),
-         lambda: lucid.randn(1, 3, 224, 224)),
-        ("efficientnet_b0 (1×3×224²)",
-         lambda: M.efficientnet_b0(num_classes=10),
-         lambda: lucid.randn(1, 3, 224, 224)),
-        ("densenet_121 (1×3×224²)",
-         lambda: M.densenet_121(num_classes=10),
-         lambda: lucid.randn(1, 3, 224, 224)),
-        ("vit_base_16 (1×3×224²)",
-         lambda: M.vit_base_16(image_size=224, num_classes=10),
-         lambda: lucid.randn(1, 3, 224, 224)),
-        ("lstm_head (50×16×64)",
-         _LstmHead,
-         lambda: lucid.randn(50, 16, 64)),
-        ("lstm_head (200×32×64)",
-         lambda: _LstmHead(input_size=64, hidden_size=256),
-         lambda: lucid.randn(200, 32, 64)),
-        ("seq2cls (100×32×64)",
-         _seq_to_cls,
-         lambda: lucid.randn(100, 32, 64)),
+        (
+            "lenet_5 (1×1×32×32)",
+            lambda: M.lenet_5(num_classes=10),
+            lambda: lucid.randn(1, 1, 32, 32),
+        ),
+        (
+            "resnet_18 (1×3×224²)",
+            lambda: M.resnet_18(num_classes=10),
+            lambda: lucid.randn(1, 3, 224, 224),
+        ),
+        (
+            "mobilenet_v1 (1×3×224²)",
+            lambda: M.mobilenet_v1(num_classes=10),
+            lambda: lucid.randn(1, 3, 224, 224),
+        ),
+        (
+            "efficientnet_b0 (1×3×224²)",
+            lambda: M.efficientnet_b0(num_classes=10),
+            lambda: lucid.randn(1, 3, 224, 224),
+        ),
+        (
+            "densenet_121 (1×3×224²)",
+            lambda: M.densenet_121(num_classes=10),
+            lambda: lucid.randn(1, 3, 224, 224),
+        ),
+        (
+            "vit_base_16 (1×3×224²)",
+            lambda: M.vit_base_16(image_size=224, num_classes=10),
+            lambda: lucid.randn(1, 3, 224, 224),
+        ),
+        ("lstm_head (50×16×64)", _LstmHead, lambda: lucid.randn(50, 16, 64)),
+        (
+            "lstm_head (200×32×64)",
+            lambda: _LstmHead(input_size=64, hidden_size=256),
+            lambda: lucid.randn(200, 32, 64),
+        ),
+        ("seq2cls (100×32×64)", _seq_to_cls, lambda: lucid.randn(100, 32, 64)),
     ]
 
 
@@ -203,7 +214,9 @@ def _bench_training_case(
     model_eager = mk_model().to(COMPILE_DEVICE)
     model_fused = mk_model().to(COMPILE_DEVICE)
     # Sync params
-    for (_, p), (_, q) in zip(model_eager.named_parameters(), model_fused.named_parameters()):
+    for (_, p), (_, q) in zip(
+        model_eager.named_parameters(), model_fused.named_parameters()
+    ):
         q.copy_(p)
     args = tuple(t.to(COMPILE_DEVICE) for t in mk_inputs())
 
@@ -259,21 +272,36 @@ def _training_cases(quick: bool) -> list[tuple[str, callable, callable]]:
         return nn.Sequential(*layers)
 
     cases = [
-        ("mlp (64→128→10, BS=32)", _mlp,
-         lambda: (lucid.randn(32, 64), lucid.randn(32, 10))),
-        ("deep_mlp (×4 hidden, BS=64)", _deeper_mlp,
-         lambda: (lucid.randn(64, 128), lucid.randn(64, 10))),
+        (
+            "mlp (64→128→10, BS=32)",
+            _mlp,
+            lambda: (lucid.randn(32, 64), lucid.randn(32, 10)),
+        ),
+        (
+            "deep_mlp (×4 hidden, BS=64)",
+            _deeper_mlp,
+            lambda: (lucid.randn(64, 128), lucid.randn(64, 10)),
+        ),
     ]
     if not quick:
-        cases.append(("lstm_head (50×16×64) train", _LstmHead,
-                      lambda: (lucid.randn(50, 16, 64), lucid.randn(16, 10))))
+        cases.append(
+            (
+                "lstm_head (50×16×64) train",
+                _LstmHead,
+                lambda: (lucid.randn(50, 16, 64), lucid.randn(16, 10)),
+            )
+        )
     return cases
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--quick", action="store_true", help="small/fast subset for CI smoke")
-    ap.add_argument("--iter", type=int, default=20, help="benchmark iterations per case")
+    ap.add_argument(
+        "--quick", action="store_true", help="small/fast subset for CI smoke"
+    )
+    ap.add_argument(
+        "--iter", type=int, default=20, help="benchmark iterations per case"
+    )
     args = ap.parse_args()
 
     print("\n## Inference (eager vs `lucid.compile(model)`)\n")
@@ -296,10 +324,10 @@ def main() -> None:
     print("| Model | Eager (ms) | Compile (ms) | Speedup | Rel diff | Note |")
     print("|---|---:|---:|---:|---:|---|")
     for r in rows:
-        eager = f"{r['eager_ms']:.2f}" if r['eager_ms'] == r['eager_ms'] else "—"
-        comp = f"{r['compile_ms']:.2f}" if r['compile_ms'] == r['compile_ms'] else "—"
-        speed = f"{r['speedup']:.2f}×" if r['speedup'] == r['speedup'] else "—"
-        rel = f"{r['rel_diff']:.2e}" if r['rel_diff'] == r['rel_diff'] else "—"
+        eager = f"{r['eager_ms']:.2f}" if r["eager_ms"] == r["eager_ms"] else "—"
+        comp = f"{r['compile_ms']:.2f}" if r["compile_ms"] == r["compile_ms"] else "—"
+        speed = f"{r['speedup']:.2f}×" if r["speedup"] == r["speedup"] else "—"
+        rel = f"{r['rel_diff']:.2e}" if r["rel_diff"] == r["rel_diff"] else "—"
         print(f"| {r['name']} | {eager} | {comp} | {speed} | {rel} | {r['note']} |")
 
     # Training sweep
@@ -321,9 +349,9 @@ def main() -> None:
     print("| Model | Eager step (ms) | Fused step (ms) | Speedup | Note |")
     print("|---|---:|---:|---:|---|")
     for r in train_rows:
-        eager = f"{r['eager_ms']:.2f}" if r['eager_ms'] == r['eager_ms'] else "—"
-        comp = f"{r['compile_ms']:.2f}" if r['compile_ms'] == r['compile_ms'] else "—"
-        speed = f"{r['speedup']:.2f}×" if r['speedup'] == r['speedup'] else "—"
+        eager = f"{r['eager_ms']:.2f}" if r["eager_ms"] == r["eager_ms"] else "—"
+        comp = f"{r['compile_ms']:.2f}" if r["compile_ms"] == r["compile_ms"] else "—"
+        speed = f"{r['speedup']:.2f}×" if r["speedup"] == r["speedup"] else "—"
         print(f"| {r['name']} | {eager} | {comp} | {speed} | {r.get('note', '')} |")
     print()
 

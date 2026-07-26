@@ -57,6 +57,7 @@ ENGINE_SLUG = "lucid._C.engine"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _camel_to_snake(name: str) -> str:
     """``Conv2d`` → ``conv2d``; ``MaxPoolNd`` → ``max_pool_nd``;
     ``LinearBackward`` → ``linear_backward``."""
@@ -101,6 +102,7 @@ def _expand_nd_variants(base: str) -> list[str]:
 # Data loaders
 # ---------------------------------------------------------------------------
 
+
 def _load_engine() -> dict[str, Any] | None:
     p = API_DATA / f"{ENGINE_SLUG}.json"
     if not p.is_file():
@@ -131,7 +133,10 @@ def _load_python_modules() -> dict[str, dict[str, Any]]:
 # Index Python symbols by name
 # ---------------------------------------------------------------------------
 
-def _index_python_symbols(modules: dict[str, dict[str, Any]]) -> dict[str, list[dict[str, str]]]:
+
+def _index_python_symbols(
+    modules: dict[str, dict[str, Any]],
+) -> dict[str, list[dict[str, str]]]:
     """Map ``name`` → ``[{path, module, kind}]``.  Classes and functions
     co-exist in the same index by their bare name; the consumer
     disambiguates by ``kind``."""
@@ -146,11 +151,13 @@ def _index_python_symbols(modules: dict[str, dict[str, Any]]) -> dict[str, list[
             # module — they don't participate in the cross-link mapping
             # (methods aren't autograd nodes).  But the class itself
             # does.
-            members = [{
-                "name": data.get("name", ""),
-                "kind": "class",
-                "path": data.get("path", ""),
-            }]
+            members = [
+                {
+                    "name": data.get("name", ""),
+                    "kind": "class",
+                    "path": data.get("path", ""),
+                }
+            ]
         else:
             continue
         for m in members:
@@ -158,9 +165,9 @@ def _index_python_symbols(modules: dict[str, dict[str, Any]]) -> dict[str, list[
             if not name:
                 continue
             entry = {
-                "path":   f"{slug}.{name}",
+                "path": f"{slug}.{name}",
                 "module": slug,
-                "kind":   m.get("kind", "function"),
+                "kind": m.get("kind", "function"),
             }
             idx.setdefault(name, []).append(entry)
     return idx
@@ -170,7 +177,10 @@ def _index_python_symbols(modules: dict[str, dict[str, Any]]) -> dict[str, list[
 # Matching
 # ---------------------------------------------------------------------------
 
-def _match_backward_class(cpp_name: str, py_idx: dict[str, list[dict[str, str]]]) -> list[dict[str, str]]:
+
+def _match_backward_class(
+    cpp_name: str, py_idx: dict[str, list[dict[str, str]]]
+) -> list[dict[str, str]]:
     """Find Python symbols backed by a C++ ``XBackward`` class."""
     base = _backward_base(cpp_name)
     if base is None:
@@ -198,7 +208,9 @@ def _match_backward_class(cpp_name: str, py_idx: dict[str, list[dict[str, str]]]
     return matches
 
 
-def _match_op_function(cpp_name: str, py_idx: dict[str, list[dict[str, str]]]) -> list[dict[str, str]]:
+def _match_op_function(
+    cpp_name: str, py_idx: dict[str, list[dict[str, str]]]
+) -> list[dict[str, str]]:
     """Find Python functions implemented by a C++ ``foo_op`` free fn."""
     base = _op_base(cpp_name)
     if base is None:
@@ -218,6 +230,7 @@ def _match_op_function(cpp_name: str, py_idx: dict[str, list[dict[str, str]]]) -
 # ---------------------------------------------------------------------------
 # Build tables
 # ---------------------------------------------------------------------------
+
 
 def _build(
     engine: dict[str, Any],
@@ -248,10 +261,12 @@ def _build(
 
         cpp_to_python[cpp_name] = matches
         for py in matches:
-            python_to_cpp.setdefault(py["path"], []).append({
-                "name": cpp_name,
-                "kind": link_kind,
-            })
+            python_to_cpp.setdefault(py["path"], []).append(
+                {
+                    "name": cpp_name,
+                    "kind": link_kind,
+                }
+            )
 
     return {"python_to_cpp": python_to_cpp, "cpp_to_python": cpp_to_python}
 
@@ -265,8 +280,10 @@ def _apply_overrides(table: dict[str, Any]) -> dict[str, Any]:
     try:
         ovr = json.loads(OVERRIDES.read_text())
     except json.JSONDecodeError:
-        print(f"[cross-links] failed to parse {OVERRIDES} — skipping overrides",
-              file=sys.stderr)
+        print(
+            f"[cross-links] failed to parse {OVERRIDES} — skipping overrides",
+            file=sys.stderr,
+        )
         return table
     for section in ("python_to_cpp", "cpp_to_python"):
         for k, v in ovr.get(section, {}).items():
@@ -278,11 +295,13 @@ def _apply_overrides(table: dict[str, Any]) -> dict[str, Any]:
 # Entry
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     engine = _load_engine()
     if engine is None:
-        print(f"[cross-links] {ENGINE_SLUG}.json missing — nothing to do",
-              file=sys.stderr)
+        print(
+            f"[cross-links] {ENGINE_SLUG}.json missing — nothing to do", file=sys.stderr
+        )
         return 0
     py_modules = _load_python_modules()
     py_idx = _index_python_symbols(py_modules)
@@ -291,7 +310,9 @@ def main() -> int:
     OUT.write_text(json.dumps(table, indent=2, ensure_ascii=False) + "\n")
     p2c = len(table["python_to_cpp"])
     c2p = len(table["cpp_to_python"])
-    print(f"[cross-links] wrote {p2c} python→cpp, {c2p} cpp→python entries → {OUT.relative_to(WEB_ROOT)}")
+    print(
+        f"[cross-links] wrote {p2c} python→cpp, {c2p} cpp→python entries → {OUT.relative_to(WEB_ROOT)}"
+    )
     return 0
 
 
