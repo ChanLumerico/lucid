@@ -164,7 +164,7 @@
         }
       ],
       "summary": "MobileNet v1 feature-extracting backbone (no classification head).",
-      "extended": "Implements the depthwise-separable convolutional topology from\nHoward et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017.\nThe network alternates a per-channel $3 \\times 3$ depthwise\nconvolution with a $1 \\times 1$ pointwise convolution that\nmixes channels — a factorisation that reduces FLOPs by roughly\n$1/N + 1/D_K^2$ relative to a standard\n$D_K \\times D_K$ convolution, an 8–9× saving for the\n$3 \\times 3$ case.\n\nThe body is a 3×3 stem (stride 2) followed by 13 depthwise +\npointwise blocks producing feature maps at strides 2, 4, 8, 16,\nand 32 relative to the input.  A global average pool collapses\nthe final spatial map to a single 1×1 descriptor.  This class\nis the canonical feature extractor used by detection /\nsegmentation heads when deployed on mobile / embedded devices.",
+      "extended": "Implements the depthwise-separable convolutional topology from\nHoward et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017.\nThe network alternates a per-channel $3 \\times 3$ depthwise\nconvolution with a $1 \\times 1$ pointwise convolution that\nmixes channels — a factorisation that reduces FLOPs by roughly\n$1/N + 1/D_K^2$ relative to a standard\n$D_K \\times D_K$ convolution, an 8–9× saving for the\n$3 \\times 3$ case.\n\nThe body is a 3×3 stem (stride 2) followed by 13 depthwise +\npointwise blocks producing feature maps at strides 2, 4, 8, 16,\nand 32 relative to the input.  A global average pool collapses\nthe final spatial map to a single 1×1 descriptor.  This class\nis the canonical feature extractor used by detection /\nsegmentation heads when deployed on mobile / embedded devices.",
       "parameters": [
         {
           "name": "config",
@@ -346,7 +346,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1\n>>> model = mobilenet_v1()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1024, 1, 1)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 1 and Table 7."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 1 and Table 7."
       ],
       "attributes": [],
       "warns": [],
@@ -886,7 +886,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_cls\n>>> model = mobilenet_v1_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 7.  Pretrained weights are converted from timm's\n`mobilenetv1_100.ra4_e3600_r224_in1k` (75.4% top-1 at 224x224\nunder the RA4 recipe) and hosted under `lucid-dl/mobilenet-v1`."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 7.  Pretrained weights are converted from timm's\n`mobilenetv1_100.ra4_e3600_r224_in1k` (75.4% top-1 at 224x224\nunder the RA4 recipe) and hosted under `lucid-dl/mobilenet-v1`."
       ],
       "attributes": [],
       "warns": [],
@@ -1434,7 +1434,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_075\n>>> model = mobilenet_v1_075()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 768, 1, 1)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 7."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 7."
       ],
       "attributes": [],
       "warns": [],
@@ -1968,7 +1968,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_075_cls\n>>> model = mobilenet_v1_075_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 7."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 7."
       ],
       "attributes": [],
       "warns": [],
@@ -2516,7 +2516,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_050\n>>> model = mobilenet_v1_050()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 1, 1)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 7."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 7."
       ],
       "attributes": [],
       "warns": [],
@@ -3050,7 +3050,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_050_cls\n>>> model = mobilenet_v1_050_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 7."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 7."
       ],
       "attributes": [],
       "warns": [],
@@ -3598,7 +3598,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_025\n>>> model = mobilenet_v1_025()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 256, 1, 1)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 7."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 7."
       ],
       "attributes": [],
       "warns": [],
@@ -4132,7 +4132,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_025_cls\n>>> model = mobilenet_v1_025_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", arXiv:1704.04861, 2017,\nTable 7."
+        "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 7."
       ],
       "attributes": [],
       "warns": [],
@@ -4683,7 +4683,7 @@
   "warns": [],
   "see_also": [],
   "canonical_name": "MobileNet",
-  "citation": "Howard, Andrew G., et al. \"MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications.\" arXiv preprint arXiv:1704.04861, 2017.",
+  "citation": "Howard, Andrew G., et al. \"MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications.\" arXiv preprint [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017.",
   "theory": "MobileNet is built around the *depthwise separable convolution*, a\nfactorisation that decomposes a standard convolution into two much\ncheaper stages: a per-channel **depthwise** $3 \\times 3$\nspatial filter followed by a $1 \\times 1$ **pointwise**\nconvolution that mixes channels.  For an input of $M$\nchannels and an output of $N$ channels with kernel size\n$D_K$, the cost drops from\n$D_K \\cdot D_K \\cdot M \\cdot N \\cdot D_F \\cdot D_F$ to\n\n\n\n$$\nD_K \\cdot D_K \\cdot M \\cdot D_F \\cdot D_F\n\\;+\\; M \\cdot N \\cdot D_F \\cdot D_F,\n$$\n\na reduction of roughly $1/N + 1/D_K^2$.  For\n$D_K = 3$ and the typical $N$ of a few hundred,\nthat is an 8–9× FLOPs saving with only a small accuracy loss\non ImageNet.\n\nTwo scalar hyper-parameters expose a smooth accuracy–latency\ntrade-off curve at inference time without retraining the whole\nfamily.  The **width multiplier** $\\alpha \\in (0, 1]$\nuniformly thins every layer (input and output channels become\n$\\alpha M$ and $\\alpha N$), giving four standard\nvariants at $\\alpha \\in \\{1.0, 0.75, 0.5, 0.25\\}$.  The\n**resolution multiplier** $\\rho$ rescales the input spatial\nsize — it does not change the model itself, only the feature\nmaps flowing through it, and is therefore not enforced inside\nthe network.\n\nTogether these two knobs let MobileNet-v1 cover a wide spectrum\nof mobile/embedded budgets from sub-mW edge devices up to\ndesktop-class deployment, while keeping a single training recipe\nand a single `MobileNetV1Config` schema.",
   "tasks": [
     "image-classification"

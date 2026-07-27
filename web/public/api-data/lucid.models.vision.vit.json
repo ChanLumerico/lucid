@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration dataclass for every Vision Transformer (ViT) variant.",
-      "extended": "`ViTConfig` is an immutable container that fully specifies the\narchitecture of a Vision Transformer.  It is consumed by both\n`ViT` (backbone) and `ViTForImageClassification`\n(classifier head on top of the CLS token).  All canonical variants\ndescribed in Dosovitskiy et al. (2020) — Base / Large / Huge at patch\nsizes 14, 16, and 32 — can be expressed by choosing different values for\n`dim`, `depth`, `num_heads`, and `patch_size`.\n\nThe number of input tokens fed into the transformer encoder is\n$N + 1$, where $N = (\\text{image\\_size} / \\text{patch\\_size})^2$\nis the number of non-overlapping patches and the extra token is a\nlearnable `[CLS]` embedding prepended to the sequence.",
+      "extended": "`ViTConfig` is an immutable container that fully specifies the\narchitecture of a Vision Transformer.  It is consumed by both\n`ViT` (backbone) and `ViTForImageClassification`\n(classifier head on top of the CLS token).  All canonical variants\ndescribed in [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929) — Base / Large / Huge at patch\nsizes 14, 16, and 32 — can be expressed by choosing different values for\n`dim`, `depth`, `num_heads`, and `patch_size`.\n\nThe number of input tokens fed into the transformer encoder is\n$N + 1$, where $N = (\\text{image\\_size} / \\text{patch\\_size})^2$\nis the number of non-overlapping patches and the extra token is a\nlearnable `[CLS]` embedding prepended to the sequence.",
       "parameters": [
         {
           "name": "image_size",
@@ -441,7 +441,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_16\n>>> model = vit_base_16()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape\n(1, 768)"
       ],
       "notes": [
-        "ViT-Base/16 was pretrained on JFT-300M / ImageNet-21k and reported\n**84.15% top-1 / 97.20% top-5 on ImageNet-1k** after fine-tuning at\n384x384 in Dosovitskiy et al. (2020, Table 5).  See\n[arXiv:2010.11929](https://arxiv.org/abs/2010.11929)."
+        "ViT-Base/16 was pretrained on JFT-300M / ImageNet-21k and reported\n**84.15% top-1 / 97.20% top-5 on ImageNet-1k** after fine-tuning at\n384x384 in [Dosovitskiy et al. (2020, Table 5)](https://arxiv.org/abs/2010.11929).  See\n[arXiv:2010.11929](https://arxiv.org/abs/2010.11929)."
       ],
       "attributes": [],
       "warns": [],
@@ -784,7 +784,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_32\n>>> model = vit_base_32()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 768)"
       ],
       "notes": [
-        "Reference: Dosovitskiy et al. (2020), Table 1.  The `/32` variant\nis most useful when latency / FLOPs dominate over absolute accuracy."
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  The `/32` variant\nis most useful when latency / FLOPs dominate over absolute accuracy."
       ],
       "attributes": [],
       "warns": [],
@@ -955,7 +955,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_32_cls\n>>> model = vit_base_32_cls(num_classes=10)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 10)"
       ],
       "notes": [
-        "Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are\nconverted from torchvision's `ViT_B_32_Weights.IMAGENET1K_V1`\n(75.912% top-1) and hosted under `lucid-dl/vit-base-32`."
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  Pretrained weights are\nconverted from torchvision's `ViT_B_32_Weights.IMAGENET1K_V1`\n(75.912% top-1) and hosted under `lucid-dl/vit-base-32`."
       ],
       "attributes": [],
       "warns": [],
@@ -1298,7 +1298,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_16_cls\n>>> model = vit_large_16_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Reference: Dosovitskiy et al. (2020), Table 5.  Pretrained weights are\nconverted from torchvision's `ViT_L_16_Weights.IMAGENET1K_V1`\n(79.662% top-1, 242-pixel resize) and hosted under\n`lucid-dl/vit-large-16`."
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 5.  Pretrained weights are\nconverted from torchvision's `ViT_L_16_Weights.IMAGENET1K_V1`\n(79.662% top-1, 242-pixel resize) and hosted under\n`lucid-dl/vit-large-16`."
       ],
       "attributes": [],
       "warns": [],
@@ -1470,7 +1470,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_32\n>>> model = vit_large_32()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 1024)"
       ],
       "notes": [
-        "Reference: Dosovitskiy et al. (2020), Table 1.  Useful when Large\ncapacity is desired but the `/16` token count is too expensive."
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  Useful when Large\ncapacity is desired but the `/16` token count is too expensive."
       ],
       "attributes": [],
       "warns": [],
@@ -1641,7 +1641,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_32_cls\n>>> model = vit_large_32_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are\nconverted from torchvision's `ViT_L_32_Weights.IMAGENET1K_V1`\n(76.972% top-1) and hosted under `lucid-dl/vit-large-32`."
+        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  Pretrained weights are\nconverted from torchvision's `ViT_L_32_Weights.IMAGENET1K_V1`\n(76.972% top-1) and hosted under `lucid-dl/vit-large-32`."
       ],
       "attributes": [],
       "warns": [],

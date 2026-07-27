@@ -164,7 +164,7 @@
         }
       ],
       "summary": "MobileNet v2 feature-extracting backbone (no classification head).",
-      "extended": "Implements the inverted-residual / linear-bottleneck topology\nfrom Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 (arXiv:1801.04381).  Each block expands\na low-dimensional input up by an integer `expand_ratio`, runs\na depthwise $3 \\times 3$ convolution in the wider interior\nspace, then projects back to a narrow bottleneck — *without* a\nfinal non-linearity (the \"linear bottleneck\").  When stride and\nchannel counts match, an identity shortcut is added around the\nwhole block:\n\n$$\ny = x + \\mathrm{Proj}\\big(\n    \\mathrm{DW}\\big( \\mathrm{Expand}(x) \\big)\n\\big).\n$$\n\nThe body is a 3×3 stem (stride 2) followed by seven inverted-residual\nstages and a final 1×1 head expansion to 1280 channels.  A global\naverage pool collapses the final feature map to a single 1×1\ndescriptor.",
+      "extended": "Implements the inverted-residual / linear-bottleneck topology\nfrom Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 ([arXiv:1801.04381](https://arxiv.org/abs/1801.04381)).  Each block expands\na low-dimensional input up by an integer `expand_ratio`, runs\na depthwise $3 \\times 3$ convolution in the wider interior\nspace, then projects back to a narrow bottleneck — *without* a\nfinal non-linearity (the \"linear bottleneck\").  When stride and\nchannel counts match, an identity shortcut is added around the\nwhole block:\n\n$$\ny = x + \\mathrm{Proj}\\big(\n    \\mathrm{DW}\\big( \\mathrm{Expand}(x) \\big)\n\\big).\n$$\n\nThe body is a 3×3 stem (stride 2) followed by seven inverted-residual\nstages and a final 1×1 head expansion to 1280 channels.  A global\naverage pool collapses the final feature map to a single 1×1\ndescriptor.",
       "parameters": [
         {
           "name": "config",
@@ -346,7 +346,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v2 import mobilenet_v2\n>>> model = mobilenet_v2()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1280, 1, 1)"
       ],
       "notes": [
-        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 (arXiv:1801.04381), Table 2 and Table 4."
+        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 ([arXiv:1801.04381](https://arxiv.org/abs/1801.04381)), Table 2 and Table 4."
       ],
       "attributes": [],
       "warns": [],
@@ -1303,7 +1303,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v2 import mobilenet_v2_cls\n>>> model = mobilenet_v2_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v2_cls(pretrained=True)            # DEFAULT tag\n>>> from lucid.models.vision.mobilenet_v2 import MobileNetV2Weights\n>>> model = mobilenet_v2_cls(weights=MobileNetV2Weights.IMAGENET1K_V1)"
       ],
       "notes": [
-        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 (arXiv:1801.04381), Table 4.  Pretrained\nweights are converted from torchvision's `MobileNet_V2_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/mobilenet-v2`."
+        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 ([arXiv:1801.04381](https://arxiv.org/abs/1801.04381)), Table 4.  Pretrained\nweights are converted from torchvision's `MobileNet_V2_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/mobilenet-v2`."
       ],
       "attributes": [],
       "warns": [],
@@ -2268,7 +2268,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v2 import mobilenet_v2_075\n>>> model = mobilenet_v2_075()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1280, 1, 1)"
       ],
       "notes": [
-        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 (arXiv:1801.04381), Table 4.  The head\nexpansion remains at 1280 channels — narrow variants do *not*\nshrink the head below 1280."
+        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 ([arXiv:1801.04381](https://arxiv.org/abs/1801.04381)), Table 4.  The head\nexpansion remains at 1280 channels — narrow variants do *not*\nshrink the head below 1280."
       ],
       "attributes": [],
       "warns": [],
@@ -3075,7 +3075,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v2 import mobilenet_v2_075_cls\n>>> model = mobilenet_v2_075_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 (arXiv:1801.04381), Table 4."
+        "See Sandler et al., \"MobileNetV2: Inverted Residuals and Linear\nBottlenecks\", CVPR 2018 ([arXiv:1801.04381](https://arxiv.org/abs/1801.04381)), Table 4."
       ],
       "attributes": [],
       "warns": [],

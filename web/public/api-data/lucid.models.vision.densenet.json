@@ -34644,7 +34644,7 @@
         ">>> from lucid.models import densenet_121_cls\n>>> model = densenet_121_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 (arXiv:1608.06993)."
+        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 ([arXiv:1608.06993](https://arxiv.org/abs/1608.06993))."
       ],
       "attributes": [
         {
@@ -34683,7 +34683,7 @@
         ">>> from lucid.models import densenet_161_cls\n>>> model = densenet_161_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 (arXiv:1608.06993)."
+        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 ([arXiv:1608.06993](https://arxiv.org/abs/1608.06993))."
       ],
       "attributes": [
         {
@@ -34722,7 +34722,7 @@
         ">>> from lucid.models import densenet_169_cls\n>>> model = densenet_169_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 (arXiv:1608.06993)."
+        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 ([arXiv:1608.06993](https://arxiv.org/abs/1608.06993))."
       ],
       "attributes": [
         {
@@ -34761,7 +34761,7 @@
         ">>> from lucid.models import densenet_201_cls\n>>> model = densenet_201_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 (arXiv:1608.06993)."
+        "Reference: Huang, Liu, van der Maaten, Weinberger, *\"Densely\nConnected Convolutional Networks\"*, CVPR 2017 ([arXiv:1608.06993](https://arxiv.org/abs/1608.06993))."
       ],
       "attributes": [
         {

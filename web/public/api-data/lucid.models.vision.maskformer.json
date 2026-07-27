@@ -209,7 +209,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet50\n>>> model = maskformer_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape   # (B, K, H, W)\n(1, 150, 512, 512)"
       ],
       "notes": [
-        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 (arXiv:2107.06278).  The total\nloss combines a CE term over query class predictions and a per-mask\nbinary CE + dice term, summed only over the Hungarian-matched query\npermutation $\\hat{\\sigma}$.\n\nFor semantic-segmentation inference the model drops the \"no-object\"\nslot and collapses queries by softmax-weighted summation into a\nstandard $(B, K, H, W)$ logit map for direct argmax evaluation."
+        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  The total\nloss combines a CE term over query class predictions and a per-mask\nbinary CE + dice term, summed only over the Hungarian-matched query\npermutation $\\hat{\\sigma}$.\n\nFor semantic-segmentation inference the model drops the \"no-object\"\nslot and collapses queries by softmax-weighted summation into a\nstandard $(B, K, H, W)$ logit map for direct argmax evaluation."
       ],
       "attributes": [
         {
@@ -280,7 +280,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet50\n>>> model = maskformer_resnet50(num_classes=21)\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n21"
       ],
       "notes": [
-        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 (arXiv:2107.06278).  The\nunification of semantic / instance / panoptic under mask\nclassification is the conceptual key idea.  Pretrained weights are\nconverted from the `facebook/maskformer-resnet50-ade` checkpoint and\nhosted under `lucid-dl/maskformer-resnet-50`."
+        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  The\nunification of semantic / instance / panoptic under mask\nclassification is the conceptual key idea.  Pretrained weights are\nconverted from the `facebook/maskformer-resnet50-ade` checkpoint and\nhosted under `lucid-dl/maskformer-resnet-50`."
       ],
       "attributes": [],
       "warns": [],
@@ -1647,7 +1647,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.maskformer import maskformer_resnet101\n>>> model = maskformer_resnet101()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[1]\n150"
       ],
       "notes": [
-        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 (arXiv:2107.06278).  Switching\nbackbones is the only change versus `maskformer_resnet50`; all\ntransformer-head hyperparameters are shared.  Pretrained weights are\nconverted from the `facebook/maskformer-resnet101-ade` checkpoint\nand hosted under `lucid-dl/maskformer-resnet-101`."
+        "See Cheng et al., \"Per-Pixel Classification is Not All You Need for\nSemantic Segmentation\", NeurIPS 2021 ([arXiv:2107.06278](https://arxiv.org/abs/2107.06278)).  Switching\nbackbones is the only change versus `maskformer_resnet50`; all\ntransformer-head hyperparameters are shared.  Pretrained weights are\nconverted from the `facebook/maskformer-resnet101-ade` checkpoint\nand hosted under `lucid-dl/maskformer-resnet-101`."
       ],
       "attributes": [],
       "warns": [],

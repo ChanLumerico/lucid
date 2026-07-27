@@ -322,5 +322,15 @@
   "nice_svhn": "413feb72c42512db",
   "nice_svhn_gen": "413feb72c42512db",
   "nice_tfd": "413feb72c42512db",
-  "nice_tfd_gen": "413feb72c42512db"
+  "nice_tfd_gen": "413feb72c42512db",
+  "realnvp_celeba": "664f126a1dfb9d92",
+  "realnvp_celeba_gen": "664f126a1dfb9d92",
+  "realnvp_cifar": "664f126a1dfb9d92",
+  "realnvp_cifar_gen": "664f126a1dfb9d92",
+  "realnvp_imagenet32": "664f126a1dfb9d92",
+  "realnvp_imagenet32_gen": "664f126a1dfb9d92",
+  "realnvp_imagenet64": "664f126a1dfb9d92",
+  "realnvp_imagenet64_gen": "664f126a1dfb9d92",
+  "realnvp_lsun": "664f126a1dfb9d92",
+  "realnvp_lsun_gen": "664f126a1dfb9d92"
 }

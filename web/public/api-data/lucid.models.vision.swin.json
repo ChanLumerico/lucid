@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration dataclass for every Swin Transformer variant.",
-      "extended": "`SwinConfig` is an immutable container that fully specifies the\narchitecture of a Swin Transformer.  It is consumed by both\n`SwinTransformer` (backbone) and\n`SwinTransformerForImageClassification` (classifier).  All\ncanonical variants described in Liu et al. (2021) — Tiny / Small /\nBase / Large — can be expressed by choosing different per-stage\ndepths, channel widths, and head counts.\n\nThe backbone is a four-stage pyramid: the stem patch embedding maps\n$(H, W, 3) \\to (H/p, W/p, C)$, then each stage applies a stack\nof pairs of Swin blocks (window + shifted-window attention) and a\npatch-merging downsampler that halves the spatial size while\ndoubling the channel width, giving the canonical\n$C, 2C, 4C, 8C$ pyramid.",
+      "extended": "`SwinConfig` is an immutable container that fully specifies the\narchitecture of a Swin Transformer.  It is consumed by both\n`SwinTransformer` (backbone) and\n`SwinTransformerForImageClassification` (classifier).  All\ncanonical variants described in [Liu et al. (2021)](https://arxiv.org/abs/2103.14030) — Tiny / Small /\nBase / Large — can be expressed by choosing different per-stage\ndepths, channel widths, and head counts.\n\nThe backbone is a four-stage pyramid: the stem patch embedding maps\n$(H, W, 3) \\to (H/p, W/p, C)$, then each stage applies a stack\nof pairs of Swin blocks (window + shifted-window attention) and a\npatch-merging downsampler that halves the spatial size while\ndoubling the channel width, giving the canonical\n$C, 2C, 4C, 8C$ pyramid.",
       "parameters": [
         {
           "name": "image_size",

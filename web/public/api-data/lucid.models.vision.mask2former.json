@@ -254,7 +254,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_swin_tiny\n>>> model = mask2former_swin_tiny()\n>>> x = lucid.randn(1, 3, 384, 384)\n>>> out = model(x)\n>>> out.logits.shape   # (B, K, H, W)\n(1, 150, 384, 384)"
       ],
       "notes": [
-        "See Cheng et al., \"Masked-attention Mask Transformer for Universal Image\nSegmentation\", CVPR 2022 (arXiv:2112.01527).  For semantic inference the\nmodel drops the no-object slot and collapses queries via the\n`softmax(class)[..., :-1] ⊗ sigmoid(mask)` einsum into a\n$(B, K, H, W)$ logit map, upsampled to the input resolution."
+        "See Cheng et al., \"Masked-attention Mask Transformer for Universal Image\nSegmentation\", CVPR 2022 ([arXiv:2112.01527](https://arxiv.org/abs/2112.01527)).  For semantic inference the\nmodel drops the no-object slot and collapses queries via the\n`softmax(class)[..., :-1] ⊗ sigmoid(mask)` einsum into a\n$(B, K, H, W)$ logit map, upsampled to the input resolution."
       ],
       "attributes": [
         {

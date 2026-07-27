@@ -1560,6 +1560,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.nice._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -2346,6 +2354,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.nice._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     }
   ],
@@ -2507,6 +2523,20 @@
     {
       "kind": "module",
       "module": "lucid.models.text.gpt2._model"
+    }
+  ],
+  "lucid.models._output.NormalizingFlowOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._model"
     }
   ],
   "lucid.models._output.ObjectDetectionOutput": [
@@ -2697,6 +2727,14 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ncsn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._pretrained"
     },
     {
       "kind": "module",
@@ -3085,6 +3123,94 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ncsn"
+    }
+  ],
+  "lucid.models.generative.nice": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.nice._config.NICEConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice._pretrained"
+    }
+  ],
+  "lucid.models.generative.nice._model.NICEForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice._pretrained"
+    }
+  ],
+  "lucid.models.generative.nice._model.NICEModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice._pretrained"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_cifar": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_cifar_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_mnist": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_mnist_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_svhn": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_svhn_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_tfd": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.nice._pretrained.nice_tfd_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice"
     }
   ],
   "lucid.models.generative.vae": [
@@ -8750,6 +8876,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.nice._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -9077,6 +9211,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._model"
     },
     {
       "kind": "module",

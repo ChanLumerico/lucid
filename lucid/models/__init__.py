@@ -59,6 +59,14 @@ from lucid.models.generative.ddpm import (
     ddpm_cifar, ddpm_lsun, ddpm_imagenet64,
     ddpm_cifar_gen, ddpm_lsun_gen, ddpm_imagenet64_gen,
 )
+# 2016 — RealNVP (Dinh, Sohl-Dickstein & Bengio)
+from lucid.models.generative.realnvp import (
+    RealNVPConfig, RealNVPModel, RealNVPForImageGeneration,
+    realnvp_cifar, realnvp_imagenet32, realnvp_imagenet64,
+    realnvp_lsun, realnvp_celeba,
+    realnvp_cifar_gen, realnvp_imagenet32_gen, realnvp_imagenet64_gen,
+    realnvp_lsun_gen, realnvp_celeba_gen,
+)
 # 2019 — NCSN (Song & Ermon)
 from lucid.models.generative.ncsn import (
     NCSNConfig, NCSNModel, NCSNForImageGeneration,
@@ -669,6 +677,12 @@ __all__ = [
     "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
     "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",
     "ddpm_cifar_gen", "ddpm_lsun_gen", "ddpm_imagenet64_gen",
+    # ── Generative (2016) RealNVP ─────────────────────────────────────────────
+    "RealNVPConfig", "RealNVPModel", "RealNVPForImageGeneration",
+    "realnvp_cifar", "realnvp_imagenet32", "realnvp_imagenet64",
+    "realnvp_lsun", "realnvp_celeba",
+    "realnvp_cifar_gen", "realnvp_imagenet32_gen", "realnvp_imagenet64_gen",
+    "realnvp_lsun_gen", "realnvp_celeba_gen",
     # ── Generative (2019) NCSN ────────────────────────────────────────────────
     "NCSNConfig", "NCSNModel", "NCSNForImageGeneration",
     "ncsn_cifar", "ncsn_celeba",

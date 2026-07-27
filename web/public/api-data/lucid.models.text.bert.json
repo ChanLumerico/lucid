@@ -117,7 +117,7 @@
         ">>> from lucid.models.text.bert import BERTConfig\n>>> cfg = BERTConfig()          # BERT-Base defaults\n>>> cfg.hidden_size, cfg.num_hidden_layers, cfg.num_attention_heads\n(768, 12, 12)\n>>> large = BERTConfig(\n...     hidden_size=1024,\n...     num_hidden_layers=24,\n...     num_attention_heads=16,\n...     intermediate_size=4096,\n... )\n>>> large.vocab_size\n30522"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805).\n\nValidation runs in `__post_init__` and raises `ValueError` for\n`type_vocab_size <= 0`, `num_labels <= 0`, or\n`classifier_dropout` outside $[0, 1)$."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nValidation runs in `__post_init__` and raises `ValueError` for\n`type_vocab_size <= 0`, `num_labels <= 0`, or\n`classifier_dropout` outside $[0, 1)$."
       ],
       "attributes": [
         {
@@ -203,7 +203,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForCausalLM\n>>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForCausalLM(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, V=30522)\n(1, 4, 30522)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805); causal adaptation follows the standard left-to-right\nLM masking scheme.\n\nThe additive causal mask $M \\in \\mathbb{R}^{T \\times T}$ satisfies\n\n\n\n$$\nM_{ij} =\n\\begin{cases}\n    0, & j \\le i \\\\\n    -10^{4}, & j > i\n\\end{cases}\n$$\n\nand is broadcast against a padding mask when present.  Loss (when\n`labels` is supplied) uses the standard next-token shift:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{CLM}}\n    = -\\frac{1}{B(T-1)} \\sum_{b,t}\n      \\log p_{\\theta}(y_{b, t+1} \\mid x_{b,\\le t}),\n$$\n\nwith positions labelled `-100` excluded."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)); causal adaptation follows the standard left-to-right\nLM masking scheme.\n\nThe additive causal mask $M \\in \\mathbb{R}^{T \\times T}$ satisfies\n\n\n\n$$\nM_{ij} =\n\\begin{cases}\n    0, & j \\le i \\\\\n    -10^{4}, & j > i\n\\end{cases}\n$$\n\nand is broadcast against a padding mask when present.  Loss (when\n`labels` is supplied) uses the standard next-token shift:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{CLM}}\n    = -\\frac{1}{B(T-1)} \\sum_{b,t}\n      \\log p_{\\theta}(y_{b, t+1} \\mid x_{b,\\le t}),\n$$\n\nwith positions labelled `-100` excluded."
       ],
       "attributes": [
         {
@@ -292,7 +292,7 @@
         }
       ],
       "summary": "BERT with a tied masked-language-modeling head.",
-      "extended": "Implements the masked-LM half of the Devlin et al. (2018) pre-training\nobjective.  A two-layer projection (dense + GELU + LayerNorm) maps each\nhidden state to vocabulary logits via a decoder whose weight matrix is\ntied to the input `word_embeddings` table when\n`config.tie_word_embeddings` is True.  Use for pre-training from\nscratch, continued pre-training on domain corpora, or fill-in-the-blank\ninference.",
+      "extended": "Implements the masked-LM half of the [Devlin et al. (2018)](https://arxiv.org/abs/1810.04805) pre-training\nobjective.  A two-layer projection (dense + GELU + LayerNorm) maps each\nhidden state to vocabulary logits via a decoder whose weight matrix is\ntied to the input `word_embeddings` table when\n`config.tie_word_embeddings` is True.  Use for pre-training from\nscratch, continued pre-training on domain corpora, or fill-in-the-blank\ninference.",
       "parameters": [
         {
           "name": "config",
@@ -307,7 +307,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForMaskedLM\n>>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForMaskedLM(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, V=30522)\n(1, 4, 30522)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805), section 3.1 Task #1.\n\nWhen `labels` is supplied the head computes\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MLM}} = -\\frac{1}{|M|}\n    \\sum_{i \\in M} \\log p_{\\theta}(x_i \\mid x_{\\setminus M})\n$$\n\nover the set $M$ of masked positions, with positions where the\nlabel equals `-100` excluded from the sum."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)), section 3.1 Task #1.\n\nWhen `labels` is supplied the head computes\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MLM}} = -\\frac{1}{|M|}\n    \\sum_{i \\in M} \\log p_{\\theta}(x_i \\mid x_{\\setminus M})\n$$\n\nover the set $M$ of masked positions, with positions where the\nlabel equals `-100` excluded from the sum."
       ],
       "attributes": [
         {
@@ -398,7 +398,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForNextSentencePrediction\n>>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForNextSentencePrediction(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])\n>>> token_type_ids = lucid.tensor([[0, 0, 0, 1, 1]])\n>>> out = model(input_ids, token_type_ids=token_type_ids)\n>>> out.logits.shape   # (B=1, 2)\n(1, 2)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §3.1 (task #2).\n\nWhen `labels` is provided, the loss is the binary cross-entropy\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{NSP}}\n    = -\\frac{1}{B}\\sum_{b=1}^{B}\n      \\log p_{\\theta}(y_b \\mid x_b^{(A)}, x_b^{(B)}),\n$$\n\nwhere $y_b \\in \\{0, 1\\}$ denotes IsNext vs. NotNext."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1 (task #2).\n\nWhen `labels` is provided, the loss is the binary cross-entropy\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{NSP}}\n    = -\\frac{1}{B}\\sum_{b=1}^{B}\n      \\log p_{\\theta}(y_b \\mid x_b^{(A)}, x_b^{(B)}),\n$$\n\nwhere $y_b \\in \\{0, 1\\}$ denotes IsNext vs. NotNext."
       ],
       "attributes": [
         {
@@ -490,7 +490,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForPreTraining\n>>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForPreTraining(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.prediction_logits.shape    # MLM logits  (B=1, T=6, V=30522)\n(1, 6, 30522)\n>>> out.seq_relationship_logits.shape   # NSP logits  (B=1, 2)\n(1, 2)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §3.1.\n\nThe combined loss when both objectives are supplied is\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{pretrain}}\n    = \\mathcal{L}_{\\mathrm{MLM}} + \\mathcal{L}_{\\mathrm{NSP}}.\n$$"
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1.\n\nThe combined loss when both objectives are supplied is\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{pretrain}}\n    = \\mathcal{L}_{\\mathrm{MLM}} + \\mathcal{L}_{\\mathrm{NSP}}.\n$$"
       ],
       "attributes": [
         {
@@ -583,7 +583,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForPreTraining\n>>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForPreTraining(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.prediction_logits.shape, out.seq_relationship_logits.shape\n((1, 5, 30522), (1, 2))"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §3.1."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1."
       ],
       "attributes": [],
       "warns": [],
@@ -663,7 +663,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForQuestionAnswering\n>>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForQuestionAnswering(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=7, 2)\n(1, 7, 2)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805).\n\nWhen both `start_positions` and `end_positions` are provided, the\nloss is the symmetric average of two cross-entropies:\n\n\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\!\\left(\n    \\mathrm{CE}(z^{\\mathrm{start}}, y^{\\mathrm{start}})\n  + \\mathrm{CE}(z^{\\mathrm{end}},   y^{\\mathrm{end}})\n\\right).\n$$\n\nThe returned `logits` tensor has shape `(B, T, 2)`; index `[..., 0]`\nfor start scores and `[..., 1]` for end scores."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nWhen both `start_positions` and `end_positions` are provided, the\nloss is the symmetric average of two cross-entropies:\n\n\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\!\\left(\n    \\mathrm{CE}(z^{\\mathrm{start}}, y^{\\mathrm{start}})\n  + \\mathrm{CE}(z^{\\mathrm{end}},   y^{\\mathrm{end}})\n\\right).\n$$\n\nThe returned `logits` tensor has shape `(B, T, 2)`; index `[..., 0]`\nfor start scores and `[..., 1]` for end scores."
       ],
       "attributes": [
         {
@@ -779,7 +779,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForSequenceClassification\n>>> cfg = BERTConfig(num_labels=3, num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForSequenceClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, num_labels=3)\n(1, 3)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805).\n\nThe pooled representation is\n$p = \\tanh(W_{\\mathrm{pool}}\\, h_{[\\mathrm{CLS}]} + b_{\\mathrm{pool}})$,\nand the final logits are $z = W_{\\mathrm{cls}}\\,\\mathrm{Dropout}(p) + b_{\\mathrm{cls}}$.\nWhen `labels` is provided, cross-entropy over `num_labels` classes is\ncomputed and exposed as `output.loss`."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nThe pooled representation is\n$p = \\tanh(W_{\\mathrm{pool}}\\, h_{[\\mathrm{CLS}]} + b_{\\mathrm{pool}})$,\nand the final logits are $z = W_{\\mathrm{cls}}\\,\\mathrm{Dropout}(p) + b_{\\mathrm{cls}}$.\nWhen `labels` is provided, cross-entropy over `num_labels` classes is\ncomputed and exposed as `output.loss`."
       ],
       "attributes": [
         {
@@ -876,7 +876,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTForTokenClassification\n>>> cfg = BERTConfig(num_labels=9, num_hidden_layers=2, hidden_size=128,\n...                  num_attention_heads=2, intermediate_size=512)\n>>> model = BERTForTokenClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, num_labels=9)\n(1, 4, 9)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805).\n\nThe loss (when `labels` is provided) is the masked cross-entropy\ninherited from `MaskedLMMixin`:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|}\n    \\sum_{(b, t) \\in V} \\log p_{\\theta}\\!\\left(y_{b,t} \\mid x_b\\right),\n$$\n\nwhere $V$ is the set of positions with `label != -100`."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nThe loss (when `labels` is provided) is the masked cross-entropy\ninherited from `MaskedLMMixin`:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|}\n    \\sum_{(b, t) \\in V} \\log p_{\\theta}\\!\\left(y_{b,t} \\mid x_b\\right),\n$$\n\nwhere $V$ is the set of positions with `label != -100`."
       ],
       "attributes": [
         {
@@ -1016,7 +1016,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import BERTConfig, BERTModel\n>>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128, num_attention_heads=2,\n...                  intermediate_size=512)\n>>> model = BERTModel(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape   # (B=1, T=4, H=128)\n(1, 4, 128)\n>>> out.pooler_output.shape       # (B=1, H=128)\n(1, 128)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805).\n\nSelf-attention follows the scaled dot-product form\n\n\n\n$$\n\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\!\\left(\n    \\frac{Q K^{\\top}}{\\sqrt{d_k}}\n\\right) V\n$$\n\nwith $d_k = H / A$.  Each layer applies multi-head attention,\nfollowed by a feed-forward block\n\n\n\n$$\n\\mathrm{FFN}(x) = \\mathrm{GELU}(x W_1 + b_1) W_2 + b_2,\n$$\n\neach wrapped by a residual connection and post-LayerNorm."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).\n\nSelf-attention follows the scaled dot-product form\n\n\n\n$$\n\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\!\\left(\n    \\frac{Q K^{\\top}}{\\sqrt{d_k}}\n\\right) V\n$$\n\nwith $d_k = H / A$.  Each layer applies multi-head attention,\nfollowed by a feed-forward block\n\n\n\n$$\n\\mathrm{FFN}(x) = \\mathrm{GELU}(x W_1 + b_1) W_2 + b_2,\n$$\n\neach wrapped by a residual connection and post-LayerNorm."
       ],
       "attributes": [
         {
@@ -1237,7 +1237,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_base\n>>> model = bert_base().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 768), (1, 768))"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805), Table 1 (BERT\\ `BASE`)."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)), Table 1 (BERT\\ `BASE`)."
       ],
       "attributes": [],
       "warns": [],
@@ -1477,7 +1477,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_cls\n>>> model = bert_base_cls(num_labels=3).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, num_labels=3)\n(1, 3)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §4.1."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.1."
       ],
       "attributes": [],
       "warns": [],
@@ -1709,7 +1709,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/text/bert/_pretrained.py#L464",
       "subcategory": "pretrained",
       "summary": "Construct a BERT-Base model with a tied masked-LM head.",
-      "extended": "Same trunk as `bert_base` (L=12, H=768, A=12, ~110M parameters),\naugmented with the masked-language-modeling prediction head used at\npre-training time.  Suitable for continued pre-training on domain\ncorpora, mask-filling inference, and reproducing the MLM half of the\nDevlin et al. (2018) pre-training recipe.",
+      "extended": "Same trunk as `bert_base` (L=12, H=768, A=12, ~110M parameters),\naugmented with the masked-language-modeling prediction head used at\npre-training time.  Suitable for continued pre-training on domain\ncorpora, mask-filling inference, and reproducing the MLM half of the\n[Devlin et al. (2018)](https://arxiv.org/abs/1810.04805) pre-training recipe.",
       "parameters": [
         {
           "name": "pretrained",
@@ -1739,7 +1739,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_mlm\n>>> model = bert_base_mlm().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, 4, vocab_size=30522)\n(1, 4, 30522)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §3.1 (task #1)."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1 (task #1)."
       ],
       "attributes": [],
       "warns": [],
@@ -2032,7 +2032,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_qa\n>>> model = bert_base_qa().eval()\n>>> # question + context (CLS q [SEP] c [SEP]) ids\n>>> input_ids = lucid.tensor([[101, 2040, 102, 1045, 2572, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, T=6, 2) — last dim is (start, end)\n(1, 6, 2)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §4.2."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.2."
       ],
       "attributes": [],
       "warns": [],
@@ -2287,7 +2287,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_base_token_cls\n>>> model = bert_base_token_cls(pretrained=True).eval()   # CoNLL-2003 NER (9 tags)\n>>> input_ids = lucid.tensor([[101, 2198, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, T=4, num_labels=9)\n(1, 4, 9)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §4.3."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.3."
       ],
       "attributes": [],
       "warns": [],
@@ -2549,7 +2549,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_large\n>>> model = bert_large().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 1024), (1, 1024))"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805), Table 1 (BERT\\ `LARGE`)."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)), Table 1 (BERT\\ `LARGE`)."
       ],
       "attributes": [],
       "warns": [],
@@ -2789,7 +2789,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_large_cls\n>>> model = bert_large_cls(num_labels=2).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, 2)\n(1, 2)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §4.1."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.1."
       ],
       "attributes": [],
       "warns": [],
@@ -3051,7 +3051,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_large_mlm\n>>> model = bert_large_mlm().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, 4, 30522)\n(1, 4, 30522)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §3.1 (task #1)."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §3.1 (task #1)."
       ],
       "attributes": [],
       "warns": [],
@@ -3344,7 +3344,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_large_qa\n>>> model = bert_large_qa().eval()\n>>> input_ids = lucid.tensor([[101, 2040, 102, 1045, 2572, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, T=6, 2)\n(1, 6, 2)"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n(arXiv:1810.04805) §4.2.  Whole-word masking is the pre-training tweak\nfrom the BERT repository's later release."
+        "Reference: Devlin, Chang, Lee, and Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL 2019\n([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)) §4.2.  Whole-word masking is the pre-training tweak\nfrom the BERT repository's later release."
       ],
       "attributes": [],
       "warns": [],
@@ -3599,7 +3599,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_medium\n>>> model = bert_medium().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 512)\n(1, 3, 512)"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 (arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [],
       "warns": [],
@@ -3839,7 +3839,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_mini\n>>> model = bert_mini().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 256)\n(1, 3, 256)"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 (arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [],
       "warns": [],
@@ -4079,7 +4079,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_small\n>>> model = bert_small().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 512)\n(1, 3, 512)"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 (arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [],
       "warns": [],
@@ -4289,7 +4289,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/text/bert/_pretrained.py#L98",
       "subcategory": "pretrained",
       "summary": "Construct a BERT-Tiny encoder.",
-      "extended": "Smallest of the four distillation-targeted variants from Turc, Chang,\nLee, and Toutanova, *\"Well-Read Students Learn Better\"*, 2019\n(arXiv:1908.08962): $L=2$ transformer layers, $H=128$ hidden,\n$A=2$ heads, intermediate width 512.  Roughly 4M parameters — use\nfor CPU/edge inference, latency-bound demos, or unit tests of the BERT\npipeline.",
+      "extended": "Smallest of the four distillation-targeted variants from Turc, Chang,\nLee, and Toutanova, *\"Well-Read Students Learn Better\"*, 2019\n([arXiv:1908.08962](https://arxiv.org/abs/1908.08962)): $L=2$ transformer layers, $H=128$ hidden,\n$A=2$ heads, intermediate width 512.  Roughly 4M parameters — use\nfor CPU/edge inference, latency-bound demos, or unit tests of the BERT\npipeline.",
       "parameters": [
         {
           "name": "pretrained",
@@ -4319,7 +4319,7 @@
         ">>> import lucid\n>>> from lucid.models.text.bert import bert_tiny\n>>> model = bert_tiny().eval()\n>>> out = model(lucid.tensor([[101, 7592, 102]]))\n>>> out.last_hidden_state.shape   # (1, 3, 128)\n(1, 3, 128)"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter: On the Importance of Pre-training Compact Models\"*, 2019\n(arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, and Toutanova, *\"Well-Read Students Learn\nBetter: On the Importance of Pre-training Compact Models\"*, 2019\n([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [],
       "warns": [],
@@ -4542,7 +4542,7 @@
         ">>> from lucid.models import bert_base_mlm\n>>> model = bert_base_mlm(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 (arXiv:1810.04805)."
+        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 ([arXiv:1810.04805](https://arxiv.org/abs/1810.04805))."
       ],
       "attributes": [
         {
@@ -4581,7 +4581,7 @@
         ">>> from lucid.models import bert_base_token_cls\n>>> model = bert_base_token_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 (arXiv:1810.04805).  Fine-tuned on CoNLL-2003 NER\n(dslim/bert-base-NER)."
+        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 ([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).  Fine-tuned on CoNLL-2003 NER\n(dslim/bert-base-NER)."
       ],
       "attributes": [
         {
@@ -4620,7 +4620,7 @@
         ">>> from lucid.models import bert_base_qa\n>>> model = bert_base_qa(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 (arXiv:1810.04805).  Fine-tuned on SQuAD v1.1."
+        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 ([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).  Fine-tuned on SQuAD v1.1."
       ],
       "attributes": [
         {
@@ -4659,7 +4659,7 @@
         ">>> from lucid.models import bert_base\n>>> model = bert_base(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 (arXiv:1810.04805)."
+        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 ([arXiv:1810.04805](https://arxiv.org/abs/1810.04805))."
       ],
       "attributes": [
         {
@@ -4698,7 +4698,7 @@
         ">>> from lucid.models import bert_large_mlm\n>>> model = bert_large_mlm(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 (arXiv:1810.04805)."
+        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 ([arXiv:1810.04805](https://arxiv.org/abs/1810.04805))."
       ],
       "attributes": [
         {
@@ -4737,7 +4737,7 @@
         ">>> from lucid.models import bert_large_qa\n>>> model = bert_large_qa(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 (arXiv:1810.04805).  Fine-tuned on SQuAD v1.1."
+        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 ([arXiv:1810.04805](https://arxiv.org/abs/1810.04805)).  Fine-tuned on SQuAD v1.1."
       ],
       "attributes": [
         {
@@ -4776,7 +4776,7 @@
         ">>> from lucid.models import bert_large\n>>> model = bert_large(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 (arXiv:1810.04805)."
+        "Reference: Devlin, Chang, Lee, Toutanova, *\"BERT: Pre-training of\nDeep Bidirectional Transformers for Language Understanding\"*, NAACL\n2019 ([arXiv:1810.04805](https://arxiv.org/abs/1810.04805))."
       ],
       "attributes": [
         {
@@ -4815,7 +4815,7 @@
         ">>> from lucid.models import bert_medium\n>>> model = bert_medium(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 (arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [
         {
@@ -4854,7 +4854,7 @@
         ">>> from lucid.models import bert_mini\n>>> model = bert_mini(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 (arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [
         {
@@ -4893,7 +4893,7 @@
         ">>> from lucid.models import bert_small\n>>> model = bert_small(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 (arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [
         {
@@ -4932,7 +4932,7 @@
         ">>> from lucid.models import bert_tiny\n>>> model = bert_tiny(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 (arXiv:1908.08962)."
+        "Reference: Turc, Chang, Lee, Toutanova, *\"Well-Read Students Learn\nBetter\"*, 2019 ([arXiv:1908.08962](https://arxiv.org/abs/1908.08962))."
       ],
       "attributes": [
         {

@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Added
+
+- add RealNVP, the multi-scale affine-coupling flow
+
+---
+
 ## [3.7.0] — 2026-07-27
 
 ### Added — NICE, the model zoo's first normalizing flow

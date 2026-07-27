@@ -184,7 +184,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.fcn import fcn_resnet50\n>>> model = fcn_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape    # (B, num_classes, H, W)\n(1, 21, 512, 512)"
       ],
       "notes": [
-        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 (arXiv:1411.4038).  The bilinear\nupsampling at the end is equivalent to a learnable transpose\nconvolution initialised to bilinear weights — but kept fixed in\nthis modernised dilated-ResNet variant.  Training loss is\n\n\n\n$$\n\\mathcal{L} = \\mathcal{L}_\\mathrm{CE}(\\mathrm{main}, y)\n            + 0.4\\, \\mathcal{L}_\\mathrm{CE}(\\mathrm{aux}, y),\n$$\n\nwith categorical cross-entropy summed over all pixels."
+        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 ([arXiv:1411.4038](https://arxiv.org/abs/1411.4038)).  The bilinear\nupsampling at the end is equivalent to a learnable transpose\nconvolution initialised to bilinear weights — but kept fixed in\nthis modernised dilated-ResNet variant.  Training loss is\n\n\n\n$$\n\\mathcal{L} = \\mathcal{L}_\\mathrm{CE}(\\mathrm{main}, y)\n            + 0.4\\, \\mathcal{L}_\\mathrm{CE}(\\mathrm{aux}, y),\n$$\n\nwith categorical cross-entropy summed over all pixels."
       ],
       "attributes": [
         {
@@ -250,7 +250,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.fcn import fcn_resnet50\n>>> model = fcn_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 21, 512, 512)"
       ],
       "notes": [
-        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 (arXiv:1411.4038).  The dilated variant\nfollows the DeepLab v1 trick (Chen et al., 2015) of replacing\nstride-2 downsampling in layer3 / layer4 with atrous convolution."
+        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 ([arXiv:1411.4038](https://arxiv.org/abs/1411.4038)).  The dilated variant\nfollows the DeepLab v1 trick (Chen et al., 2015) of replacing\nstride-2 downsampling in layer3 / layer4 with atrous convolution."
       ],
       "attributes": [],
       "warns": [],

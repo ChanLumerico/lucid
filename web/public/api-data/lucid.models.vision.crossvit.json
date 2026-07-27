@@ -948,7 +948,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 (arXiv:2103.14899)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
@@ -2163,7 +2163,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 (arXiv:2103.14899)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
@@ -3378,7 +3378,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 (arXiv:2103.14899)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
@@ -4593,7 +4593,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 (arXiv:2103.14899)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
@@ -5808,7 +5808,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 (arXiv:2103.14899)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
@@ -7023,7 +7023,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 (arXiv:2103.14899)."
+        "Reference: Chen, Fan, and Panda, *\"CrossViT: Cross-Attention\nMulti-Scale Vision Transformer for Image Classification\"*, ICCV\n2021 ([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [],
       "warns": [],
@@ -7637,7 +7637,7 @@
         ">>> from lucid.models import crossvit_9_cls\n>>> model = crossvit_9_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n(arXiv:2103.14899)."
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [
         {
@@ -7676,7 +7676,7 @@
         ">>> from lucid.models import crossvit_15_cls\n>>> model = crossvit_15_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n(arXiv:2103.14899)."
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [
         {
@@ -7715,7 +7715,7 @@
         ">>> from lucid.models import crossvit_18_cls\n>>> model = crossvit_18_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n(arXiv:2103.14899)."
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [
         {
@@ -7754,7 +7754,7 @@
         ">>> from lucid.models import crossvit_base_cls\n>>> model = crossvit_base_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n(arXiv:2103.14899)."
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [
         {
@@ -7793,7 +7793,7 @@
         ">>> from lucid.models import crossvit_small_cls\n>>> model = crossvit_small_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n(arXiv:2103.14899)."
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [
         {
@@ -7832,7 +7832,7 @@
         ">>> from lucid.models import crossvit_tiny_cls\n>>> model = crossvit_tiny_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n(arXiv:2103.14899)."
+        "Reference: Chen, Fan, Panda, *\"CrossViT: Cross-Attention Multi-Scale\nVision Transformer for Image Classification\"*, ICCV 2021\n([arXiv:2103.14899](https://arxiv.org/abs/2103.14899))."
       ],
       "attributes": [
         {

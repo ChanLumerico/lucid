@@ -331,7 +331,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.faster_rcnn import faster_rcnn_resnet50_fpn\n>>> model = faster_rcnn_resnet50_fpn()\n>>> model.eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape[-1]   # num_classes\n91\n>>> dets = model.postprocess(out, image_sizes=[(224, 224)])\n>>> sorted(dets[0].keys())\n['boxes', 'labels', 'scores']"
       ],
       "notes": [
-        "See Ren et al., \"Faster R-CNN: Towards Real-Time Object Detection with\nRegion Proposal Networks\", NeurIPS 2015 (arXiv:1506.01497) and Lin et\nal., \"Feature Pyramid Networks for Object Detection\", CVPR 2017.  The\nmodel expects an already resized + normalised image batch; final\ndetections come from `postprocess`."
+        "See Ren et al., \"Faster R-CNN: Towards Real-Time Object Detection with\nRegion Proposal Networks\", NeurIPS 2015 ([arXiv:1506.01497](https://arxiv.org/abs/1506.01497)) and Lin et\nal., \"Feature Pyramid Networks for Object Detection\", CVPR 2017.  The\nmodel expects an already resized + normalised image batch; final\ndetections come from `postprocess`."
       ],
       "attributes": [
         {

@@ -5461,7 +5461,7 @@
         ">>> from lucid.models import vgg_11_bn_cls\n>>> model = vgg_11_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
@@ -5500,7 +5500,7 @@
         ">>> from lucid.models import vgg_11_cls\n>>> model = vgg_11_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556))."
       ],
       "attributes": [
         {
@@ -5539,7 +5539,7 @@
         ">>> from lucid.models import vgg_13_bn_cls\n>>> model = vgg_13_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
@@ -5578,7 +5578,7 @@
         ">>> from lucid.models import vgg_13_cls\n>>> model = vgg_13_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556))."
       ],
       "attributes": [
         {
@@ -5617,7 +5617,7 @@
         ">>> from lucid.models import vgg_16_bn_cls\n>>> model = vgg_16_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
@@ -5656,7 +5656,7 @@
         ">>> from lucid.models import vgg_16_cls\n>>> model = vgg_16_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556))."
       ],
       "attributes": [
         {
@@ -5695,7 +5695,7 @@
         ">>> from lucid.models import vgg_19_bn_cls\n>>> model = vgg_19_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
@@ -5734,7 +5734,7 @@
         ">>> from lucid.models import vgg_19_cls\n>>> model = vgg_19_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 (arXiv:1409.1556)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556))."
       ],
       "attributes": [
         {

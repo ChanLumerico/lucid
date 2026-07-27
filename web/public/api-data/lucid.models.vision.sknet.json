@@ -157,7 +157,7 @@
         }
       ],
       "summary": "SK-ResNet feature-extracting backbone (no classification head).",
-      "extended": "Implements the Selective Kernel augmentation of the ResNet\ntopology from Li et al., \"Selective Kernel Networks\", CVPR\n2019 (arXiv:1903.06586).  Each $3 \\times 3$ convolution\ninside a residual block is replaced by a two-branch\nSelective Kernel unit: a $3 \\times 3$ convolution and a\ndilation-2 $3 \\times 3$ convolution (effective receptive\nfield $5 \\times 5$) run in parallel, with a softmax gate\nthat produces *per-radix, per-channel* attention weights\n\n$$\na_c + b_c = 1, \\quad\nV_c = a_c \\cdot \\tilde U_{1, c} + b_c \\cdot \\tilde U_{2, c}.\n$$\n\nBecause $a_c$ and $b_c$ are computed from the\ninput itself, every channel of every feature map can\neffectively choose its own receptive-field size at every\nspatial location.\n\nThe block topology supports both basic (SK-ResNet-18/34) and\nbottleneck (SK-ResNet-50/101) variants, plus ResNeXt-style\ngrouped widening via the `cardinality` and `base_width`\nknobs (`sk_resnext_50_32x4d`).",
+      "extended": "Implements the Selective Kernel augmentation of the ResNet\ntopology from Li et al., \"Selective Kernel Networks\", CVPR\n2019 ([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)).  Each $3 \\times 3$ convolution\ninside a residual block is replaced by a two-branch\nSelective Kernel unit: a $3 \\times 3$ convolution and a\ndilation-2 $3 \\times 3$ convolution (effective receptive\nfield $5 \\times 5$) run in parallel, with a softmax gate\nthat produces *per-radix, per-channel* attention weights\n\n$$\na_c + b_c = 1, \\quad\nV_c = a_c \\cdot \\tilde U_{1, c} + b_c \\cdot \\tilde U_{2, c}.\n$$\n\nBecause $a_c$ and $b_c$ are computed from the\ninput itself, every channel of every feature map can\neffectively choose its own receptive-field size at every\nspatial location.\n\nThe block topology supports both basic (SK-ResNet-18/34) and\nbottleneck (SK-ResNet-50/101) variants, plus ResNeXt-style\ngrouped widening via the `cardinality` and `base_width`\nknobs (`sk_resnext_50_32x4d`).",
       "parameters": [
         {
           "name": "config",
@@ -339,7 +339,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_18\n>>> model = sk_resnet_18()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586).  Uses `rd_ratio = 0.6` for the attention\nbottleneck and `split_input = False` so each branch receives\nthe full input — matching the SK-ResNet-18 budget reference."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)).  Uses `rd_ratio = 0.6` for the attention\nbottleneck and `split_input = False` so each branch receives\nthe full input — matching the SK-ResNet-18 budget reference."
       ],
       "attributes": [],
       "warns": [],
@@ -1409,7 +1409,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_18_cls\n>>> model = sk_resnet_18_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = sk_resnet_18_cls(pretrained=True)            # DEFAULT tag\n>>> from lucid.models.vision.sknet import SKResNet18Weights\n>>> model = sk_resnet_18_cls(weights=SKResNet18Weights.RA_IN1K)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586).  Pretrained weights are converted from\n`timm`'s `skresnet18.ra_in1k` and hosted on the Hugging Face\nHub under `lucid-dl/sk-resnet-18`."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)).  Pretrained weights are converted from\n`timm`'s `skresnet18.ra_in1k` and hosted on the Hugging Face\nHub under `lucid-dl/sk-resnet-18`."
       ],
       "attributes": [],
       "warns": [],
@@ -2487,7 +2487,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_34\n>>> model = sk_resnet_34()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586)."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586))."
       ],
       "attributes": [],
       "warns": [],
@@ -3560,7 +3560,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_34_cls\n>>> model = sk_resnet_34_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586).  Pretrained weights are converted from\n`timm`'s `skresnet34.ra_in1k` and hosted on the Hugging Face\nHub under `lucid-dl/sk-resnet-34`."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)).  Pretrained weights are converted from\n`timm`'s `skresnet34.ra_in1k` and hosted on the Hugging Face\nHub under `lucid-dl/sk-resnet-34`."
       ],
       "attributes": [],
       "warns": [],
@@ -4641,7 +4641,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_50\n>>> model = sk_resnet_50()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586), Table 1.  Final-stage output is 2048\nchannels."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)), Table 1.  Final-stage output is 2048\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -6088,7 +6088,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_50_cls\n>>> model = sk_resnet_50_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586), Table 1."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)), Table 1."
       ],
       "attributes": [],
       "warns": [],
@@ -7549,7 +7549,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_101\n>>> model = sk_resnet_101()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586)."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586))."
       ],
       "attributes": [],
       "warns": [],
@@ -8996,7 +8996,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnet_101_cls\n>>> model = sk_resnet_101_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586)."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586))."
       ],
       "attributes": [],
       "warns": [],
@@ -10457,7 +10457,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnext_50_32x4d\n>>> model = sk_resnext_50_32x4d()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586), Table 1 (SKNet-50 row).  Combines the\ncardinality of ResNeXt with the data-dependent receptive-field\nselection of SK."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)), Table 1 (SKNet-50 row).  Combines the\ncardinality of ResNeXt with the data-dependent receptive-field\nselection of SK."
       ],
       "attributes": [],
       "warns": [],
@@ -11904,7 +11904,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.sknet import sk_resnext_50_32x4d_cls\n>>> model = sk_resnext_50_32x4d_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n(arXiv:1903.06586), Table 1 (SKNet-50 row)."
+        "See Li et al., \"Selective Kernel Networks\", CVPR 2019\n([arXiv:1903.06586](https://arxiv.org/abs/1903.06586)), Table 1 (SKNet-50 row)."
       ],
       "attributes": [],
       "warns": [],
