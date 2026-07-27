@@ -4,7 +4,9 @@
     * Per-batch schedule indexing (``extract_into_tensor``)      — diffusion
     * Diagonal Gaussian KL divergence (``gaussian_kl_divergence``) — VAE
     * Reparameterisation sample (``reparameterize``)              — VAE
-    * Activation dispatch (``generative_activation``)             — both
+    * Flow prior density / sampling (``flow_prior_log_prob`` /
+      ``flow_prior_sample``)                                      — flows
+    * Activation dispatch (``generative_activation``)             — all
 
 All operations are stateless and side-effect free.
 """
@@ -22,6 +24,8 @@ __all__ = [
     "extract_into_tensor",
     "gaussian_kl_divergence",
     "reparameterize",
+    "flow_prior_log_prob",
+    "flow_prior_sample",
     "generative_activation",
 ]
 
@@ -174,6 +178,88 @@ def reparameterize(mu: Tensor, logvar: Tensor) -> Tensor:
     std = (0.5 * logvar).exp()
     eps = lucid.randn(mu.shape, device=mu.device.type)
     return mu + std * eps
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Normalizing flows: factorised base distribution
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def flow_prior_log_prob(name: str, h: Tensor) -> Tensor:
+    r"""Elementwise log-density of a flow's factorised prior :math:`p_H`.
+
+    A normalizing flow scores data through
+    :math:`\log p_X(x) = \log p_H(f(x)) + \log|\det \partial f / \partial x|`,
+    so the prior only ever enters as a per-dimension log-density that the
+    caller sums over the latent axis.
+
+    Parameters
+    ----------
+    name : str
+        ``"logistic"`` — standard logistic, the Dinh et al. (2014) default:
+        :math:`\log p(h) = -\log(1 + e^{h}) - \log(1 + e^{-h})`, written
+        with softplus for numerical stability.  ``"gaussian"`` — standard
+        normal: :math:`\log p(h) = -\tfrac{1}{2}(h^2 + \log 2\pi)`.
+    h : Tensor
+        Latent values, any shape.
+
+    Returns
+    -------
+    Tensor
+        Same shape as ``h``.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a supported prior.
+    """
+    if name == "logistic":
+        return -(F.softplus(h) + F.softplus(-h))
+    if name == "gaussian":
+        return -0.5 * (h * h + math.log(2.0 * math.pi))
+    raise ValueError(f"Unsupported flow prior {name!r}")
+
+
+def flow_prior_sample(
+    name: str,
+    shape: tuple[int, ...],
+    *,
+    device: str = "cpu",
+) -> Tensor:
+    r"""Draw i.i.d. samples from a flow's factorised prior :math:`p_H`.
+
+    Flows generate by ancestral sampling — :math:`h \sim p_H`, then
+    :math:`x = f^{-1}(h)`.
+
+    Parameters
+    ----------
+    name : str
+        ``"logistic"`` (inverse-CDF transform of a uniform sample,
+        :math:`h = \log u - \log(1 - u)`) or ``"gaussian"``.
+    shape : tuple[int, ...]
+        Shape of the requested sample block.
+    device : str, optional
+        Placement of the result.  Default ``"cpu"``.
+
+    Returns
+    -------
+    Tensor
+        ``shape``-shaped sample.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a supported prior.
+    """
+    if name == "logistic":
+        # Clip away the open-interval endpoints — the inverse CDF diverges
+        # at 0 and 1 and ``rand`` samples the half-open [0, 1).
+        eps = 1e-7
+        u = lucid.rand(shape, device=device).clip(eps, 1.0 - eps)
+        return u.log() - (1.0 - u).log()
+    if name == "gaussian":
+        return lucid.randn(shape, device=device)
+    raise ValueError(f"Unsupported flow prior {name!r}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

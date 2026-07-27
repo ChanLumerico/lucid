@@ -1,0 +1,1369 @@
+{
+  "slug": "lucid.models.generative.nice",
+  "name": "nice",
+  "path": "lucid.models.generative.nice",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/__init__.py#L1",
+  "members": [
+    {
+      "name": "NICEConfig",
+      "path": "lucid.models.generative.nice._config.NICEConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "NormalizingFlowConfig"
+      ],
+      "labels": [],
+      "signature": "NICEConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'relu', prior: FlowPrior = 'logistic', input_dim: int = 784, num_coupling_layers: int = 4, num_hidden_layers: int = 5, hidden_dim: int = 1000, input_reorder: Literal['tile', 'none'] = 'tile', init_range: float = 0.01)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_config.py#L20",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "split",
+          "path": "lucid.models.generative.nice._config.NICEConfig.split",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "split: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_config.py#L181",
+          "summary": "Index at which every coupling layer partitions the `D` dims.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.nice._config.NICEConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'relu', prior: FlowPrior = 'logistic', input_dim: int = 784, num_coupling_layers: int = 4, num_hidden_layers: int = 5, hidden_dim: int = 1000, input_reorder: Literal['tile', 'none'] = 'tile', init_range: float = 0.01)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for every NICE variant.",
+      "extended": "Defaults reproduce the paper's MNIST experiment (Figure 3): 784\ndimensions, four coupling layers whose coupling networks have five\nhidden layers of 1000 rectified units, and a standard logistic prior.",
+      "parameters": [
+        {
+          "name": "input_dim",
+          "annotation": "int",
+          "description": "Dimensionality `D` of the data the flow is defined\non — the paper's \"# dimensions\" row and the released\nconfigs' `nvis`.  Figure 3: `784` (MNIST), `2304`\n(TFD), `3072` (SVHN, CIFAR-10).  Must be even, since every\ncoupling layer splits it in half.",
+          "default": "784"
+        },
+        {
+          "name": "num_coupling_layers",
+          "annotation": "int",
+          "description": "Number of stacked additive coupling layers.\nThe paper uses `4` for every dataset; three is the minimum\nthat lets all dimensions interact.",
+          "default": "4"
+        },
+        {
+          "name": "num_hidden_layers",
+          "annotation": "int",
+          "description": "Hidden layers inside each coupling network\n`m`.  Paper Figure 3: `5` for MNIST, `4` for TFD /\nSVHN / CIFAR-10.",
+          "default": "5"
+        },
+        {
+          "name": "hidden_dim",
+          "annotation": "int",
+          "description": "Units per hidden layer of `m`.  Paper Figure 3:\n`1000` (MNIST), `5000` (TFD), `2000` (SVHN,\nCIFAR-10).",
+          "default": "1000"
+        },
+        {
+          "name": "input_reorder",
+          "annotation": "Literal['tile', 'none']",
+          "description": "One-off permutation applied before the first\ncoupling layer.  `\"tile\"` (default) reproduces the paper's\nodd/even partition; `\"none\"` splits in raster order, which\nis what the released configs for SVHN / CIFAR-10 do.",
+          "default": "'tile'"
+        },
+        {
+          "name": "init_range",
+          "annotation": "float",
+          "description": "Half-width of the uniform weight initialisation of\nevery coupling network, matching the official release's\n`irange = 0.01`.  Biases start at zero, and the diagonal\nscaling starts at `s = 0` (identity).",
+          "default": "0.01"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "NICE is defined on flat `D`-vectors, not on a pixel grid: both\nthe paper and the released configs parametrise each experiment by\na single dimension count.  `input_dim` is therefore the only\ndimensional knob, and the spatial fields inherited from\n`GenerativeModelConfig` (`sample_size`, `in_channels`,\n`out_channels`) are pinned to the equivalent vector encoding\nrather than to an image shape the sources never state."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "NICEForImageGeneration",
+      "path": "lucid.models.generative.nice._model.NICEForImageGeneration",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "NICEForImageGeneration(config: NICEConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L329",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.nice._model.NICEForImageGeneration.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: NICEConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L387",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.nice._model.NICEForImageGeneration.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L393",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "NormalizingFlowOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "generate",
+          "path": "lucid.models.generative.nice._model.NICEForImageGeneration.generate",
+          "kind": "function",
+          "labels": [],
+          "signature": "generate(n_samples: int = 1, device: str = 'cpu')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L403",
+          "subcategory": "model",
+          "summary": "Sample `n_samples` vectors by inverting a prior draw.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "n_samples",
+              "annotation": "int",
+              "description": "Number of samples to draw.",
+              "default": "1"
+            },
+            {
+              "name": "device",
+              "annotation": "str",
+              "description": "Where to allocate the prior sample.  Default `\"cpu\"`.",
+              "default": "'cpu'"
+            }
+          ],
+          "returns": {
+            "annotation": "GenerationOutput",
+            "description": "`samples` of shape `(n_samples, D)`, in the same\n(dequantised, possibly whitened) space the model was trained\non — no squashing is applied.  Reshape to the dataset's image\ngrid for display."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "NICE with the exact maximum-likelihood loss and `.generate()`.",
+      "extended": "Wraps `NICEModel` with the paper's training objective — plain\nnegative log-likelihood, no bound and no auxiliary term — and the\nancestral sampler.  `forward(x)` returns a\n`NormalizingFlowOutput` whose `loss` is\n`-log_prob.mean()`; `generate(n_samples)` draws\n$h \\sim p_H$ and returns $f^{-1}(h)$ in a single parallel\npass.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "NICEConfig",
+          "description": "Architecture and prior; see `NICEConfig`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.nice import (\n...     NICEConfig, NICEForImageGeneration,\n... )\n>>> cfg = NICEConfig(input_dim=64, num_coupling_layers=2,\n...                  num_hidden_layers=1, hidden_dim=16)\n>>> model = NICEForImageGeneration(cfg).eval()\n>>> out = model(lucid.rand((2, 64)))\n>>> out.loss.shape                       # scalar NLL\n()\n>>> model.generate(n_samples=3).samples.shape\n(3, 64)"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516).\n\nTraining objective (maximised in the paper, minimised here):\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\Big[\\log p_H\\big(f(x^{(b)})\\big) + \\sum_{i=1}^{D} s_i\\Big].\n$$\n\nThe paper optimises this with Adam (learning rate $10^{-3}$)\nfor 1500 epochs and reports test log-likelihoods of 1980.50 (MNIST),\n5514.71 (TFD), 11496.55 (SVHN) and 5371.78 (CIFAR-10) nats — figures\nthat are only comparable under the paper's own preprocessing."
+      ],
+      "attributes": [
+        {
+          "name": "nice",
+          "annotation": "NICEModel",
+          "description": "Underlying bijection, exposing `encode` / `decode` /\n`log_prob`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "NICEModel",
+      "path": "lucid.models.generative.nice._model.NICEModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "NICEModel(config: NICEConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L165",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.nice._model.NICEModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: NICEConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L234",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "input_dim",
+          "path": "lucid.models.generative.nice._model.NICEModel.input_dim",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "input_dim: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L246",
+          "summary": "Flattened dimensionality `D` the bijection acts on.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "prior",
+          "path": "lucid.models.generative.nice._model.NICEModel.prior",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "prior: str",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L251",
+          "summary": "Name of the factorised latent prior (`\"logistic\"` / `\"gaussian\"`).",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.generative.nice._model.NICEModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L262",
+          "subcategory": "model",
+          "summary": "Map data to the latent space.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Dequantised samples, shape `(B, D)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": "`(h, log_det)` with `h` of shape `(B, D)` and\n`log_det` of shape `(B,)`.  Every coupling layer and\npermutation contributes exactly zero to `log_det`, so it is\nthe diagonal scaling's $\\sum_i s_i$ broadcast across the\nbatch."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "decode",
+          "path": "lucid.models.generative.nice._model.NICEModel.decode",
+          "kind": "function",
+          "labels": [],
+          "signature": "decode(h: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L291",
+          "subcategory": "model",
+          "summary": "Invert the flow — latent `(B, D)` back to data `(B, D)`.",
+          "extended": "Exact rather than approximate: every stage is run backwards, so\n`decode(encode(x)[0])` recovers `x` up to float round-off.",
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "log_prob",
+          "path": "lucid.models.generative.nice._model.NICEModel.log_prob",
+          "kind": "function",
+          "labels": [],
+          "signature": "log_prob(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L309",
+          "subcategory": "model",
+          "summary": "Exact per-sample log-likelihood $\\log p_X(x)$ in nats.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.nice._model.NICEModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_model.py#L314",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "NormalizingFlowOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Bare NICE flow — invertible map plus the factorised latent prior.",
+      "extended": "The prior is part of the model rather than of the training loop\n(matching the official `NICE(encoder, prior)` construction): the\nflow only becomes a density once the latent space is measured against\n$p_H$.  Three entry points cover the two directions and the\ndensity:\n\n* `encode(x) -> (h, log_det)` — data to latent, with the per-sample\n  log-determinant of the transformation.\n* `decode(h) -> x` — the *exact* inverse, back to `(B, D)`.\n* `log_prob(x) -> (B,)` — exact log-likelihood in nats.\n\nData and latent are both flat `(B, D)` — the flow has no notion of\nspatial structure, so image batches are flattened by the caller.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "NICEConfig",
+          "description": "Architecture and prior.  `config.input_dim` must be even; see\n`NICEConfig` for the full field list.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.nice import NICEConfig, NICEModel\n>>> cfg = NICEConfig(input_dim=64, num_coupling_layers=2,\n...                  num_hidden_layers=1, hidden_dim=16)\n>>> model = NICEModel(cfg).eval()\n>>> x = lucid.rand((2, 64))\n>>> h, log_det = model.encode(x)\n>>> h.shape, log_det.shape\n((2, 64), (2,))\n>>> model.log_prob(x).shape\n(2,)"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516).\n\nThe exact objective, with additive couplings contributing zero:\n\n\n\n$$\n\\log p_X(x) = \\sum_{i=1}^{D}\n    \\Big[\\log p_{H_i}\\big(f_i(x)\\big) + s_i\\Big].\n$$\n\nThe model expects *dequantised* data — the paper adds uniform noise of\n`1/256` and rescales to $[0, 1]^D$ ($1/128$ and\n$[-1, 1]^D$ for CIFAR-10), and applies ZCA (SVHN, CIFAR-10) or\napproximate whitening (TFD) beforehand.  Feeding raw 8-bit integers\nlets the flow put unbounded density on the quantisation lattice, so\nthe likelihood diverges."
+      ],
+      "attributes": [
+        {
+          "name": "couplings",
+          "annotation": "nn.ModuleList",
+          "description": "`config.num_coupling_layers` additive coupling layers, each\nfollowed by an index reversal."
+        },
+        {
+          "name": "scaling",
+          "annotation": "nn.Module",
+          "description": "Diagonal scaling $\\exp(s)$ closing the stack — the only\nstage contributing to the log-determinant."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "nice_cifar",
+      "path": "lucid.models.generative.nice._pretrained.nice_cifar",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_cifar(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L235",
+      "subcategory": "pretrained",
+      "summary": "Construct the NICE flow for the CIFAR-10 setup.",
+      "extended": "Paper-faithful CIFAR-10 configuration from Dinh et al., 2014\nFigure 3: 3072 dimensions, four coupling layers with four hidden\nlayers of 2000 units each, and a standard logistic prior.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEModel",
+        "description": "Bare bijection configured with the CIFAR-10 setup and any\noverrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.nice import nice_cifar\n>>> model = nice_cifar().eval()\n>>> x = lucid.rand((1, 3072)) * 2.0 - 1.0\n>>> model.log_prob(x).shape\n(1,)"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 5371.78 nats, on ZCA-whitened\ndata dequantised with uniform `1/128` noise and rescaled to\n$[-1, 1]^D$ (CIFAR-10 is the one dataset given the wider\nrange).  The released reference config for this dataset instead\nstacks 8 coupling layers of 2400 units with a normal prior and no\ninput reordering — see the module docstring for how far overrides\nreproduce it."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEModel",
+        "type": "NICEModel",
+        "params": 72617216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 72614144,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 18153536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 18153536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 15080000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 3074000,
+                            "own_params": 3074000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 4002000,
+                            "own_params": 4002000,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 3073536,
+                        "own_params": 3073536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "nice_cifar_gen",
+      "path": "lucid.models.generative.nice._pretrained.nice_cifar_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_cifar_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L429",
+      "subcategory": "pretrained",
+      "summary": "NICE generator for the CIFAR-10 setup (NLL loss + `.generate()`).",
+      "extended": "Same bijection as `nice_cifar`, wrapped with the exact\nmaximum-likelihood objective and the ancestral sampler.  This is the\nweakest of the four experiments in perceptual terms — NICE's\nvolume-preserving couplings cannot model natural-image texture — and\nthe reason RealNVP replaced additive couplings with affine ones.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEForImageGeneration",
+        "description": "Generator configured with the CIFAR-10 setup and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.nice import nice_cifar_gen\n>>> model = nice_cifar_gen().eval()\n>>> out = model.generate(n_samples=2)\n>>> out.samples.shape\n(2, 3072)"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 5371.78 nats on ZCA-whitened\ndata in $[-1, 1]^D$."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEForImageGeneration",
+        "type": "NICEForImageGeneration",
+        "params": 72617216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "nice",
+            "type": "NICEModel",
+            "params": 72617216,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "couplings",
+                "type": "ModuleList",
+                "params": 72614144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_AdditiveCoupling",
+                    "params": 18153536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "coupling",
+                        "type": "_CouplingNet",
+                        "params": 18153536,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "hidden",
+                            "type": "ModuleList",
+                            "params": 15080000,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 3074000,
+                                "own_params": 3074000,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "Linear",
+                                "params": 4002000,
+                                "own_params": 4002000,
+                                "children": [],
+                                "repeat": 3
+                              }
+                            ]
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 3073536,
+                            "own_params": 3073536,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "scaling",
+                "type": "_DiagonalScaling",
+                "params": 3072,
+                "own_params": 3072,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nice_mnist",
+      "path": "lucid.models.generative.nice._pretrained.nice_mnist",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_mnist(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L88",
+      "subcategory": "pretrained",
+      "summary": "Construct the NICE flow for the MNIST setup.",
+      "extended": "Paper-faithful MNIST configuration from Dinh et al., 2014 Figure 3:\n784 dimensions, four additive coupling layers whose coupling networks\nhave five hidden layers of 1000 rectified units, an odd/even input\npartition, and a standard logistic prior.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEModel",
+        "description": "Bare bijection configured with the MNIST setup and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.nice import nice_mnist\n>>> model = nice_mnist().eval()\n>>> x = lucid.rand((1, 784))\n>>> h, log_det = model.encode(x)\n>>> h.shape, log_det.shape\n((1, 784), (1,))"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 1980.50 nats, on data\ndequantised with uniform `1/256` noise and rescaled to\n$[0, 1]^D$ (no whitening for MNIST)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEModel",
+        "type": "NICEModel",
+        "params": 19158352,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 19157568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 4789392,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 4789392,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 4397000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 393000,
+                            "own_params": 393000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 1001000,
+                            "own_params": 1001000,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 392392,
+                        "own_params": 392392,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 784,
+            "own_params": 784,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "nice_mnist_gen",
+      "path": "lucid.models.generative.nice._pretrained.nice_mnist_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_mnist_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L290",
+      "subcategory": "pretrained",
+      "summary": "NICE generator for the MNIST setup (NLL loss + `.generate()`).",
+      "extended": "Same bijection as `nice_mnist`, wrapped with the exact\nmaximum-likelihood objective and the ancestral sampler.  Sampling is a\nsingle parallel pass: draw $h$ from the logistic prior, return\n$f^{-1}(h)$.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEForImageGeneration",
+        "description": "Generator configured with the MNIST setup and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.nice import nice_mnist_gen\n>>> model = nice_mnist_gen().eval()\n>>> model.generate(n_samples=4).samples.shape\n(4, 784)"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Samples come back in the dequantised training space, not in\n`[0, 255]`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEForImageGeneration",
+        "type": "NICEForImageGeneration",
+        "params": 19158352,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "nice",
+            "type": "NICEModel",
+            "params": 19158352,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "couplings",
+                "type": "ModuleList",
+                "params": 19157568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_AdditiveCoupling",
+                    "params": 4789392,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "coupling",
+                        "type": "_CouplingNet",
+                        "params": 4789392,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "hidden",
+                            "type": "ModuleList",
+                            "params": 4397000,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 393000,
+                                "own_params": 393000,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "Linear",
+                                "params": 1001000,
+                                "own_params": 1001000,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 392392,
+                            "own_params": 392392,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "scaling",
+                "type": "_DiagonalScaling",
+                "params": 784,
+                "own_params": 784,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nice_svhn",
+      "path": "lucid.models.generative.nice._pretrained.nice_svhn",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_svhn(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L186",
+      "subcategory": "pretrained",
+      "summary": "Construct the NICE flow for the SVHN setup.",
+      "extended": "Paper-faithful SVHN configuration from Dinh et al., 2014 Figure 3:\n3072 dimensions, four coupling layers with four hidden layers of\n2000 units each, and a standard logistic prior.  Identical in\ntopology to `nice_cifar` — the two experiments differ in data\nand reported likelihood only.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEModel",
+        "description": "Bare bijection configured with the SVHN setup and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.nice import nice_svhn\n>>> model = nice_svhn().eval()\n>>> model.input_dim\n3072"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 11496.55 nats, on\nZCA-whitened data — the whitening is what makes this number so much\nlarger than the CIFAR-10 one, so likelihoods are comparable only\nwithin a preprocessing pipeline."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEModel",
+        "type": "NICEModel",
+        "params": 72617216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 72614144,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 18153536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 18153536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 15080000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 3074000,
+                            "own_params": 3074000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 4002000,
+                            "own_params": 4002000,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 3073536,
+                        "own_params": 3073536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "nice_svhn_gen",
+      "path": "lucid.models.generative.nice._pretrained.nice_svhn_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_svhn_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L384",
+      "subcategory": "pretrained",
+      "summary": "NICE generator for the SVHN setup (NLL loss + `.generate()`).",
+      "extended": "Same bijection as `nice_svhn`, wrapped with the exact\nmaximum-likelihood objective and the ancestral sampler.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEForImageGeneration",
+        "description": "Generator configured with the SVHN setup and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.nice import nice_svhn_gen\n>>> model = nice_svhn_gen().eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 3072)"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Samples live in the ZCA-whitened space; apply the inverse\nZCA transform to view them as images."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEForImageGeneration",
+        "type": "NICEForImageGeneration",
+        "params": 72617216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "nice",
+            "type": "NICEModel",
+            "params": 72617216,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "couplings",
+                "type": "ModuleList",
+                "params": 72614144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_AdditiveCoupling",
+                    "params": 18153536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "coupling",
+                        "type": "_CouplingNet",
+                        "params": 18153536,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "hidden",
+                            "type": "ModuleList",
+                            "params": 15080000,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 3074000,
+                                "own_params": 3074000,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "Linear",
+                                "params": 4002000,
+                                "own_params": 4002000,
+                                "children": [],
+                                "repeat": 3
+                              }
+                            ]
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 3073536,
+                            "own_params": 3073536,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "scaling",
+                "type": "_DiagonalScaling",
+                "params": 3072,
+                "own_params": 3072,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nice_tfd",
+      "path": "lucid.models.generative.nice._pretrained.nice_tfd",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_tfd(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L137",
+      "subcategory": "pretrained",
+      "summary": "Construct the NICE flow for the Toronto Face Database setup.",
+      "extended": "Paper-faithful TFD configuration from Dinh et al., 2014 Figure 3:\n2304 dimensions, four coupling layers with four hidden layers of\n5000 units each, and — uniquely among the four experiments — a\nstandard *normal* prior.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEModel",
+        "description": "Bare bijection configured with the TFD setup and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.nice import nice_tfd\n>>> model = nice_tfd().eval()\n>>> model.prior\n'gaussian'\n>>> model.input_dim\n2304"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 5514.71 nats, on\napproximately whitened data — well ahead of the 5250 nats of the Deep\nMFA bound it was compared against."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEModel",
+        "type": "NICEModel",
+        "params": 346166912,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 346164608,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 86541152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 86541152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 80780000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 5765000,
+                            "own_params": 5765000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 25005000,
+                            "own_params": 25005000,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 5761152,
+                        "own_params": 5761152,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 2304,
+            "own_params": 2304,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "nice_tfd_gen",
+      "path": "lucid.models.generative.nice._pretrained.nice_tfd_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "nice_tfd_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/generative/nice/_pretrained.py#L337",
+      "subcategory": "pretrained",
+      "summary": "NICE generator for the TFD setup (NLL loss + `.generate()`).",
+      "extended": "Same bijection as `nice_tfd` — four coupling layers of four\n5000-unit hidden layers over 2304 dims, with a standard normal prior\n— wrapped with the exact maximum-likelihood objective and the\nancestral sampler.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NICEConfig` field overrides forwarded into the\nunderlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NICEForImageGeneration",
+        "description": "Generator configured with the TFD setup and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.nice import nice_tfd_gen\n>>> model = nice_tfd_gen().eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 2304)"
+      ],
+      "notes": [
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Samples are in the approximately whitened space the model\ntrains on — invert the whitening to view them as images."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NICEForImageGeneration",
+        "type": "NICEForImageGeneration",
+        "params": 346166912,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "nice",
+            "type": "NICEModel",
+            "params": 346166912,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "couplings",
+                "type": "ModuleList",
+                "params": 346164608,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_AdditiveCoupling",
+                    "params": 86541152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "coupling",
+                        "type": "_CouplingNet",
+                        "params": 86541152,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "hidden",
+                            "type": "ModuleList",
+                            "params": 80780000,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 5765000,
+                                "own_params": 5765000,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "Linear",
+                                "params": 25005000,
+                                "own_params": 25005000,
+                                "children": [],
+                                "repeat": 3
+                              }
+                            ]
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 5761152,
+                            "own_params": 5761152,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "scaling",
+                "type": "_DiagonalScaling",
+                "params": 2304,
+                "own_params": 2304,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "NICE family — Dinh, Krueger & Bengio, 2014 (additive-coupling flow).",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "NICE",
+  "citation": "Dinh, Laurent, David Krueger, and Yoshua Bengio. \"NICE: Non-linear Independent Components Estimation.\" International Conference on Learning Representations, Workshop Track, 2015.",
+  "theory": "NICE is the first *normalizing flow* trained on images: instead of\nbounding the likelihood (VAE) or factorising it over pixels\n(autoregressive models), it learns an invertible map\n$h = f(x)$ onto a latent space with a factorised prior, so the\nexact data log-density falls straight out of the change-of-variables\nformula\n\n\n\n$$\n\\log p_X(x) = \\log p_H\\big(f(x)\\big)\n    + \\log\\Big|\\det \\frac{\\partial f}{\\partial x}\\Big|.\n$$\n\nNothing is approximated — no variational gap, no Markov chain — but\nevery layer now has to be invertible *and* have a cheap Jacobian\ndeterminant, which is a severe architectural constraint.\n\nThe construction that satisfies both is the **additive coupling\nlayer**.  Partition the dimensions into two blocks\n$(x_{I_1}, x_{I_2})$ and update only the second, conditioned on\nthe first:\n\n\n\n$$\n\\begin{aligned}\ny_{I_1} &= x_{I_1}, \\\\\ny_{I_2} &= x_{I_2} + m(x_{I_1}).\n\\end{aligned}\n$$\n\nThe Jacobian is unit lower-triangular, so its determinant is\n$1$ no matter how deep the coupling network $m$ is, and\nthe inverse is the same graph with one sign flipped,\n$x_{I_2} = y_{I_2} - m(y_{I_1})$.  Since one block passes\nthrough untouched, consecutive layers must exchange the roles of the\ntwo blocks; at least three couplings are required before every\ndimension can influence every other, and the paper stacks four with\ndeep rectified networks (linear output units) as the $m$'s.\n\nA stack of volume-preserving maps is itself volume-preserving, so\nNICE closes the flow with a learned **diagonal scaling**\n$h = \\exp(s) \\odot h^{(4)}$ — the only stage that moves the\ndeterminant:\n\n\n\n$$\n\\log p_X(x) = \\sum_{i=1}^{D}\n    \\Big[\\log p_{H_i}\\big(f_i(x)\\big) + s_i\\Big].\n$$\n\nThe scales $\\exp(s_i)$ behave as learned per-dimension\nimportance weights: directions the model captures well are given\nsmall scale, making $s$ the non-linear analogue of an\neigenvalue spectrum in PCA.  The prior is a standard logistic\n(heavier tails, used for MNIST / SVHN / CIFAR-10) or a standard\nnormal (used for TFD).\n\nGeneration is exact and parallel — draw $h \\sim p_H$, return\n$f^{-1}(h)$ — with no decoder and no iterative refinement.  The\ncoupling layer introduced here is the direct ancestor of RealNVP\n(affine couplings, multi-scale spatial masks) and Glow (invertible\n1x1 convolutions); the samples look blurry by modern standards, but\nthe recipe defined how exact-likelihood generative models are built.",
+  "tasks": [
+    "image-generation"
+  ]
+}

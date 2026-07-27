@@ -21,6 +21,7 @@ Most callers should import directly from the sub-module:
     from lucid.models._utils._generative import (
         make_beta_schedule, extract_into_tensor,
         gaussian_kl_divergence, reparameterize, generative_activation,
+        flow_prior_log_prob, flow_prior_sample,
     )
 
 Alternatively the most-used names are re-exported here for convenience:
@@ -33,6 +34,8 @@ from lucid.models._utils._classification import DropPath, LayerScale
 from lucid.models._utils._text import text_activation, extended_attention_mask
 from lucid.models._utils._generative import (
     extract_into_tensor,
+    flow_prior_log_prob,
+    flow_prior_sample,
     gaussian_kl_divergence,
     generative_activation,
     make_beta_schedule,
@@ -81,6 +84,8 @@ __all__ = [
     "extract_into_tensor",
     "gaussian_kl_divergence",
     "reparameterize",
+    "flow_prior_log_prob",
+    "flow_prior_sample",
     "generative_activation",
     # detection — box ops
     "box_area",

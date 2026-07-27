@@ -23,7 +23,7 @@ from lucid.models._output import (
     ModelOutput, BaseModelOutput, BaseModelOutputWithPooling,
     ImageClassificationOutput, ObjectDetectionOutput, InstanceSegmentationOutput,
     SemanticSegmentationOutput, CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput,
-    DiffusionModelOutput, VAEOutput, GenerationOutput,
+    DiffusionModelOutput, VAEOutput, NormalizingFlowOutput, GenerationOutput,
 )
 from lucid.models._protocols import (
     BackboneProtocol, ConfigT,
@@ -39,13 +39,19 @@ from lucid.models.text import LanguageModelConfig, TextActivation
 # Generative-domain infrastructure (Phase 5 base layer).
 from lucid.models.generative import (
     BetaSchedule, DDPMScheduler,
-    DiffusionModelConfig, GenerativeActivation, GenerativeModelConfig,
-    DiffusionScheduler,
+    DiffusionModelConfig, FlowPrior, GenerativeActivation, GenerativeModelConfig,
+    NormalizingFlowConfig, DiffusionScheduler,
 )
 # 2013 — VAE (Kingma & Welling)
 from lucid.models.generative.vae import (
     VAEConfig, VAEModel, VAEForImageGeneration,
     vae, hvae, vae_gen, hvae_gen,
+)
+# 2014 — NICE (Dinh, Krueger & Bengio)
+from lucid.models.generative.nice import (
+    NICEConfig, NICEModel, NICEForImageGeneration,
+    nice_mnist, nice_tfd, nice_svhn, nice_cifar,
+    nice_mnist_gen, nice_tfd_gen, nice_svhn_gen, nice_cifar_gen,
 )
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
@@ -410,13 +416,13 @@ __all__ = [
     "BackboneMixin", "ClassificationHeadMixin", "DiffusionMixin",
     "FeatureInfo", "CausalLMMixin", "MaskedLMMixin",
     "LanguageModelConfig", "TextActivation",
-    "GenerativeModelConfig", "DiffusionModelConfig",
-    "GenerativeActivation", "BetaSchedule",
+    "GenerativeModelConfig", "DiffusionModelConfig", "NormalizingFlowConfig",
+    "GenerativeActivation", "BetaSchedule", "FlowPrior",
     "DiffusionScheduler", "DDPMScheduler",
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
     "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
     "SemanticSegmentationOutput", "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",
-    "DiffusionModelOutput", "VAEOutput", "GenerationOutput",
+    "DiffusionModelOutput", "VAEOutput", "NormalizingFlowOutput", "GenerationOutput",
     "AutoConfig", "AutoModel",
     "AutoModelForCausalLM", "AutoModelForImageClassification",
     "AutoModelForMaskedLM", "AutoModelForObjectDetection", "AutoModelForSemanticSegmentation",
@@ -655,6 +661,10 @@ __all__ = [
     # ── Generative (2013) VAE ─────────────────────────────────────────────────
     "VAEConfig", "VAEModel", "VAEForImageGeneration",
     "vae", "hvae", "vae_gen", "hvae_gen",
+    # ── Generative (2014) NICE ────────────────────────────────────────────────
+    "NICEConfig", "NICEModel", "NICEForImageGeneration",
+    "nice_mnist", "nice_tfd", "nice_svhn", "nice_cifar",
+    "nice_mnist_gen", "nice_tfd_gen", "nice_svhn_gen", "nice_cifar_gen",
     # ── Generative (2020) DDPM ────────────────────────────────────────────────
     "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
     "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",

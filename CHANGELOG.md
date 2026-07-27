@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add state_dict / load_state_dict to every LR scheduler
 
+- add NICE, the model zoo's first normalizing flow
+
 ### Performance
 
 - route ViT attention through the fused memory-efficient SDPA

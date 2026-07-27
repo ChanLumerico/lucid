@@ -3,7 +3,7 @@
   "name": "detr",
   "path": "lucid.models.vision.detr",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/__init__.py#L1",
   "members": [
     {
       "name": "DETRConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DETRConfig(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, num_bbox_layers: int = 3, bbox_hidden_dim: int = 256, score_thresh: float = 0.7)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, num_bbox_layers: int = 3, bbox_hidden_dim: int = 256, score_thresh: float = 0.7)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -143,7 +143,7 @@
       ],
       "labels": [],
       "signature": "DETRForObjectDetection(config: DETRConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_model.py#L539",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_model.py#L539",
       "subcategory": "model",
       "methods": [
         {
@@ -152,7 +152,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DETRConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_model.py#L644",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_model.py#L644",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -174,7 +174,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: list[dict[str, Tensor]] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_model.py#L678",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_model.py#L678",
           "subcategory": "model",
           "summary": "Run DETR.",
           "extended": null,
@@ -209,7 +209,7 @@
           "kind": "function",
           "labels": [],
           "signature": "postprocess(output: ObjectDetectionOutput, image_sizes: list[tuple[int, int]])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_model.py#L850",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_model.py#L850",
           "subcategory": "model",
           "summary": "Filter queries by score threshold and convert to pixel coordinates.",
           "extended": null,
@@ -255,7 +255,7 @@
         "Inference returns class logits and normalised cxcywh boxes for every\nquery:\n>>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet50\n>>> model = detr_resnet50()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape   # (B, num_queries, K + 1)\n(1, 100, 81)\n>>> out.pred_boxes.shape\n(1, 100, 4)\nTraining pass with normalised xyxy ground-truth boxes (Hungarian\nmatching computes the set loss):\n>>> targets = [{\n...     \"boxes\":  lucid.tensor([[0.1, 0.1, 0.5, 0.5]]),\n...     \"labels\": lucid.tensor([3], dtype=lucid.int64),\n... }]\n>>> out = model(x, targets=targets)\n>>> out.loss.shape\n()"
       ],
       "notes": [
-        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 ([arXiv:2005.12872](https://arxiv.org/abs/2005.12872)).  The bipartite Hungarian assignment\nfinds the permutation $\\hat{\\sigma} \\in \\mathfrak{S}_N$ that\nminimises\n\n\n\n$$\n\\hat{\\sigma} = \\arg\\min_{\\sigma \\in \\mathfrak{S}_N}\n               \\sum_{i=1}^{N}\n               \\mathcal{L}_\\mathrm{match}\\bigl(y_i, \\hat{y}_{\\sigma(i)}\\bigr),\n$$\n\nwith the pair cost\n\n\n\n$$\n\\mathcal{L}_\\mathrm{match}(y, \\hat{y}) =\n    -\\mathbb{1}_{c \\ne \\varnothing}\\,\\hat{p}(c)\n    + \\mathbb{1}_{c \\ne \\varnothing}\\,\n      \\bigl(\\lambda_{\\mathrm{L_1}}\\|b - \\hat{b}\\|_1\n            + \\lambda_\\mathrm{GIoU}\\,\n              (1 - \\mathrm{GIoU}(b, \\hat{b}))\\bigr).\n$$\n\nThe final loss reuses the same per-pair terms, with \"no-object\"\nmatches penalised at reduced weight.  Removing NMS / anchors makes\nDETR conceptually simple but training-data hungry — the paper\nreports needing 500 epochs to fully converge on COCO."
+        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 (arXiv:2005.12872).  The bipartite Hungarian assignment\nfinds the permutation $\\hat{\\sigma} \\in \\mathfrak{S}_N$ that\nminimises\n\n\n\n$$\n\\hat{\\sigma} = \\arg\\min_{\\sigma \\in \\mathfrak{S}_N}\n               \\sum_{i=1}^{N}\n               \\mathcal{L}_\\mathrm{match}\\bigl(y_i, \\hat{y}_{\\sigma(i)}\\bigr),\n$$\n\nwith the pair cost\n\n\n\n$$\n\\mathcal{L}_\\mathrm{match}(y, \\hat{y}) =\n    -\\mathbb{1}_{c \\ne \\varnothing}\\,\\hat{p}(c)\n    + \\mathbb{1}_{c \\ne \\varnothing}\\,\n      \\bigl(\\lambda_{\\mathrm{L_1}}\\|b - \\hat{b}\\|_1\n            + \\lambda_\\mathrm{GIoU}\\,\n              (1 - \\mathrm{GIoU}(b, \\hat{b}))\\bigr).\n$$\n\nThe final loss reuses the same per-pair terms, with \"no-object\"\nmatches penalised at reduced weight.  Removing NMS / anchors makes\nDETR conceptually simple but training-data hungry — the paper\nreports needing 500 epochs to fully converge on COCO."
       ],
       "attributes": [
         {
@@ -303,7 +303,7 @@
       "kind": "function",
       "labels": [],
       "signature": "detr_resnet50(pretrained: bool | str = False, weights: DETRResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_pretrained.py#L58",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_pretrained.py#L58",
       "subcategory": "pretrained",
       "summary": "DETR with ResNet-50 backbone (Carion et al., ECCV 2020).",
       "extended": "Builds a `DETRForObjectDetection` with the paper-cited\nResNet-50 + transformer configuration: 100 object queries, a 6-layer\nencoder + 6-layer decoder with `d_model = 256`, 8 attention heads,\nand `dim_feedforward = 2048`.  The COCO config uses\n`num_classes = 91`.  Reaches COCO box mAP of 42.0 (paper Table 1).\nApproximately 41.5M parameters with a notable *no-anchor / no-NMS*\ndesign.",
@@ -336,7 +336,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet50\n>>> model = detr_resnet50()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 100, 92)"
       ],
       "notes": [
-        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 ([arXiv:2005.12872](https://arxiv.org/abs/2005.12872)).  Pretrained weights are converted from\nthe original Facebook DETR `detr_resnet50` checkpoint and hosted\nunder `lucid-dl/detr-resnet-50`."
+        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 (arXiv:2005.12872).  Pretrained weights are converted from\nthe original Facebook DETR `detr_resnet50` checkpoint and hosted\nunder `lucid-dl/detr-resnet-50`."
       ],
       "attributes": [],
       "warns": [],
@@ -1128,7 +1128,7 @@
       "kind": "function",
       "labels": [],
       "signature": "detr_resnet101(pretrained: bool | str = False, weights: DETRResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_pretrained.py#L128",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_pretrained.py#L128",
       "subcategory": "pretrained",
       "summary": "DETR with ResNet-101 backbone (Carion et al., ECCV 2020).",
       "extended": "Builds a `DETRForObjectDetection` with the same transformer\nhead as `detr_resnet50` but a deeper ResNet-101 backbone\n(`[3, 4, 23, 3]` bottleneck blocks).  The COCO config uses\n`num_classes = 91`.  Approximately 60.5M parameters and COCO box\nmAP of 43.5 (paper Table 1, DETR-R101 row).",
@@ -1161,7 +1161,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet101\n>>> model = detr_resnet101()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 100, 92)"
       ],
       "notes": [
-        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 ([arXiv:2005.12872](https://arxiv.org/abs/2005.12872)).  Switching to ResNet-101 buys ~1.5\npoints of AP at the cost of ~50% more parameters in the backbone;\nthe transformer head is unchanged.  Pretrained weights are converted\nfrom the original Facebook DETR `detr_resnet101` checkpoint and\nhosted under `lucid-dl/detr-resnet-101`."
+        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 (arXiv:2005.12872).  Switching to ResNet-101 buys ~1.5\npoints of AP at the cost of ~50% more parameters in the backbone;\nthe transformer head is unchanged.  Pretrained weights are converted\nfrom the original Facebook DETR `detr_resnet101` checkpoint and\nhosted under `lucid-dl/detr-resnet-101`."
       ],
       "attributes": [],
       "warns": [],
@@ -1957,7 +1957,7 @@
       ],
       "labels": [],
       "signature": "DETRResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_weights.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_weights.py#L21",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.detr_resnet50`.",
@@ -1981,7 +1981,7 @@
       ],
       "labels": [],
       "signature": "DETRResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda/lucid/models/vision/detr/_weights.py#L46",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ef4beda3c/lucid/models/vision/detr/_weights.py#L46",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.detr_resnet101`.",

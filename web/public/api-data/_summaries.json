@@ -244939,5 +244939,597 @@
         "children": []
       }
     ]
+  },
+  "nice_cifar": {
+    "name": "NICEModel",
+    "type": "NICEModel",
+    "params": 72617216,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "couplings",
+        "type": "ModuleList",
+        "params": 72614144,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_AdditiveCoupling",
+            "params": 18153536,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "coupling",
+                "type": "_CouplingNet",
+                "params": 18153536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "hidden",
+                    "type": "ModuleList",
+                    "params": 15080000,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 3074000,
+                        "own_params": 3074000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 4002000,
+                        "own_params": 4002000,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 3073536,
+                    "own_params": 3073536,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 4
+          }
+        ]
+      },
+      {
+        "name": "scaling",
+        "type": "_DiagonalScaling",
+        "params": 3072,
+        "own_params": 3072,
+        "children": []
+      }
+    ]
+  },
+  "nice_cifar_gen": {
+    "name": "NICEForImageGeneration",
+    "type": "NICEForImageGeneration",
+    "params": 72617216,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "nice",
+        "type": "NICEModel",
+        "params": 72617216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 72614144,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 18153536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 18153536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 15080000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 3074000,
+                            "own_params": 3074000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 4002000,
+                            "own_params": 4002000,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 3073536,
+                        "own_params": 3073536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "nice_mnist": {
+    "name": "NICEModel",
+    "type": "NICEModel",
+    "params": 19158352,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "couplings",
+        "type": "ModuleList",
+        "params": 19157568,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_AdditiveCoupling",
+            "params": 4789392,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "coupling",
+                "type": "_CouplingNet",
+                "params": 4789392,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "hidden",
+                    "type": "ModuleList",
+                    "params": 4397000,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 393000,
+                        "own_params": 393000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 1001000,
+                        "own_params": 1001000,
+                        "children": [],
+                        "repeat": 4
+                      }
+                    ]
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 392392,
+                    "own_params": 392392,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 4
+          }
+        ]
+      },
+      {
+        "name": "scaling",
+        "type": "_DiagonalScaling",
+        "params": 784,
+        "own_params": 784,
+        "children": []
+      }
+    ]
+  },
+  "nice_mnist_gen": {
+    "name": "NICEForImageGeneration",
+    "type": "NICEForImageGeneration",
+    "params": 19158352,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "nice",
+        "type": "NICEModel",
+        "params": 19158352,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 19157568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 4789392,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 4789392,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 4397000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 393000,
+                            "own_params": 393000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 1001000,
+                            "own_params": 1001000,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 392392,
+                        "own_params": 392392,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 784,
+            "own_params": 784,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "nice_svhn": {
+    "name": "NICEModel",
+    "type": "NICEModel",
+    "params": 72617216,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "couplings",
+        "type": "ModuleList",
+        "params": 72614144,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_AdditiveCoupling",
+            "params": 18153536,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "coupling",
+                "type": "_CouplingNet",
+                "params": 18153536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "hidden",
+                    "type": "ModuleList",
+                    "params": 15080000,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 3074000,
+                        "own_params": 3074000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 4002000,
+                        "own_params": 4002000,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 3073536,
+                    "own_params": 3073536,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 4
+          }
+        ]
+      },
+      {
+        "name": "scaling",
+        "type": "_DiagonalScaling",
+        "params": 3072,
+        "own_params": 3072,
+        "children": []
+      }
+    ]
+  },
+  "nice_svhn_gen": {
+    "name": "NICEForImageGeneration",
+    "type": "NICEForImageGeneration",
+    "params": 72617216,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "nice",
+        "type": "NICEModel",
+        "params": 72617216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 72614144,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 18153536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 18153536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 15080000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 3074000,
+                            "own_params": 3074000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 4002000,
+                            "own_params": 4002000,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 3073536,
+                        "own_params": 3073536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 3072,
+            "own_params": 3072,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "nice_tfd": {
+    "name": "NICEModel",
+    "type": "NICEModel",
+    "params": 346166912,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "couplings",
+        "type": "ModuleList",
+        "params": 346164608,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_AdditiveCoupling",
+            "params": 86541152,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "coupling",
+                "type": "_CouplingNet",
+                "params": 86541152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "hidden",
+                    "type": "ModuleList",
+                    "params": 80780000,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 5765000,
+                        "own_params": 5765000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 25005000,
+                        "own_params": 25005000,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 5761152,
+                    "own_params": 5761152,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 4
+          }
+        ]
+      },
+      {
+        "name": "scaling",
+        "type": "_DiagonalScaling",
+        "params": 2304,
+        "own_params": 2304,
+        "children": []
+      }
+    ]
+  },
+  "nice_tfd_gen": {
+    "name": "NICEForImageGeneration",
+    "type": "NICEForImageGeneration",
+    "params": 346166912,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "nice",
+        "type": "NICEModel",
+        "params": 346166912,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "couplings",
+            "type": "ModuleList",
+            "params": 346164608,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_AdditiveCoupling",
+                "params": 86541152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "coupling",
+                    "type": "_CouplingNet",
+                    "params": 86541152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "hidden",
+                        "type": "ModuleList",
+                        "params": 80780000,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 5765000,
+                            "own_params": 5765000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 25005000,
+                            "own_params": 25005000,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 5761152,
+                        "own_params": 5761152,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "scaling",
+            "type": "_DiagonalScaling",
+            "params": 2304,
+            "own_params": 2304,
+            "children": []
+          }
+        ]
+      }
+    ]
   }
 }

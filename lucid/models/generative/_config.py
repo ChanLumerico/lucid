@@ -25,6 +25,10 @@ GenerativeActivation = Literal["silu", "swish", "relu", "gelu"]
 # Noise schedule shape — see ``make_beta_schedule`` in ``_utils/_generative``.
 BetaSchedule = Literal["linear", "cosine"]
 
+# Factorised base distribution of a normalizing flow's latent space — see
+# ``flow_prior_log_prob`` in ``_utils/_generative``.
+FlowPrior = Literal["logistic", "gaussian"]
+
 
 @dataclass(frozen=True)
 class GenerativeModelConfig(ModelConfig):
@@ -101,9 +105,33 @@ class DiffusionModelConfig(GenerativeModelConfig):
             )
 
 
+@dataclass(frozen=True)
+class NormalizingFlowConfig(GenerativeModelConfig):
+    """Shared base for *normalizing-flow* families (exact likelihood).
+
+    A flow is a bijection ``f`` between data and a factorised latent space,
+    trained by maximising ``log p(x) = log p_H(f(x)) + log|det ∂f/∂x|``.
+    Every family therefore needs to declare which base distribution the
+    latent is measured against; the bijection's own knobs (coupling depth,
+    scale parameterisation, …) stay in the family config.
+
+    Args:
+        prior: Factorised base distribution over ``h = f(x)``.
+            ``"logistic"`` — heavier-tailed, the default in Dinh et al.,
+            2014 for dequantised pixel data; ``"gaussian"`` — standard
+            normal.
+    """
+
+    model_type: ClassVar[str] = "normalizing_flow"
+
+    prior: FlowPrior = "logistic"
+
+
 __all__ = [
     "GenerativeModelConfig",
     "DiffusionModelConfig",
+    "NormalizingFlowConfig",
     "GenerativeActivation",
     "BetaSchedule",
+    "FlowPrior",
 ]

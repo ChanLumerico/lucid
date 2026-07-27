@@ -576,14 +576,65 @@ class VAEOutput(ModelOutput):
 
 
 @dataclass(slots=True)
+class NormalizingFlowOutput(ModelOutput):
+    r"""Forward output of an exact-likelihood normalizing flow.
+
+    A flow's forward direction is the *inference* direction — it maps data
+    to the latent space and reports how much volume the map contracted, so
+    the exact log-density comes out of a single pass.
+
+    Attributes
+    ----------
+    latent : Tensor
+        Latent code :math:`h = f(x)`, shape ``(B, D)`` with
+        ``D = C · H · W`` for image flows (the bijection is defined on the
+        flattened sample).
+    log_det_jacobian : Tensor
+        Per-sample :math:`\log\big|\det \partial f / \partial x\big|`,
+        shape ``(B,)``.  Volume-preserving stages (additive coupling,
+        permutations) contribute exactly zero.
+    log_prob : Tensor
+        Per-sample exact log-likelihood, shape ``(B,)``:
+
+        .. math::
+
+            \log p_X(x) = \log p_H(f(x))
+                + \log\big|\det \partial f / \partial x\big|.
+
+    loss : Tensor or None, optional
+        Scalar negative log-likelihood ``-log_prob.mean()``, populated by
+        the task wrapper (the bare trunk leaves it ``None``).
+
+    Notes
+    -----
+    Returned by ``NICEModel.forward`` and every other flow trunk /
+    ``…ForImageGeneration`` head.  Sampling runs the bijection backwards
+    and returns :class:`GenerationOutput` instead.
+
+    Examples
+    --------
+    >>> model = create_model("nice_mnist")
+    >>> out = model(images)
+    >>> out.latent.shape, out.log_prob.shape
+    ((4, 784), (4,))
+    """
+
+    latent: Tensor
+    log_det_jacobian: Tensor
+    log_prob: Tensor
+    loss: Tensor | None = None
+
+
+@dataclass(slots=True)
 class GenerationOutput(ModelOutput):
     r"""Final result of a generative model's sampling loop.
 
     Attributes
     ----------
     samples : Tensor
-        Final ``(n_samples, C, H, W)`` (image) or ``(n_samples, T)``
-        (text) batch produced by the sampler.
+        Final ``(n_samples, C, H, W)`` (image), ``(n_samples, D)``
+        (vector flow) or ``(n_samples, T)`` (text) batch produced by the
+        sampler.
     intermediates : tuple[Tensor, ...] or None, optional
         Per-step latents / samples — populated only when the caller
         passes ``return_intermediates=True`` to ``generate``.  Useful for

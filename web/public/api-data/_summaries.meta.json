@@ -314,5 +314,13 @@
   "zfnet": "208b659350f828b7",
   "zfnet_cls": "208b659350f828b7",
   "coatnet_7": "ab1cd1add29e1652",
-  "coatnet_7_cls": "ab1cd1add29e1652"
+  "coatnet_7_cls": "ab1cd1add29e1652",
+  "nice_cifar": "413feb72c42512db",
+  "nice_cifar_gen": "413feb72c42512db",
+  "nice_mnist": "413feb72c42512db",
+  "nice_mnist_gen": "413feb72c42512db",
+  "nice_svhn": "413feb72c42512db",
+  "nice_svhn_gen": "413feb72c42512db",
+  "nice_tfd": "413feb72c42512db",
+  "nice_tfd_gen": "413feb72c42512db"
 }
