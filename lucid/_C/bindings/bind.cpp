@@ -45,6 +45,7 @@ void register_composite(py::module_& m);
 void register_linalg(py::module_& m);
 void register_einops(py::module_& m);
 void register_fft(py::module_& m);
+void register_diffeq(py::module_& m);
 void register_quantized(py::module_& m);
 void register_complex(py::module_& m);
 void register_compile(py::module_& m);
@@ -98,6 +99,10 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_einops(einops);
     auto fft = m.def_submodule("fft", "Discrete Fourier transform ops (mlx::core::fft wrappers).");
     lucid::bindings::register_fft(fft);
+    // Differential-equation primitives; the integrator loop lives in Python
+    // (lucid.diffeq) because the right-hand side is a Python callable.
+    auto diffeq = m.def_submodule("diffeq", "Differential-equation primitives (Runge-Kutta).");
+    lucid::bindings::register_diffeq(diffeq);
     // Low-precision (int4/int8) GEMM primitives (mlx::core quantized kernels).
     auto quantized = m.def_submodule("quantized", "MLX quantized GEMM ops (GPU only).");
     lucid::bindings::register_quantized(quantized);

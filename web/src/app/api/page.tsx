@@ -18,6 +18,7 @@ import {
   Sigma,
   SlidersHorizontal,
   Sparkles,
+  Spline,
   Star,
   Timer,
   TrendingDown,
@@ -59,7 +60,11 @@ function _memberCount(slug: string): number {
   try {
     const d = loadApiData(slug);
     if (isApiClassModule(d)) return d.methods.length;
-    if (isApiModule(d))       return d.members.length;
+    // Module-level constants documented in the docstring's ``Attributes``
+    // section are public names on the page too, so they count — otherwise a
+    // module that exports mostly constants advertises a misleadingly low
+    // number.  No-op for modules that document none.
+    if (isApiModule(d))       return d.members.length + d.attributes.length;
     return 0;
   } catch {
     return 0;
@@ -119,6 +124,7 @@ function buildModuleGroups(): ModuleGroup[] {
   const special       = _memberCount("lucid.special");
   const signal        = _memberCount("lucid.signal");
   const distributions = _memberCount("lucid.distributions");
+  const diffeq        = _memberCount("lucid.diffeq");
   const engineMembers = _memberCount("lucid._C.engine");
 
   return [
@@ -165,6 +171,7 @@ function buildModuleGroups(): ModuleGroup[] {
         { name: "lucid.signal",        slug: "lucid.signal",        description: `${signal} spectral window functions.`,                     icon: Activity },
         { name: "lucid.einops",        slug: "lucid.einops",        description: "Einops-style tensor manipulation.",                         icon: Shuffle  },
         { name: "lucid.distributions", slug: "lucid.distributions", description: `${distributions} distributions + base class + KL registry.`, icon: Dices  },
+        { name: "lucid.diffeq",        slug: "lucid.diffeq",        description: `${diffeq} names — fixed-step explicit Runge-Kutta ODE integration.`,        icon: Spline   },
       ],
     },
     {

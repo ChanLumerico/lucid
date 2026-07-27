@@ -328,6 +328,7 @@ lucid_object_library(
     ops/complex/Imag.cpp
     ops/complex/Complex.cpp
     ops/complex/Conj.cpp
+    ops/diffeq/RkCombine.cpp
     nn/Linear.cpp
     nn/Dropout.cpp
     nn/LayerNorm.cpp
@@ -493,6 +494,7 @@ lucid_object_library(
     bindings/bind_linalg.cpp
     bindings/bind_einops.cpp
     bindings/bind_fft.cpp
+    bindings/bind_diffeq.cpp
     bindings/bind_quantized.cpp
     bindings/bind_complex.cpp
     bindings/bind_compile.cpp        # 3.5 Phase 1.1: lucid.compile() bindings

@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Added
+
+- add lucid.diffeq — fixed-step explicit Runge-Kutta ODE integrators
+
+---
+
 ## [3.7.1] — 2026-07-27
 
 ### Added — RealNVP, the multi-scale affine-coupling flow

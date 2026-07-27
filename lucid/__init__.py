@@ -223,7 +223,7 @@ __all__ = [
     "erf", "erfinv", "max", "min", "pow", "ravel", "round", "sum",
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "func", "linalg", "fft", "signal", "special",
-    "utils", "amp", "profiler", "einops", "compile", "quantization",
+    "diffeq", "utils", "amp", "profiler", "einops", "compile", "quantization",
     "metal", "backends", "test", "weights",
     # ── public type aliases ───────────────────────────────────────────────
     "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
@@ -312,7 +312,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset([
     # ── core ML stack ─────────────────────────────────────────────────────
     "nn", "optim", "autograd", "func",
     # ── numerical sub-packages ────────────────────────────────────────────
-    "linalg", "fft", "signal", "special", "distributions",
+    "linalg", "fft", "signal", "special", "distributions", "diffeq",
     # ── inference / deployment ────────────────────────────────────────────
     "quantization",
     # ── infra / tooling ───────────────────────────────────────────────────

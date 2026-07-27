@@ -1,0 +1,227 @@
+{
+  "slug": "lucid.diffeq",
+  "name": "diffeq",
+  "path": "lucid.diffeq",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/__init__.py#L1",
+  "members": [
+    {
+      "name": "odeint",
+      "path": "lucid.diffeq._solvers.odeint",
+      "kind": "function",
+      "labels": [],
+      "signature": "odeint(func: Callable[[Tensor, Tensor], Tensor], y0: Tensor, t: Tensor | Sequence[float], method: str | ButcherTableau = 'rk4', return_trajectory: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_solvers.py#L164",
+      "subcategory": "solvers",
+      "summary": "Integrate `dy/dt = f(t, y)` on a fixed grid with an explicit RK method.",
+      "extended": "The supplied grid `t` *is* the integration grid: consecutive entries are\nstepped in one Runge-Kutta step each, with no sub-stepping and no dense\noutput.  Step size therefore comes from the spacing of `t`, and\ncontrolling accuracy means choosing a finer grid.\n\nGradient mode is left entirely to the caller.  Under grad, the whole solve\nis differentiable end-to-end (discretise-then-optimise) and every stage is\nretained for backward; wrap the call in `lucid.no_grad` for sampling,\nwhere the stage graph is pure overhead.",
+      "parameters": [
+        {
+          "name": "func",
+          "annotation": "callable",
+          "description": "Right-hand side `f(t, y) -> dy/dt`.  Receives the stage time as a\n0-D tensor matching `y0` in dtype and device, and must return a\ntensor with the same shape as `y0`.",
+          "default": null
+        },
+        {
+          "name": "y0",
+          "annotation": "Tensor",
+          "description": "Initial state at `t[0]`.  Any shape; must have a floating dtype.",
+          "default": null
+        },
+        {
+          "name": "t",
+          "annotation": "Tensor or sequence of float",
+          "description": "Strictly monotonic 1-D grid of at least two finite time points.\nDescending grids integrate backwards in time.",
+          "default": null
+        },
+        {
+          "name": "method",
+          "annotation": "str or ButcherTableau",
+          "description": "`\"euler\"`, `\"midpoint\"`, `\"heun2\"`, `\"heun3\"`, `\"rk4\"`, or a\ncustom `ButcherTableau`.",
+          "default": "\"rk4\""
+        },
+        {
+          "name": "return_trajectory",
+          "annotation": "bool",
+          "description": "Return the state at every grid point.  Set `False` to keep only the\nfinal state — for a sampling run of many steps over a batch of\nimages, stacking the full trajectory multiplies peak memory by the\nnumber of steps.",
+          "default": "True"
+        }
+      ],
+      "returns": {
+        "annotation": "Tensor",
+        "description": "Shape `(len(t), *y0.shape)` when `return_trajectory` is `True`\n(index 0 is `y0` itself), otherwise `y0.shape`.  The dtype is the\npromotion of `y0` with everything `func` returns, matching what\n`y + dt * k` would produce."
+      },
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `t` is not a strictly monotonic 1-D grid of at least two finite\npoints, if `y0` has a non-floating dtype, if `method` names no\nregistered method, or if `func` returns a tensor whose shape or\ndevice differs from `y0`."
+        },
+        {
+          "annotation": "TypeError",
+          "description": "If `method` is neither a string nor a `ButcherTableau`, or\nif `func` returns something other than a tensor."
+        }
+      ],
+      "examples": [
+        "Exponential decay against its closed form:\n>>> import lucid, lucid.diffeq as diffeq\n>>> y0 = lucid.tensor([1.0])\n>>> t = [i / 20 for i in range(21)]\n>>> y = diffeq.odeint(lambda s, y: -y, y0, t, return_trajectory=False)\n>>> abs(float(y.item()) - 0.36787944) < 1e-6\nTrue"
+      ],
+      "notes": [
+        "Cost is `(len(t) - 1) * method.stages` calls to `func`.  Adaptive step\ncontrol, error estimates, and the O(1)-memory adjoint are deliberately out\nof scope here — they need a per-step error norm read back to the host,\nwhich changes the performance character of the loop.\n\nHigher-order differentiation works: the fused step opts into\ngraph-recording backward, so `create_graph=True` through a solve behaves\nexactly as it would for the unfused arithmetic."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lucid.diffeq.ButcherTableau",
+          "description": "Coefficient table selected by `method`."
+        }
+      ]
+    },
+    {
+      "name": "ButcherTableau",
+      "path": "lucid.diffeq._tableau.ButcherTableau",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [],
+      "labels": [],
+      "signature": "ButcherTableau(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_tableau.py#L26",
+      "subcategory": "tableau",
+      "methods": [
+        {
+          "name": "stages",
+          "path": "lucid.diffeq._tableau.ButcherTableau.stages",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "stages: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_tableau.py#L133",
+          "summary": "int: Number of stage derivatives evaluated per step.",
+          "extended": "Equals the number of right-hand-side calls the method makes for each\nstep, which is the dominant cost when the right-hand side is a neural\nnetwork.",
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.diffeq._tableau.ButcherTableau.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_tableau.py#L1",
+          "subcategory": "tableau",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Coefficient table defining one explicit Runge-Kutta method.",
+      "extended": "Given a step from $t$ to $t + \\Delta t$, the method evaluates\n$s$ stage derivatives and combines them into the new state:\n\n$$\n\\begin{aligned}\nk_i    &= f\\!\\left(t + c_i \\Delta t,\\;\n           y + \\Delta t \\textstyle\\sum_{j<i} a_{ij} k_j\\right) \\\\\ny_{n+1} &= y_n + \\Delta t \\textstyle\\sum_i b_i k_i\n\\end{aligned}\n$$",
+      "parameters": [
+        {
+          "name": "a",
+          "annotation": "tuple of tuple of float",
+          "description": "Strictly lower-triangular stage coefficients, stored row by row with\nthe zeros above the diagonal omitted — row `i` holds exactly `i`\nentries, so `a[0]` is empty.  Sequences of any kind are accepted\nand coerced to nested tuples.",
+          "default": null
+        },
+        {
+          "name": "b",
+          "annotation": "tuple of float",
+          "description": "Combination weights, one per stage.  Must sum to `1`.",
+          "default": null
+        },
+        {
+          "name": "c",
+          "annotation": "tuple of float",
+          "description": "Stage times as fractions of the step.  Entry `i` must equal\n`sum(a[i])`, the standard consistency condition.",
+          "default": null
+        },
+        {
+          "name": "order",
+          "annotation": "int",
+          "description": "Order of accuracy $p$: halving the step size shrinks the global\nerror by roughly $2^p$.  Used by tests and diagnostics, never by\nthe integration loop itself.",
+          "default": null
+        },
+        {
+          "name": "name",
+          "annotation": "str",
+          "description": "Human-readable method name, surfaced in error messages.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `a` / `b` / `c` disagree on stage count, if any row of `a`\nhas the wrong length for a strictly lower-triangular matrix, if `b`\ndoes not sum to `1`, if any `c[i] != sum(a[i])`, or if `order`\nor `name` are unset."
+        }
+      ],
+      "examples": [
+        "The classical fourth-order method, written out in full:\n>>> import lucid.diffeq as diffeq\n>>> rk4 = diffeq.ButcherTableau(\n...     a=((), (0.5,), (0.0, 0.5), (0.0, 0.0, 1.0)),\n...     b=(1 / 6, 1 / 3, 1 / 3, 1 / 6),\n...     c=(0.0, 0.5, 0.5, 1.0),\n...     order=4,\n...     name=\"rk4\",\n... )\n>>> rk4.stages\n4"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": [
+        {
+          "name": "lucid.diffeq.odeint",
+          "description": "Consumes a tableau, by name or by instance."
+        }
+      ]
+    }
+  ],
+  "summary": "lucid.diffeq — differential-equation solvers.",
+  "extended": "Numerical integration of ordinary differential equations, `dy/dt = f(t, y)`,\nwhere the right-hand side is an arbitrary Lucid callable — most often a neural\nnetwork, as in continuous normalising flows, flow matching, and rectified flow.\n\nSurface: `odeint` integrates on a fixed user-supplied grid using an\nexplicit Runge-Kutta method, and `ButcherTableau` is the coefficient\ntable it dispatches on.  The five built-in tableaux — `EULER`,\n`MIDPOINT`, `HEUN2`, `HEUN3`, `RK4` — are also\nexported, and a custom tableau is accepted anywhere a method name is.\n\nEverything here is reached as `lucid.diffeq.*` and nowhere else — there are\nno top-level aliases and no `Tensor` methods, so each name has exactly one\ncanonical path.\n\nAdaptive step control, the O(1)-memory adjoint, and stochastic differential\nequations are not implemented; the fixed-step explicit family is what the flow\nmodel families need, and the rest have materially different performance\ncharacteristics.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [
+    {
+      "name": "EULER",
+      "annotation": "ButcherTableau",
+      "description": "Forward Euler — one stage, first order.  Method name `\"euler\"`."
+    },
+    {
+      "name": "MIDPOINT",
+      "annotation": "ButcherTableau",
+      "description": "Explicit midpoint — two stages, second order.  Method name `\"midpoint\"`."
+    },
+    {
+      "name": "HEUN2",
+      "annotation": "ButcherTableau",
+      "description": "Heun's method (explicit trapezoid) — two stages, second order.  Method\nname `\"heun2\"`."
+    },
+    {
+      "name": "HEUN3",
+      "annotation": "ButcherTableau",
+      "description": "Heun's third-order method — three stages, third order.  Method name\n`\"heun3\"`."
+    },
+    {
+      "name": "RK4",
+      "annotation": "ButcherTableau",
+      "description": "The classical Runge-Kutta method — four stages, fourth order.  Method\nname `\"rk4\"`."
+    }
+  ],
+  "warns": [],
+  "see_also": []
+}

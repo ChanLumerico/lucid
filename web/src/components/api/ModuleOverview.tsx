@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { FunctionCard } from "./FunctionSignature";
 import { ClassCard, ClassDoc } from "./ClassDoc";
+import { AttributeTable } from "./ParameterTable";
 import { MathText } from "./MathText";
 import { AnchorLink } from "./AnchorLink";
 import { ViewModeToggle } from "./ViewModeToggle";
@@ -173,6 +174,16 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
       {subpackageSections.map((sec) => (
         <SubpackageGrid key={sec.title} groups={sec.groups} title={sec.title} />
       ))}
+      {/* Module-level constants documented in the module docstring's
+          ``Attributes`` section.  Griffe surfaces these as attributes, not
+          members, so without this they parse into the JSON and then render
+          nowhere — the class path already funnels them through the same
+          table via ClassDoc. */}
+      {data.attributes.length > 0 && (
+        <MemberSection title="Attributes" slug={data.slug} accent="blue">
+          <AttributeTable attributes={data.attributes} />
+        </MemberSection>
+      )}
       {classes.length > 0 && (
         <MemberSection title="Classes" slug={data.slug} accent="primary">
           {classes.map((cls) => (

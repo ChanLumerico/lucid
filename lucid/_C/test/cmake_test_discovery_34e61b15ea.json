@@ -1,5 +1,5 @@
 {
-  "tests": 108,
+  "tests": 119,
   "name": "AllTests",
   "testsuites": [
     {
@@ -530,6 +530,67 @@
           "name": "CorrectValues",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
           "line": 78
+        }
+      ]
+    },
+    {
+      "name": "RkCombine",
+      "tests": 11,
+      "testsuite": [
+        {
+          "name": "ForwardWeightedSum",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 24
+        },
+        {
+          "name": "ForwardEulerStep",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 35
+        },
+        {
+          "name": "ZeroCoefficientIsSkipped",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 45
+        },
+        {
+          "name": "NoStagesCopiesBase",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 56
+        },
+        {
+          "name": "NegativeStepIntegratesBackwards",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 64
+        },
+        {
+          "name": "BackwardScalesEachStage",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 72
+        },
+        {
+          "name": "BackwardZeroCoefficientGivesZeroGrad",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 89
+        },
+        {
+          "name": "BackwardAccumulatesRepeatedStage",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 99
+        },
+        {
+          "name": "RejectsCoeffLengthMismatch",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 111
+        },
+        {
+          "name": "RejectsShapeMismatch",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 117
+        },
+        {
+          "name": "RejectsDtypeMismatch",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
+          "line": 123
         }
       ]
     },

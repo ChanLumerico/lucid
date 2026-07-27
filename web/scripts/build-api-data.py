@@ -1832,9 +1832,15 @@ def _serialise_module(mod: Any, parser: Any, sha: str, *, slug: str) -> dict[str
     # slug) and class members (already deduped via ``seen_paths``).
     if allowed_names is not None:
         emitted = {m.get("name") for m in members}
+        # Module-level constants (``RK4 = ButcherTableau(...)``) are Griffe
+        # Attributes whose value is a call, so no member branch above emits
+        # them.  Documenting one in the module docstring's ``Attributes``
+        # section is the supported way to surface it — the module page
+        # renders that table — so those names are covered, not missing.
+        documented_attrs = {a.get("name") for a in doc.get("attributes", [])}
         missing = []
         for n in allowed_names:
-            if n in emitted:
+            if n in emitted or n in documented_attrs:
                 continue
             sub = mod.members.get(n)
             sub = _resolve_member(sub) if sub is not None else None

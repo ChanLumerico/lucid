@@ -403,6 +403,14 @@ class _einops_namespace:
 
 einops: _einops_namespace
 
+# ── diffeq sub-namespace ──────────────────────────────────────────────────────
+
+class _diffeq_namespace:
+    @staticmethod
+    def rk_combine(y0: TensorImpl, ks: Sequence[TensorImpl], coeffs: Sequence[SupportsFloat], dt: SupportsFloat) -> TensorImpl: ...
+
+diffeq: _diffeq_namespace
+
 # ── _C_engine.utils.tokenizer sub-namespace ──────────────────────────────────
 # Mirrors lucid/_C/bindings/bind_tokenizer.cpp.  Every class here is wrapped
 # by the matching lucid.utils.tokenizer.*Tokenizer{Fast} Python class.

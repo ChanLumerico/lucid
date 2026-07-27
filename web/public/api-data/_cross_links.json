@@ -496,6 +496,22 @@
         "kind": "free_function"
       }
     ],
+    "lucid.nn.Fold": [
+      {
+        "name": "FoldBackward",
+        "kind": "backward_node"
+      }
+    ],
+    "lucid.nn.functional.fold": [
+      {
+        "name": "FoldBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "fold_op",
+        "kind": "free_function"
+      }
+    ],
     "lucid.nn.functional.gelu": [
       {
         "name": "GeluBackward",
@@ -1388,6 +1404,12 @@
         "kind": "free_function"
       }
     ],
+    "lucid.quantization.dequantize": [
+      {
+        "name": "dequantize_op",
+        "kind": "free_function"
+      }
+    ],
     "lucid.linalg.diagonal": [
       {
         "name": "diagonal_op",
@@ -1493,12 +1515,6 @@
     "lucid.ops.fmod": [
       {
         "name": "fmod_op",
-        "kind": "free_function"
-      }
-    ],
-    "lucid.nn.functional.fold": [
-      {
-        "name": "fold_op",
         "kind": "free_function"
       }
     ],
@@ -1871,6 +1887,12 @@
     "lucid.linalg.qr": [
       {
         "name": "qr_op",
+        "kind": "free_function"
+      }
+    ],
+    "lucid.quantization.quantize": [
+      {
+        "name": "quantize_op",
         "kind": "free_function"
       }
     ],
@@ -2501,6 +2523,18 @@
       {
         "path": "lucid.ops.floor",
         "module": "lucid.ops",
+        "kind": "function"
+      }
+    ],
+    "FoldBackward": [
+      {
+        "path": "lucid.nn.Fold",
+        "module": "lucid.nn",
+        "kind": "class"
+      },
+      {
+        "path": "lucid.nn.functional.fold",
+        "module": "lucid.nn.functional",
         "kind": "function"
       }
     ],
@@ -3371,6 +3405,13 @@
         "kind": "function"
       }
     ],
+    "dequantize_op": [
+      {
+        "path": "lucid.quantization.dequantize",
+        "module": "lucid.quantization",
+        "kind": "function"
+      }
+    ],
     "det_op": [
       {
         "path": "lucid.linalg.det",
@@ -4191,6 +4232,13 @@
       {
         "path": "lucid.linalg.qr",
         "module": "lucid.linalg",
+        "kind": "function"
+      }
+    ],
+    "quantize_op": [
+      {
+        "path": "lucid.quantization.quantize",
+        "module": "lucid.quantization",
         "kind": "function"
       }
     ],

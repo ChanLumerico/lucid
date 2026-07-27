@@ -214,6 +214,7 @@ const PACKAGE_LABELS: Record<string, string> = {
   "lucid.signal":            "Signal",
   "lucid.special":           "Special Functions",
   "lucid.distributions":     "Distributions",
+  "lucid.diffeq":            "Differential Equations",
   "lucid.einops":            "Einops",
   "lucid.amp":               "Mixed Precision",
   "lucid.quantization":      "Quantization",

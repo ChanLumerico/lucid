@@ -24,6 +24,9 @@ RULES: list[tuple[str, tuple[str, ...]]] = [
     ("lucid.autograd", ("lucid.nn", "lucid.optim")),
     ("lucid.optim", ("lucid.nn",)),
     ("lucid.linalg", ("lucid.nn", "lucid.optim")),
+    # the integrator takes an arbitrary callable as its RHS — if it reached
+    # into nn/optim for one, the layering would invert
+    ("lucid.diffeq", ("lucid.nn", "lucid.optim")),
     # test utilities must not import test files (parity tests may import torch, that's OK)
 ]
 

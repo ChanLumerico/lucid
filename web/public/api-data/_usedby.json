@@ -158,6 +158,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._solvers"
+    },
+    {
+      "kind": "module",
       "module": "lucid.einops"
     },
     {
@@ -719,6 +723,22 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.fused_step"
+    }
+  ],
+  "lucid.diffeq._solvers.odeint": [
+    {
+      "kind": "module",
+      "module": "lucid.diffeq"
+    }
+  ],
+  "lucid.diffeq._tableau.ButcherTableau": [
+    {
+      "kind": "module",
+      "module": "lucid.diffeq"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._solvers"
     }
   ],
   "lucid.distributions": [

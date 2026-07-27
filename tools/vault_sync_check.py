@@ -57,10 +57,11 @@ MAPPING: list[tuple[str, list[str]]] = [
     ("lucid/nn/init.py",       ["obsidian/api/api-python-nn-init.md"]),
     ("lucid/nn/utils/**",      ["obsidian/api/api-python-nn-utils.md"]),
 
-    # ── optim / autograd / linalg ─────────────────────────────────────────
+    # ── optim / autograd / linalg / diffeq ────────────────────────────────
     ("lucid/optim/**",         ["obsidian/api/api-python-optim.md"]),
     ("lucid/autograd/**",      ["obsidian/api/api-python-autograd.md"]),
     ("lucid/linalg/**",        ["obsidian/api/api-python-linalg.md"]),
+    ("lucid/diffeq/**",        ["obsidian/api/api-python-diffeq.md"]),
 
     # ── utils / amp / profiler / einops / serialization ───────────────────
     ("lucid/utils/data/**",    ["obsidian/api/api-python-utils-data.md"]),
