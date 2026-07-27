@@ -27,6 +27,11 @@ def _decay(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
     return -y
 
 
+def _maxdiff(a: lucid.Tensor, b: lucid.Tensor) -> float:
+    """Largest elementwise gap, for shapes pytest.approx cannot nest into."""
+    return float((a - b).abs().max().item())
+
+
 class TestButcherTableau:
     def test_builtin_stage_counts(self) -> None:
         assert diffeq.EULER.stages == 1
@@ -960,3 +965,164 @@ class TestOdeintDense:
         )
         assert endpoint < 1e-7
         assert interior > 5 * endpoint
+
+
+class TestOdeintAdjoint:
+    """``y' = -k y`` has ``y(1) = y0 exp(-k)``, so both gradients are closed form."""
+
+    @staticmethod
+    def _solve(**kwargs: object) -> tuple[lucid.Tensor, lucid.Tensor, lucid.Tensor]:
+        k = lucid.tensor([0.5], dtype=lucid.float64, requires_grad=True)
+        y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        ys = diffeq.odeint_adjoint(
+            lambda t, y: -k * y, y0, [0.0, 1.0],
+            rtol=1e-12, atol=1e-14, adjoint_params=[k], **kwargs,  # type: ignore[arg-type]
+        )
+        return k, y0, ys
+
+    def test_forward_matches_odeint(self) -> None:
+        k, y0, ys = self._solve()
+        direct = diffeq.odeint(
+            lambda t, y: -k * y, y0, [0.0, 1.0], rtol=1e-12, atol=1e-14
+        )
+        assert _maxdiff(ys, direct) < 1e-12
+
+    def test_gradients_match_the_closed_form(self) -> None:
+        k, y0, ys = self._solve()
+        ys[-1].sum().backward()
+        assert y0.grad is not None and k.grad is not None
+        assert float(y0.grad.item()) == pytest.approx(math.exp(-0.5), abs=1e-9)
+        assert float(k.grad.item()) == pytest.approx(-math.exp(-0.5), abs=1e-9)
+
+    def test_agrees_with_direct_differentiation(self) -> None:
+        # The adjoint solves for the gradient instead of differentiating the
+        # discretisation, so the two agree only up to solver tolerance.
+        k_a = lucid.tensor([0.7], dtype=lucid.float64, requires_grad=True)
+        y0_a = lucid.tensor([1.5], dtype=lucid.float64, requires_grad=True)
+        diffeq.odeint_adjoint(
+            lambda t, y: -k_a * y + lucid.sin(t), y0_a, [0.0, 1.0],
+            rtol=1e-12, atol=1e-14, adjoint_params=[k_a],
+        )[-1].sum().backward()
+
+        k_d = lucid.tensor([0.7], dtype=lucid.float64, requires_grad=True)
+        y0_d = lucid.tensor([1.5], dtype=lucid.float64, requires_grad=True)
+        diffeq.odeint(
+            lambda t, y: -k_d * y + lucid.sin(t), y0_d, [0.0, 1.0],
+            rtol=1e-12, atol=1e-14,
+        )[-1].sum().backward()
+
+        assert float(y0_a.grad.item()) == pytest.approx(  # type: ignore[union-attr]
+            float(y0_d.grad.item()), abs=1e-7  # type: ignore[union-attr]
+        )
+        assert float(k_a.grad.item()) == pytest.approx(  # type: ignore[union-attr]
+            float(k_d.grad.item()), abs=1e-7  # type: ignore[union-attr]
+        )
+
+    def test_gradient_accumulates_over_every_output_time(self) -> None:
+        # Summing the whole trajectory means each output time contributes;
+        # dL/dy0 is then the sum of exp(-t_i).
+        grid = _grid(8)
+        y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        diffeq.odeint_adjoint(
+            _decay, y0, grid, rtol=1e-12, atol=1e-14
+        ).sum().backward()
+        assert y0.grad is not None
+        assert float(y0.grad.item()) == pytest.approx(
+            sum(math.exp(-t) for t in grid), abs=1e-7
+        )
+
+    def test_adjoint_settings_default_to_the_forward_ones(self) -> None:
+        k, y0, ys = self._solve(adjoint_rtol=1e-12, adjoint_atol=1e-14)
+        ys[-1].sum().backward()
+        assert float(k.grad.item()) == pytest.approx(  # type: ignore[union-attr]
+            -math.exp(-0.5), abs=1e-9
+        )
+
+    def test_a_looser_adjoint_tolerance_costs_accuracy(self) -> None:
+        # The backward solve is itself numerical, so its tolerance is what
+        # controls gradient accuracy — not the forward one.
+        def run(adj_tol: float) -> float:
+            k = lucid.tensor([0.5], dtype=lucid.float64, requires_grad=True)
+            y0 = lucid.tensor([1.0], dtype=lucid.float64)
+            diffeq.odeint_adjoint(
+                lambda t, y: -k * y, y0, [0.0, 1.0], rtol=1e-12, atol=1e-14,
+                adjoint_rtol=adj_tol, adjoint_atol=adj_tol * 1e-2,
+                adjoint_params=[k],
+            )[-1].sum().backward()
+            return abs(float(k.grad.item()) + math.exp(-0.5))  # type: ignore[union-attr]
+
+        assert run(1e-4) > run(1e-12)
+
+    def test_params_default_to_the_modules_parameters(self) -> None:
+        # Found by duck-typing: lucid.diffeq must not import lucid.nn.
+        class Field:
+            def __init__(self) -> None:
+                self.k = lucid.tensor([0.5], dtype=lucid.float64, requires_grad=True)
+
+            def parameters(self) -> list[lucid.Tensor]:
+                return [self.k]
+
+            def __call__(self, t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+                return -self.k * y
+
+        field = Field()
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        diffeq.odeint_adjoint(
+            field, y0, [0.0, 1.0], rtol=1e-12, atol=1e-14
+        )[-1].sum().backward()
+        assert field.k.grad is not None
+        assert float(field.k.grad.item()) == pytest.approx(-math.exp(-0.5), abs=1e-9)
+
+    def test_does_not_pollute_unrelated_parameter_grads(self) -> None:
+        # Regression: the adjoint calls autograd.grad once per stage, and a
+        # tensor left outside its ``inputs`` has its .grad silently
+        # accumulated on every one of those calls.  Passing the real
+        # parameters (not detached stand-ins) is what keeps that from
+        # happening — the first attempt here reported +73.996 for a gradient
+        # whose true value is -0.607.  See debug-autograd-grad-leaks-into-grad.
+        k = lucid.tensor([0.5], dtype=lucid.float64, requires_grad=True)
+        y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        diffeq.odeint_adjoint(
+            lambda t, y: -k * y, y0, [0.0, 1.0], rtol=1e-12, atol=1e-14,
+            adjoint_params=[k],
+        )[-1].sum().backward()
+        assert float(k.grad.item()) == pytest.approx(  # type: ignore[union-attr]
+            -math.exp(-0.5), abs=1e-9
+        )
+
+    def test_works_without_any_parameters(self) -> None:
+        y0 = lucid.tensor([1.0, 2.0], dtype=lucid.float64, requires_grad=True)
+        diffeq.odeint_adjoint(_decay, y0, [0.0, 1.0], rtol=1e-12, atol=1e-14)[
+            -1
+        ].sum().backward()
+        assert y0.grad is not None
+        assert y0.grad.tolist() == pytest.approx([math.exp(-1.0)] * 2, abs=1e-9)
+
+    def test_multidimensional_state(self) -> None:
+        y0 = lucid.tensor(
+            [[1.0, 2.0], [3.0, 4.0]], dtype=lucid.float64, requires_grad=True
+        )
+        ys = diffeq.odeint_adjoint(_decay, y0, [0.0, 1.0], rtol=1e-12, atol=1e-14)
+        assert ys.shape == (2, 2, 2)
+        ys[-1].sum().backward()
+        assert y0.grad is not None
+        assert _maxdiff(y0.grad, lucid.full_like(y0, math.exp(-1.0))) < 1e-9
+
+    def test_rejects_event_fn(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(NotImplementedError, match="event_fn"):
+            diffeq.odeint_adjoint(
+                _decay, y0, [0.0, 1.0], event_fn=lambda t, y: y
+            )
+
+    def test_rejects_non_tensor_params(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(TypeError, match="must be a Tensor"):
+            diffeq.odeint_adjoint(
+                _decay, y0, [0.0, 1.0], adjoint_params=[1.0]  # type: ignore[list-item]
+            )
+
+    def test_rejects_bad_method_before_integrating(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="unknown method"):
+            diffeq.odeint_adjoint(_decay, y0, [0.0, 1.0], method="radauIIA5")

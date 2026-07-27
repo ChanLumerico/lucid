@@ -578,6 +578,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._adjoint"
+    },
+    {
+      "kind": "module",
       "module": "lucid.fft"
     },
     {
@@ -605,6 +609,10 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.step"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._adjoint"
     },
     {
       "kind": "module",
@@ -732,6 +740,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._adjoint"
+    },
+    {
+      "kind": "module",
       "module": "lucid.diffeq._fixed"
     },
     {
@@ -739,10 +751,20 @@
       "module": "lucid.diffeq._solvers"
     }
   ],
+  "lucid.diffeq._adjoint.odeint_adjoint": [
+    {
+      "kind": "module",
+      "module": "lucid.diffeq"
+    }
+  ],
   "lucid.diffeq._solvers.odeint": [
     {
       "kind": "module",
       "module": "lucid.diffeq"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._adjoint"
     }
   ],
   "lucid.diffeq._solvers.odeint_dense": [
@@ -759,6 +781,10 @@
     {
       "kind": "module",
       "module": "lucid.diffeq._adaptive"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._adjoint"
     },
     {
       "kind": "module",

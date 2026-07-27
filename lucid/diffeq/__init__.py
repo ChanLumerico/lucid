@@ -5,7 +5,9 @@ where the right-hand side is an arbitrary Lucid callable — most often a neural
 network, as in continuous normalising flows, flow matching, and rectified flow.
 
 Surface: :func:`odeint` integrates to a set of times you name up front and
-:func:`odeint_dense` returns a continuous solution you can query afterwards;
+:func:`odeint_dense` returns a continuous solution you can query afterwards, and
+:func:`odeint_adjoint` trades exactness for constant memory when the solve is
+long enough that retained stages dominate;
 :class:`ButcherTableau` is the coefficient table they dispatch on.  Ten
 built-in tableaux are exported, and a custom tableau is accepted anywhere a
 method name is.
@@ -58,6 +60,7 @@ RK4 : ButcherTableau
     name ``"rk4"``.
 """
 
+from lucid.diffeq._adjoint import odeint_adjoint
 from lucid.diffeq._solvers import odeint, odeint_dense
 from lucid.diffeq._tableau import (
     ADAPTIVE_HEUN,
@@ -75,6 +78,7 @@ from lucid.diffeq._tableau import (
 
 __all__ = [
     "odeint",
+    "odeint_adjoint",
     "odeint_dense",
     "ButcherTableau",
     "DOPRI5",

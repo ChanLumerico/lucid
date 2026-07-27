@@ -389,3 +389,50 @@ class TestOdeintDenseParity:
         )
         for i in (0, 256, 512, 1024):
             assert_close(dense(i / 1024), fine[i], atol=1e-9, rtol=1e-8)
+
+
+@pytest.mark.parity
+class TestAdjointParity:
+    """The adjoint gradient must land where direct differentiation does."""
+
+    @pytest.mark.parametrize("method", ["dopri5", "tsit5", "bosh3"])
+    def test_matches_direct_differentiation(self, method: str, ref: Any) -> None:
+        rng = np.random.default_rng(31)
+        raw = rng.standard_normal(size=(4,)).astype(np.float64)
+        grid = [0.0, 0.4, 1.0]
+
+        def run(adjoint: bool) -> tuple[list[float], list[float]]:
+            k = lucid.tensor([0.6], dtype=lucid.float64, requires_grad=True)
+            y0 = lucid.tensor(raw.copy(), dtype=lucid.float64, requires_grad=True)
+            solve = diffeq.odeint_adjoint if adjoint else diffeq.odeint
+            extra = {"adjoint_params": [k]} if adjoint else {}
+            ys = solve(
+                lambda t, y: -k * y + lucid.sin(t), y0, grid,
+                method=method, rtol=1e-12, atol=1e-14, **extra,
+            )
+            (ys * ys).sum().backward()
+            assert y0.grad is not None and k.grad is not None
+            return y0.grad.tolist(), k.grad.tolist()
+
+        adj_y0, adj_k = run(True)
+        dir_y0, dir_k = run(False)
+        assert adj_y0 == pytest.approx(dir_y0, abs=1e-6)
+        assert adj_k == pytest.approx(dir_k, abs=1e-6)
+
+    def test_matches_the_reference_framework_closed_form(self, ref: Any) -> None:
+        # y' = -k y has y(T) = y0 exp(-k T); differentiate that in the
+        # reference framework and require the adjoint to reproduce it.
+        y0_val, k_val, horizon = 1.25, 0.6, 1.4
+        rk = ref.tensor(k_val, dtype=ref.float64, requires_grad=True)
+        ry0 = ref.tensor(y0_val, dtype=ref.float64, requires_grad=True)
+        (ry0 * ref.exp(-rk * horizon)).backward()
+
+        k = lucid.tensor([k_val], dtype=lucid.float64, requires_grad=True)
+        y0 = lucid.tensor([y0_val], dtype=lucid.float64, requires_grad=True)
+        diffeq.odeint_adjoint(
+            lambda t, y: -k * y, y0, [0.0, horizon],
+            rtol=1e-12, atol=1e-14, adjoint_params=[k],
+        )[-1].sum().backward()
+
+        assert float(y0.grad.item()) == pytest.approx(float(ry0.grad), abs=1e-8)
+        assert float(k.grad.item()) == pytest.approx(float(rk.grad), abs=1e-8)
