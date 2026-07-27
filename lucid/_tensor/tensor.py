@@ -1139,9 +1139,10 @@ class Tensor:
                     f"backward(): gradient shape {tuple(gradient._impl.shape)} does not "
                     f"match tensor shape {tuple(self._impl.shape)}"
                 )
-            g_impl = gradient.detach()._impl
-            scaled = _C_engine.mul(self._impl, g_impl)
-            root = _C_engine.sum(scaled)
+            # Tensor-level ops rather than the engine primitives: those are
+            # strict about dtype, so a float32 seed on a float64 tensor was
+            # rejected even though every other mixed-dtype pair promotes.
+            root = (self * gradient.detach()).sum()._impl
             _C_engine.engine_backward(
                 root, retain_graph=retain_graph, create_graph=create_graph
             )

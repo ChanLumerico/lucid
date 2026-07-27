@@ -1,6 +1,6 @@
 {
   "lucid.amp": "d6ec2e5a2b1a14234c401d7060293efc5a7e0b4bd8aea56bd23e84fa25a41d43",
-  "lucid.autograd": "3953c462eb10c479018101ff816f36fb338a9de38d51897767feec22d4151cd7",
+  "lucid.autograd": "54d1cc0bea85be17574b4fefee11818ac05fddad0894fa86fef81cdb17d9b8a1",
   "lucid.compile": "cb879aae6164136c98bff7befee7f35d0add87b927793bdd03df12d17a115982",
   "lucid.diffeq": "a947ece79a28af77628c312f8c46db384c7a4707ef0a31d4da353aef9821b7d4",
   "lucid.distributions": "2bd2b002f6bf8d2971e1734f9ceb4386f714f8153802f865c066eea906a0ad5a",
@@ -76,7 +76,7 @@
   "lucid.serialization": "08941c7de2674941575fea42c754f28e5aab5a3c32b91269168586cf70d27d07",
   "lucid.signal": "c696e0ca1c53daf8249d68ba7714cc7fd39e8f231ba62d62d6faea82cb33582f",
   "lucid.special": "3834f1812aae7a86e6e68fb8bf93208e6208bcd9a7459e91633691b66b7a2b0c",
-  "lucid.tensor": "8d09faec6902c9df3bde71e6ea44df1490bb31a381f62ffa0283c8a2846e730c",
+  "lucid.tensor": "f032fada6ef54a67dfad5cb3485e4e87e4a6d1439630bdc569ce5b355c71cda6",
   "lucid.utils": "30b7841d1221c8e90cdfbda6ae344edde0a193a1117679586f675eff3524a180",
   "lucid.utils.cache": "72632d82cb333f95f26b86ab50fe7e963d8d6356712e886e3777eec471cca7c8",
   "lucid.utils.data": "7b1334c368ced5dae971be036eefeb10aa3729042c096ff466d171acfa661caf",

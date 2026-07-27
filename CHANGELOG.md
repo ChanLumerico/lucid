@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add odeint_dense, a continuous solution over an interval
 - add odeint_adjoint, constant-memory backpropagation
 
+### Fixed
+
+- stop grad() from writing .grad on leaves outside inputs
+
 ---
 
 ## [3.7.1] — 2026-07-27

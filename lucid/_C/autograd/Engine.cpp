@@ -19,6 +19,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/TensorImpl.h"
 #include "../ops/gfunc/Gfunc.h"
+#include "AccumulateGrad.h"
 #include "FusionPass.h"
 #include "Helpers.h"
 #include "Node.h"
@@ -291,6 +292,182 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     if (!retain_graph) {
         root->clear_grad_fn();
     }
+}
+
+// ── Functional gradients (no .grad written anywhere) ─────────────────────────
+//
+// Same traversal as backward(), with one difference that is the whole point:
+// an AccumulateGrad node is never executed.  Executing it is what writes a
+// leaf's .grad, so intercepting the gradient on its way in leaves every
+// tensor's gradient state untouched — including leaves the caller never
+// asked about.
+
+namespace {
+
+// Declared where it is defined (ops/bfunc/Add.cpp); graph-mode
+// accumulation has to go through it so the sum joins the new graph.
+
+// Where a requested input should be captured during the traversal.
+//
+// Everything is keyed by node.  A leaf that has taken part in any op already
+// owns an AccumulateGrad as its own ``grad_fn`` (``ensure_grad_fn`` installs
+// it), so leaves and interior tensors are both reached the same way — there
+// is no separate "match the leaf tensor" case to get wrong.
+struct CaptureTargets {
+    std::unordered_map<const Node*, std::size_t> by_node;
+    // Only for a tensor with no grad_fn at all, which can be captured solely
+    // as the root of the differentiation.
+    std::unordered_map<const TensorImpl*, std::size_t> orphans;
+};
+
+CaptureTargets build_targets(const std::vector<std::shared_ptr<TensorImpl>>& inputs) {
+    CaptureTargets targets;
+    for (std::size_t i = 0; i < inputs.size(); ++i) {
+        const auto& inp = inputs[i];
+        if (!inp)
+            ErrorBuilder("Engine::grad").fail("inputs[" + std::to_string(i) + "] is null");
+        if (inp->grad_fn())
+            targets.by_node.emplace(inp->grad_fn().get(), i);
+        else
+            targets.orphans.emplace(inp.get(), i);
+    }
+    return targets;
+}
+
+// Index of the requested input this node captures for, or ``npos``.
+constexpr std::size_t kNoSlot = static_cast<std::size_t>(-1);
+
+std::size_t capture_slot(const Node* node, const CaptureTargets& targets) {
+    auto it = targets.by_node.find(node);
+    return it == targets.by_node.end() ? kNoSlot : it->second;
+}
+
+}  // namespace
+
+std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
+                                        Storage grad_seed,
+                                        const std::vector<std::shared_ptr<TensorImpl>>& inputs,
+                                        bool retain_graph,
+                                        bool create_graph) {
+    if (!root)
+        ErrorBuilder("Engine::grad").fail("root is null");
+
+    const CaptureTargets targets = build_targets(inputs);
+    std::vector<TensorImplPtr> results(inputs.size());
+
+    Storage seed = std::move(grad_seed);
+    if (storage_is_empty(seed))
+        seed = make_ones_storage(root->shape(), root->dtype(), root->device());
+
+    // A leaf root differentiates to itself: dy/dy is the seed.
+    if (!root->grad_fn()) {
+        auto it = targets.orphans.find(root.get());
+        if (it != targets.orphans.end())
+            results[it->second] = std::make_shared<TensorImpl>(
+                std::move(seed), root->shape(), root->dtype(), root->device(), false);
+        return results;
+    }
+
+    if (create_graph) {
+        auto seed_impl = std::make_shared<TensorImpl>(std::move(seed), root->shape(), root->dtype(),
+                                                      root->device(), false);
+        auto order = topo_order(root->grad_fn());
+        std::unordered_map<Node*, TensorImplPtr> pending;
+        pending.emplace(root->grad_fn().get(), std::move(seed_impl));
+
+        for (const auto& node : order) {
+            auto it = pending.find(node.get());
+            if (it == pending.end())
+                continue;
+            TensorImplPtr grad_in = std::move(it->second);
+            pending.erase(it);
+
+            const std::size_t slot = capture_slot(node.get(), targets);
+            if (slot != kNoSlot)
+                results[slot] = grad_in;
+            // Executing an AccumulateGrad is precisely what writes a leaf's
+            // .grad, so this path never does — captured or not, stop here.
+            if (dynamic_cast<const AccumulateGrad*>(node.get()) != nullptr)
+                continue;
+
+            node->validate_versions();
+            const auto input_grads = node->apply_for_graph(grad_in);
+
+            const auto& edges = node->next_edges();
+            for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
+                auto next = edges[i].node;
+                if (!next || !input_grads[i])
+                    continue;
+                auto pit = pending.find(next.get());
+                if (pit == pending.end())
+                    pending.emplace(next.get(), input_grads[i]);
+                else {
+                    extern TensorImplPtr add_op(const TensorImplPtr&, const TensorImplPtr&);
+                    pit->second = add_op(pit->second, input_grads[i]);
+                }
+            }
+        }
+        return results;
+    }
+
+    run_fusion_pass(root->grad_fn().get());
+    auto order = topo_order(root->grad_fn());
+
+    std::unordered_map<Node*, Storage> pending;
+    if (root->grad_fn()->is_barrier()) {
+        root->grad_fn()->accumulate_barrier_grad(root->grad_output_nr(), std::move(seed));
+        pending.emplace(root->grad_fn().get(), Storage{CpuStorage{}});
+    } else {
+        pending.emplace(root->grad_fn().get(), std::move(seed));
+    }
+
+    for (const auto& node : order) {
+        auto it = pending.find(node.get());
+        if (it == pending.end())
+            continue;
+        Storage grad_in = std::move(it->second);
+        pending.erase(it);
+
+        const std::size_t slot = capture_slot(node.get(), targets);
+        if (slot != kNoSlot) {
+            const auto& inp = inputs[slot];
+            results[slot] = std::make_shared<TensorImpl>(grad_in, inp->shape(), inp->dtype(),
+                                                         inp->device(), false);
+        }
+        // Executing an AccumulateGrad is precisely what writes a leaf's
+        // .grad, so this path never does — captured or not, stop here.
+        if (dynamic_cast<const AccumulateGrad*>(node.get()) != nullptr)
+            continue;
+
+        node->validate_versions();
+        const auto input_grads =
+            node->is_barrier() ? node->apply_barrier() : node->apply(std::move(grad_in));
+
+        if (!retain_graph)
+            node->release_saved();
+
+        const auto& edges = node->next_edges();
+        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
+            auto next = edges[i].node;
+            if (!next)
+                continue;
+            if (next->is_barrier()) {
+                next->accumulate_barrier_grad(edges[i].input_nr, input_grads[i]);
+                pending.emplace(next.get(), Storage{CpuStorage{}});
+                continue;
+            }
+            auto pit = pending.find(next.get());
+            if (pit == pending.end())
+                pending.emplace(next.get(), input_grads[i]);
+            else
+                accumulate_into(pit->second, input_grads[i]);
+        }
+    }
+
+    if (!retain_graph)
+        root->clear_grad_fn();
+
+    return results;
 }
 
 }  // namespace lucid

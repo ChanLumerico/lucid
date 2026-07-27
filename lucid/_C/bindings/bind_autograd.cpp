@@ -55,6 +55,25 @@ void register_autograd(py::module_& m) {
         "If create_graph is True, the backward pass itself is tracked in the "
         "autograd graph, enabling second-order derivatives (MAML, Hessians, etc.).");
 
+    // engine_grad is the functional counterpart: it returns the gradients
+    // instead of accumulating them, and touches no tensor's ``.grad`` at
+    // all — not the requested inputs', and not any other leaf's.  Emulating
+    // it in Python (full backward, then restore ``.grad``) can only restore
+    // the tensors the caller named, so every other leaf in the graph keeps
+    // whatever the traversal deposited.
+    m.def(
+        "engine_grad",
+        [](std::shared_ptr<TensorImpl> root, const std::vector<std::shared_ptr<TensorImpl>>& inputs,
+           std::shared_ptr<TensorImpl> grad_seed, bool retain_graph, bool create_graph) {
+            Storage seed = grad_seed ? grad_seed->storage() : Storage{CpuStorage{}};
+            return Engine::grad(root, std::move(seed), inputs, retain_graph, create_graph);
+        },
+        py::arg("root"), py::arg("inputs"), py::arg("grad_seed") = nullptr,
+        py::arg("retain_graph") = false, py::arg("create_graph") = false,
+        "Gradients of `root` w.r.t. `inputs`, returned rather than accumulated. "
+        "Never reads or writes any tensor's .grad. An entry is None when that "
+        "input lies outside the graph.");
+
     // register_custom_function installs the Python-side CustomFunction class
     // and the _register_python_backward_node() hook used by lucid.autograd.Function.
     lucid::register_custom_function(m);

@@ -3,6 +3,7 @@ autograd.backward() and autograd.grad() free functions.
 """
 
 from typing import TYPE_CHECKING
+from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
@@ -208,56 +209,56 @@ def grad(
     if not isinstance(inputs, (list, tuple)):
         inputs = [inputs]
 
-    # Save existing .grad values so we can restore them after
-    saved_grads: list[Tensor | None] = [inp.grad for inp in inputs]
-    # Zero out existing grads on inputs so we can read the fresh ones.
-    # ``grad_to_tensor`` is the numpy-free probe — returns a TensorImpl
-    # for any accumulated grad (graph-mode or detached), or ``None`` when
-    # truly absent.  ``grad_as_impl`` alone would be too strict (it only
-    # finds graph-mode grads).
-    for inp in inputs:
-        if inp._impl.grad_to_tensor() is not None:
-            inp._impl.zero_grad()
-
     _retain = retain_graph if retain_graph is not None else create_graph
 
-    # Run backward
-    if grad_outputs is None:
-        for out in outputs:
-            out.backward(retain_graph=_retain, create_graph=create_graph)
-    else:
-        for out, g in zip(outputs, grad_outputs):
-            out.backward(gradient=g, retain_graph=_retain, create_graph=create_graph)
+    # One engine call per output, summing the contributions.  The engine
+    # returns the gradients rather than accumulating them, so no tensor's
+    # ``.grad`` is read or written — not the requested inputs', and not any
+    # other leaf's.  The previous implementation ran a full ``backward`` and
+    # restored ``.grad`` afterwards, which could only restore the tensors
+    # named in ``inputs`` and silently corrupted every other leaf.
+    totals: list[Tensor | None] = [None] * len(inputs)
+    impls = [_unwrap(inp) for inp in inputs]
+    for index, out in enumerate(outputs):
+        # Reduce an explicit seed the same way ``Tensor.backward`` does —
+        # differentiate ``sum(out * seed)`` rather than injecting the seed
+        # storage raw.  That gets dtype promotion and the shape check for
+        # free; a raw storage of a different dtype would be reinterpreted
+        # byte-for-byte and silently produce nonsense.
+        if grad_outputs is None:
+            root = _unwrap(out)
+        else:
+            seed = grad_outputs[index]
+            if out.shape != seed.shape:
+                raise RuntimeError(
+                    f"grad(): grad_outputs[{index}] shape {tuple(seed.shape)} does "
+                    f"not match output shape {tuple(out.shape)}"
+                )
+            # Tensor-level ops so the seed is promoted to the output's dtype,
+            # matching how every other mixed-dtype pair is handled.
+            root = _unwrap((out * seed.detach()).sum())
 
-    # Collect computed gradients.  Two numpy-free accessors, used in order:
-    #   1. ``grad_as_impl()`` — graph-mode grad with ``grad_fn`` intact
-    #      (needed when ``create_graph=True`` so the grad-of-grad graph
-    #      isn't severed).  Returns None for detached / non-graph grads.
-    #   2. ``grad_to_tensor()`` — wraps the accumulated grad Storage as a
-    #      fresh TensorImpl regardless of graph-mode tracking.  Returns
-    #      None only when no grad was accumulated.
-    # Both replace the prior ``grad_as_python()`` + ``TensorImpl(np.ndarray,
-    # ...)`` round-trip, which forced numpy in even for detached grads.
-    result: list[Tensor | None] = []
-    for inp in inputs:
-        g_impl = inp._impl.grad_as_impl()
-        if g_impl is None:
-            g_impl = inp._impl.grad_to_tensor()
-        if g_impl is not None:
-            result.append(_wrap(g_impl))
-            continue
-        if not allow_unused:
-            raise RuntimeError(
-                "One of the differentiated tensors does not require grad "
-                "and is not reachable from outputs. "
-                "Set allow_unused=True to suppress this error."
-            )
-        result.append(None)
+        # Every output but the last needs the graph kept for the next call.
+        keep = _retain or index < len(outputs) - 1
+        partials = _C_engine.engine_grad(
+            root,
+            impls,
+            None,
+            keep,
+            create_graph,
+        )
+        for slot, impl in enumerate(partials):
+            if impl is None:
+                continue
+            piece = _wrap(impl)
+            current = totals[slot]
+            totals[slot] = piece if current is None else current + piece
 
-    # Restore original .grad values using set_grad (no numpy).
-    for inp, saved in zip(inputs, saved_grads):
-        inp._impl.zero_grad()
-        if saved is not None:
-            inp._impl.set_grad(_unwrap(saved))
+    if not allow_unused and any(g is None for g in totals):
+        raise RuntimeError(
+            "One of the differentiated tensors does not require grad "
+            "and is not reachable from outputs. "
+            "Set allow_unused=True to suppress this error."
+        )
 
-    return tuple(result)
+    return tuple(totals)

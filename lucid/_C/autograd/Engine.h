@@ -8,9 +8,11 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "../api.h"
 #include "../core/TensorImpl.h"
+#include "../core/fwd.h"
 
 namespace lucid {
 
@@ -106,6 +108,65 @@ public:
                          Storage grad_seed = Storage{CpuStorage{}},
                          bool retain_graph = false,
                          bool create_graph = false);
+
+    // Differentiate ``root`` with respect to ``inputs`` without writing any
+    // ``.grad``.
+    //
+    // The functional counterpart to :func:`backward`.  It walks the same
+    // graph, but instead of letting gradients terminate in the
+    // :class:`AccumulateGrad` nodes that own each leaf's ``.grad`` slot, it
+    // intercepts them and returns them to the caller.  No tensor's gradient
+    // state is read or modified — not the requested inputs', and not any
+    // other leaf's.
+    //
+    // That last part is the reason this exists.  Emulating it in Python by
+    // running a full :func:`backward` and then restoring ``.grad`` can only
+    // restore the tensors the caller named; every *other* leaf in the graph
+    // keeps whatever the traversal deposited, which silently corrupts
+    // parameters the caller never mentioned.
+    //
+    // Parameters
+    // ----------
+    // root : const std::shared_ptr<TensorImpl>&
+    //     Output to differentiate.  Must be non-null.
+    // grad_seed : Storage
+    //     Upstream gradient for ``root``.  An empty storage means "ones",
+    //     matching :func:`backward`.
+    // inputs : const std::vector<std::shared_ptr<TensorImpl>>&
+    //     Tensors to differentiate with respect to.  May be leaves or
+    //     interior nodes; entries must be non-null.
+    // retain_graph : bool, default=false
+    //     Keep saved forward tensors so the graph can be traversed again.
+    // create_graph : bool, default=true for the returned gradients to be
+    //     differentiable in turn (higher-order).  Implies ``retain_graph``.
+    //
+    // Returns
+    // -------
+    // std::vector<TensorImplPtr>
+    //     One entry per requested input, in order.  An entry is null when
+    //     that input lies outside ``root``'s graph — the caller decides
+    //     whether that is an error.
+    //
+    // Raises
+    // ------
+    // LucidError
+    //     If ``root`` or any entry of ``inputs`` is null.
+    //
+    // Notes
+    // -----
+    // A leaf is matched by the :class:`AccumulateGrad` node bound to it; an
+    // interior tensor is matched by its own ``grad_fn``.  Interior captures
+    // do not stop the traversal, so asking for a tensor halfway down the
+    // graph still lets gradients reach everything below it.
+    //
+    // See Also
+    // --------
+    // :func:`Engine::backward` — the accumulating counterpart.
+    static std::vector<TensorImplPtr> grad(const std::shared_ptr<TensorImpl>& root,
+                                           Storage grad_seed,
+                                           const std::vector<std::shared_ptr<TensorImpl>>& inputs,
+                                           bool retain_graph = false,
+                                           bool create_graph = false);
 };
 
 }  // namespace lucid

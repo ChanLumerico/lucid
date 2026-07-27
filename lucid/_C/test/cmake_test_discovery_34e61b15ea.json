@@ -1,7 +1,73 @@
 {
-  "tests": 129,
+  "tests": 141,
   "name": "AllTests",
   "testsuites": [
+    {
+      "name": "EngineGrad",
+      "tests": 12,
+      "testsuite": [
+        {
+          "name": "ReturnsGradientForRequestedInput",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 24
+        },
+        {
+          "name": "LeavesRequestedInputGradUntouched",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 36
+        },
+        {
+          "name": "LeavesUnrequestedLeafGradUntouched",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 45
+        },
+        {
+          "name": "PreservesAPreExistingGrad",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 57
+        },
+        {
+          "name": "ReturnsOnePerInputInOrder",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 75
+        },
+        {
+          "name": "ReturnsNullForAnUnreachableInput",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 86
+        },
+        {
+          "name": "AccumulatesAcrossBranches",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 98
+        },
+        {
+          "name": "HonoursAnExplicitSeed",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 109
+        },
+        {
+          "name": "DifferentiatesAnInteriorTensor",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 120
+        },
+        {
+          "name": "LeafRootDifferentiatesToTheSeed",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 135
+        },
+        {
+          "name": "RetainGraphAllowsASecondCall",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 143
+        },
+        {
+          "name": "RejectsNullRootAndInputs",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_engine_grad.cpp",
+          "line": 156
+        }
+      ]
+    },
     {
       "name": "GradAdd",
       "tests": 1,
@@ -540,57 +606,57 @@
         {
           "name": "ForwardWeightedSum",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 26
+          "line": 28
         },
         {
           "name": "ForwardEulerStep",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 37
+          "line": 39
         },
         {
           "name": "ZeroCoefficientIsSkipped",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 47
+          "line": 49
         },
         {
           "name": "NoStagesCopiesBase",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 58
+          "line": 60
         },
         {
           "name": "NegativeStepIntegratesBackwards",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 66
+          "line": 68
         },
         {
           "name": "BackwardScalesEachStage",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 74
+          "line": 76
         },
         {
           "name": "BackwardZeroCoefficientGivesZeroGrad",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 91
+          "line": 96
         },
         {
           "name": "BackwardAccumulatesRepeatedStage",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 101
+          "line": 107
         },
         {
           "name": "RejectsCoeffLengthMismatch",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 113
+          "line": 120
         },
         {
           "name": "RejectsShapeMismatch",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 119
+          "line": 126
         },
         {
           "name": "RejectsDtypeMismatch",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 125
+          "line": 132
         }
       ]
     },
@@ -601,52 +667,52 @@
         {
           "name": "MatchesHandComputedRatio",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 133
+          "line": 140
         },
         {
           "name": "RmsMixesElementsRatherThanTakingTheMax",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 145
+          "line": 152
         },
         {
           "name": "ZeroCoefficientsGiveZero",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 156
+          "line": 163
         },
         {
           "name": "NoStagesGiveZero",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 163
+          "line": 170
         },
         {
           "name": "ScalesWithStepSize",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 169
+          "line": 176
         },
         {
           "name": "TighterToleranceRaisesRatio",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 179
+          "line": 186
         },
         {
           "name": "UsesDoublePrecisionState",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 188
+          "line": 195
         },
         {
           "name": "RejectsShapeMismatch",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 197
+          "line": 204
         },
         {
           "name": "RejectsCoeffLengthMismatch",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 204
+          "line": 211
         },
         {
           "name": "RejectsNonFloatDtype",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_diffeq.cpp",
-          "line": 211
+          "line": 218
         }
       ]
     },

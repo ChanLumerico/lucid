@@ -86,6 +86,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.autograd._backward"
+    },
+    {
+      "kind": "module",
       "module": "lucid.autograd._functional"
     },
     {
