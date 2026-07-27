@@ -673,13 +673,6 @@ class TestAdaptiveOptions:
         with pytest.raises(ValueError, match="unknown option"):
             diffeq.odeint(_decay, y0, [0.0, 1.0], options={"nope": 1})
 
-    def test_fixed_step_method_rejects_options(self) -> None:
-        y0 = lucid.tensor([1.0], dtype=lucid.float64)
-        with pytest.raises(ValueError, match="accepts no"):
-            diffeq.odeint(
-                _decay, y0, _grid(4), method="rk4", options={"first_step": 0.1}
-            )
-
     @pytest.mark.parametrize(
         ("bad", "match"),
         [
@@ -710,3 +703,119 @@ class TestAdaptiveOptions:
             return_trajectory=False,
         )
         assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-7)
+
+
+class TestFixedStepOptions:
+    def test_step_size_decouples_the_integration_grid(self) -> None:
+        # With step_size the solver walks its own grid and interpolates to t,
+        # so a two-point t is as accurate as a fine one.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        y = diffeq.odeint(
+            _decay, y0, [0.0, 1.0], method="rk4",
+            options={"step_size": 1 / 64, "interp": "cubic"},
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-9)
+
+    def test_cubic_interpolation_beats_linear_off_grid(self) -> None:
+        # Linear interpolation caps accuracy at O(h^2) no matter how good the
+        # stepper is; the cubic Hermite recovers the method's own order.  The
+        # gap is the whole reason interp is an option.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        grid = [0.0, 0.3, 1.0]
+
+        def worst(interp: str) -> float:
+            traj = diffeq.odeint(
+                _decay, y0, grid, method="rk4",
+                options={"step_size": 1 / 64, "interp": interp},
+            )
+            return max(
+                abs(row[0] - math.exp(-t)) for t, row in zip(grid, traj.tolist())
+            )
+
+        assert worst("cubic") < worst("linear") / 100
+
+    def test_grid_constructor_overrides_step_size(self) -> None:
+        seen: list[object] = []
+
+        def build(func: object, y0_arg: object, t: object) -> list[float]:
+            seen.append(t)
+            return [i / 32 for i in range(33)]
+
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        y = diffeq.odeint(
+            _decay, y0, [0.0, 1.0], method="rk4",
+            options={"grid_constructor": build, "step_size": 0.5, "interp": "cubic"},
+            return_trajectory=False,
+        )
+        assert seen  # the constructor really was consulted
+        assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-8)
+
+    def test_default_grid_is_the_output_grid(self) -> None:
+        # No options at all: t is the integration grid, exactly as before.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        grid = _grid(64)
+        implicit = diffeq.odeint(_decay, y0, grid, method="rk4", return_trajectory=False)
+        explicit = diffeq.odeint(
+            _decay, y0, grid, method="rk4", options={}, return_trajectory=False
+        )
+        assert implicit.tolist() == explicit.tolist()
+
+    def test_perturb_only_nudges(self) -> None:
+        # A one-ulp shift must not move the answer meaningfully; it exists so a
+        # discontinuity sitting on a grid point is sampled from one side.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        plain = diffeq.odeint(
+            _decay, y0, [0.0, 1.0], method="rk4",
+            options={"step_size": 1 / 64}, return_trajectory=False,
+        )
+        nudged = diffeq.odeint(
+            _decay, y0, [0.0, 1.0], method="rk4",
+            options={"step_size": 1 / 64, "perturb": True}, return_trajectory=False,
+        )
+        assert float(nudged.item()) == pytest.approx(float(plain.item()), abs=1e-12)
+
+    def test_trajectory_shape_with_step_size(self) -> None:
+        y0 = lucid.tensor([[1.0, 2.0]], dtype=lucid.float64)
+        grid = [0.0, 0.25, 0.5, 1.0]
+        traj = diffeq.odeint(
+            _decay, y0, grid, method="rk4", options={"step_size": 1 / 16}
+        )
+        assert traj.shape == (len(grid), 1, 2)
+        assert traj[0].tolist() == y0.tolist()
+
+    def test_rejects_adaptive_options_on_a_fixed_method(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="unknown option"):
+            diffeq.odeint(
+                _decay, y0, _grid(4), method="rk4", options={"first_step": 0.1}
+            )
+
+    def test_rejects_fixed_options_on_an_adaptive_method(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="unknown option"):
+            diffeq.odeint(_decay, y0, [0.0, 1.0], options={"step_size": 0.1})
+
+    @pytest.mark.parametrize(
+        ("bad", "match"),
+        [
+            ({"step_size": 0.0}, "finite and non-zero"),
+            ({"interp": "quartic"}, "interp must be one of"),
+            ({"perturb": 1}, "must be a bool"),
+            ({"grid_constructor": 5}, "must be callable"),
+        ],
+    )
+    def test_rejects_out_of_range_options(
+        self, bad: dict[str, object], match: str
+    ) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match=match):
+            diffeq.odeint(_decay, y0, _grid(4), method="rk4", options=bad)
+
+    def test_grid_constructor_must_span_the_interval(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="must return a grid spanning"):
+            diffeq.odeint(
+                _decay, y0, [0.0, 1.0], method="rk4",
+                options={"grid_constructor": lambda f, y, t: [0.0, 0.5]},
+            )

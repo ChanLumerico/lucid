@@ -3,7 +3,7 @@
   "name": "diffeq",
   "path": "lucid.diffeq",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f86d03cf5/lucid/diffeq/__init__.py#L1",
   "members": [
     {
       "name": "odeint",
@@ -11,10 +11,10 @@
       "kind": "function",
       "labels": [],
       "signature": "odeint(func: Callable[[Tensor, Tensor], Tensor], y0: Tensor, t: Tensor | Sequence[float], rtol: float = 1e-07, atol: float = 1e-09, method: str | ButcherTableau | None = None, options: dict[str, object] | None = None, return_trajectory: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_solvers.py#L125",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f86d03cf5/lucid/diffeq/_solvers.py#L125",
       "subcategory": "solvers",
       "summary": "Integrate `dy/dt = f(t, y)` with an explicit Runge-Kutta method.",
-      "extended": "Two families are reachable through the same call, and which one runs\nfollows from `method`:\n\n**Adaptive** (the default, and anything carrying an embedded error\nestimate) treats `t` as *output* times.  The solver picks its own step\nsizes to hold the local error inside `rtol` / `atol` and interpolates\nto each requested time, so a coarse `t` costs nothing in accuracy.\n\n**Fixed step** (`euler` / `midpoint` / `heun2` / `heun3` / `rk4`)\ntreats `t` as the integration grid itself: consecutive entries are one\nstep each, with no sub-stepping and no interpolation.  `rtol` / `atol`\nare unused there, and accuracy is controlled by choosing a finer grid.\n\nGradient mode is left entirely to the caller.  Under grad the whole solve\nis differentiable end-to-end (discretise-then-optimise) and every stage is\nretained for backward; wrap the call in `lucid.no_grad` for sampling,\nwhere the stage graph is pure overhead.",
+      "extended": "Two families are reachable through the same call, and which one runs\nfollows from `method`:\n\n**Adaptive** (the default, and anything carrying an embedded error\nestimate) treats `t` as *output* times.  The solver picks its own step\nsizes to hold the local error inside `rtol` / `atol` and interpolates\nto each requested time, so a coarse `t` costs nothing in accuracy.\n\n**Fixed step** (`euler` / `midpoint` / `heun2` / `heun3` / `rk4`)\ntreats `t` as the integration grid itself by default: consecutive\nentries are one step each, with no sub-stepping and no interpolation.\n`rtol` / `atol` are unused there, and accuracy is controlled by\nchoosing a finer grid — or by handing `options[\"step_size\"]`, which\ndecouples the two the same way an adaptive method does.\n\nGradient mode is left entirely to the caller.  Under grad the whole solve\nis differentiable end-to-end (discretise-then-optimise) and every stage is\nretained for backward; wrap the call in `lucid.no_grad` for sampling,\nwhere the stage graph is pure overhead.",
       "parameters": [
         {
           "name": "func",
@@ -55,7 +55,7 @@
         {
           "name": "options",
           "annotation": "dict or None",
-          "description": "Per-method controller settings.  Adaptive methods accept\n`min_step`, `max_step`, `first_step`, `step_t`, `jump_t`,\n`safety`, `ifactor`, `dfactor`, `max_num_steps` (plus\n`dtype` and `norm`, accepted and ignored).  Fixed-step methods\naccept none.",
+          "description": "Per-method settings.  Adaptive methods accept `min_step`,\n`max_step`, `first_step`, `step_t`, `jump_t`, `safety`,\n`ifactor`, `dfactor`, `max_num_steps` (plus `dtype` and\n`norm`, accepted and ignored).  Fixed-step methods accept\n`step_size`, `grid_constructor`, `interp` and `perturb` —\ngiving either of the first two decouples the integration grid from\n`t`, which is then reached by interpolation.",
           "default": "None"
         },
         {
@@ -106,7 +106,7 @@
       "bases": [],
       "labels": [],
       "signature": "ButcherTableau(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str, b_error: tuple[float, ...] | None = None, mid: tuple[float, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L38",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f86d03cf5/lucid/diffeq/_tableau.py#L38",
       "subcategory": "tableau",
       "methods": [
         {
@@ -117,7 +117,7 @@
             "property"
           ],
           "signature": "is_adaptive: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L182",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f86d03cf5/lucid/diffeq/_tableau.py#L182",
           "summary": "bool: Whether the tableau carries an embedded error estimate.",
           "extended": "Adaptive methods pair two solutions of different order; their weight\ndifference (`b_error`) estimates the local error, which is what a\nstep-size controller needs.  A tableau without it can only be stepped\non a fixed grid.",
           "parameters": [],
@@ -140,7 +140,7 @@
             "property"
           ],
           "signature": "is_fsal: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L193",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f86d03cf5/lucid/diffeq/_tableau.py#L193",
           "summary": "bool: Whether the last stage derivative equals `f(t + dt, y_next)`.",
           "extended": "True when the final stage row reproduces the solution weights, so the\nstage already evaluated the right-hand side at the new state.  That\nderivative can then be reused as the next step's first stage, saving\none call per accepted step — a real saving when the right-hand side is\na neural network.",
           "parameters": [],
@@ -163,7 +163,7 @@
             "property"
           ],
           "signature": "stages: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L205",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f86d03cf5/lucid/diffeq/_tableau.py#L205",
           "summary": "int: Number of stage derivatives evaluated per step.",
           "extended": "Equals the number of right-hand-side calls the method makes for each\nstep, which is the dominant cost when the right-hand side is a neural\nnetwork.",
           "parameters": [],
@@ -184,7 +184,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str, b_error: tuple[float, ...] | None = None, mid: tuple[float, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f86d03cf5/lucid/diffeq/_tableau.py#L1",
           "subcategory": "tableau",
           "summary": null,
           "extended": null,

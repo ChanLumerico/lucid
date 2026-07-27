@@ -732,6 +732,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._fixed"
+    },
+    {
+      "kind": "module",
       "module": "lucid.diffeq._solvers"
     }
   ],
@@ -749,6 +753,10 @@
     {
       "kind": "module",
       "module": "lucid.diffeq._adaptive"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._fixed"
     },
     {
       "kind": "module",

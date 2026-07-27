@@ -22,7 +22,7 @@ from typing import Callable, Sequence, SupportsFloat, cast
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.diffeq import _adaptive, _fused
+from lucid.diffeq import _adaptive, _fixed, _fused
 from lucid.diffeq._tableau import ButcherTableau, _DEFAULT_METHOD, _METHODS
 
 # The fixed-grid loop and the tests both reach for this; it is the fused
@@ -144,9 +144,11 @@ def odeint(
     to each requested time, so a coarse ``t`` costs nothing in accuracy.
 
     **Fixed step** (``euler`` / ``midpoint`` / ``heun2`` / ``heun3`` / ``rk4``)
-    treats ``t`` as the integration grid itself: consecutive entries are one
-    step each, with no sub-stepping and no interpolation.  ``rtol`` / ``atol``
-    are unused there, and accuracy is controlled by choosing a finer grid.
+    treats ``t`` as the integration grid itself by default: consecutive
+    entries are one step each, with no sub-stepping and no interpolation.
+    ``rtol`` / ``atol`` are unused there, and accuracy is controlled by
+    choosing a finer grid — or by handing ``options["step_size"]``, which
+    decouples the two the same way an adaptive method does.
 
     Gradient mode is left entirely to the caller.  Under grad the whole solve
     is differentiable end-to-end (discretise-then-optimise) and every stage is
@@ -174,11 +176,13 @@ def odeint(
         ``"midpoint"``, ``"heun2"``, ``"heun3"``, ``"rk4"``, or a custom
         :class:`ButcherTableau`.
     options : dict or None, default=None
-        Per-method controller settings.  Adaptive methods accept
-        ``min_step``, ``max_step``, ``first_step``, ``step_t``, ``jump_t``,
-        ``safety``, ``ifactor``, ``dfactor``, ``max_num_steps`` (plus
-        ``dtype`` and ``norm``, accepted and ignored).  Fixed-step methods
-        accept none.
+        Per-method settings.  Adaptive methods accept ``min_step``,
+        ``max_step``, ``first_step``, ``step_t``, ``jump_t``, ``safety``,
+        ``ifactor``, ``dfactor``, ``max_num_steps`` (plus ``dtype`` and
+        ``norm``, accepted and ignored).  Fixed-step methods accept
+        ``step_size``, ``grid_constructor``, ``interp`` and ``perturb`` —
+        giving either of the first two decouples the integration grid from
+        ``t``, which is then reached by interpolation.
     return_trajectory : bool, default=True
         Return the state at every time in ``t``.  Set ``False`` to keep only
         the final state — for a sampling run of many steps over a batch of
@@ -281,13 +285,15 @@ def odeint(
             return_trajectory=return_trajectory,
         )
     else:
-        if options:
-            raise ValueError(
-                f"method {tableau.name!r} is a fixed-step method and accepts no "
-                f"options; got {sorted(options)}"
-            )
-        y, trajectory = _fixed_grid(
-            func, y0, grid, tableau, scalar, check, return_trajectory
+        y, trajectory = _fixed.integrate(
+            func,
+            y0,
+            grid,
+            tableau,
+            scalar,
+            check,
+            options=options,
+            return_trajectory=return_trajectory,
         )
 
     if not return_trajectory:
@@ -297,57 +303,3 @@ def odeint(
     # make the stack fail.  Settle the whole trajectory on the final dtype.
     trajectory = [s if s.dtype == y.dtype else s.to(y.dtype) for s in trajectory]
     return lucid.stack(trajectory, dim=0)
-
-
-def _fixed_grid(
-    func: Callable[[Tensor, Tensor], Tensor],
-    y0: Tensor,
-    grid: list[float],
-    tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
-    return_trajectory: bool,
-) -> tuple[Tensor, list[Tensor]]:
-    """Step once per grid interval, with no error control and no interpolation.
-
-    Parameters
-    ----------
-    func : callable
-        Right-hand side.
-    y0 : Tensor
-        Initial state.
-    grid : list of float
-        The integration grid; consecutive entries are one step each.
-    tableau : ButcherTableau
-        Any explicit tableau; the embedded error weights are ignored here.
-    scalar : callable
-        Builds the 0-D time tensor the right-hand side expects.
-    check : callable
-        Validates a right-hand-side result and returns it.
-    return_trajectory : bool
-        Whether to collect the state at every grid point.
-
-    Returns
-    -------
-    tuple
-        The final state, and the collected trajectory (empty when not
-        requested).
-    """
-    y = y0
-    trajectory: list[Tensor] = [y0] if return_trajectory else []
-
-    for step in range(len(grid) - 1):
-        t_start = grid[step]
-        dt = grid[step + 1] - t_start
-
-        ks: list[Tensor] = []
-        for stage in range(tableau.stages):
-            stage_y = _combine(y, ks, tableau.a[stage], dt)
-            stage_t = scalar(t_start + tableau.c[stage] * dt)
-            ks.append(check(func(stage_t, stage_y), step, stage))
-
-        y = _combine(y, ks, tableau.b, dt)
-        if return_trajectory:
-            trajectory.append(y)
-
-    return y, trajectory
