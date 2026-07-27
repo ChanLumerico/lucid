@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add RealNVP, the multi-scale affine-coupling flow
 
+### Fixed
+
+- discover api-data slugs from the manifest, not emitted JSON
+
 ---
 
 ## [3.7.0] — 2026-07-27

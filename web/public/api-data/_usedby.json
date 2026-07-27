@@ -3213,6 +3213,106 @@
       "module": "lucid.models.generative.nice"
     }
   ],
+  "lucid.models.generative.realnvp": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.realnvp._config.RealNVPConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._pretrained"
+    }
+  ],
+  "lucid.models.generative.realnvp._model.RealNVPForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._pretrained"
+    }
+  ],
+  "lucid.models.generative.realnvp._model.RealNVPModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._pretrained"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_celeba": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_celeba_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_cifar": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_cifar_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_imagenet32": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_imagenet32_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_imagenet64": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_imagenet64_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_lsun": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.realnvp._pretrained.realnvp_lsun_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp"
+    }
+  ],
   "lucid.models.generative.vae": [
     {
       "kind": "module",

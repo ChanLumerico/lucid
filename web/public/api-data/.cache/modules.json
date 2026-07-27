@@ -12,6 +12,7 @@
   "lucid.models.generative.ddpm": "1ef358ad4af46a825507220889ebe738ce8c826f83bc49b5513d282d424cb939",
   "lucid.models.generative.ncsn": "30db0b74f2a025f908464f0197bf81e765f250e8eaeadbb870003ac2014e005d",
   "lucid.models.generative.nice": "d716a418b1d46170f628bd3af51016791caaad6979db6e2139f0a934f4a884be",
+  "lucid.models.generative.realnvp": "ab6ae732387b18d5e0f11df4ccd00c3df1c58877af2ed48ab129436b661af949",
   "lucid.models.generative.vae": "d7bf76a041d46711b52599cd15e60b91c3bbde6466ee945a7ac45706c43a56ca",
   "lucid.models.text": "b87fea5135679b9a14e9b0e8cfe9724b6f8abfd337da406bb7843cffdeea3082",
   "lucid.models.text.bert": "35bc3b852f68d8c28965afa6c75fa0715750975270494472ae43ded27f10fa51",

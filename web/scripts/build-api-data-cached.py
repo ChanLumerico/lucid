@@ -123,6 +123,41 @@ def _hash_paths(paths: list[Path]) -> str:
     return h.hexdigest()
 
 
+def _documented_slugs() -> list[str]:
+    """Every slug that *should* have a page, not just those that already do.
+
+    Deriving the list from the emitted ``*.json`` files alone makes a
+    brand-new module invisible: it has no JSON yet, so it never lands in
+    ``stale_slugs`` (never gets built) and never lands in the drift
+    baseline (``--check`` reports green while a whole page is missing).
+    The build script's manifest is the source of truth, so union the two —
+    the manifest brings in new modules, the glob keeps synthesized slugs
+    that have no source directory of their own.
+    """
+    emitted: set[str] = set()
+    if OUT_DIR.is_dir():
+        emitted = {
+            jp.stem
+            for jp in OUT_DIR.glob("*.json")
+            if not jp.name.startswith(("_", "."))
+        }
+
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("_api_build", BUILD_SCRIPT)
+        if spec is None or spec.loader is None:
+            return sorted(emitted)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        emitted |= set(module.MODULE_MANIFEST)
+    except Exception:  # noqa: BLE001 — discovery is best-effort
+        # A broken build script is reported by the build itself; falling
+        # back to the emitted set keeps the cache usable meanwhile.
+        pass
+    return sorted(emitted)
+
+
 def _per_module_fingerprints() -> dict[str, str]:
     """Compute a fingerprint per slug, keyed by slug.
 
@@ -131,16 +166,10 @@ def _per_module_fingerprints() -> dict[str, str]:
     Used for the post-build cache write — the actual rebuild decision
     happens module-by-module in :func:`_should_skip_slug`.
     """
-    # We need the list of emitted slugs.  Easiest source: the existing
-    # *.json files under OUT_DIR — they were just emitted, so they're
-    # the canonical list.
     result: dict[str, str] = {}
     if not OUT_DIR.is_dir():
         return result
-    for jp in OUT_DIR.glob("*.json"):
-        if jp.name.startswith("_") or jp.name.startswith("."):
-            continue
-        slug = jp.stem
+    for slug in _documented_slugs():
         d = _slug_to_source_dir(slug)
         if d is None:
             continue
@@ -176,10 +205,7 @@ def _content_fingerprints() -> dict[str, str]:
     result: dict[str, str] = {}
     if not OUT_DIR.is_dir():
         return result
-    for jp in OUT_DIR.glob("*.json"):
-        if jp.name.startswith("_") or jp.name.startswith("."):
-            continue
-        slug = jp.stem
+    for slug in _documented_slugs():
         d = _slug_to_source_dir(slug)
         if d is None:
             continue
@@ -308,10 +334,10 @@ def main() -> int:
     prev_fingerprints = _load_module_cache() if not force else {}
     current_per_module: dict[str, str] = {}
     if OUT_DIR.is_dir():
-        for jp in OUT_DIR.glob("*.json"):
-            if jp.name.startswith("_") or jp.name.startswith("."):
-                continue
-            slug = jp.stem
+        # Manifest-driven, not glob-driven: a module that has never been
+        # built has no JSON to glob, and enumerating the emitted files
+        # would silently exclude it from ``stale_slugs`` forever.
+        for slug in _documented_slugs():
             d = _slug_to_source_dir(slug)
             if d is None:
                 continue
