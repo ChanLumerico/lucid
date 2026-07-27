@@ -4,8 +4,9 @@ Numerical integration of ordinary differential equations, ``dy/dt = f(t, y)``,
 where the right-hand side is an arbitrary Lucid callable — most often a neural
 network, as in continuous normalising flows, flow matching, and rectified flow.
 
-Surface: :func:`odeint` integrates using an explicit Runge-Kutta method, and
-:class:`ButcherTableau` is the coefficient table it dispatches on.  Ten
+Surface: :func:`odeint` integrates to a set of times you name up front and
+:func:`odeint_dense` returns a continuous solution you can query afterwards;
+:class:`ButcherTableau` is the coefficient table they dispatch on.  Ten
 built-in tableaux are exported, and a custom tableau is accepted anywhere a
 method name is.
 
@@ -57,7 +58,7 @@ RK4 : ButcherTableau
     name ``"rk4"``.
 """
 
-from lucid.diffeq._solvers import odeint
+from lucid.diffeq._solvers import odeint, odeint_dense
 from lucid.diffeq._tableau import (
     ADAPTIVE_HEUN,
     BOSH3,
@@ -74,6 +75,7 @@ from lucid.diffeq._tableau import (
 
 __all__ = [
     "odeint",
+    "odeint_dense",
     "ButcherTableau",
     "DOPRI5",
     "TSIT5",

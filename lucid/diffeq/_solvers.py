@@ -17,6 +17,7 @@ evaluations; the fusion trims the bandwidth-bound arithmetic around them, not
 the network forwards themselves.
 """
 
+import bisect
 import math
 from typing import Callable, Sequence, SupportsFloat, cast
 
@@ -29,7 +30,7 @@ from lucid.diffeq._tableau import ButcherTableau, _DEFAULT_METHOD, _METHODS
 # stage combination that every explicit method reduces to.
 _combine = _fused.combine
 
-__all__ = ["odeint"]
+__all__ = ["odeint", "odeint_dense"]
 
 
 def _resolve_method(method: str | ButcherTableau | None) -> ButcherTableau:
@@ -120,6 +121,55 @@ def _resolve_grid(t: Tensor | Sequence[float]) -> list[float]:
                 f"found {prev!r} followed by {cur!r}"
             )
     return grid
+
+
+def _make_callbacks(
+    y0: Tensor,
+) -> tuple[Callable[[float], Tensor], Callable[[object, int, int], Tensor]]:
+    """Build the time-tensor factory and right-hand-side validator for a solve.
+
+    Parameters
+    ----------
+    y0 : Tensor
+        Initial state, which fixes the dtype, device and shape every stage
+        must agree with.
+
+    Returns
+    -------
+    tuple
+        ``(scalar, check)`` — the first turns a host time into the 0-D tensor
+        the right-hand side expects, the second validates what it returns.
+
+    Notes
+    -----
+    Shared by every entry point so the contract is stated once.  The checks
+    live here rather than being left to the engine so a mistake in ``func``
+    is reported against ``func``, not as a shape or device error deep inside
+    an internal fused op.
+    """
+
+    def scalar(value: float) -> Tensor:
+        return lucid.tensor(value, dtype=y0.dtype, device=y0.device)
+
+    def check(result: object, step: int, stage: int) -> Tensor:
+        if not isinstance(result, Tensor):
+            raise TypeError(
+                f"func must return a Tensor, got {type(result).__name__} "
+                f"at step {step}, stage {stage}"
+            )
+        if result.shape != y0.shape:
+            raise ValueError(
+                f"func returned shape {result.shape} but y0 has shape {y0.shape} "
+                f"(step {step}, stage {stage})"
+            )
+        if result.device != y0.device:
+            raise ValueError(
+                f"func returned a tensor on {result.device} but y0 is on "
+                f"{y0.device} (step {step}, stage {stage})"
+            )
+        return result
+
+    return scalar, check
 
 
 def odeint(
@@ -247,29 +297,7 @@ def odeint(
             f"y0 must have a floating dtype for integration, got {y0.dtype}"
         )
 
-    def scalar(value: float) -> Tensor:
-        return lucid.tensor(value, dtype=y0.dtype, device=y0.device)
-
-    def check(result: object, step: int, stage: int) -> Tensor:
-        if not isinstance(result, Tensor):
-            raise TypeError(
-                f"func must return a Tensor, got {type(result).__name__} "
-                f"at step {step}, stage {stage}"
-            )
-        if result.shape != y0.shape:
-            raise ValueError(
-                f"func returned shape {result.shape} but y0 has shape {y0.shape} "
-                f"(step {step}, stage {stage})"
-            )
-        # Checked here rather than left to the engine so the message names
-        # ``func`` — the caller's actual mistake — instead of surfacing as a
-        # DeviceMismatch on the internal fused op.
-        if result.device != y0.device:
-            raise ValueError(
-                f"func returned a tensor on {result.device} but y0 is on "
-                f"{y0.device} (step {step}, stage {stage})"
-            )
-        return result
+    scalar, check = _make_callbacks(y0)
 
     if tableau.is_adaptive:
         y, trajectory = _adaptive.integrate(
@@ -303,3 +331,130 @@ def odeint(
     # make the stack fail.  Settle the whole trajectory on the final dtype.
     trajectory = [s if s.dtype == y.dtype else s.to(y.dtype) for s in trajectory]
     return lucid.stack(trajectory, dim=0)
+
+
+def odeint_dense(
+    func: Callable[[Tensor, Tensor], Tensor],
+    y0: Tensor,
+    t0: float,
+    t1: float,
+    *,
+    rtol: float = 1e-7,
+    atol: float = 1e-9,
+    method: str | ButcherTableau | None = None,
+    options: dict[str, object] | None = None,
+) -> Callable[[float | Tensor], Tensor]:
+    r"""Solve once across an interval and return a continuous solution.
+
+    Where :func:`odeint` wants the output times up front, this integrates
+    ``[t0, t1]`` a single time and hands back a function of ``t``.  Every
+    step's interpolating polynomial is kept, so any later query costs a
+    binary search and one polynomial evaluation — no re-integration, and no
+    commitment to a grid before you know which times you need.
+
+    Parameters
+    ----------
+    func : callable
+        Right-hand side ``f(t, y) -> dy/dt``.  Receives the stage time as a
+        0-D tensor matching ``y0`` in dtype and device, and must return a
+        tensor with the same shape and device as ``y0``.
+    y0 : Tensor
+        Initial state at ``t0``.  Any shape; must have a floating dtype.
+    t0, t1 : float
+        Ends of the interval.  ``t1 < t0`` integrates backwards.
+    rtol : float, default=1e-7
+        Relative tolerance.  Adaptive methods only.
+    atol : float, default=1e-9
+        Absolute tolerance.  Adaptive methods only.
+    method : str or ButcherTableau or None, default=None
+        ``None`` selects ``"dopri5"``.  See :func:`odeint` for the full list.
+    options : dict or None, default=None
+        Per-method settings, exactly as :func:`odeint` takes them.
+
+    Returns
+    -------
+    callable
+        ``dense(t) -> Tensor``, accepting a float or a 0-D tensor and
+        returning the state there.  Raises :class:`ValueError` for a time
+        outside ``[t0, t1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``t0`` and ``t1`` are equal or non-finite, if ``y0`` has a
+        non-floating dtype, if ``method`` names no registered method, if
+        ``options`` holds a key the method does not accept, or if ``func``
+        returns a tensor whose shape or device differs from ``y0``.
+    TypeError
+        If ``method`` is neither a string nor a :class:`ButcherTableau`, or
+        if ``func`` returns something other than a tensor.
+    RuntimeError
+        If an adaptive solve exceeds ``max_num_steps`` or its step size
+        collapses.
+
+    Notes
+    -----
+    Memory grows with the number of accepted steps: each keeps a handful of
+    tensors the size of the state.  A long solve over a large state is
+    therefore much heavier than :func:`odeint` with ``return_trajectory=False``.
+
+    A fixed-step method interpolates with whatever ``options["interp"]``
+    says, and without ``step_size`` its grid is the single interval
+    ``[t0, t1]`` — usually far too coarse, so pass one.
+
+    Examples
+    --------
+    >>> import lucid, lucid.diffeq as diffeq
+    >>> y0 = lucid.tensor([1.0], dtype=lucid.float64)
+    >>> dense = diffeq.odeint_dense(lambda t, y: -y, y0, 0.0, 1.0)
+    >>> abs(float(dense(0.5).item()) - 0.6065306597) < 1e-7
+    True
+
+    See Also
+    --------
+    lucid.diffeq.odeint : Same solvers, output times fixed up front.
+    """
+    if not math.isfinite(t0) or not math.isfinite(t1):
+        raise ValueError(f"t0 and t1 must be finite, got {t0!r} and {t1!r}")
+    if t0 == t1:
+        raise ValueError(f"t0 and t1 must differ, both are {t0!r}")
+
+    tableau = _resolve_method(method)
+    if not y0.is_floating_point():
+        raise ValueError(
+            f"y0 must have a floating dtype for integration, got {y0.dtype}"
+        )
+
+    scalar, check = _make_callbacks(y0)
+
+    if tableau.is_adaptive:
+        segments = _adaptive.integrate_dense(
+            func, y0, t0, t1, tableau, scalar, check,
+            rtol=rtol, atol=atol, options=options,
+        )
+    else:
+        segments = _fixed.integrate_dense(
+            func, y0, t0, t1, tableau, scalar, check, options=options
+        )
+
+    # Index by ascending interval start so a query is a binary search
+    # regardless of which way the solve ran.
+    ordered = segments if t1 > t0 else list(reversed(segments))
+    starts = [min(a, b) for a, b, _ in ordered]
+    low, high = min(t0, t1), max(t0, t1)
+
+    def dense(t: float | Tensor) -> Tensor:
+        value = float(t.item()) if isinstance(t, Tensor) else float(t)
+        if not math.isfinite(value):
+            raise ValueError(f"query time must be finite, got {value!r}")
+        if value < low or value > high:
+            raise ValueError(
+                f"query time {value!r} lies outside the solved interval "
+                f"[{low!r}, {high!r}]"
+            )
+        index = bisect.bisect_right(starts, value) - 1
+        index = min(max(index, 0), len(ordered) - 1)
+        seg_t0, seg_t1, coeffs = ordered[index]
+        return _fused.poly_eval(coeffs, seg_t0, seg_t1, value)
+
+    return dense

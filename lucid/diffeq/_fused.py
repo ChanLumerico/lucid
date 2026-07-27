@@ -153,3 +153,31 @@ def error_ratio(
         rtol,
         atol,
     )
+
+
+def poly_eval(coeffs: Sequence[Tensor], t0: float, t1: float, t: float) -> Tensor:
+    """Evaluate a step polynomial in descending powers of normalised time.
+
+    Parameters
+    ----------
+    coeffs : sequence of Tensor
+        Coefficients, highest power first.
+    t0, t1 : float
+        Ends of the step the polynomial was fitted on; either orientation.
+    t : float
+        Query time.
+
+    Returns
+    -------
+    Tensor
+        The interpolated value.
+
+    Notes
+    -----
+    The powers of the normalised time are host floats, so the whole
+    evaluation is one affine combination of the coefficient tensors — a
+    single fused engine call rather than a chain of scalar multiplies.
+    """
+    x = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+    last = len(coeffs) - 1
+    return lincomb(list(coeffs), [x ** (last - i) for i in range(len(coeffs))])

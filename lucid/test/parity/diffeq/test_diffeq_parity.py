@@ -330,3 +330,62 @@ class TestAdaptiveAgreement:
             return_trajectory=False,
         )
         assert_close(adaptive, fixed, atol=want_tol, rtol=want_tol * 10)
+
+
+@pytest.mark.parity
+class TestOdeintDenseParity:
+    """The continuous solution must agree with the grid solve and the truth."""
+
+    @pytest.mark.parametrize("method", ADAPTIVE_METHODS)
+    def test_matches_the_reference_framework_closed_form(
+        self, method: str, ref: Any
+    ) -> None:
+        rtol, atol, want_tol = ADAPTIVE_TOL[method]
+        y0_val = 0.75
+        y0 = lucid.tensor([y0_val], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(
+            lambda t, y: -y + lucid.sin(t), y0, 0.0, 1.3,
+            method=method, rtol=rtol, atol=atol,
+        )
+        # A time inside a step carries the interpolant's error on top of the
+        # solver's, and the two are not always comparable: measured here,
+        # bosh3's interior error is ~90x its endpoint error because its
+        # midpoint weights are coarse, while dopri5's is 1x.  The endpoint is
+        # asserted tightly by test_agrees_with_the_reference_framework_closed_form.
+        interior_tol = want_tol * 100
+        for frac in (0.0, 0.25, 0.5, 0.75, 1.0):
+            t = 1.3 * frac
+            rt = ref.tensor(t, dtype=ref.float64)
+            want = (ref.tensor(y0_val, dtype=ref.float64) + 0.5) * ref.exp(-rt) + 0.5 * (
+                ref.sin(rt) - ref.cos(rt)
+            )
+            assert float(dense(t).item()) == pytest.approx(
+                float(want), abs=interior_tol
+            )
+
+    def test_matches_odeint_on_the_same_solve(self, ref: Any) -> None:
+        # A bounded right-hand side: y * y - t blows up wherever |y| > 1, and
+        # the resulting step collapse costs 20s for no extra coverage.
+        rng = np.random.default_rng(21)
+        raw = rng.standard_normal(size=(3,)).astype(np.float64)
+        y0 = lucid.tensor(raw.copy(), dtype=lucid.float64)
+        rhs = lambda t, y: -y + lucid.sin(t)  # noqa: E731
+        times = [0.0, 0.11, 0.37, 0.6, 0.9]
+
+        traj = diffeq.odeint(rhs, y0, times, rtol=1e-12, atol=1e-14)
+        dense = diffeq.odeint_dense(rhs, y0, 0.0, 0.9, rtol=1e-12, atol=1e-14)
+        for t, row in zip(times, traj.tolist()):
+            assert_close(dense(t), lucid.tensor(row, dtype=lucid.float64), atol=1e-9)
+
+    def test_fixed_cubic_matches_a_fine_fixed_solve(self, ref: Any) -> None:
+        y0 = lucid.tensor([1.0, -2.0], dtype=lucid.float64)
+        rhs = lambda t, y: -y + lucid.sin(t)  # noqa: E731
+        dense = diffeq.odeint_dense(
+            rhs, y0, 0.0, 1.0, method="rk4",
+            options={"step_size": 1 / 64, "interp": "cubic"},
+        )
+        fine = diffeq.odeint(
+            rhs, y0, [i / 1024 for i in range(1025)], method="rk4"
+        )
+        for i in (0, 256, 512, 1024):
+            assert_close(dense(i / 1024), fine[i], atol=1e-9, rtol=1e-8)

@@ -819,3 +819,144 @@ class TestFixedStepOptions:
                 _decay, y0, [0.0, 1.0], method="rk4",
                 options={"grid_constructor": lambda f, y, t: [0.0, 0.5]},
             )
+
+
+class TestOdeintDense:
+    def test_matches_analytic_across_the_interval(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(_decay, y0, 0.0, 1.0, rtol=1e-11, atol=1e-13)
+        for i in range(101):
+            t = i / 100
+            assert float(dense(t).item()) == pytest.approx(math.exp(-t), abs=1e-9)
+
+    def test_agrees_with_odeint_at_the_same_times(self) -> None:
+        # The continuous solution and the grid solve run the same stepper, so
+        # they must not disagree about any time.
+        y0 = lucid.tensor([1.0, -0.5], dtype=lucid.float64)
+        rhs = lambda t, y: -y + lucid.sin(t)  # noqa: E731
+        grid = [0.0, 0.13, 0.5, 0.77, 1.0]
+        traj = diffeq.odeint(rhs, y0, grid, rtol=1e-11, atol=1e-13)
+        dense = diffeq.odeint_dense(rhs, y0, 0.0, 1.0, rtol=1e-11, atol=1e-13)
+        for t, row in zip(grid, traj.tolist()):
+            assert dense(t).tolist() == pytest.approx(row, abs=1e-9)
+
+    def test_endpoints_are_exact(self) -> None:
+        y0 = lucid.tensor([2.0, 3.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(_decay, y0, 0.0, 1.0)
+        assert dense(0.0).tolist() == pytest.approx(y0.tolist(), abs=1e-12)
+        final = diffeq.odeint(_decay, y0, [0.0, 1.0], return_trajectory=False)
+        assert dense(1.0).tolist() == pytest.approx(final.tolist(), abs=1e-9)
+
+    def test_backwards_interval(self) -> None:
+        # Start at t=1 and integrate down; y(t) = y1 * exp(1 - t).
+        y1 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(_decay, y1, 1.0, 0.0, rtol=1e-11, atol=1e-13)
+        for i in range(11):
+            t = i / 10
+            assert float(dense(t).item()) == pytest.approx(math.exp(1.0 - t), abs=1e-8)
+
+    def test_accepts_a_tensor_query(self) -> None:
+        # float64 on purpose: a float32 tensor cannot hold 0.4 exactly, so the
+        # query time itself would shift by ~6e-9 and the answer with it.  The
+        # callable reads whatever precision it is handed, by design.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(_decay, y0, 0.0, 1.0)
+        query = lucid.tensor(0.4, dtype=lucid.float64)
+        assert dense(query).tolist() == pytest.approx(dense(0.4).tolist(), abs=1e-12)
+
+    def test_preserves_shape_and_dtype(self) -> None:
+        y0 = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(_decay, y0, 0.0, 1.0)
+        out = dense(0.5)
+        assert out.shape == y0.shape
+        assert out.dtype == y0.dtype
+
+    @pytest.mark.parametrize(
+        ("method", "tol", "want"),
+        [
+            ("dopri5", 1e-11, 1e-8),
+            ("tsit5", 1e-11, 1e-8),
+            # A third-order method runs into its step floor long before a
+            # fifth-order one does, so asking it for 1e-11 buys nothing.
+            ("bosh3", 1e-9, 1e-6),
+            ("adaptive_heun", 1e-9, 1e-6),
+        ],
+    )
+    def test_every_adaptive_method(
+        self, method: str, tol: float, want: float
+    ) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(
+            _decay, y0, 0.0, 1.0, method=method, rtol=tol, atol=tol * 100
+        )
+        assert float(dense(0.5).item()) == pytest.approx(math.exp(-0.5), abs=want)
+
+    def test_fixed_method_with_step_size(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(
+            _decay, y0, 0.0, 1.0, method="rk4",
+            options={"step_size": 1 / 32, "interp": "cubic"},
+        )
+        for i in range(21):
+            t = i / 20
+            assert float(dense(t).item()) == pytest.approx(math.exp(-t), abs=1e-8)
+
+    def test_rejects_query_outside_the_interval(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(_decay, y0, 0.0, 1.0)
+        for bad in (-0.001, 1.001):
+            with pytest.raises(ValueError, match="outside the solved interval"):
+                dense(bad)
+
+    def test_rejects_non_finite_query(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(_decay, y0, 0.0, 1.0)
+        with pytest.raises(ValueError, match="must be finite"):
+            dense(float("nan"))
+
+    def test_rejects_degenerate_interval(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="must differ"):
+            diffeq.odeint_dense(_decay, y0, 1.0, 1.0)
+
+    def test_rejects_non_finite_bounds(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="must be finite"):
+            diffeq.odeint_dense(_decay, y0, 0.0, float("inf"))
+
+    def test_rejects_integer_state(self) -> None:
+        with pytest.raises(ValueError, match="floating dtype"):
+            diffeq.odeint_dense(_decay, lucid.tensor([1, 2]), 0.0, 1.0)
+
+    def test_propagates_option_validation(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="unknown option"):
+            diffeq.odeint_dense(_decay, y0, 0.0, 1.0, options={"nope": 1})
+
+    def test_grad_flows_through_a_query(self) -> None:
+        k = 0.5
+        y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        dense = diffeq.odeint_dense(
+            lambda t, y: -k * y, y0, 0.0, 1.0, rtol=1e-11, atol=1e-13
+        )
+        dense(1.0).sum().backward()
+        assert y0.grad is not None
+        assert float(y0.grad.item()) == pytest.approx(math.exp(-k), abs=1e-7)
+
+
+    def test_endpoints_are_tighter_than_interior_points(self) -> None:
+        # Worth knowing rather than rediscovering: a dense query inside a step
+        # is only as good as the interpolant, which is anchored on the
+        # tableau's midpoint weights.  bosh3's are coarse ([0, 1/2, 0, 0]), so
+        # its interior error runs well above its endpoint error; dopri5 has
+        # proper mid coefficients and shows no such gap.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        dense = diffeq.odeint_dense(
+            _decay, y0, 0.0, 1.0, method="bosh3", rtol=1e-11, atol=1e-13
+        )
+        endpoint = abs(float(dense(1.0).item()) - math.exp(-1.0))
+        interior = max(
+            abs(float(dense(t).item()) - math.exp(-t)) for t in (0.25, 0.5, 0.75)
+        )
+        assert endpoint < 1e-7
+        assert interior > 5 * endpoint

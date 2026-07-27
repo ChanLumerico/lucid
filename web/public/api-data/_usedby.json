@@ -745,6 +745,12 @@
       "module": "lucid.diffeq"
     }
   ],
+  "lucid.diffeq._solvers.odeint_dense": [
+    {
+      "kind": "module",
+      "module": "lucid.diffeq"
+    }
+  ],
   "lucid.diffeq._tableau.ButcherTableau": [
     {
       "kind": "module",

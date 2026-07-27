@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add lucid.diffeq — fixed-step explicit Runge-Kutta ODE integrators
 - add adaptive-step Runge-Kutta with dense output
 - decouple the fixed-step integration grid from the output times
+- add odeint_dense, a continuous solution over an interval
 
 ---
 

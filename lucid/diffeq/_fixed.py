@@ -221,9 +221,7 @@ def _interp_evaluate(
     coeffs: Sequence[Tensor], t0: float, t1: float, t: float
 ) -> Tensor:
     """Evaluate a fitted step polynomial at a time inside the step."""
-    x = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
-    powers = [x ** (len(coeffs) - 1 - i) for i in range(len(coeffs))]
-    return _fused.lincomb(list(coeffs), powers)
+    return _fused.poly_eval(coeffs, t0, t1, t)
 
 
 def integrate(
@@ -329,3 +327,85 @@ def integrate(
         # it is the endpoint either way.
         trajectory.append(y)
     return y, trajectory
+
+
+def integrate_dense(
+    func: Callable[[Tensor, Tensor], Tensor],
+    y0: Tensor,
+    t0: float,
+    t1: float,
+    tableau: ButcherTableau,
+    scalar: Callable[[float], Tensor],
+    check: Callable[[object, int, int], Tensor],
+    *,
+    options: dict[str, object] | None,
+) -> list[tuple[float, float, list[Tensor]]]:
+    """Step across ``[t0, t1]`` on the configured grid, keeping every interpolant.
+
+    Parameters
+    ----------
+    func : callable
+        Right-hand side ``f(t, y)``.
+    y0 : Tensor
+        Initial state at ``t0``.
+    t0, t1 : float
+        Ends of the interval.  ``t1 < t0`` integrates backwards.
+    tableau : ButcherTableau
+        Any explicit tableau.
+    scalar : callable
+        Builds the 0-D time tensor the right-hand side expects.
+    check : callable
+        Validates a right-hand-side result and returns it.
+    options : dict or None
+        See :class:`FixedOptions`.
+
+    Returns
+    -------
+    list of (float, float, list of Tensor)
+        One entry per step: its start, its end, and its polynomial.
+
+    Notes
+    -----
+    Without ``step_size`` or ``grid_constructor`` the grid is just
+    ``[t0, t1]`` — a single step across the whole interval, which is
+    mathematically fine but usually far too coarse to interpolate through.
+    A fixed-step dense solve normally wants one of those options.
+    """
+    opts = parse_options(options)
+    steps = build_grid(opts, func, y0, [t0, t1])
+
+    y = y0
+    f0: Tensor | None = None
+    if opts.interp == "cubic":
+        f0 = check(func(scalar(steps[0]), y), 0, 0)
+
+    segments: list[tuple[float, float, list[Tensor]]] = []
+    for index in range(len(steps) - 1):
+        a, b = steps[index], steps[index + 1]
+        dt = b - a
+
+        ks: list[Tensor] = []
+        for stage in range(tableau.stages):
+            stage_t = a + tableau.c[stage] * dt
+            if opts.perturb:
+                if tableau.c[stage] == 0.0:
+                    stage_t = math.nextafter(a, b)
+                elif tableau.c[stage] == 1.0:
+                    stage_t = math.nextafter(b, a)
+            if stage == 0 and f0 is not None and not opts.perturb:
+                ks.append(f0)
+                continue
+            stage_y = _fused.combine(y, ks, tableau.a[stage], dt)
+            ks.append(check(func(scalar(stage_t), stage_y), index, stage))
+
+        y_next = _fused.combine(y, ks, tableau.b, dt)
+        if opts.interp == "cubic":
+            assert f0 is not None
+            f1 = check(func(scalar(b), y_next), index, tableau.stages)
+            segments.append((a, b, _interp_fit_cubic(y, y_next, f0, f1, dt)))
+            f0 = f1
+        else:
+            segments.append((a, b, _interp_fit_linear(y, y_next)))
+        y = y_next
+
+    return segments

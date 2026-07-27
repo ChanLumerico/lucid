@@ -354,15 +354,8 @@ def interp_evaluate(coeffs: Sequence[Tensor], t0: float, t1: float, t: float) ->
     -------
     Tensor
         The interpolated state.
-
-    Notes
-    -----
-    The powers of the normalised time are host floats, so the whole evaluation
-    is one affine combination of the coefficient tensors — a single fused
-    engine call rather than a chain of scalar multiplies.
     """
-    x = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
-    return _fused.lincomb(list(coeffs), [x**4, x**3, x**2, x, 1.0])
+    return _fused.poly_eval(coeffs, t0, t1, t)
 
 
 def _clamp(step: float, opts: AdaptiveOptions) -> float:
@@ -377,6 +370,194 @@ def _next_forced(times: Sequence[float], t: float, direction: float) -> float | 
         return min(ahead) if ahead else None
     ahead = [v for v in times if v < t]
     return max(ahead) if ahead else None
+
+
+@dataclass(frozen=True)
+class Step:
+    """One accepted step, with everything an interpolant needs.
+
+    Attributes
+    ----------
+    t0, t1 : float
+        The times the step ran between.
+    dt : float
+        Signed step size, ``t1 - t0``.
+    y0, y1 : Tensor
+        States at those times.
+    f0, f1 : Tensor
+        Derivatives at those times.
+    ks : list of Tensor
+        The stage derivatives, needed for the midpoint state.
+    """
+
+    t0: float
+    t1: float
+    dt: float
+    y0: Tensor
+    y1: Tensor
+    f0: Tensor
+    f1: Tensor
+    ks: list[Tensor]
+
+
+class Stepper:
+    """Drives one adaptive solve, one accepted step at a time.
+
+    Both the output-times loop and the dense-output collector run on this, so
+    the step body — stages, error ratio, accept/reject, the FSAL shortcut —
+    exists once.  Duplicating it is how a stage input goes missing and a
+    method silently loses its order.
+
+    Parameters
+    ----------
+    func : callable
+        Right-hand side ``f(t, y)``.
+    y0 : Tensor
+        Initial state.
+    t0 : float
+        Initial time.
+    tableau : ButcherTableau
+        An adaptive tableau.
+    scalar : callable
+        Builds the 0-D time tensor the right-hand side expects.
+    check : callable
+        Validates a right-hand-side result and returns it.
+    rtol, atol : float
+        Tolerances.
+    opts : AdaptiveOptions
+        Controller settings.
+    direction : float
+        ``+1`` integrating forwards, ``-1`` backwards.
+    """
+
+    def __init__(
+        self,
+        func: Callable[[Tensor, Tensor], Tensor],
+        y0: Tensor,
+        t0: float,
+        tableau: ButcherTableau,
+        scalar: Callable[[float], Tensor],
+        check: Callable[[object, int, int], Tensor],
+        rtol: float,
+        atol: float,
+        opts: AdaptiveOptions,
+        direction: float,
+    ) -> None:
+        self._func = func
+        self._tableau = tableau
+        self._scalar = scalar
+        self._check = check
+        self._rtol = rtol
+        self._atol = atol
+        self._opts = opts
+        self._direction = direction
+        self._forced = tuple(sorted({*opts.step_t, *opts.jump_t}))
+
+        self.t = t0
+        self.y = y0
+        self.f = check(func(scalar(t0), y0), 0, 0)
+        self.accepted = 0
+
+        if opts.first_step is not None:
+            step = opts.first_step
+        else:
+            step = select_initial_step(
+                func, t0, y0, self.f, tableau.order, rtol, atol, direction, scalar
+            )
+        self.step = _clamp(step, opts)
+
+    def advance(self) -> Step:
+        """Take one accepted step, retrying at smaller sizes until it passes.
+
+        Returns
+        -------
+        Step
+            The accepted step.  The stepper's own ``t`` / ``y`` / ``f`` have
+            already moved to its end.
+
+        Raises
+        ------
+        RuntimeError
+            If the step size collapses, or the accepted-step budget runs out.
+        """
+        tableau = self._tableau
+        while True:
+            # Only times the caller pinned constrain the step.  Output times
+            # deliberately do not: clipping to them would tie the step size to
+            # the output grid, which is the coupling dense output exists to
+            # remove, and would change the step sequence.
+            limit = _next_forced(self._forced, self.t, self._direction)
+            if limit is not None:
+                self.step = min(self.step, abs(limit - self.t))
+            if self.step <= 0.0:
+                raise RuntimeError(
+                    f"step size collapsed to {self.step!r} at t={self.t!r}; the "
+                    f"problem may be too stiff for an explicit method"
+                )
+
+            dt = self._direction * self.step
+            t_next = self.t + dt
+            ks: list[Tensor] = [self.f]
+            for stage in range(1, tableau.stages):
+                stage_y = _fused.combine(self.y, ks, tableau.a[stage], dt)
+                stage_t = self._scalar(self.t + tableau.c[stage] * dt)
+                ks.append(self._check(self._func(stage_t, stage_y), self.accepted, stage))
+
+            y_next = _fused.combine(self.y, ks, tableau.b, dt)
+            assert tableau.b_error is not None
+            ratio = _fused.error_ratio(
+                self.y, y_next, ks, tableau.b_error, dt, self._rtol, self._atol
+            )
+
+            proposed = _clamp(
+                optimal_step_size(
+                    self.step,
+                    ratio,
+                    self._opts.safety,
+                    self._opts.ifactor,
+                    self._opts.dfactor,
+                    tableau.order,
+                ),
+                self._opts,
+            )
+            if ratio > 1.0:
+                self.step = proposed
+                continue
+
+            self.accepted += 1
+            if self.accepted > self._opts.max_num_steps:
+                raise RuntimeError(
+                    f"exceeded max_num_steps ({self._opts.max_num_steps}) at "
+                    f"t={t_next!r}; loosen rtol/atol or raise the budget"
+                )
+
+            # The last stage of an FSAL tableau already evaluated the
+            # right-hand side at the new state, so it is the next step's first
+            # stage for free.  Otherwise that derivative has to be computed:
+            # reusing the final stage would seed the next step from a point
+            # that is not y1 and cost the method its order.
+            if tableau.is_fsal:
+                f_next = ks[-1]
+            else:
+                f_next = self._check(
+                    self._func(self._scalar(t_next), y_next),
+                    self.accepted,
+                    tableau.stages,
+                )
+
+            step = Step(
+                t0=self.t, t1=t_next, dt=dt, y0=self.y, y1=y_next,
+                f0=self.f, f1=f_next, ks=ks,
+            )
+            self.t, self.y, self.f = t_next, y_next, f_next
+            self.step = proposed
+            return step
+
+    def fit(self, step: Step) -> list[Tensor]:
+        """Build the interpolating polynomial for an accepted step."""
+        assert self._tableau.mid is not None
+        y_mid = _fused.combine(step.y0, step.ks, self._tableau.mid, step.dt)
+        return interp_fit(step.y0, step.y1, y_mid, step.f0, step.f1, step.dt)
 
 
 def integrate(
@@ -403,7 +584,7 @@ def integrate(
     grid : list of float
         Output times, strictly monotonic.
     tableau : ButcherTableau
-        An adaptive tableau, i.e. one carrying ``b_error`` and ``mid``.
+        An adaptive tableau.
     scalar : callable
         Builds the 0-D time tensor the right-hand side expects.
     check : callable
@@ -421,124 +602,94 @@ def integrate(
         The final state, and the collected trajectory (empty when not
         requested).
 
-    Raises
-    ------
-    RuntimeError
-        If the solve exceeds ``max_num_steps``, or if the step size collapses
-        below what the controller can act on.
+    Notes
+    -----
+    The interpolant is fitted lazily: only a step that actually spans an
+    output time pays for it.
     """
     opts = parse_options(options)
     direction = 1.0 if grid[-1] > grid[0] else -1.0
-    forced = tuple(sorted({*opts.step_t, *opts.jump_t}))
-
-    t_cur = grid[0]
-    y = y0
-    f0 = check(func(scalar(t_cur), y), 0, 0)
-
-    if opts.first_step is not None:
-        step = opts.first_step
-    else:
-        step = select_initial_step(
-            func, t_cur, y0, f0, tableau.order, rtol, atol, direction, scalar
-        )
-    step = _clamp(step, opts)
+    stepper = Stepper(
+        func, y0, grid[0], tableau, scalar, check, rtol, atol, opts, direction
+    )
 
     trajectory: list[Tensor] = [y0] if return_trajectory else []
-    accepted = 0
-    # Polynomial for the most recently accepted step, and the interval it
-    # covers.  Fitted lazily — only a step that actually spans an output time
-    # pays for the fit.
     span: tuple[float, float] | None = None
     coeffs: list[Tensor] = []
 
     for target in grid[1:]:
-        while direction * (t_cur - target) < 0.0:
-            # Only times the caller pinned constrain the step.  Output times
-            # deliberately do not: clipping to them would tie the step size to
-            # the output grid, which is the very coupling dense output exists
-            # to remove — and would make this solver's step sequence differ
-            # from the reference implementation's.
-            limit = _next_forced(forced, t_cur, direction)
-            if limit is not None:
-                step = min(step, abs(limit - t_cur))
-            if step <= 0.0:
-                raise RuntimeError(
-                    f"step size collapsed to {step!r} at t={t_cur!r}; the "
-                    f"problem may be too stiff for an explicit method"
-                )
-
-            t_next = t_cur + direction * step
-            ks: list[Tensor] = [f0]
-            for stage in range(1, tableau.stages):
-                stage_y = _fused.combine(y, ks, tableau.a[stage], direction * step)
-                stage_t = scalar(t_cur + tableau.c[stage] * direction * step)
-                ks.append(check(func(stage_t, stage_y), accepted, stage))
-
-            y_next = _fused.combine(y, ks, tableau.b, direction * step)
-            assert tableau.b_error is not None
-            ratio = _fused.error_ratio(
-                y, y_next, ks, tableau.b_error, direction * step, rtol, atol
-            )
-
-            if ratio > 1.0:
-                step = _clamp(
-                    optimal_step_size(
-                        step,
-                        ratio,
-                        opts.safety,
-                        opts.ifactor,
-                        opts.dfactor,
-                        tableau.order,
-                    ),
-                    opts,
-                )
-                continue
-
-            accepted += 1
-            if accepted > opts.max_num_steps:
-                raise RuntimeError(
-                    f"exceeded max_num_steps ({opts.max_num_steps}) before reaching "
-                    f"t={grid[-1]!r}; loosen rtol/atol or raise the budget"
-                )
-
-            # The last stage of an FSAL tableau already evaluated the
-            # right-hand side at the new state, so it is the next step's first
-            # stage for free.  Otherwise the derivative there has to be
-            # computed: reusing the final stage instead would seed the next
-            # step from the wrong point and cost the method its order.
-            if tableau.is_fsal:
-                f_next = ks[-1]
-            else:
-                f_next = check(func(scalar(t_next), y_next), accepted, tableau.stages)
-
-            span = (t_cur, t_next)
-            fitted = False
-            if direction * (t_next - target) >= 0.0:
-                assert tableau.mid is not None
-                y_mid = _fused.combine(y, ks, tableau.mid, direction * step)
-                coeffs = interp_fit(y, y_next, y_mid, f0, f_next, direction * step)
-                fitted = True
-
-            t_cur, y, f0 = t_next, y_next, f_next
-            step = _clamp(
-                optimal_step_size(
-                    step, ratio, opts.safety, opts.ifactor, opts.dfactor, tableau.order
-                ),
-                opts,
-            )
-            if fitted:
+        while direction * (stepper.t - target) < 0.0:
+            step = stepper.advance()
+            if direction * (step.t1 - target) >= 0.0:
+                span = (step.t0, step.t1)
+                coeffs = stepper.fit(step)
                 break
 
         if return_trajectory:
-            if t_cur == target or span is None:
-                trajectory.append(y)
+            if stepper.t == target or span is None:
+                trajectory.append(stepper.y)
             else:
                 trajectory.append(interp_evaluate(coeffs, span[0], span[1], target))
 
-    # ``y`` sits at the last accepted step, which generally overshoots the
-    # final output time; the value asked for is the interpolated one.
-    if t_cur == grid[-1] or span is None:
-        final = y
+    # ``stepper.y`` sits at the last accepted step, which generally overshoots
+    # the final output time; the value asked for is the interpolated one.
+    if stepper.t == grid[-1] or span is None:
+        final = stepper.y
     else:
         final = interp_evaluate(coeffs, span[0], span[1], grid[-1])
     return final, trajectory
+
+
+def integrate_dense(
+    func: Callable[[Tensor, Tensor], Tensor],
+    y0: Tensor,
+    t0: float,
+    t1: float,
+    tableau: ButcherTableau,
+    scalar: Callable[[float], Tensor],
+    check: Callable[[object, int, int], Tensor],
+    *,
+    rtol: float,
+    atol: float,
+    options: dict[str, object] | None,
+) -> list[tuple[float, float, list[Tensor]]]:
+    """Integrate once across ``[t0, t1]``, keeping every step's interpolant.
+
+    Parameters
+    ----------
+    func : callable
+        Right-hand side ``f(t, y)``.
+    y0 : Tensor
+        Initial state at ``t0``.
+    t0, t1 : float
+        Ends of the interval.  ``t1 < t0`` integrates backwards.
+    tableau : ButcherTableau
+        An adaptive tableau.
+    scalar : callable
+        Builds the 0-D time tensor the right-hand side expects.
+    check : callable
+        Validates a right-hand-side result and returns it.
+    rtol, atol : float
+        Tolerances.
+    options : dict or None
+        Controller options.
+
+    Returns
+    -------
+    list of (float, float, list of Tensor)
+        One entry per accepted step: its start, its end, and its polynomial.
+
+    Notes
+    -----
+    Every step is fitted here, unlike :func:`integrate` — that is the whole
+    point, since the caller may later ask for any time in the interval.
+    """
+    opts = parse_options(options)
+    direction = 1.0 if t1 > t0 else -1.0
+    stepper = Stepper(func, y0, t0, tableau, scalar, check, rtol, atol, opts, direction)
+
+    segments: list[tuple[float, float, list[Tensor]]] = []
+    while direction * (stepper.t - t1) < 0.0:
+        step = stepper.advance()
+        segments.append((step.t0, step.t1, stepper.fit(step)))
+    return segments
