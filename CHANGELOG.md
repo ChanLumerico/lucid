@@ -15,6 +15,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.1] — 2026-07-27
+
+### Added — RealNVP, the multi-scale affine-coupling flow
+
+The second family in the flow lineage, and the one that made
+exact-likelihood flows work on natural images.  `RealNVP` (Dinh,
+Sohl-Dickstein & Bengio, 2016) gives the coupling layer a learned scale
+as well as a shift, so the map is no longer volume-preserving and the
+density can concentrate where the data needs it.  Ten factories cover the
+paper's Table 1 datasets — `realnvp_cifar`, `realnvp_imagenet32`,
+`realnvp_imagenet64`, `realnvp_lsun`, `realnvp_celeba`, each with a
+`_gen` head.
+
+Each scale runs three alternating checkerboard couplings, squeezes,
+runs three alternating channel-wise couplings and factors out half its
+dimensions; the last scale ends with four checkerboard couplings.  The
+logit preprocessing lives inside the model so its log-determinant is part
+of the reported bits/dim.  The flow infrastructure NICE introduced in
+3.7.0 carried this family with no additions.
+
+
 
 ### Added
 
@@ -3076,7 +3097,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.7.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.7.1...HEAD
+[3.7.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.1
 [3.7.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.0
 [3.5.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.5.0
 [3.0.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.0.0
