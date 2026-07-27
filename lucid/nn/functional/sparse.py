@@ -23,6 +23,23 @@ def check_embedding_indices(x: Tensor, weight: Tensor, op: str) -> None:
 
     Shared by :func:`embedding` and :func:`~lucid.nn.functional.embedding_bag`
     so the two cannot disagree on what a valid index is.
+
+    Parameters
+    ----------
+    x : Tensor
+        Index tensor of any shape.  Empty tensors pass trivially.  Non-int64
+        indices are cast before the reduction, since the CPU reduce kernels
+        do not cover every integer width.
+    weight : Tensor
+        Embedding table of shape ``(num_embeddings, embedding_dim)``; only
+        its leading dimension is consulted.
+    op : str
+        Name of the calling op, used as the prefix of the raised message.
+
+    Raises
+    ------
+    IndexError
+        If any index is negative or ``>= weight.shape[0]``.
     """
     if x.numel() == 0:
         return

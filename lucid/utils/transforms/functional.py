@@ -769,6 +769,9 @@ def rotation_matrix(
         y-coordinate of the rotation center (pixel).
     scale : float, optional, default=1.0
         Uniform scale factor applied alongside the rotation.
+    device : DeviceLike, optional
+        Placement of the returned matrix.  ``None`` uses the current
+        default device.
 
     Returns
     -------
@@ -819,6 +822,9 @@ def affine_matrix(
         Shear angles in degrees along each axis.
     translate_x, translate_y : float, optional, default=0.0
         Post-transform translation in pixels.
+    device : DeviceLike, optional
+        Placement of the returned matrix.  ``None`` uses the current
+        default device.
 
     Returns
     -------
@@ -852,6 +858,9 @@ def perspective_matrix(
         Four source ``(x, y)`` corner points (pixel coords).
     dst : list of [float, float]
         Four destination ``(x, y)`` corner points; same order as ``src``.
+    device : DeviceLike, optional
+        Placement of the returned matrix.  ``None`` uses the current
+        default device.
 
     Returns
     -------
