@@ -214,8 +214,8 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
 
     Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
     if (a->device() != Device::CPU) {
-        Storage up = backend::Dispatcher::for_device(a->device())
-                         .from_cpu(std::move(out), out_shape);
+        Storage up =
+            backend::Dispatcher::for_device(a->device()).from_cpu(std::move(out), out_shape);
         return fresh(std::move(up), std::move(out_shape), Dtype::I64, a->device());
     }
     return fresh(Storage{std::move(out)}, std::move(out_shape), Dtype::I64, Device::CPU);
@@ -268,8 +268,8 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
     else
         ErrorBuilder("unique").not_implemented("dtype not supported");
     if (a->device() != Device::CPU) {
-        Storage up = backend::Dispatcher::for_device(a->device())
-                         .from_cpu(std::move(out_cpu), out_shape);
+        Storage up =
+            backend::Dispatcher::for_device(a->device()).from_cpu(std::move(out_cpu), out_shape);
         return fresh(std::move(up), std::move(out_shape), dt, a->device());
     }
     return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, Device::CPU);

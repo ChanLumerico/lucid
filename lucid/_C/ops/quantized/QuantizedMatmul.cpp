@@ -62,20 +62,26 @@ std::vector<TensorImplPtr> quantize_op(const TensorImplPtr& w, int group_size, i
     return ::mlx::core::view(w, ::mlx::core::uint32);
 }
 
-TensorImplPtr dequantize_op(const TensorImplPtr& w, const TensorImplPtr& scales,
-                            const TensorImplPtr& biases, int group_size, int bits) {
+TensorImplPtr dequantize_op(const TensorImplPtr& w,
+                            const TensorImplPtr& scales,
+                            const TensorImplPtr& biases,
+                            int group_size,
+                            int bits) {
     ::mlx::core::array wa = as_packed_u32(gpu_array(w, "dequantize"));
     ::mlx::core::array sa = gpu_array(scales, "dequantize");
     std::optional<::mlx::core::array> ba =
-        biases ? std::optional<::mlx::core::array>(gpu_array(biases, "dequantize"))
-               : std::nullopt;
+        biases ? std::optional<::mlx::core::array>(gpu_array(biases, "dequantize")) : std::nullopt;
     ::mlx::core::array out = ::mlx::core::dequantize(wa, sa, ba, group_size, bits);
     return wrap(std::move(out), Dtype::F32);
 }
 
-TensorImplPtr quantized_matmul_op(const TensorImplPtr& x, const TensorImplPtr& w,
-                                  const TensorImplPtr& scales, const TensorImplPtr& biases,
-                                  bool transpose, int group_size, int bits) {
+TensorImplPtr quantized_matmul_op(const TensorImplPtr& x,
+                                  const TensorImplPtr& w,
+                                  const TensorImplPtr& scales,
+                                  const TensorImplPtr& biases,
+                                  bool transpose,
+                                  int group_size,
+                                  int bits) {
     ::mlx::core::array xa = gpu_array(x, "quantized_matmul");
     ::mlx::core::array wa = as_packed_u32(gpu_array(w, "quantized_matmul"));
     ::mlx::core::array sa = gpu_array(scales, "quantized_matmul");

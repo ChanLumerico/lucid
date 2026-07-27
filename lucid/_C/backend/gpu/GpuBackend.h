@@ -2290,8 +2290,8 @@ public:
             auto raw = ::mlx::core::linalg::norm(flat, ord, std::nullopt, /*keepdims=*/false,
                                                  k_linalg_stream);
             if (keepdims)
-                raw = ::mlx::core::reshape(
-                    raw, ::mlx::core::Shape(static_cast<int>(ga.arr->ndim()), 1));
+                raw = ::mlx::core::reshape(raw,
+                                           ::mlx::core::Shape(static_cast<int>(ga.arr->ndim()), 1));
             return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(raw), dt)};
         }
         if (axes.size() >= 2) {
@@ -2306,16 +2306,15 @@ public:
             } else if (ord == 1.0) {
                 red = ::mlx::core::sum(absx, axes, keepdims, k_linalg_stream);
             } else if (ord == 2.0) {
-                red = ::mlx::core::sqrt(
-                    ::mlx::core::sum(::mlx::core::square(absx, k_linalg_stream), axes, keepdims,
-                                     k_linalg_stream),
-                    k_linalg_stream);
+                red = ::mlx::core::sqrt(::mlx::core::sum(::mlx::core::square(absx, k_linalg_stream),
+                                                         axes, keepdims, k_linalg_stream),
+                                        k_linalg_stream);
             } else {
                 auto p = ::mlx::core::power(absx, ::mlx::core::array(static_cast<float>(ord)),
                                             k_linalg_stream);
-                red = ::mlx::core::power(
-                    ::mlx::core::sum(p, axes, keepdims, k_linalg_stream),
-                    ::mlx::core::array(static_cast<float>(1.0 / ord)), k_linalg_stream);
+                red = ::mlx::core::power(::mlx::core::sum(p, axes, keepdims, k_linalg_stream),
+                                         ::mlx::core::array(static_cast<float>(1.0 / ord)),
+                                         k_linalg_stream);
             }
             return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(red), dt)};
         }

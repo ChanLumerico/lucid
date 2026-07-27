@@ -141,8 +141,7 @@ inline std::uint16_t float_to_half_bits(float value) {
         mant |= 0x800000u;  // restore the implicit bit, then shift into place
         const std::uint32_t shift = static_cast<std::uint32_t>(14 - exp);
         const std::uint32_t half = 1u << (shift - 1);
-        const std::uint32_t rounded =
-            (mant + half - 1u + ((mant >> shift) & 1u)) >> shift;
+        const std::uint32_t rounded = (mant + half - 1u + ((mant >> shift) & 1u)) >> shift;
         return static_cast<std::uint16_t>(sign | rounded);
     }
     const std::uint32_t half = 0x1000u;
@@ -153,8 +152,8 @@ inline std::uint16_t float_to_half_bits(float value) {
             return static_cast<std::uint16_t>(sign | 0x7c00u);
         return static_cast<std::uint16_t>(sign | (static_cast<std::uint32_t>(exp) << 10));
     }
-    return static_cast<std::uint16_t>(
-        sign | (static_cast<std::uint32_t>(exp) << 10) | (rounded >> 13));
+    return static_cast<std::uint16_t>(sign | (static_cast<std::uint32_t>(exp) << 10) |
+                                      (rounded >> 13));
 }
 
 }  // namespace detail
@@ -4932,8 +4931,7 @@ public:
                 return astype(as_f32, shape, Dtype::F32, dst_dt);  // F16-free leg
             }
             // dst is F16: bring the source to F32 first (F16-free leg), encode.
-            Storage as_f32 =
-                (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
+            Storage as_f32 = (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
             const auto& cf = std::get<CpuStorage>(as_f32);
             const auto* f32 = reinterpret_cast<const float*>(cf.ptr.get());
             auto* out16 = reinterpret_cast<std::uint16_t*>(out_ptr.get());

@@ -846,8 +846,8 @@ namespace {
 // Materialised in full (rather than broadcast from a 1-D pattern) because the
 // CPU scatter_add reads the index buffer as densely contiguous over the whole
 // index shape.  Dtype is I32 to match that reader.
-TensorImplPtr make_unfold_scatter_index(
-    const Shape& flat_shape, int dim, int size, int step, Device device) {
+TensorImplPtr
+make_unfold_scatter_index(const Shape& flat_shape, int dim, int size, int step, Device device) {
     const int ndim = static_cast<int>(flat_shape.size());
     std::size_t outer = 1;
     for (int i = 0; i < dim; ++i)

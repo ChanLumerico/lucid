@@ -408,8 +408,8 @@ TensorImplPtr fold_op(const TensorImplPtr& x,
     if (blocks_h <= 0 || blocks_w <= 0)
         ErrorBuilder("fold").fail("output_size too small for the given kernel/stride/dilation");
     if (static_cast<std::int64_t>(blocks_h) * blocks_w != x->shape()[2])
-        ErrorBuilder("fold").shape_mismatch(
-            Shape{static_cast<std::int64_t>(blocks_h) * blocks_w}, Shape{x->shape()[2]});
+        ErrorBuilder("fold").shape_mismatch(Shape{static_cast<std::int64_t>(blocks_h) * blocks_w},
+                                            Shape{x->shape()[2]});
 
     Shape out_shape = {static_cast<std::int64_t>(N), static_cast<std::int64_t>(C),
                        static_cast<std::int64_t>(outH), static_cast<std::int64_t>(outW)};
