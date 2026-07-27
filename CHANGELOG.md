@@ -15,6 +15,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] — 2026-07-27
+
+### Added — NICE, the model zoo's first normalizing flow
+
+The generative zoo gains its first exact-likelihood family. `NICE`
+(Dinh, Krueger & Bengio, 2014) trains by maximising the true data
+log-density rather than a bound: additive coupling layers have a unit
+Jacobian determinant, so the whole density is one forward pass plus a
+learned diagonal scaling, and sampling is the same graph run backwards.
+Eight factories cover the paper's four experiments — `nice_mnist`,
+`nice_tfd`, `nice_svhn`, `nice_cifar`, each with a `_gen` head.
+
+Shared flow infrastructure lands with it: `NormalizingFlowConfig` (a
+sibling tier to `DiffusionModelConfig`), logistic / Gaussian prior
+density and sampling helpers, and the `NormalizingFlowOutput` dataclass
+carrying latent, log-determinant and exact log-probability.
+
+This release also collects the coverage-directed correctness sweep that
+landed on `main` since 3.6.0 — every entry below.
+
+
 
 ### Fixed
 
@@ -3044,6 +3065,7 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.5.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.7.0...HEAD
+[3.7.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.0
 [3.5.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.5.0
 [3.0.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.0.0
