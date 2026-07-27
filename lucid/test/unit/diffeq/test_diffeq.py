@@ -43,7 +43,18 @@ class TestButcherTableau:
     def test_registry_names_match_the_reference_library(self) -> None:
         # Method-name strings are exposed API, so they track the reference
         # ODE library exactly: it has heun2 / heun3 and no bare "heun".
-        assert sorted(_METHODS) == ["euler", "heun2", "heun3", "midpoint", "rk4"]
+        assert sorted(_METHODS) == [
+            "adaptive_heun",
+            "bosh3",
+            "dopri5",
+            "euler",
+            "fehlberg2",
+            "heun2",
+            "heun3",
+            "midpoint",
+            "rk4",
+            "tsit5",
+        ]
         for name, tableau in _METHODS.items():
             assert tableau.name == name
 
@@ -128,7 +139,7 @@ class TestOrderOfConvergence:
 class TestAnalyticSolutions:
     def test_exponential_decay(self) -> None:
         y0 = lucid.tensor([2.0], dtype=lucid.float64)
-        y = diffeq.odeint(_decay, y0, _grid(64), return_trajectory=False)
+        y = diffeq.odeint(_decay, y0, _grid(64), method="rk4", return_trajectory=False)
         assert abs(float(y.item()) - 2.0 * math.exp(-1.0)) < 1e-8
 
     def test_exponential_growth_matches_at_every_grid_point(self) -> None:
@@ -147,7 +158,7 @@ class TestAnalyticSolutions:
 
         y0 = lucid.tensor([1.0, 0.0], dtype=lucid.float64)
         grid = [i * 2 * math.pi / 200 for i in range(201)]
-        y = diffeq.odeint(rhs, y0, grid, return_trajectory=False)
+        y = diffeq.odeint(rhs, y0, grid, method="rk4", return_trajectory=False)
 
         x_end, v_end = y.tolist()
         assert abs(x_end**2 + v_end**2 - 1.0) < 1e-8
@@ -228,7 +239,7 @@ class TestMethodResolution:
     def test_unknown_method_lists_alternatives(self) -> None:
         y0 = lucid.tensor([1.0])
         with pytest.raises(ValueError, match="unknown method"):
-            diffeq.odeint(_decay, y0, _grid(2), method="dopri5")
+            diffeq.odeint(_decay, y0, _grid(2), method="radauIIA5")
 
     def test_non_method_type_rejected(self) -> None:
         y0 = lucid.tensor([1.0])
@@ -393,7 +404,9 @@ class TestGradientFlow:
         # backward is wired — a fused forward alone would cut the graph.
         k = 0.5
         y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
-        y = diffeq.odeint(lambda t, y: -k * y, y0, _grid(64), return_trajectory=False)
+        y = diffeq.odeint(
+            lambda t, y: -k * y, y0, _grid(64), method="rk4", return_trajectory=False
+        )
         y.sum().backward()
 
         assert y0.grad is not None
@@ -403,7 +416,9 @@ class TestGradientFlow:
         # d/dk of y0 * exp(-k) at k=0.5 is -exp(-0.5).
         k = lucid.tensor([0.5], dtype=lucid.float64, requires_grad=True)
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
-        y = diffeq.odeint(lambda t, y: -k * y, y0, _grid(64), return_trajectory=False)
+        y = diffeq.odeint(
+            lambda t, y: -k * y, y0, _grid(64), method="rk4", return_trajectory=False
+        )
         (grad_k,) = lucid.autograd.grad(y.sum(), k)
 
         assert grad_k is not None
@@ -453,3 +468,245 @@ class TestGradientFlow:
             return (out * out).sum()
 
         assert lucid.autograd.gradcheck(fn, [y0, *ks])
+
+
+ADAPTIVE_METHODS = ["dopri5", "tsit5", "bosh3", "fehlberg2", "adaptive_heun"]
+
+
+class TestAdaptiveTableaux:
+    @pytest.mark.parametrize("name", ADAPTIVE_METHODS)
+    def test_carries_error_and_mid_weights(self, name: str) -> None:
+        tab = _METHODS[name]
+        assert tab.is_adaptive
+        assert tab.b_error is not None and len(tab.b_error) == tab.stages
+        assert tab.mid is not None and len(tab.mid) == tab.stages
+
+    @pytest.mark.parametrize("name", ADAPTIVE_METHODS)
+    def test_error_weights_sum_to_zero(self, name: str) -> None:
+        # Both embedded solutions are consistent, so their weights differ by
+        # something that sums to zero.  A transcription slip in the tableau
+        # almost always breaks this before it breaks anything else.
+        tab = _METHODS[name]
+        assert tab.b_error is not None
+        assert sum(tab.b_error) == pytest.approx(0.0, abs=1e-12)
+
+    def test_fsal_detection(self) -> None:
+        # dopri5 and bosh3 end on a stage that already evaluated the new
+        # state, so that derivative is reused as the next step's first stage.
+        assert diffeq.DOPRI5.is_fsal
+        assert diffeq.BOSH3.is_fsal
+        assert not diffeq.ADAPTIVE_HEUN.is_fsal
+        assert not diffeq.FEHLBERG2.is_fsal
+        # tsit5 ends with a non-zero final weight, so the last stage is
+        # not the new state's derivative — the reference library applies
+        # the same test and reaches the same conclusion.
+        assert not diffeq.TSIT5.is_fsal
+        assert not diffeq.RK4.is_adaptive
+
+    def test_rejects_error_weights_that_do_not_cancel(self) -> None:
+        with pytest.raises(ValueError, match="b_error must sum to 0"):
+            diffeq.ButcherTableau(
+                a=((), (1.0,)),
+                b=(0.5, 0.5),
+                c=(0.0, 1.0),
+                order=2,
+                name="bad",
+                b_error=(0.5, 0.5),
+                mid=(0.5, 0.0),
+            )
+
+    def test_error_weights_require_mid(self) -> None:
+        with pytest.raises(ValueError, match="also needs mid"):
+            diffeq.ButcherTableau(
+                a=((), (1.0,)),
+                b=(0.5, 0.5),
+                c=(0.0, 1.0),
+                order=2,
+                name="bad",
+                b_error=(0.5, -0.5),
+            )
+
+
+class TestAdaptiveIntegration:
+    @pytest.mark.parametrize("name", ADAPTIVE_METHODS)
+    def test_reaches_analytic_solution(self, name: str) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        y = diffeq.odeint(
+            _decay,
+            y0,
+            [0.0, 1.0],
+            method=name,
+            rtol=1e-10,
+            atol=1e-12,
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-8)
+
+    def test_default_method_is_dopri5(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        implicit = diffeq.odeint(_decay, y0, [0.0, 1.0], return_trajectory=False)
+        explicit = diffeq.odeint(
+            _decay, y0, [0.0, 1.0], method="dopri5", return_trajectory=False
+        )
+        assert implicit.tolist() == explicit.tolist()
+
+    def test_tightening_tolerance_reduces_error(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        errors = []
+        for tol in (1e-3, 1e-6, 1e-9):
+            y = diffeq.odeint(
+                _decay, y0, [0.0, 1.0], rtol=tol, atol=tol, return_trajectory=False
+            )
+            errors.append(abs(float(y.item()) - math.exp(-1.0)))
+        assert errors[0] > errors[1] > errors[2]
+
+    def test_output_grid_does_not_change_the_answer(self) -> None:
+        # The defining property of an adaptive solve: t is a set of output
+        # times, so refining it must not change the value at a shared time.
+        # A fixed-step solver would answer differently for each grid.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        coarse = diffeq.odeint(_decay, y0, [0.0, 1.0])
+        fine = diffeq.odeint(_decay, y0, _grid(37))
+        assert coarse[-1].tolist() == pytest.approx(fine[-1].tolist(), abs=1e-9)
+
+    def test_dense_output_matches_analytic_everywhere(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        grid = _grid(8)
+        traj = diffeq.odeint(_decay, y0, grid, rtol=1e-10, atol=1e-12)
+        assert traj.shape == (len(grid), 1)
+        for t, row in zip(grid, traj.tolist()):
+            assert row[0] == pytest.approx(math.exp(-t), abs=1e-9)
+
+    def test_descending_grid(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        y = diffeq.odeint(
+            _decay, y0, [1.0, 0.0], rtol=1e-10, atol=1e-12, return_trajectory=False
+        )
+        assert float(y.item()) == pytest.approx(math.exp(1.0), abs=1e-7)
+
+    def test_harmonic_oscillator_period(self) -> None:
+        def rhs(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            return lucid.stack([y[1], -y[0]], dim=0)
+
+        y0 = lucid.tensor([1.0, 0.0], dtype=lucid.float64)
+        y = diffeq.odeint(
+            rhs,
+            y0,
+            [0.0, 2 * math.pi],
+            rtol=1e-11,
+            atol=1e-13,
+            return_trajectory=False,
+        )
+        x_end, v_end = y.tolist()
+        assert x_end == pytest.approx(1.0, abs=1e-7)
+        assert v_end == pytest.approx(0.0, abs=1e-7)
+
+    def test_grad_flows_through_adaptive_solve(self) -> None:
+        k = 0.5
+        y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        y = diffeq.odeint(
+            lambda t, y: -k * y,
+            y0,
+            [0.0, 1.0],
+            rtol=1e-11,
+            atol=1e-13,
+            return_trajectory=False,
+        )
+        y.sum().backward()
+        assert y0.grad is not None
+        assert float(y0.grad.item()) == pytest.approx(math.exp(-k), abs=1e-7)
+
+    def test_mixed_dtype_rhs_is_promoted(self) -> None:
+        # Under autocast the derivatives come back below the state's
+        # precision; the interpolant is built from derivatives alone in one
+        # of its coefficients, so it has to promote as a group.
+        y0 = lucid.tensor([1.0], dtype=lucid.float32)
+        traj = diffeq.odeint(lambda t, y: (-y).to(lucid.float16), y0, _grid(4))
+        assert traj.dtype == lucid.float32
+        assert traj.shape == (5, 1)
+
+
+class TestAdaptiveOptions:
+    def test_first_step_and_max_step_are_honoured(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        y = diffeq.odeint(
+            _decay,
+            y0,
+            [0.0, 1.0],
+            options={"first_step": 0.01, "max_step": 0.05},
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-8)
+
+    def test_step_t_is_landed_on(self) -> None:
+        seen: list[float] = []
+
+        def rhs(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            seen.append(float(t.item()))
+            return -y
+
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        diffeq.odeint(
+            rhs,
+            y0,
+            [0.0, 1.0],
+            options={"step_t": [0.3, 0.7]},
+            return_trajectory=False,
+        )
+        assert any(abs(t - 0.3) < 1e-12 for t in seen)
+        assert any(abs(t - 0.7) < 1e-12 for t in seen)
+
+    def test_max_num_steps_is_enforced(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(RuntimeError, match="max_num_steps"):
+            diffeq.odeint(
+                _decay,
+                y0,
+                [0.0, 1.0],
+                rtol=1e-13,
+                atol=1e-15,
+                options={"max_num_steps": 2},
+            )
+
+    def test_rejects_unknown_option(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="unknown option"):
+            diffeq.odeint(_decay, y0, [0.0, 1.0], options={"nope": 1})
+
+    def test_fixed_step_method_rejects_options(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match="accepts no"):
+            diffeq.odeint(
+                _decay, y0, _grid(4), method="rk4", options={"first_step": 0.1}
+            )
+
+    @pytest.mark.parametrize(
+        ("bad", "match"),
+        [
+            ({"ifactor": 0.5}, "ifactor must be"),
+            ({"dfactor": 0.0}, "dfactor must lie"),
+            ({"max_num_steps": 0}, "max_num_steps must be"),
+            ({"min_step": 1.0, "max_step": 0.1}, "must not exceed"),
+            ({"first_step": 0.0}, "first_step must be non-zero"),
+        ],
+    )
+    def test_rejects_out_of_range_options(
+        self, bad: dict[str, float], match: str
+    ) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(ValueError, match=match):
+            diffeq.odeint(_decay, y0, [0.0, 1.0], options=bad)
+
+    def test_dtype_and_norm_are_accepted_and_ignored(self) -> None:
+        # Both exist upstream to control step-control precision and the error
+        # norm; here step control is always host-double and the norm is fused
+        # into the kernel, so they are accepted for signature compatibility.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        y = diffeq.odeint(
+            _decay,
+            y0,
+            [0.0, 1.0],
+            options={"dtype": lucid.float64, "norm": "rms"},
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-7)

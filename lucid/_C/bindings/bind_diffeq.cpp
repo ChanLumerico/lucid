@@ -14,6 +14,7 @@
 
 #include "../core/TensorImpl.h"
 #include "../ops/diffeq/RkCombine.h"
+#include "../ops/diffeq/RkErrorNorm.h"
 
 namespace py = pybind11;
 
@@ -26,6 +27,13 @@ void register_diffeq(py::module_& m) {
     // device synchronisation on every stage of every step.
     m.def("rk_combine", &rk_combine_op, py::arg("y0"), py::arg("ks"), py::arg("coeffs"),
           py::arg("dt"), "y0 + dt * sum_i coeffs[i] * ks[i] (elementwise, all inputs same shape).");
+
+    // Returns a host float, not a tensor: the step controller branches on
+    // this value, so it has to cross to the host either way.  Producing it
+    // in one kernel makes that exactly one sync per step.
+    m.def("rk_error_norm", &rk_error_norm_op, py::arg("y0"), py::arg("y1"), py::arg("ks"),
+          py::arg("coeffs"), py::arg("dt"), py::arg("rtol"), py::arg("atol"),
+          "RMS norm of (dt * sum_i coeffs[i] * ks[i]) / (atol + rtol * max(|y0|, |y1|)).");
 }
 
 }  // namespace lucid::bindings

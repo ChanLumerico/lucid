@@ -775,6 +775,8 @@ einops: _einops_namespace
 class _diffeq_namespace:
     @staticmethod
     def rk_combine(y0: TensorImpl, ks: Sequence[TensorImpl], coeffs: Sequence[SupportsFloat], dt: SupportsFloat) -> TensorImpl: ...
+    @staticmethod
+    def rk_error_norm(y0: TensorImpl, y1: TensorImpl, ks: Sequence[TensorImpl], coeffs: Sequence[SupportsFloat], dt: SupportsFloat, rtol: SupportsFloat, atol: SupportsFloat) -> float: ...
 
 diffeq: _diffeq_namespace
 

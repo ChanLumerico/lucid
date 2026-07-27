@@ -3,23 +3,23 @@
   "name": "diffeq",
   "path": "lucid.diffeq",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/__init__.py#L1",
   "members": [
     {
       "name": "odeint",
       "path": "lucid.diffeq._solvers.odeint",
       "kind": "function",
       "labels": [],
-      "signature": "odeint(func: Callable[[Tensor, Tensor], Tensor], y0: Tensor, t: Tensor | Sequence[float], method: str | ButcherTableau = 'rk4', return_trajectory: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_solvers.py#L164",
+      "signature": "odeint(func: Callable[[Tensor, Tensor], Tensor], y0: Tensor, t: Tensor | Sequence[float], rtol: float = 1e-07, atol: float = 1e-09, method: str | ButcherTableau | None = None, options: dict[str, object] | None = None, return_trajectory: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_solvers.py#L125",
       "subcategory": "solvers",
-      "summary": "Integrate `dy/dt = f(t, y)` on a fixed grid with an explicit RK method.",
-      "extended": "The supplied grid `t` *is* the integration grid: consecutive entries are\nstepped in one Runge-Kutta step each, with no sub-stepping and no dense\noutput.  Step size therefore comes from the spacing of `t`, and\ncontrolling accuracy means choosing a finer grid.\n\nGradient mode is left entirely to the caller.  Under grad, the whole solve\nis differentiable end-to-end (discretise-then-optimise) and every stage is\nretained for backward; wrap the call in `lucid.no_grad` for sampling,\nwhere the stage graph is pure overhead.",
+      "summary": "Integrate `dy/dt = f(t, y)` with an explicit Runge-Kutta method.",
+      "extended": "Two families are reachable through the same call, and which one runs\nfollows from `method`:\n\n**Adaptive** (the default, and anything carrying an embedded error\nestimate) treats `t` as *output* times.  The solver picks its own step\nsizes to hold the local error inside `rtol` / `atol` and interpolates\nto each requested time, so a coarse `t` costs nothing in accuracy.\n\n**Fixed step** (`euler` / `midpoint` / `heun2` / `heun3` / `rk4`)\ntreats `t` as the integration grid itself: consecutive entries are one\nstep each, with no sub-stepping and no interpolation.  `rtol` / `atol`\nare unused there, and accuracy is controlled by choosing a finer grid.\n\nGradient mode is left entirely to the caller.  Under grad the whole solve\nis differentiable end-to-end (discretise-then-optimise) and every stage is\nretained for backward; wrap the call in `lucid.no_grad` for sampling,\nwhere the stage graph is pure overhead.",
       "parameters": [
         {
           "name": "func",
           "annotation": "callable",
-          "description": "Right-hand side `f(t, y) -> dy/dt`.  Receives the stage time as a\n0-D tensor matching `y0` in dtype and device, and must return a\ntensor with the same shape as `y0`.",
+          "description": "Right-hand side `f(t, y) -> dy/dt`.  Receives the stage time as a\n0-D tensor matching `y0` in dtype and device, and must return a\ntensor with the same shape and device as `y0`.",
           "default": null
         },
         {
@@ -35,15 +35,33 @@
           "default": null
         },
         {
+          "name": "rtol",
+          "annotation": "float",
+          "description": "Relative tolerance.  Adaptive methods only.",
+          "default": "1e-7"
+        },
+        {
+          "name": "atol",
+          "annotation": "float",
+          "description": "Absolute tolerance.  Adaptive methods only.",
+          "default": "1e-9"
+        },
+        {
           "name": "method",
-          "annotation": "str or ButcherTableau",
-          "description": "`\"euler\"`, `\"midpoint\"`, `\"heun2\"`, `\"heun3\"`, `\"rk4\"`, or a\ncustom `ButcherTableau`.",
-          "default": "\"rk4\""
+          "annotation": "str or ButcherTableau or None",
+          "description": "`None` selects `\"dopri5\"`.  Otherwise one of `\"dopri5\"`,\n`\"bosh3\"`, `\"fehlberg2\"`, `\"adaptive_heun\"`, `\"euler\"`,\n`\"midpoint\"`, `\"heun2\"`, `\"heun3\"`, `\"rk4\"`, or a custom\n`ButcherTableau`.",
+          "default": "None"
+        },
+        {
+          "name": "options",
+          "annotation": "dict or None",
+          "description": "Per-method controller settings.  Adaptive methods accept\n`min_step`, `max_step`, `first_step`, `step_t`, `jump_t`,\n`safety`, `ifactor`, `dfactor`, `max_num_steps` (plus\n`dtype` and `norm`, accepted and ignored).  Fixed-step methods\naccept none.",
+          "default": "None"
         },
         {
           "name": "return_trajectory",
           "annotation": "bool",
-          "description": "Return the state at every grid point.  Set `False` to keep only the\nfinal state — for a sampling run of many steps over a batch of\nimages, stacking the full trajectory multiplies peak memory by the\nnumber of steps.",
+          "description": "Return the state at every time in `t`.  Set `False` to keep only\nthe final state — for a sampling run of many steps over a batch of\nimages, stacking the full trajectory multiplies peak memory by the\nnumber of steps.  **Lucid extension**, not part of the reference\ninterface.",
           "default": "True"
         }
       ],
@@ -54,18 +72,22 @@
       "raises": [
         {
           "annotation": "ValueError",
-          "description": "If `t` is not a strictly monotonic 1-D grid of at least two finite\npoints, if `y0` has a non-floating dtype, if `method` names no\nregistered method, or if `func` returns a tensor whose shape or\ndevice differs from `y0`."
+          "description": "If `t` is not a strictly monotonic 1-D grid of at least two finite\npoints, if `y0` has a non-floating dtype, if `method` names no\nregistered method, if `options` holds a key the method does not\naccept, or if `func` returns a tensor whose shape or device differs\nfrom `y0`."
         },
         {
           "annotation": "TypeError",
           "description": "If `method` is neither a string nor a `ButcherTableau`, or\nif `func` returns something other than a tensor."
+        },
+        {
+          "annotation": "RuntimeError",
+          "description": "If an adaptive solve exceeds `max_num_steps` or its step size\ncollapses."
         }
       ],
       "examples": [
-        "Exponential decay against its closed form:\n>>> import lucid, lucid.diffeq as diffeq\n>>> y0 = lucid.tensor([1.0])\n>>> t = [i / 20 for i in range(21)]\n>>> y = diffeq.odeint(lambda s, y: -y, y0, t, return_trajectory=False)\n>>> abs(float(y.item()) - 0.36787944) < 1e-6\nTrue"
+        "Exponential decay against its closed form:\n>>> import lucid, lucid.diffeq as diffeq\n>>> y0 = lucid.tensor([1.0], dtype=lucid.float64)\n>>> y = diffeq.odeint(lambda s, y: -y, y0, [0.0, 1.0], return_trajectory=False)\n>>> abs(float(y.item()) - 0.36787944117) < 1e-8\nTrue"
       ],
       "notes": [
-        "Cost is `(len(t) - 1) * method.stages` calls to `func`.  Adaptive step\ncontrol, error estimates, and the O(1)-memory adjoint are deliberately out\nof scope here — they need a per-step error norm read back to the host,\nwhich changes the performance character of the loop.\n\nHigher-order differentiation works: the fused step opts into\ngraph-recording backward, so `create_graph=True` through a solve behaves\nexactly as it would for the unfused arithmetic."
+        "A fixed-step solve costs exactly `(len(t) - 1) * method.stages` calls to\n`func`.  An adaptive solve costs as many as the tolerances demand, and\nreads one scalar back to the host per step to decide whether to accept it\n— that host synchronisation is intrinsic to adaptivity, which is why the\ntwo families have different performance characters.\n\nHigher-order differentiation works: the fused step opts into\ngraph-recording backward, so `create_graph=True` through a solve behaves\nexactly as it would for the unfused arithmetic."
       ],
       "attributes": [],
       "warns": [],
@@ -83,10 +105,56 @@
       "class_kind": "dataclass",
       "bases": [],
       "labels": [],
-      "signature": "ButcherTableau(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_tableau.py#L26",
+      "signature": "ButcherTableau(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str, b_error: tuple[float, ...] | None = None, mid: tuple[float, ...] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L38",
       "subcategory": "tableau",
       "methods": [
+        {
+          "name": "is_adaptive",
+          "path": "lucid.diffeq._tableau.ButcherTableau.is_adaptive",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "is_adaptive: bool",
+          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L182",
+          "summary": "bool: Whether the tableau carries an embedded error estimate.",
+          "extended": "Adaptive methods pair two solutions of different order; their weight\ndifference (`b_error`) estimates the local error, which is what a\nstep-size controller needs.  A tableau without it can only be stepped\non a fixed grid.",
+          "parameters": [],
+          "returns": {
+            "annotation": "bool",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "is_fsal",
+          "path": "lucid.diffeq._tableau.ButcherTableau.is_fsal",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "is_fsal: bool",
+          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L193",
+          "summary": "bool: Whether the last stage derivative equals `f(t + dt, y_next)`.",
+          "extended": "True when the final stage row reproduces the solution weights, so the\nstage already evaluated the right-hand side at the new state.  That\nderivative can then be reused as the next step's first stage, saving\none call per accepted step — a real saving when the right-hand side is\na neural network.",
+          "parameters": [],
+          "returns": {
+            "annotation": "bool",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
         {
           "name": "stages",
           "path": "lucid.diffeq._tableau.ButcherTableau.stages",
@@ -95,7 +163,7 @@
             "property"
           ],
           "signature": "stages: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_tableau.py#L133",
+          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L205",
           "summary": "int: Number of stage derivatives evaluated per step.",
           "extended": "Equals the number of right-hand-side calls the method makes for each\nstep, which is the dominant cost when the right-hand side is a neural\nnetwork.",
           "parameters": [],
@@ -115,8 +183,8 @@
           "path": "lucid.diffeq._tableau.ButcherTableau.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/55b6f4959/lucid/diffeq/_tableau.py#L1",
+          "signature": "__init__(a: tuple[tuple[float, ...], ...], b: tuple[float, ...], c: tuple[float, ...], order: int, name: str, b_error: tuple[float, ...] | None = None, mid: tuple[float, ...] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/99ade6924/lucid/diffeq/_tableau.py#L1",
           "subcategory": "tableau",
           "summary": null,
           "extended": null,
@@ -157,7 +225,7 @@
         {
           "name": "order",
           "annotation": "int",
-          "description": "Order of accuracy $p$: halving the step size shrinks the global\nerror by roughly $2^p$.  Used by tests and diagnostics, never by\nthe integration loop itself.",
+          "description": "Order of accuracy $p$: halving the step size shrinks the global\nerror by roughly $2^p$.  Also the exponent the adaptive\ncontroller uses when proposing the next step size.",
           "default": null
         },
         {
@@ -165,6 +233,18 @@
           "annotation": "str",
           "description": "Human-readable method name, surfaced in error messages.",
           "default": null
+        },
+        {
+          "name": "b_error",
+          "annotation": "tuple of float",
+          "description": "Difference between the two embedded solutions' weights,\n$b - \\hat{b}$, one per stage.  Present exactly on the adaptive\nmethods; its presence is what `is_adaptive` reports.  Must sum\nto `0`, since both solutions are consistent.",
+          "default": "None"
+        },
+        {
+          "name": "mid",
+          "annotation": "tuple of float",
+          "description": "Weights producing the state at the midpoint of a step, used to anchor\nthe quartic interpolant that gives dense output.  Required whenever\n`b_error` is given.",
+          "default": "None"
         }
       ],
       "returns": null,
@@ -189,13 +269,38 @@
     }
   ],
   "summary": "lucid.diffeq — differential-equation solvers.",
-  "extended": "Numerical integration of ordinary differential equations, `dy/dt = f(t, y)`,\nwhere the right-hand side is an arbitrary Lucid callable — most often a neural\nnetwork, as in continuous normalising flows, flow matching, and rectified flow.\n\nSurface: `odeint` integrates on a fixed user-supplied grid using an\nexplicit Runge-Kutta method, and `ButcherTableau` is the coefficient\ntable it dispatches on.  The five built-in tableaux — `EULER`,\n`MIDPOINT`, `HEUN2`, `HEUN3`, `RK4` — are also\nexported, and a custom tableau is accepted anywhere a method name is.\n\nEverything here is reached as `lucid.diffeq.*` and nowhere else — there are\nno top-level aliases and no `Tensor` methods, so each name has exactly one\ncanonical path.\n\nAdaptive step control, the O(1)-memory adjoint, and stochastic differential\nequations are not implemented; the fixed-step explicit family is what the flow\nmodel families need, and the rest have materially different performance\ncharacteristics.",
+  "extended": "Numerical integration of ordinary differential equations, `dy/dt = f(t, y)`,\nwhere the right-hand side is an arbitrary Lucid callable — most often a neural\nnetwork, as in continuous normalising flows, flow matching, and rectified flow.\n\nSurface: `odeint` integrates using an explicit Runge-Kutta method, and\n`ButcherTableau` is the coefficient table it dispatches on.  Ten\nbuilt-in tableaux are exported, and a custom tableau is accepted anywhere a\nmethod name is.\n\nThe tableau decides how `t` is read.  An **adaptive** method — the default\n`DOPRI5`, plus `TSIT5`, `BOSH3`, `FEHLBERG2` and\n`ADAPTIVE_HEUN` —\ncarries an embedded error estimate, so it picks its own step sizes to hold the\nerror inside `rtol` / `atol` and interpolates to the times in `t`.  A\n**fixed-step** method — `EULER`, `MIDPOINT`, `HEUN2`,\n`HEUN3`, `RK4` — steps once per interval of `t`, so `t` is the\nintegration grid itself.\n\nEverything here is reached as `lucid.diffeq.*` and nowhere else — there are\nno top-level aliases and no `Tensor` methods, so each name has exactly one\ncanonical path.\n\nThe O(1)-memory adjoint, event handling, implicit methods, and stochastic\ndifferential equations are not implemented yet.",
   "parameters": [],
   "returns": null,
   "raises": [],
   "examples": [],
   "notes": [],
   "attributes": [
+    {
+      "name": "DOPRI5",
+      "annotation": "ButcherTableau",
+      "description": "Dormand-Prince 5(4) — seven stages, adaptive, fifth order.  The default\nmethod.  Method name `\"dopri5\"`."
+    },
+    {
+      "name": "TSIT5",
+      "annotation": "ButcherTableau",
+      "description": "Tsitouras 5(4) — seven stages, adaptive, fifth order.  Method name\n`\"tsit5\"`."
+    },
+    {
+      "name": "BOSH3",
+      "annotation": "ButcherTableau",
+      "description": "Bogacki-Shampine 3(2) — four stages, adaptive, third order.  Method name\n`\"bosh3\"`."
+    },
+    {
+      "name": "FEHLBERG2",
+      "annotation": "ButcherTableau",
+      "description": "Fehlberg 2(1) — three stages, adaptive, second order.  Method name\n`\"fehlberg2\"`."
+    },
+    {
+      "name": "ADAPTIVE_HEUN",
+      "annotation": "ButcherTableau",
+      "description": "Heun-Euler 2(1) — two stages, adaptive, second order.  Method name\n`\"adaptive_heun\"`."
+    },
     {
       "name": "EULER",
       "annotation": "ButcherTableau",

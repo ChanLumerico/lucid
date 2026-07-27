@@ -329,6 +329,7 @@ lucid_object_library(
     ops/complex/Complex.cpp
     ops/complex/Conj.cpp
     ops/diffeq/RkCombine.cpp
+    ops/diffeq/RkErrorNorm.cpp
     nn/Linear.cpp
     nn/Dropout.cpp
     nn/LayerNorm.cpp

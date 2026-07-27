@@ -1,0 +1,155 @@
+"""Thin wrappers over the fused ``_C_engine.diffeq`` primitives.
+
+Both the fixed-grid and the adaptive solver reduce almost all of their tensor
+arithmetic to two engine calls, so the wrappers live here rather than in
+either solver.
+
+Engine ops are strict about dtype — promotion is the Python layer's job,
+exactly as it is for ``Tensor.__add__``.  Getting that wrong is not a corner
+case: under ``autocast`` on Metal the right-hand side returns float16 while
+the state stays float32, and the mismatch is invisible on CPU because
+autocast folds float16 back to float32 there.
+"""
+
+from typing import Sequence
+
+import lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
+from lucid._tensor.tensor import Tensor
+
+__all__: list[str] = []
+
+
+def _promote(terms: Sequence[Tensor]) -> tuple[Tensor, ...]:
+    """Cast a group of tensors to their common dtype.
+
+    Parameters
+    ----------
+    terms : sequence of Tensor
+        Operands about to be handed to a strict engine op.
+
+    Returns
+    -------
+    tuple of Tensor
+        The same tensors, each at the promoted dtype.
+    """
+    target = terms[0].dtype
+    for t in terms[1:]:
+        target = lucid.promote_types(target, t.dtype)
+    return tuple(t if t.dtype == target else t.to(target) for t in terms)
+
+
+def combine(
+    y0: Tensor, ks: Sequence[Tensor], coeffs: Sequence[float], dt: float
+) -> Tensor:
+    """Evaluate ``y0 + dt * sum_i coeffs[i] * ks[i]`` in one fused engine op.
+
+    Parameters
+    ----------
+    y0 : Tensor
+        Base state.
+    ks : sequence of Tensor
+        Stage derivatives, or any tensors being combined affinely.
+    coeffs : sequence of float
+        One host-side weight per entry of ``ks``.
+    dt : float
+        Scale applied to the whole sum.
+
+    Returns
+    -------
+    Tensor
+        The combined tensor, or ``y0`` itself when nothing is added.
+
+    Notes
+    -----
+    An all-zero row contributes nothing, so the engine call is skipped — that
+    covers the first stage of every method, whose tableau row is empty.
+    """
+    if not ks or not any(coeffs):
+        return y0
+    base, *stages = _promote([y0, *ks])
+    return _wrap(
+        _C_engine.diffeq.rk_combine(
+            _unwrap(base), [_unwrap(s) for s in stages], list(coeffs), dt
+        )
+    )
+
+
+def lincomb(terms: Sequence[Tensor], weights: Sequence[float]) -> Tensor:
+    """Evaluate ``sum_i weights[i] * terms[i]`` in one fused engine op.
+
+    Parameters
+    ----------
+    terms : sequence of Tensor
+        Tensors to combine; must be non-empty and share a shape.
+    weights : sequence of float
+        One host-side weight per term.
+
+    Returns
+    -------
+    Tensor
+        The weighted sum.
+
+    Notes
+    -----
+    Routed through the same fused op as :func:`combine` by folding the first
+    term's weight into the base: ``terms[0] + 1 * ((w0 - 1) * terms[0] + ...)``
+    is the requested sum, so the interpolation math costs one engine call per
+    coefficient rather than a chain of multiplies and adds.
+    """
+    return combine(terms[0], list(terms), [weights[0] - 1.0, *weights[1:]], 1.0)
+
+
+def error_ratio(
+    y0: Tensor,
+    y1: Tensor,
+    ks: Sequence[Tensor],
+    coeffs: Sequence[float],
+    dt: float,
+    rtol: float,
+    atol: float,
+) -> float:
+    """Root-mean-square ratio of the embedded error estimate to its tolerance.
+
+    Parameters
+    ----------
+    y0, y1 : Tensor
+        States at the start and the proposed end of the step.
+    ks : sequence of Tensor
+        Stage derivatives of the step.
+    coeffs : sequence of float
+        Embedded-error weights (``b - b_hat``).
+    dt : float
+        Step size.
+    rtol, atol : float
+        Relative and absolute tolerances.
+
+    Returns
+    -------
+    float
+        The error ratio, on the host.  At most ``1`` means accept the step.
+
+    Notes
+    -----
+    The controller has to branch on this value, so it crosses to the host no
+    matter how it is computed; the fused op makes that exactly one
+    synchronisation per step and never materialises the error tensor.
+
+    The engine kernel carries only float32 and float64 — step control is a
+    scalar diagnostic, so a lower-precision state is promoted here instead of
+    the kernel growing a half-precision path.
+    """
+    operands = _promote([y0, y1, *ks])
+    if operands[0].dtype not in (lucid.float32, lucid.float64):
+        operands = tuple(t.to(lucid.float32) for t in operands)
+    base, end, *stages = operands
+    return _C_engine.diffeq.rk_error_norm(
+        _unwrap(base),
+        _unwrap(end),
+        [_unwrap(s) for s in stages],
+        list(coeffs),
+        dt,
+        rtol,
+        atol,
+    )
