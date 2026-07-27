@@ -242,8 +242,7 @@ def test_training_matches_the_reference_over_five_epochs(
     # Accuracy — measured within 0.0005 everywhere, and exactly equal for
     # lenet and vit.  0.01 is 20 of the 2,000 test images.
     assert abs(lucid_acc - ref_acc) < 0.01, (
-        f"final accuracy differs: lucid {lucid_acc:.4f} vs "
-        f"reference {ref_acc:.4f}"
+        f"final accuracy differs: lucid {lucid_acc:.4f} vs " f"reference {ref_acc:.4f}"
     )
 
     # 4. The learning-rate schedule itself, when one is attached.  This is a
@@ -277,9 +276,9 @@ def test_training_matches_the_reference_over_five_epochs(
             continue
         got = np.asarray(buf.numpy(), dtype=np.int64)
         want = np.asarray(ref_buffers[name].numpy(), dtype=np.int64)
-        assert np.array_equal(got, want), (
-            f"{name} differs: lucid {got} vs reference {want}"
-        )
+        assert np.array_equal(
+            got, want
+        ), f"{name} differs: lucid {got} vs reference {want}"
 
 
 def test_batchnorm_running_stats_match_with_weights_frozen(

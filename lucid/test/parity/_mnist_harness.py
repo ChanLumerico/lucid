@@ -289,9 +289,7 @@ def build_ref_vit(ref: ModuleType) -> Any:
         def __init__(self) -> None:
             super().__init__()
             self.patch = nn_ref.Conv2d(1, EMBED_DIM, PATCH, stride=PATCH)
-            self.pos = nn_ref.Parameter(
-                ref.zeros(1, (32 // PATCH) ** 2, EMBED_DIM)
-            )
+            self.pos = nn_ref.Parameter(ref.zeros(1, (32 // PATCH) ** 2, EMBED_DIM))
             self.ln1 = nn_ref.LayerNorm(EMBED_DIM)
             self.attn = nn_ref.MultiheadAttention(
                 EMBED_DIM, NUM_HEADS, batch_first=True
@@ -426,9 +424,9 @@ def train_lucid(
             opt.step()
 
             value = float(loss.item())
-            assert math.isfinite(value), (
-                f"lucid loss became {value} — training is numerically unstable"
-            )
+            assert math.isfinite(
+                value
+            ), f"lucid loss became {value} — training is numerically unstable"
             losses.append(value)
             step_losses.append(value)
         if sched is not None:

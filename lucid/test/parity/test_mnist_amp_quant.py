@@ -145,9 +145,7 @@ def test_grad_scaler_skips_the_step_on_a_non_finite_gradient(
     x = lucid.tensor(np.ones((1, 4), dtype=np.float32), device=device)
     scaler.scale(model(x).sum()).backward()
     for p in model.parameters():
-        p.grad = lucid.tensor(
-            np.full(p.shape, np.inf, dtype=np.float32), device=device
-        )
+        p.grad = lucid.tensor(np.full(p.shape, np.inf, dtype=np.float32), device=device)
 
     scaler.step(opt)
     scaler.update()
@@ -157,9 +155,9 @@ def test_grad_scaler_skips_the_step_on_a_non_finite_gradient(
         "a non-finite gradient reached the parameters — the scaler stepped "
         "when it should have skipped"
     )
-    assert np.array_equal(before, after), (
-        "the scaler applied an update derived from a non-finite gradient"
-    )
+    assert np.array_equal(
+        before, after
+    ), "the scaler applied an update derived from a non-finite gradient"
     assert scaler.get_scale() < 2.0**16, (
         "the scaler did not back off after seeing a non-finite gradient, so "
         "the next step would overflow the same way"
@@ -186,9 +184,9 @@ def test_grad_scaler_keeps_the_scale_when_gradients_are_finite(
     scaler.update()
 
     assert scaler.get_scale() == 2.0**16, "the scale moved on a healthy step"
-    assert not np.array_equal(before, model.weight.numpy()), (
-        "a finite gradient was skipped — the scaler is dropping good updates"
-    )
+    assert not np.array_equal(
+        before, model.weight.numpy()
+    ), "a finite gradient was skipped — the scaler is dropping good updates"
 
 
 def test_amp_training_reaches_float32_quality(
@@ -220,9 +218,9 @@ def test_amp_training_reaches_float32_quality(
     )
 
     assert set(fp32_dtypes) == {lucid.float32}
-    assert lucid.float16 in set(amp_dtypes), (
-        "the AMP run never produced a half-precision activation"
-    )
+    assert lucid.float16 in set(
+        amp_dtypes
+    ), "the AMP run never produced a half-precision activation"
 
     assert all(math.isfinite(v) for v in amp_losses), (
         "AMP training produced a non-finite loss — the scaler failed to keep "
@@ -232,8 +230,7 @@ def test_amp_training_reaches_float32_quality(
         assert np.isfinite(p.numpy()).all(), f"{name} is non-finite after AMP"
 
     assert amp_losses[-1] < 0.35 * amp_losses[0], (
-        f"AMP training did not converge: {amp_losses[0]:.4f} → "
-        f"{amp_losses[-1]:.4f}"
+        f"AMP training did not converge: {amp_losses[0]:.4f} → " f"{amp_losses[-1]:.4f}"
     )
     assert amp_acc > 0.90, f"AMP accuracy {amp_acc:.4f} is too low"
     assert abs(amp_acc - fp32_acc) < 0.02, (
@@ -282,9 +279,7 @@ def _accuracy(model: Any, data: tuple[np.ndarray, ...], device: str) -> float:
     return correct / len(y_te)
 
 
-def test_convert_actually_quantizes(
-    device: str, mnist: tuple[np.ndarray, ...]
-) -> None:
+def test_convert_actually_quantizes(device: str, mnist: tuple[np.ndarray, ...]) -> None:
     """Anti-vacuity check: ``convert`` must really replace the float weights.
 
     A ``convert`` that returned the model untouched would score identically to
