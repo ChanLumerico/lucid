@@ -19,8 +19,8 @@ The tableau decides how ``t`` is read.  An **adaptive** method — the default
 carries an embedded error estimate, so it picks its own step sizes to hold the
 error inside ``rtol`` / ``atol`` and interpolates to the times in ``t``.  A
 **fixed-step** method — :data:`EULER`, :data:`MIDPOINT`, :data:`HEUN2`,
-:data:`HEUN3`, :data:`RK4` — steps once per interval of ``t``, so ``t`` is the
-integration grid itself.
+:data:`HEUN3`, :data:`RK4`, :data:`RK4_CLASSIC` — steps once per interval of
+``t``, so ``t`` is the integration grid itself.
 
 Two further fixed-step families trade a different way.  **Adams multistep** —
 method names ``"explicit_adams"``, ``"implicit_adams"`` and ``"fixed_adams"``,
@@ -66,8 +66,12 @@ HEUN3 : ButcherTableau
     Heun's third-order method — three stages, third order.  Method name
     ``"heun3"``.
 RK4 : ButcherTableau
-    The classical Runge-Kutta method — four stages, fourth order.  Method
-    name ``"rk4"``.
+    Kutta's 3/8 rule — four stages, fourth order.  Method name ``"rk4"``,
+    matching what that name means in the reference ODE library.
+RK4_CLASSIC : ButcherTableau
+    The classical Runge-Kutta method — four stages, fourth order.  Method name
+    ``"rk4_classic"``.  A Lucid extension: the reference has no name for this
+    tableau, but it is what most other sources call "RK4".
 IMPLICIT_EULER : ButcherTableau
     Backward Euler — one stage, first order, implicit.  The most stable
     method here and the least accurate.  Method name ``"implicit_euler"``.
@@ -115,6 +119,7 @@ from lucid.diffeq._tableau import (
     RADAU_IIA3,
     RADAU_IIA5,
     RK4,
+    RK4_CLASSIC,
     SDIRK2,
     TRAPEZOID,
     TRBDF2,
@@ -138,6 +143,7 @@ __all__ = [
     "HEUN2",
     "HEUN3",
     "RK4",
+    "RK4_CLASSIC",
     "IMPLICIT_EULER",
     "IMPLICIT_MIDPOINT",
     "TRAPEZOID",

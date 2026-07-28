@@ -16,6 +16,7 @@ METHOD_ORDERS = [
     ("heun2", 2),
     ("heun3", 3),
     ("rk4", 4),
+    ("rk4_classic", 4),
 ]
 
 
@@ -40,15 +41,22 @@ class TestButcherTableau:
         assert diffeq.HEUN2.stages == 2
         assert diffeq.HEUN3.stages == 3
         assert diffeq.RK4.stages == 4
+        assert diffeq.RK4_CLASSIC.stages == 4
 
     def test_builtin_orders(self) -> None:
         tableaux = (diffeq.EULER, diffeq.MIDPOINT, diffeq.HEUN2, diffeq.HEUN3)
         assert [t.order for t in tableaux] == [1, 2, 2, 3]
         assert diffeq.RK4.order == 4
+        assert diffeq.RK4_CLASSIC.order == 4
 
     def test_registry_names_match_the_reference_library(self) -> None:
         # Method-name strings are exposed API, so they track the reference
         # ODE library exactly: it has heun2 / heun3 and no bare "heun".
+        #
+        # "rk4_classic" is the one deliberate addition.  The reference gives
+        # "rk4" to the 3/8 rule and has no name at all for the classical
+        # tableau, so keeping the classical one reachable needs a name the
+        # reference does not define.  See test_rk4_is_the_reference_spelling.
         assert sorted(_METHODS) == [
             "adaptive_heun",
             "bosh3",
@@ -65,6 +73,7 @@ class TestButcherTableau:
             "radauIIA3",
             "radauIIA5",
             "rk4",
+            "rk4_classic",
             "sdirk2",
             "trapezoid",
             "trbdf2",
@@ -72,6 +81,40 @@ class TestButcherTableau:
         ]
         for name, tableau in _METHODS.items():
             assert tableau.name == name
+
+    def test_rk4_is_the_reference_spelling_not_the_textbook_one(self) -> None:
+        # Two different fourth-order methods share the popular name.  The
+        # reference ODE library resolves "rk4" to Kutta's 3/8 rule, so Lucid
+        # does too -- a method name is exposed API, and code ported across has
+        # to produce the same numbers.  Both are fourth order, so an order
+        # convergence test cannot tell them apart; only the coefficients can.
+        assert diffeq.RK4.b == (1 / 8, 3 / 8, 3 / 8, 1 / 8)
+        assert diffeq.RK4.c == (0.0, 1 / 3, 2 / 3, 1.0)
+        assert diffeq.RK4.a == ((), (1 / 3,), (-1 / 3, 1.0), (1.0, -1.0, 1.0))
+
+        assert diffeq.RK4_CLASSIC.b == (1 / 6, 1 / 3, 1 / 3, 1 / 6)
+        assert diffeq.RK4_CLASSIC.c == (0.0, 0.5, 0.5, 1.0)
+        assert diffeq.RK4_CLASSIC.a == ((), (0.5,), (0.0, 0.5), (0.0, 0.0, 1.0))
+
+    def test_the_two_rk4_tableaux_actually_disagree(self) -> None:
+        # Guards against a future edit quietly making them the same tableau,
+        # which would leave both names but lose the distinction they encode.
+        #
+        # The problem has to be non-autonomous or nonlinear.  On y' = -y every
+        # four-stage fourth-order explicit method collapses to the same
+        # stability polynomial 1 + z + z^2/2 + z^3/6 + z^4/24, so the two
+        # tableaux agree to round-off there and the guard would never fire.
+        def rhs(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            return -y + lucid.sin(t)
+
+        y0 = lucid.tensor([1.0, -2.0], dtype=lucid.float64)
+        args = dict(return_trajectory=False)
+        a = diffeq.odeint(rhs, y0, _grid(8), method="rk4", **args)
+        b = diffeq.odeint(rhs, y0, _grid(8), method="rk4_classic", **args)
+        # Same order, so they agree to about the fifth-order term and no more.
+        gap = _maxdiff(a, b)
+        assert gap > 1e-12, "the two rk4 tableaux collapsed into one"
+        assert gap < 1e-4, "these should still be two fourth-order methods"
 
     def test_heun3_coefficients(self) -> None:
         assert diffeq.HEUN3.a == ((), (1 / 3,), (0.0, 2 / 3))
@@ -372,6 +415,10 @@ class TestDtypeAndDevice:
 
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         diffeq.odeint(rhs, y0, [0.0, 1.0], method="rk4")
+        assert times == pytest.approx([0.0, 1 / 3, 2 / 3, 1.0])
+
+        times.clear()
+        diffeq.odeint(rhs, y0, [0.0, 1.0], method="rk4_classic")
         assert times == pytest.approx([0.0, 0.5, 0.5, 1.0])
 
     def test_mixed_dtype_rhs_is_promoted(self) -> None:

@@ -332,7 +332,8 @@ def odeint(
     sizes to hold the local error inside ``rtol`` / ``atol`` and interpolates
     to each requested time, so a coarse ``t`` costs nothing in accuracy.
 
-    **Fixed step** (``euler`` / ``midpoint`` / ``heun2`` / ``heun3`` / ``rk4``)
+    **Fixed step** (``euler`` / ``midpoint`` / ``heun2`` / ``heun3`` / ``rk4``
+    / ``rk4_classic``)
     treats ``t`` as the integration grid itself by default: consecutive
     entries are one step each, with no sub-stepping and no interpolation.
     ``rtol`` / ``atol`` are unused there, and accuracy is controlled by
@@ -370,6 +371,7 @@ def odeint(
         ``None`` selects ``"dopri5"``.  Otherwise one of ``"dopri5"``,
         ``"tsit5"``, ``"bosh3"``, ``"fehlberg2"``, ``"adaptive_heun"``,
         ``"euler"``, ``"midpoint"``, ``"heun2"``, ``"heun3"``, ``"rk4"``,
+        ``"rk4_classic"``,
         ``"explicit_adams"``, ``"implicit_adams"``, ``"fixed_adams"``,
         ``"implicit_euler"``, ``"implicit_midpoint"``, ``"trapezoid"``,
         ``"radauIIA3"``, ``"radauIIA5"``, ``"gl4"``, ``"gl6"``, ``"sdirk2"``,

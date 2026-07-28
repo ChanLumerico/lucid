@@ -25,6 +25,7 @@ __all__ = [
     "HEUN2",
     "HEUN3",
     "RK4",
+    "RK4_CLASSIC",
     "ADAPTIVE_HEUN",
     "FEHLBERG2",
     "BOSH3",
@@ -292,13 +293,37 @@ HEUN3 = ButcherTableau(
 """ButcherTableau: Heun's third-order method — three stages, third order."""
 
 RK4 = ButcherTableau(
+    a=((), (1.0 / 3.0,), (-1.0 / 3.0, 1.0), (1.0, -1.0, 1.0)),
+    b=(0.125, 0.375, 0.375, 0.125),
+    c=(0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0),
+    order=4,
+    name="rk4",
+)
+"""ButcherTableau: Kutta's 3/8 rule — four stages, fourth order.
+
+This is what ``"rk4"`` resolves to, because it is what the reference ODE
+library's ``"rk4"`` resolves to and a method name is exposed API: code ported
+across should produce the same numbers.  For the textbook method that the name
+more often denotes elsewhere, ask for :data:`RK4_CLASSIC`.
+
+Both are fourth order, so no convergence-order test can tell them apart — only
+a direct value comparison can, and the two disagree at the fifth-order term
+(about 2e-7 relative on a smooth problem at a step of 1/32).
+"""
+
+RK4_CLASSIC = ButcherTableau(
     a=((), (0.5,), (0.0, 0.5), (0.0, 0.0, 1.0)),
     b=(1.0 / 6.0, 1.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0),
     c=(0.0, 0.5, 0.5, 1.0),
     order=4,
-    name="rk4",
+    name="rk4_classic",
 )
-"""ButcherTableau: The classical Runge-Kutta method — four stages, fourth order."""
+"""ButcherTableau: The classical Runge-Kutta method — four stages, fourth order.
+
+A Lucid extension: the reference ODE library has no method name for this
+tableau, having given ``"rk4"`` to :data:`RK4` instead.  It is kept reachable
+because this is the method almost every other source means by "RK4".
+"""
 
 
 # ── Adaptive (embedded) pairs ────────────────────────────────────────────────
@@ -568,6 +593,7 @@ _METHODS: dict[str, ButcherTableau] = {
     HEUN2.name: HEUN2,
     HEUN3.name: HEUN3,
     RK4.name: RK4,
+    RK4_CLASSIC.name: RK4_CLASSIC,
     ADAPTIVE_HEUN.name: ADAPTIVE_HEUN,
     FEHLBERG2.name: FEHLBERG2,
     BOSH3.name: BOSH3,
