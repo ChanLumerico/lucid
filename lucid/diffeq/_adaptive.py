@@ -501,7 +501,9 @@ class Stepper:
             for stage in range(1, tableau.stages):
                 stage_y = _fused.combine(self.y, ks, tableau.a[stage], dt)
                 stage_t = self._scalar(self.t + tableau.c[stage] * dt)
-                ks.append(self._check(self._func(stage_t, stage_y), self.accepted, stage))
+                ks.append(
+                    self._check(self._func(stage_t, stage_y), self.accepted, stage)
+                )
 
             y_next = _fused.combine(self.y, ks, tableau.b, dt)
             assert tableau.b_error is not None
@@ -546,8 +548,14 @@ class Stepper:
                 )
 
             step = Step(
-                t0=self.t, t1=t_next, dt=dt, y0=self.y, y1=y_next,
-                f0=self.f, f1=f_next, ks=ks,
+                t0=self.t,
+                t1=t_next,
+                dt=dt,
+                y0=self.y,
+                y1=y_next,
+                f0=self.f,
+                f1=f_next,
+                ks=ks,
             )
             self.t, self.y, self.f = t_next, y_next, f_next
             self.step = proposed

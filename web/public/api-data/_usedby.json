@@ -748,6 +748,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._event"
+    },
+    {
+      "kind": "module",
       "module": "lucid.diffeq._fixed"
     },
     {
@@ -777,6 +781,12 @@
       "module": "lucid.diffeq"
     }
   ],
+  "lucid.diffeq._solvers.odeint_event": [
+    {
+      "kind": "module",
+      "module": "lucid.diffeq"
+    }
+  ],
   "lucid.diffeq._tableau.ButcherTableau": [
     {
       "kind": "module",
@@ -789,6 +799,10 @@
     {
       "kind": "module",
       "module": "lucid.diffeq._adjoint"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._event"
     },
     {
       "kind": "module",

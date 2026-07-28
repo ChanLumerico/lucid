@@ -18,7 +18,6 @@ from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _fused
 from lucid.diffeq._tableau import ButcherTableau
 
-
 __all__: list[str] = []
 
 
@@ -155,7 +154,9 @@ def build_grid(
         if isinstance(built, Tensor):
             grid = [float(v) for v in cast(list[SupportsFloat], built.tolist())]
         else:
-            grid = [float(cast(SupportsFloat, v)) for v in cast(Sequence[object], built)]
+            grid = [
+                float(cast(SupportsFloat, v)) for v in cast(Sequence[object], built)
+            ]
         if len(grid) < 2 or grid[0] != t[0] or grid[-1] != t[-1]:
             raise ValueError(
                 f"grid_constructor must return a grid spanning t[0]..t[-1] "
@@ -316,9 +317,7 @@ def integrate(
             (grid[target_index] - t1) * (1.0 if dt > 0 else -1.0) <= 0.0
         ):
             if return_trajectory:
-                trajectory.append(
-                    _interp_evaluate(coeffs, t0, t1, grid[target_index])
-                )
+                trajectory.append(_interp_evaluate(coeffs, t0, t1, grid[target_index]))
             target_index += 1
         y = y_next
 

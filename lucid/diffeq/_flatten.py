@@ -13,7 +13,6 @@ from typing import Sequence
 import lucid
 from lucid._tensor.tensor import Tensor
 
-
 __all__: list[str] = []
 
 

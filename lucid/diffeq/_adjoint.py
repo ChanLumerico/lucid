@@ -32,7 +32,6 @@ from lucid.diffeq import _flatten
 from lucid.diffeq._solvers import _resolve_grid, _resolve_method, odeint
 from lucid.diffeq._tableau import ButcherTableau
 
-
 __all__ = ["odeint_adjoint"]
 
 
@@ -165,14 +164,19 @@ class _AdjointSolve(Function):
         """Integrate the trajectory with gradient tracking switched off."""
         ctx.config = config
         with lucid.no_grad():
-            ys = odeint(
-                config.func,
-                y0,
-                config.grid,
-                rtol=config.rtol,
-                atol=config.atol,
-                method=config.method,
-                options=config.options,
+            # ``odeint`` only returns a pair when given an ``event_fn``, which
+            # the adjoint never does.
+            ys = cast(
+                Tensor,
+                odeint(
+                    config.func,
+                    y0,
+                    config.grid,
+                    rtol=config.rtol,
+                    atol=config.atol,
+                    method=config.method,
+                    options=config.options,
+                ),
             )
         # The trajectory is saved detached — holding the returned tensor
         # itself would make the context and the graph node reference each
@@ -211,15 +215,18 @@ class _AdjointSolve(Function):
         for index in range(len(grid) - 1, 0, -1):
             adjoint = adjoint + grad_ys[index]
             aug0 = _flatten.flatten([ys[index], adjoint, *grads])
-            aug1 = odeint(
-                dynamics,
-                aug0,
-                [grid[index], grid[index - 1]],
-                rtol=cfg.adjoint_rtol,
-                atol=cfg.adjoint_atol,
-                method=cfg.adjoint_method,
-                options=cfg.adjoint_options,
-                return_trajectory=False,
+            aug1 = cast(
+                Tensor,
+                odeint(
+                    dynamics,
+                    aug0,
+                    [grid[index], grid[index - 1]],
+                    rtol=cfg.adjoint_rtol,
+                    atol=cfg.adjoint_atol,
+                    method=cfg.adjoint_method,
+                    options=cfg.adjoint_options,
+                    return_trajectory=False,
+                ),
             )
             pieces = _flatten.unflatten(aug1, shapes)
             adjoint = pieces[1]

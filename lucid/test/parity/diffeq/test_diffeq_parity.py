@@ -236,7 +236,13 @@ class TestFusedPrimitiveParity:
         dt, rtol, atol = 0.037, 1e-5, 1e-8
 
         got = _fused.error_ratio(
-            lucid_ts[0], lucid_ts[1], lucid_ts[2 : 2 + n][:n], tableau.b_error[:n], dt, rtol, atol
+            lucid_ts[0],
+            lucid_ts[1],
+            lucid_ts[2 : 2 + n][:n],
+            tableau.b_error[:n],
+            dt,
+            rtol,
+            atol,
         )
 
         y0, y1 = ref_ts[0], ref_ts[1]
@@ -278,7 +284,9 @@ class TestFusedPrimitiveParity:
         coeffs = _adaptive.interp_fit(y0, y1, y_mid, f0, f1, 0.25)
         assert_close(_adaptive.interp_evaluate(coeffs, 0.0, 1.0, 0.0), y0, atol=1e-12)
         assert_close(_adaptive.interp_evaluate(coeffs, 0.0, 1.0, 1.0), y1, atol=1e-12)
-        assert_close(_adaptive.interp_evaluate(coeffs, 0.0, 1.0, 0.5), y_mid, atol=1e-12)
+        assert_close(
+            _adaptive.interp_evaluate(coeffs, 0.0, 1.0, 0.5), y_mid, atol=1e-12
+        )
 
 
 @pytest.mark.parity
@@ -305,9 +313,8 @@ class TestAdaptiveAgreement:
             return_trajectory=False,
         )
         rt = ref.tensor(t1, dtype=ref.float64)
-        want = (
-            (ref.tensor(y0_val, dtype=ref.float64) + 0.5) * ref.exp(-rt)
-            + 0.5 * (ref.sin(rt) - ref.cos(rt))
+        want = (ref.tensor(y0_val, dtype=ref.float64) + 0.5) * ref.exp(-rt) + 0.5 * (
+            ref.sin(rt) - ref.cos(rt)
         )
         assert float(got.item()) == pytest.approx(float(want), abs=want_tol)
 
@@ -322,11 +329,19 @@ class TestAdaptiveAgreement:
 
         rtol, atol, want_tol = ADAPTIVE_TOL[method]
         adaptive = diffeq.odeint(
-            rhs, y0, [0.0, 1.0], method=method, rtol=rtol, atol=atol,
+            rhs,
+            y0,
+            [0.0, 1.0],
+            method=method,
+            rtol=rtol,
+            atol=atol,
             return_trajectory=False,
         )
         fixed = diffeq.odeint(
-            rhs, y0, [i / 512 for i in range(513)], method="rk4",
+            rhs,
+            y0,
+            [i / 512 for i in range(513)],
+            method="rk4",
             return_trajectory=False,
         )
         assert_close(adaptive, fixed, atol=want_tol, rtol=want_tol * 10)
@@ -344,8 +359,13 @@ class TestOdeintDenseParity:
         y0_val = 0.75
         y0 = lucid.tensor([y0_val], dtype=lucid.float64)
         dense = diffeq.odeint_dense(
-            lambda t, y: -y + lucid.sin(t), y0, 0.0, 1.3,
-            method=method, rtol=rtol, atol=atol,
+            lambda t, y: -y + lucid.sin(t),
+            y0,
+            0.0,
+            1.3,
+            method=method,
+            rtol=rtol,
+            atol=atol,
         )
         # A time inside a step carries the interpolant's error on top of the
         # solver's, and the two are not always comparable: measured here,
@@ -356,9 +376,9 @@ class TestOdeintDenseParity:
         for frac in (0.0, 0.25, 0.5, 0.75, 1.0):
             t = 1.3 * frac
             rt = ref.tensor(t, dtype=ref.float64)
-            want = (ref.tensor(y0_val, dtype=ref.float64) + 0.5) * ref.exp(-rt) + 0.5 * (
-                ref.sin(rt) - ref.cos(rt)
-            )
+            want = (ref.tensor(y0_val, dtype=ref.float64) + 0.5) * ref.exp(
+                -rt
+            ) + 0.5 * (ref.sin(rt) - ref.cos(rt))
             assert float(dense(t).item()) == pytest.approx(
                 float(want), abs=interior_tol
             )
@@ -381,12 +401,14 @@ class TestOdeintDenseParity:
         y0 = lucid.tensor([1.0, -2.0], dtype=lucid.float64)
         rhs = lambda t, y: -y + lucid.sin(t)  # noqa: E731
         dense = diffeq.odeint_dense(
-            rhs, y0, 0.0, 1.0, method="rk4",
+            rhs,
+            y0,
+            0.0,
+            1.0,
+            method="rk4",
             options={"step_size": 1 / 64, "interp": "cubic"},
         )
-        fine = diffeq.odeint(
-            rhs, y0, [i / 1024 for i in range(1025)], method="rk4"
-        )
+        fine = diffeq.odeint(rhs, y0, [i / 1024 for i in range(1025)], method="rk4")
         for i in (0, 256, 512, 1024):
             assert_close(dense(i / 1024), fine[i], atol=1e-9, rtol=1e-8)
 
@@ -407,8 +429,13 @@ class TestAdjointParity:
             solve = diffeq.odeint_adjoint if adjoint else diffeq.odeint
             extra = {"adjoint_params": [k]} if adjoint else {}
             ys = solve(
-                lambda t, y: -k * y + lucid.sin(t), y0, grid,
-                method=method, rtol=1e-12, atol=1e-14, **extra,
+                lambda t, y: -k * y + lucid.sin(t),
+                y0,
+                grid,
+                method=method,
+                rtol=1e-12,
+                atol=1e-14,
+                **extra,
             )
             (ys * ys).sum().backward()
             assert y0.grad is not None and k.grad is not None
@@ -430,9 +457,68 @@ class TestAdjointParity:
         k = lucid.tensor([k_val], dtype=lucid.float64, requires_grad=True)
         y0 = lucid.tensor([y0_val], dtype=lucid.float64, requires_grad=True)
         diffeq.odeint_adjoint(
-            lambda t, y: -k * y, y0, [0.0, horizon],
-            rtol=1e-12, atol=1e-14, adjoint_params=[k],
+            lambda t, y: -k * y,
+            y0,
+            [0.0, horizon],
+            rtol=1e-12,
+            atol=1e-14,
+            adjoint_params=[k],
         )[-1].sum().backward()
 
         assert float(y0.grad.item()) == pytest.approx(float(ry0.grad), abs=1e-8)
         assert float(k.grad.item()) == pytest.approx(float(rk.grad), abs=1e-8)
+
+
+@pytest.mark.parity
+class TestEventParity:
+    """Event times must match the closed forms, computed independently."""
+
+    # Only the methods whose midpoint weights are accurate.  bosh3,
+    # fehlberg2 and adaptive_heun carry first-order ``mid`` coefficients, so
+    # their interpolant — and therefore any event time read off it — is far
+    # coarser than their steps.  Pinned by
+    # TestInterpolantQuality::test_midpoint_accuracy_varies_by_tableau.
+    @pytest.mark.parametrize("method", ["dopri5", "tsit5"])
+    def test_free_fall_impact_time(self, method: str, ref: Any) -> None:
+        # Height h(t) = h0 - g t^2 / 2 reaches zero at sqrt(2 h0 / g).
+        h0, g = 12.5, 9.8
+        y0 = lucid.tensor([h0, 0.0], dtype=lucid.float64)
+
+        def fall(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            return lucid.stack([y[1], lucid.tensor(-g, dtype=y.dtype)], dim=0)
+
+        event_t, sol = diffeq.odeint_event(
+            fall, y0, 0.0, event_fn=lambda t, y: y[0],
+            method=method, rtol=1e-12, atol=1e-14,
+        )
+        want = ref.sqrt(ref.tensor(2 * h0 / g, dtype=ref.float64))
+        assert float(event_t.item()) == pytest.approx(float(want), abs=1e-7)
+        # Impact speed is g * t_event.
+        assert sol[-1].tolist()[1] == pytest.approx(-g * float(want), abs=1e-6)
+
+    def test_threshold_crossing_on_exponential_decay(self, ref: Any) -> None:
+        # y = y0 exp(-t) crosses a threshold c at t = ln(y0 / c).
+        y0_val, threshold = 3.0, 0.4
+        y0 = lucid.tensor([y0_val], dtype=lucid.float64)
+        event_t, sol = diffeq.odeint_event(
+            lambda t, y: -y, y0, 0.0,
+            event_fn=lambda t, y: y[0] - threshold, rtol=1e-12, atol=1e-14,
+        )
+        want = ref.log(ref.tensor(y0_val / threshold, dtype=ref.float64))
+        assert float(event_t.item()) == pytest.approx(float(want), abs=1e-9)
+        assert sol[-1].tolist()[0] == pytest.approx(threshold, abs=1e-9)
+
+    def test_state_at_the_event_matches_odeint_at_that_time(self, ref: Any) -> None:
+        # Solving to the discovered event time by the ordinary path must give
+        # the same state — the interpolant is not allowed to drift from it.
+        y0 = lucid.tensor([2.0, -1.0], dtype=lucid.float64)
+        rhs = lambda t, y: -y + lucid.sin(t)  # noqa: E731
+        event_t, sol = diffeq.odeint_event(
+            rhs, y0, 0.0, event_fn=lambda t, y: y[0] - 0.9,
+            rtol=1e-12, atol=1e-14,
+        )
+        direct = diffeq.odeint(
+            rhs, y0, [0.0, float(event_t.item())], rtol=1e-12, atol=1e-14,
+            return_trajectory=False,
+        )
+        assert_close(sol[-1], direct, atol=1e-9)

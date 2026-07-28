@@ -94,7 +94,7 @@ class TestGradStillCorrect:
     def test_interior_tensor(self) -> None:
         x = lucid.tensor([2.0], dtype=lucid.float64, requires_grad=True)
         mid = x * 3
-        (g_mid, g_x) = lucid.autograd.grad((mid * mid).sum(), [mid, x])
+        g_mid, g_x = lucid.autograd.grad((mid * mid).sum(), [mid, x])
         assert g_mid.tolist() == pytest.approx([12.0])  # type: ignore[union-attr]
         assert g_x.tolist() == pytest.approx([36.0])  # type: ignore[union-attr]
 

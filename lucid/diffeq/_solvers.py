@@ -23,14 +23,14 @@ from typing import Callable, Sequence, SupportsFloat, cast
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.diffeq import _adaptive, _fixed, _fused
+from lucid.diffeq import _adaptive, _event, _fixed, _fused
 from lucid.diffeq._tableau import ButcherTableau, _DEFAULT_METHOD, _METHODS
 
 # The fixed-grid loop and the tests both reach for this; it is the fused
 # stage combination that every explicit method reduces to.
 _combine = _fused.combine
 
-__all__ = ["odeint", "odeint_dense"]
+__all__ = ["odeint", "odeint_dense", "odeint_event"]
 
 
 def _resolve_method(method: str | ButcherTableau | None) -> ButcherTableau:
@@ -181,8 +181,9 @@ def odeint(
     atol: float = 1e-9,
     method: str | ButcherTableau | None = None,
     options: dict[str, object] | None = None,
+    event_fn: Callable[[Tensor, Tensor], Tensor] | None = None,
     return_trajectory: bool = True,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""Integrate ``dy/dt = f(t, y)`` with an explicit Runge-Kutta method.
 
     Two families are reachable through the same call, and which one runs
@@ -233,20 +234,31 @@ def odeint(
         ``step_size``, ``grid_constructor``, ``interp`` and ``perturb`` —
         giving either of the first two decouples the integration grid from
         ``t``, which is then reached by interpolation.
+    event_fn : callable or None, default=None
+        ``g(t, y)`` returning a single-element tensor.  When given, the solve
+        ignores every entry of ``t`` but the first, runs until ``g`` changes
+        sign, and returns a ``(event_t, solution)`` pair instead of a
+        trajectory.  The direction of ``t`` still decides which way it
+        searches.
     return_trajectory : bool, default=True
         Return the state at every time in ``t``.  Set ``False`` to keep only
         the final state — for a sampling run of many steps over a batch of
         images, stacking the full trajectory multiplies peak memory by the
-        number of steps.  **Lucid extension**, not part of the reference
-        interface.
+        number of steps.  Ignored when ``event_fn`` is given.  **Lucid
+        extension**, not part of the reference interface.
 
     Returns
     -------
-    Tensor
-        Shape ``(len(t), *y0.shape)`` when ``return_trajectory`` is ``True``
-        (index 0 is ``y0`` itself), otherwise ``y0.shape``.  The dtype is the
-        promotion of ``y0`` with everything ``func`` returns, matching what
-        ``y + dt * k`` would produce.
+    Tensor or tuple
+        Without ``event_fn``: shape ``(len(t), *y0.shape)`` when
+        ``return_trajectory`` is ``True`` (index 0 is ``y0`` itself),
+        otherwise ``y0.shape``.  The dtype is the promotion of ``y0`` with
+        everything ``func`` returns, matching what ``y + dt * k`` would
+        produce.
+
+        With ``event_fn``: a ``(event_t, solution)`` pair, where ``event_t``
+        is a 0-D tensor and ``solution`` has shape ``(2, *y0.shape)`` — the
+        state at ``t[0]`` and the state at the event.
 
     Raises
     ------
@@ -298,6 +310,23 @@ def odeint(
         )
 
     scalar, check = _make_callbacks(y0)
+
+    if event_fn is not None:
+        direction = 1.0 if grid[-1] > grid[0] else -1.0
+        event_t, y_event = _event.integrate_until_event(
+            func,
+            y0,
+            grid[0],
+            event_fn,
+            tableau,
+            scalar,
+            check,
+            rtol=rtol,
+            atol=atol,
+            options=options,
+            direction=direction,
+        )
+        return scalar(event_t), _event.solution_pair(y0, y_event)
 
     if tableau.is_adaptive:
         y, trajectory = _adaptive.integrate(
@@ -429,8 +458,16 @@ def odeint_dense(
 
     if tableau.is_adaptive:
         segments = _adaptive.integrate_dense(
-            func, y0, t0, t1, tableau, scalar, check,
-            rtol=rtol, atol=atol, options=options,
+            func,
+            y0,
+            t0,
+            t1,
+            tableau,
+            scalar,
+            check,
+            rtol=rtol,
+            atol=atol,
+            options=options,
         )
     else:
         segments = _fixed.integrate_dense(
@@ -458,3 +495,91 @@ def odeint_dense(
         return _fused.poly_eval(coeffs, seg_t0, seg_t1, value)
 
     return dense
+
+
+def odeint_event(
+    func: Callable[[Tensor, Tensor], Tensor],
+    y0: Tensor,
+    t0: float | Tensor,
+    *,
+    event_fn: Callable[[Tensor, Tensor], Tensor],
+    reverse_time: bool = False,
+    odeint_interface: Callable[..., object] = odeint,
+    **kwargs: object,
+) -> tuple[Tensor, Tensor]:
+    r"""Integrate from ``t0`` until an event fires.
+
+    The convenience form of ``odeint(..., event_fn=...)`` for the common case
+    where there is no output grid at all — you have a starting time and a
+    condition, and want to know when the condition is met.
+
+    Parameters
+    ----------
+    func : callable
+        Right-hand side ``f(t, y) -> dy/dt``.
+    y0 : Tensor
+        Initial state at ``t0``.
+    t0 : float or Tensor
+        Start time.
+    event_fn : callable
+        ``g(t, y)`` returning a single-element tensor.  The solve ends the
+        moment its sign changes; a value of exactly zero at ``t0`` fires
+        immediately.
+    reverse_time : bool, default=False
+        Search backwards in time instead of forwards.
+    odeint_interface : callable, default=:func:`odeint`
+        Solver to delegate to.  Pass :func:`odeint_adjoint` to get the event
+        solve at constant memory.
+    **kwargs
+        Forwarded to ``odeint_interface`` — ``rtol``, ``atol``, ``method``,
+        ``options``.
+
+    Returns
+    -------
+    tuple
+        ``(event_t, solution)``; ``event_t`` is a 0-D tensor and
+        ``solution`` has shape ``(2, *y0.shape)`` — the state at ``t0`` and
+        the state at the event.
+
+    Raises
+    ------
+    ValueError
+        If a fixed-step method is used without ``options["step_size"]``, or
+        if ``event_fn`` does not return a single-element tensor.
+    RuntimeError
+        If no sign change is found within the step budget.
+
+    Notes
+    -----
+    The event time itself is located by bisecting the interpolant of the
+    step that brackets it, so it costs event-function calls but no extra
+    right-hand-side evaluations.
+
+    ``event_t`` carries no gradient.  Making it differentiable needs the
+    implicit-function rerouting the reference implementation applies, which
+    is not implemented here; ``solution`` is differentiable as usual.
+
+    Examples
+    --------
+    A body falling from rest hits the ground at :math:`\sqrt{2h/g}`:
+
+    >>> import lucid, lucid.diffeq as diffeq
+    >>> y0 = lucid.tensor([10.0, 0.0], dtype=lucid.float64)  # height, velocity
+    >>> def fall(t, y):
+    ...     return lucid.stack([y[1], lucid.tensor(-9.8, dtype=y.dtype)], dim=0)
+    >>> event_t, sol = diffeq.odeint_event(
+    ...     fall, y0, 0.0, event_fn=lambda t, y: y[0]
+    ... )
+    >>> abs(float(event_t.item()) - (2 * 10.0 / 9.8) ** 0.5) < 1e-6
+    True
+
+    See Also
+    --------
+    lucid.diffeq.odeint : Takes ``event_fn`` directly alongside an output grid.
+    """
+    start = float(t0.item()) if isinstance(t0, Tensor) else float(t0)
+    # Only the first entry is read; the second exists to state the search
+    # direction, which is the one thing the grid still carries.
+    grid = [start, start - 1.0] if reverse_time else [start, start + 1.0]
+    result = odeint_interface(func, y0, grid, event_fn=event_fn, **kwargs)
+    return cast(tuple[Tensor, Tensor], result)
