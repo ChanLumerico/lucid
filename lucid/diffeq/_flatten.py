@@ -8,7 +8,7 @@ one vector, integrate that, split it back.
 """
 
 import math
-from typing import Sequence
+from typing import Callable, Sequence
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -93,3 +93,140 @@ def unflatten(flat: Tensor, shapes: Sequence[tuple[int, ...]]) -> list[Tensor]:
         pieces.append(flat[offset : offset + size].reshape(*shape))
         offset += size
     return pieces
+
+
+def unflatten_rows(flat: Tensor, shapes: Sequence[tuple[int, ...]]) -> list[Tensor]:
+    """Split every row of a stacked flat state back into its parts.
+
+    Parameters
+    ----------
+    flat : Tensor
+        Shape ``(n, total)`` — one flattened state per row.
+    shapes : sequence of tuple of int
+        The shapes each row is composed of.
+
+    Returns
+    -------
+    list of Tensor
+        One tensor of shape ``(n, *shape)`` per entry of ``shapes``.
+
+    Notes
+    -----
+    The trajectory counterpart of :func:`unflatten`: a solve over a tuple
+    state is run flat and split back once at the end, so the split happens
+    per component rather than per time point.
+    """
+    rows = flat.shape[0]
+    pieces: list[Tensor] = []
+    offset = 0
+    for shape in shapes:
+        size = math.prod(shape)
+        pieces.append(flat[:, offset : offset + size].reshape(rows, *shape))
+        offset += size
+    return pieces
+
+
+def wrap_rhs(
+    func: Callable[[Tensor, tuple[Tensor, ...]], Sequence[Tensor]],
+    shapes: Sequence[tuple[int, ...]],
+) -> Callable[[Tensor, Tensor], Tensor]:
+    """Adapt a tuple-valued right-hand side to the flat state the solver uses.
+
+    Parameters
+    ----------
+    func : callable
+        ``f(t, y_tuple) -> derivative tuple``, the caller's own signature.
+    shapes : sequence of tuple of int
+        Component shapes of the state.
+
+    Returns
+    -------
+    callable
+        ``f(t, y_flat) -> dy_flat``.
+
+    Raises
+    ------
+    TypeError
+        If ``func`` does not return a sequence of tensors.
+    ValueError
+        If it returns the wrong number of components.
+    """
+
+    def flat_func(t: Tensor, y: Tensor) -> Tensor:
+        parts = func(t, tuple(unflatten(y, shapes)))
+        if isinstance(parts, Tensor) or not isinstance(parts, (list, tuple)):
+            raise TypeError(
+                f"func must return a tuple of tensors when y0 is a tuple, "
+                f"got {type(parts).__name__}"
+            )
+        if len(parts) != len(shapes):
+            raise ValueError(
+                f"func returned {len(parts)} components but y0 has "
+                f"{len(shapes)}"
+            )
+        return flatten(list(parts))
+
+    return flat_func
+
+
+def wrap_event(
+    event_fn: Callable[[Tensor, tuple[Tensor, ...]], Tensor],
+    shapes: Sequence[tuple[int, ...]],
+) -> Callable[[Tensor, Tensor], Tensor]:
+    """Adapt a tuple-valued event function to the flat state.
+
+    Parameters
+    ----------
+    event_fn : callable
+        ``g(t, y_tuple) -> scalar tensor``.
+    shapes : sequence of tuple of int
+        Component shapes of the state.
+
+    Returns
+    -------
+    callable
+        ``g(t, y_flat) -> scalar tensor``.
+
+    Notes
+    -----
+    Only the input is adapted — the event value is a scalar either way.
+    """
+
+    def flat_event(t: Tensor, y: Tensor) -> Tensor:
+        return event_fn(t, tuple(unflatten(y, shapes)))
+
+    return flat_event
+
+
+def check_state(y0: object) -> tuple[Tensor, ...]:
+    """Validate a tuple state and return it as a tuple of tensors.
+
+    Parameters
+    ----------
+    y0 : object
+        The caller's initial state, already known not to be a tensor.
+
+    Returns
+    -------
+    tuple of Tensor
+        The validated components.
+
+    Raises
+    ------
+    TypeError
+        If ``y0`` is not a tuple or list of tensors.
+    ValueError
+        If it is empty.
+    """
+    if not isinstance(y0, (tuple, list)):
+        raise TypeError(
+            f"y0 must be a Tensor or a tuple of Tensors, got {type(y0).__name__}"
+        )
+    if not y0:
+        raise ValueError("y0 tuple must not be empty")
+    for index, part in enumerate(y0):
+        if not isinstance(part, Tensor):
+            raise TypeError(
+                f"y0[{index}] must be a Tensor, got {type(part).__name__}"
+            )
+    return tuple(y0)

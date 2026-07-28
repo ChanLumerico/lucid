@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add odeint_event, integrating until a condition fires
 
+- tuple-valued state and Adams multistep methods
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

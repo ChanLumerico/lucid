@@ -23,14 +23,19 @@ from typing import Callable, Sequence, SupportsFloat, cast
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.diffeq import _adaptive, _event, _fixed, _fused
-from lucid.diffeq._tableau import ButcherTableau, _DEFAULT_METHOD, _METHODS
+from lucid.diffeq import _adaptive, _event, _fixed, _flatten, _fused, _multistep
+from lucid.diffeq._tableau import RK4, ButcherTableau, _DEFAULT_METHOD, _METHODS
 
 # The fixed-grid loop and the tests both reach for this; it is the fused
 # stage combination that every explicit method reduces to.
 _combine = _fused.combine
 
 __all__ = ["odeint", "odeint_dense", "odeint_event"]
+
+# A state is either one tensor or a tuple of them.  The solvers integrate a
+# single flat vector either way; the tuple form is packed on the way in and
+# split on the way out, so nothing below this boundary knows about it.
+State = Tensor | tuple[Tensor, ...]
 
 
 def _resolve_method(method: str | ButcherTableau | None) -> ButcherTableau:
@@ -61,12 +66,67 @@ def _resolve_method(method: str | ButcherTableau | None) -> ButcherTableau:
     if isinstance(method, str):
         tableau = _METHODS.get(method)
         if tableau is None:
-            known = ", ".join(sorted(_METHODS))
+            known = ", ".join(sorted({*_METHODS, *_multistep.METHODS}))
             raise ValueError(f"unknown method {method!r}; expected one of: {known}")
         return tableau
     raise TypeError(
         f"method must be a str or ButcherTableau, got {type(method).__name__}"
     )
+
+
+def _multistep_kind(method: str | ButcherTableau | None) -> bool | None:
+    """Report whether ``method`` names an Adams method, and which kind.
+
+    Parameters
+    ----------
+    method : str or ButcherTableau or None
+        The caller's ``method`` argument.
+
+    Returns
+    -------
+    bool or None
+        ``True`` for a predictor-corrector Adams method, ``False`` for the
+        explicit one, and ``None`` when this is an ordinary Runge-Kutta
+        method that a tableau describes.
+    """
+    if isinstance(method, str):
+        return _multistep.METHODS.get(method)
+    return None
+
+
+def _validate_method(method: str | ButcherTableau | None) -> None:
+    """Raise unless ``method`` names a method of either family.
+
+    Both the tableau methods and the Adams methods are legal names, so a
+    caller that only wants to fail fast on a typo has to check against both.
+
+    Raises
+    ------
+    ValueError
+        If ``method`` is a string naming no registered method.
+    TypeError
+        If ``method`` is neither a string nor a :class:`ButcherTableau`.
+    """
+    if _multistep_kind(method) is None:
+        _resolve_method(method)
+
+
+def _reject_multistep(method: str | ButcherTableau | None, entry: str) -> None:
+    """Refuse an Adams method where no interpolant backs it.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``method`` names an Adams method.  These carry no dense output of
+        their own, and silently substituting a cruder interpolant would make
+        ``{entry}`` quietly less accurate than the same method under
+        :func:`odeint`.
+    """
+    if _multistep_kind(method) is not None:
+        raise NotImplementedError(
+            f"{entry} does not support method={method!r}: Adams methods carry "
+            f"no dense output. Use a Runge-Kutta method such as 'dopri5'."
+        )
 
 
 def _resolve_grid(t: Tensor | Sequence[float]) -> list[float]:
@@ -123,6 +183,76 @@ def _resolve_grid(t: Tensor | Sequence[float]) -> list[float]:
     return grid
 
 
+def _pack_state(
+    func: Callable[..., object],
+    y0: State,
+    event_fn: Callable[..., Tensor] | None,
+) -> tuple[
+    Callable[[Tensor, Tensor], Tensor],
+    Tensor,
+    Callable[[Tensor, Tensor], Tensor] | None,
+    list[tuple[int, ...]] | None,
+]:
+    """Reduce a possibly-tuple state to the flat one the solvers integrate.
+
+    Parameters
+    ----------
+    func : callable
+        The caller's right-hand side, over whichever state form they used.
+    y0 : Tensor or tuple of Tensor
+        The caller's initial state.
+    event_fn : callable or None
+        The caller's event function, if any.
+
+    Returns
+    -------
+    tuple
+        ``(func, y0, event_fn, shapes)`` in flat form.  ``shapes`` is
+        ``None`` when the caller passed a plain tensor, which is the signal
+        to hand results back unchanged.
+    """
+    if isinstance(y0, Tensor):
+        return (
+            cast(Callable[[Tensor, Tensor], Tensor], func),
+            y0,
+            cast(Callable[[Tensor, Tensor], Tensor] | None, event_fn),
+            None,
+        )
+
+    parts = _flatten.check_state(y0)
+    shapes = _flatten.shapes_of(parts)
+    flat_event = None if event_fn is None else _flatten.wrap_event(event_fn, shapes)
+    return (
+        _flatten.wrap_rhs(
+            cast(Callable[[Tensor, tuple[Tensor, ...]], Sequence[Tensor]], func), shapes
+        ),
+        _flatten.flatten(parts),
+        flat_event,
+        shapes,
+    )
+
+
+def _unpack(stacked: Tensor, shapes: list[tuple[int, ...]] | None) -> State:
+    """Split a stacked flat result back into the caller's state form.
+
+    Parameters
+    ----------
+    stacked : Tensor
+        Shape ``(n, total)`` — one flat state per time point.
+    shapes : list of tuple of int or None
+        Component shapes, or ``None`` when the caller used a plain tensor.
+
+    Returns
+    -------
+    Tensor or tuple of Tensor
+        The input unchanged when ``shapes`` is ``None``, otherwise one
+        tensor of shape ``(n, *shape)`` per component.
+    """
+    if shapes is None:
+        return stacked
+    return tuple(_flatten.unflatten_rows(stacked, shapes))
+
+
 def _make_callbacks(
     y0: Tensor,
 ) -> tuple[Callable[[float], Tensor], Callable[[object, int, int], Tensor]]:
@@ -173,20 +303,20 @@ def _make_callbacks(
 
 
 def odeint(
-    func: Callable[[Tensor, Tensor], Tensor],
-    y0: Tensor,
+    func: Callable[..., object],
+    y0: State,
     t: Tensor | Sequence[float],
     *,
     rtol: float = 1e-7,
     atol: float = 1e-9,
     method: str | ButcherTableau | None = None,
     options: dict[str, object] | None = None,
-    event_fn: Callable[[Tensor, Tensor], Tensor] | None = None,
+    event_fn: Callable[..., Tensor] | None = None,
     return_trajectory: bool = True,
-) -> Tensor | tuple[Tensor, Tensor]:
-    r"""Integrate ``dy/dt = f(t, y)`` with an explicit Runge-Kutta method.
+) -> State | tuple[Tensor, State]:
+    r"""Integrate ``dy/dt = f(t, y)``.
 
-    Two families are reachable through the same call, and which one runs
+    Three families are reachable through the same call, and which one runs
     follows from ``method``:
 
     **Adaptive** (the default, and anything carrying an embedded error
@@ -200,6 +330,13 @@ def odeint(
     ``rtol`` / ``atol`` are unused there, and accuracy is controlled by
     choosing a finer grid — or by handing ``options["step_size"]``, which
     decouples the two the same way an adaptive method does.
+
+    **Adams multistep** (``explicit_adams`` / ``implicit_adams`` /
+    ``fixed_adams``) is fixed-step too, but reaches high order by reusing the
+    derivatives from previous steps instead of taking more of them inside one
+    step — one new evaluation per step regardless of order.  That pays off
+    when ``func`` is expensive.  See ``options["max_order"]`` for the caveat
+    that comes with it.
 
     Gradient mode is left entirely to the caller.  Under grad the whole solve
     is differentiable end-to-end (discretise-then-optimise) and every stage is
@@ -223,9 +360,10 @@ def odeint(
         Absolute tolerance.  Adaptive methods only.
     method : str or ButcherTableau or None, default=None
         ``None`` selects ``"dopri5"``.  Otherwise one of ``"dopri5"``,
-        ``"bosh3"``, ``"fehlberg2"``, ``"adaptive_heun"``, ``"euler"``,
-        ``"midpoint"``, ``"heun2"``, ``"heun3"``, ``"rk4"``, or a custom
-        :class:`ButcherTableau`.
+        ``"tsit5"``, ``"bosh3"``, ``"fehlberg2"``, ``"adaptive_heun"``,
+        ``"euler"``, ``"midpoint"``, ``"heun2"``, ``"heun3"``, ``"rk4"``,
+        ``"explicit_adams"``, ``"implicit_adams"``, ``"fixed_adams"``, or a
+        custom :class:`ButcherTableau`.
     options : dict or None, default=None
         Per-method settings.  Adaptive methods accept ``min_step``,
         ``max_step``, ``first_step``, ``step_t``, ``jump_t``, ``safety``,
@@ -233,7 +371,17 @@ def odeint(
         ``norm``, accepted and ignored).  Fixed-step methods accept
         ``step_size``, ``grid_constructor``, ``interp`` and ``perturb`` —
         giving either of the first two decouples the integration grid from
-        ``t``, which is then reached by interpolation.
+        ``t``, which is then reached by interpolation.  Adams methods accept
+        all four of those plus ``max_order`` (default 12) and ``max_iters``
+        (default 4, corrector sweeps, ignored by ``explicit_adams``).
+
+        A high ``max_order`` is not simply more accurate.  Explicit Adams
+        loses stability as the order climbs — at the default 12 its stable
+        step is small enough that ``explicit_adams`` diverges on problems
+        ``rk4`` handles comfortably — so lower it, or use one of the
+        corrected variants, whose stability holds up far better.  Order also
+        ramps from a Runge-Kutta start, which caps the accuracy the first
+        steps can contribute regardless of ``max_order``.
     event_fn : callable or None, default=None
         ``g(t, y)`` returning a single-element tensor.  When given, the solve
         ignores every entry of ``t`` but the first, runs until ``g`` changes
@@ -301,8 +449,10 @@ def odeint(
     --------
     lucid.diffeq.ButcherTableau : Coefficient table selected by ``method``.
     """
-    tableau = _resolve_method(method)
+    multistep = _multistep_kind(method)
+    tableau = RK4 if multistep is not None else _resolve_method(method)
     grid = _resolve_grid(t)
+    func, y0, event_fn, shapes = _pack_state(func, y0, event_fn)
 
     if not y0.is_floating_point():
         raise ValueError(
@@ -312,6 +462,7 @@ def odeint(
     scalar, check = _make_callbacks(y0)
 
     if event_fn is not None:
+        _reject_multistep(method, "event detection")
         direction = 1.0 if grid[-1] > grid[0] else -1.0
         event_t, y_event = _event.integrate_until_event(
             func,
@@ -326,9 +477,23 @@ def odeint(
             options=options,
             direction=direction,
         )
-        return scalar(event_t), _event.solution_pair(y0, y_event)
+        pair = _event.solution_pair(y0, y_event)
+        return scalar(event_t), _unpack(pair, shapes)
 
-    if tableau.is_adaptive:
+    if multistep is not None:
+        y, trajectory = _multistep.integrate(
+            func,
+            y0,
+            grid,
+            multistep,
+            scalar,
+            check,
+            rtol=rtol,
+            atol=atol,
+            options=options,
+            return_trajectory=return_trajectory,
+        )
+    elif tableau.is_adaptive:
         y, trajectory = _adaptive.integrate(
             func,
             y0,
@@ -354,17 +519,17 @@ def odeint(
         )
 
     if not return_trajectory:
-        return y
+        return y if shapes is None else tuple(_flatten.unflatten(y, shapes))
     # Promotion can lift the state above y0's dtype (a float64 RHS over a
     # float32 y0), which would leave trajectory[0] as the odd one out and
     # make the stack fail.  Settle the whole trajectory on the final dtype.
     trajectory = [s if s.dtype == y.dtype else s.to(y.dtype) for s in trajectory]
-    return lucid.stack(trajectory, dim=0)
+    return _unpack(lucid.stack(trajectory, dim=0), shapes)
 
 
 def odeint_dense(
-    func: Callable[[Tensor, Tensor], Tensor],
-    y0: Tensor,
+    func: Callable[..., object],
+    y0: State,
     t0: float,
     t1: float,
     *,
@@ -372,7 +537,7 @@ def odeint_dense(
     atol: float = 1e-9,
     method: str | ButcherTableau | None = None,
     options: dict[str, object] | None = None,
-) -> Callable[[float | Tensor], Tensor]:
+) -> Callable[[float | Tensor], State]:
     r"""Solve once across an interval and return a continuous solution.
 
     Where :func:`odeint` wants the output times up front, this integrates
@@ -448,7 +613,9 @@ def odeint_dense(
     if t0 == t1:
         raise ValueError(f"t0 and t1 must differ, both are {t0!r}")
 
+    _reject_multistep(method, "odeint_dense")
     tableau = _resolve_method(method)
+    func, y0, _unused, shapes = _pack_state(func, y0, None)
     if not y0.is_floating_point():
         raise ValueError(
             f"y0 must have a floating dtype for integration, got {y0.dtype}"
@@ -480,7 +647,7 @@ def odeint_dense(
     starts = [min(a, b) for a, b, _ in ordered]
     low, high = min(t0, t1), max(t0, t1)
 
-    def dense(t: float | Tensor) -> Tensor:
+    def dense(t: float | Tensor) -> State:
         value = float(t.item()) if isinstance(t, Tensor) else float(t)
         if not math.isfinite(value):
             raise ValueError(f"query time must be finite, got {value!r}")
@@ -492,21 +659,22 @@ def odeint_dense(
         index = bisect.bisect_right(starts, value) - 1
         index = min(max(index, 0), len(ordered) - 1)
         seg_t0, seg_t1, coeffs = ordered[index]
-        return _fused.poly_eval(coeffs, seg_t0, seg_t1, value)
+        state = _fused.poly_eval(coeffs, seg_t0, seg_t1, value)
+        return state if shapes is None else tuple(_flatten.unflatten(state, shapes))
 
     return dense
 
 
 def odeint_event(
-    func: Callable[[Tensor, Tensor], Tensor],
-    y0: Tensor,
+    func: Callable[..., object],
+    y0: State,
     t0: float | Tensor,
     *,
-    event_fn: Callable[[Tensor, Tensor], Tensor],
+    event_fn: Callable[..., Tensor],
     reverse_time: bool = False,
     odeint_interface: Callable[..., object] = odeint,
     **kwargs: object,
-) -> tuple[Tensor, Tensor]:
+) -> tuple[Tensor, State]:
     r"""Integrate from ``t0`` until an event fires.
 
     The convenience form of ``odeint(..., event_fn=...)`` for the common case
@@ -582,4 +750,4 @@ def odeint_event(
     # direction, which is the one thing the grid still carries.
     grid = [start, start - 1.0] if reverse_time else [start, start + 1.0]
     result = odeint_interface(func, y0, grid, event_fn=event_fn, **kwargs)
-    return cast(tuple[Tensor, Tensor], result)
+    return cast(tuple[Tensor, State], result)

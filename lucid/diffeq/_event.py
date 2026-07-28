@@ -19,7 +19,6 @@ from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _adaptive, _fixed, _fused
 from lucid.diffeq._tableau import ButcherTableau
 
-
 __all__: list[str] = []
 
 
@@ -71,9 +70,7 @@ def _evaluate(
     """
     out = event_fn(scalar(t), y)
     if not isinstance(out, Tensor):
-        raise TypeError(
-            f"event_fn must return a Tensor, got {type(out).__name__}"
-        )
+        raise TypeError(f"event_fn must return a Tensor, got {type(out).__name__}")
     if out.numel() != 1:
         raise ValueError(
             f"event_fn must return a single-element tensor, got shape {out.shape}"
@@ -251,9 +248,7 @@ def integrate_until_event(
                 ) -> Tensor:
                     return _fused.poly_eval(_c, _a, _b, t)
 
-                return find_event(
-                    interp_fixed, sign0, t_cur, t_next, event_fn, scalar
-                )
+                return find_event(interp_fixed, sign0, t_cur, t_next, event_fn, scalar)
 
             if fixed_opts.interp == "cubic":
                 f0 = check(func(scalar(t_next), y_next), index, tableau.stages)

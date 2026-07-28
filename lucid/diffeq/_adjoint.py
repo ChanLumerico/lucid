@@ -29,7 +29,14 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.diffeq import _flatten
-from lucid.diffeq._solvers import _resolve_grid, _resolve_method, odeint
+from lucid.diffeq._solvers import (
+    State,
+    _pack_state,
+    _resolve_grid,
+    _validate_method,
+    _unpack,
+    odeint,
+)
 from lucid.diffeq._tableau import ButcherTableau
 
 __all__ = ["odeint_adjoint"]
@@ -53,7 +60,7 @@ class _Config:
 
 
 def _resolve_params(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: Callable[..., object],
     adjoint_params: Sequence[Tensor] | None,
 ) -> tuple[Tensor, ...]:
     """Decide which tensors the adjoint should accumulate gradients for.
@@ -237,21 +244,21 @@ class _AdjointSolve(Function):
 
 
 def odeint_adjoint(
-    func: Callable[[Tensor, Tensor], Tensor],
-    y0: Tensor,
+    func: Callable[..., object],
+    y0: State,
     t: Tensor | Sequence[float],
     *,
     rtol: float = 1e-7,
     atol: float = 1e-9,
     method: str | ButcherTableau | None = None,
     options: dict[str, object] | None = None,
-    event_fn: Callable[[Tensor, Tensor], Tensor] | None = None,
+    event_fn: Callable[..., Tensor] | None = None,
     adjoint_rtol: float | None = None,
     adjoint_atol: float | None = None,
     adjoint_method: str | ButcherTableau | None = None,
     adjoint_options: dict[str, object] | None = None,
     adjoint_params: Sequence[Tensor] | None = None,
-) -> Tensor:
+) -> State:
     r"""Integrate ``dy/dt = f(t, y)`` and differentiate it at constant memory.
 
     Same result as :func:`odeint`, different gradient strategy.  ``odeint``
@@ -344,11 +351,12 @@ def odeint_adjoint(
         )
 
     grid = _resolve_grid(t)
-    _resolve_method(method)  # fail fast on a bad name, before any integration
+    _validate_method(method)  # fail fast on a bad name, before any integration
     params = _resolve_params(func, adjoint_params)
+    flat_func, flat_y0, _unused, shapes = _pack_state(func, y0, None)
 
     config = _Config(
-        func=func,
+        func=flat_func,
         grid=grid,
         rtol=rtol,
         atol=atol,
@@ -361,4 +369,5 @@ def odeint_adjoint(
         n_params=len(params),
     )
     # ``apply`` is typed to allow a tuple of outputs; this op returns one.
-    return cast(Tensor, _AdjointSolve.apply(y0, *params, config=config))
+    ys = cast(Tensor, _AdjointSolve.apply(flat_y0, *params, config=config))
+    return _unpack(ys, shapes)

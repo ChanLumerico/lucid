@@ -6,6 +6,7 @@ import pytest
 
 import lucid
 import lucid.diffeq as diffeq
+from lucid.diffeq import _multistep
 from lucid.diffeq._solvers import _combine
 from lucid.diffeq._tableau import _METHODS
 
@@ -1195,8 +1196,12 @@ class TestOdeintEvent:
     def test_odeint_takes_event_fn_directly(self) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         event_t, sol = diffeq.odeint(
-            _decay, y0, [0.0, 5.0], event_fn=lambda t, y: y[0] - 0.5,
-            rtol=1e-12, atol=1e-14,
+            _decay,
+            y0,
+            [0.0, 5.0],
+            event_fn=lambda t, y: y[0] - 0.5,
+            rtol=1e-12,
+            atol=1e-14,
         )
         assert float(event_t.item()) == pytest.approx(math.log(2.0), abs=1e-9)
         assert sol.shape == (2, 1)
@@ -1206,16 +1211,25 @@ class TestOdeintEvent:
         # survive, so a different end time must not change the answer.
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         fn = lambda t, y: y[0] - 0.5  # noqa: E731
-        a, _ = diffeq.odeint(_decay, y0, [0.0, 5.0], event_fn=fn, rtol=1e-12, atol=1e-14)
-        b, _ = diffeq.odeint(_decay, y0, [0.0, 0.9], event_fn=fn, rtol=1e-12, atol=1e-14)
+        a, _ = diffeq.odeint(
+            _decay, y0, [0.0, 5.0], event_fn=fn, rtol=1e-12, atol=1e-14
+        )
+        b, _ = diffeq.odeint(
+            _decay, y0, [0.0, 0.9], event_fn=fn, rtol=1e-12, atol=1e-14
+        )
         assert float(a.item()) == pytest.approx(float(b.item()), abs=1e-12)
 
     def test_reverse_time(self) -> None:
         # y' = -y backwards from y(0)=1 reaches 2 at t = -ln 2.
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         event_t, _ = diffeq.odeint_event(
-            _decay, y0, 0.0, event_fn=lambda t, y: y[0] - 2.0,
-            reverse_time=True, rtol=1e-12, atol=1e-14,
+            _decay,
+            y0,
+            0.0,
+            event_fn=lambda t, y: y[0] - 2.0,
+            reverse_time=True,
+            rtol=1e-12,
+            atol=1e-14,
         )
         assert float(event_t.item()) == pytest.approx(-math.log(2.0), abs=1e-8)
 
@@ -1223,16 +1237,25 @@ class TestOdeintEvent:
     def test_every_adaptive_method_finds_it(self, method: str) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         event_t, _ = diffeq.odeint_event(
-            _decay, y0, 0.0, event_fn=lambda t, y: y[0] - 0.5,
-            method=method, rtol=1e-11, atol=1e-13,
+            _decay,
+            y0,
+            0.0,
+            event_fn=lambda t, y: y[0] - 0.5,
+            method=method,
+            rtol=1e-11,
+            atol=1e-13,
         )
         assert float(event_t.item()) == pytest.approx(math.log(2.0), abs=1e-7)
 
     def test_fixed_method_with_step_size(self) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         event_t, _ = diffeq.odeint_event(
-            _decay, y0, 0.0, event_fn=lambda t, y: y[0] - 0.5,
-            method="rk4", options={"step_size": 0.05, "interp": "cubic"},
+            _decay,
+            y0,
+            0.0,
+            event_fn=lambda t, y: y[0] - 0.5,
+            method="rk4",
+            options={"step_size": 0.05, "interp": "cubic"},
         )
         assert float(event_t.item()) == pytest.approx(math.log(2.0), abs=1e-6)
 
@@ -1270,8 +1293,12 @@ class TestOdeintEvent:
     def test_gradient_flows_through_the_event_state(self) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
         _, sol = diffeq.odeint_event(
-            _decay, y0, 0.0, event_fn=lambda t, y: y[0] - 0.5,
-            rtol=1e-12, atol=1e-14,
+            _decay,
+            y0,
+            0.0,
+            event_fn=lambda t, y: y[0] - 0.5,
+            rtol=1e-12,
+            atol=1e-14,
         )
         sol[-1].sum().backward()
         assert y0.grad is not None
@@ -1295,7 +1322,10 @@ class TestOdeintEvent:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         with pytest.raises(RuntimeError, match="max_num_steps"):
             diffeq.odeint_event(
-                _decay, y0, 0.0, event_fn=lambda t, y: y[0] - 2.0,
+                _decay,
+                y0,
+                0.0,
+                event_fn=lambda t, y: y[0] - 2.0,
                 options={"max_step": 1e-2, "max_num_steps": 50},
             )
 
@@ -1311,14 +1341,19 @@ class TestOdeintEvent:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         with pytest.raises(RuntimeError, match="did not change sign"):
             diffeq.odeint_event(
-                _decay, y0, 0.0, event_fn=lambda t, y: y[0] - 2.0,
+                _decay,
+                y0,
+                0.0,
+                event_fn=lambda t, y: y[0] - 2.0,
                 options={"max_step": 1e-2},
             )
 
     def test_accepts_a_tensor_start_time(self) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         a, _ = diffeq.odeint_event(
-            _decay, y0, lucid.tensor(0.0, dtype=lucid.float64),
+            _decay,
+            y0,
+            lucid.tensor(0.0, dtype=lucid.float64),
             event_fn=lambda t, y: y[0] - 0.5,
         )
         b, _ = diffeq.odeint_event(_decay, y0, 0.0, event_fn=lambda t, y: y[0] - 0.5)
@@ -1391,7 +1426,424 @@ class TestInterpolantQuality:
         y0 = lucid.tensor([12.5, 0.0], dtype=lucid.float64)
         for method in ("dopri5", "tsit5"):
             event_t, _ = diffeq.odeint_event(
-                _fall, y0, 0.0, event_fn=lambda t, y: y[0],
-                method=method, rtol=1e-12, atol=1e-14,
+                _fall,
+                y0,
+                0.0,
+                event_fn=lambda t, y: y[0],
+                method=method,
+                rtol=1e-12,
+                atol=1e-14,
             )
             assert float(event_t.item()) == pytest.approx(exact, abs=1e-9)
+
+
+def _osc_tuple(t: lucid.Tensor, y: tuple[lucid.Tensor, ...]) -> tuple[lucid.Tensor, ...]:
+    """Harmonic oscillator over a two-component state of differing shapes."""
+    pos, vel = y
+    return (vel.reshape(1, 2), -pos.reshape(2))
+
+
+class TestTupleState:
+    """``y0`` may be a tuple of differently-shaped tensors.
+
+    The solvers integrate one flat vector either way — the tuple is packed on
+    the way in and split on the way out — so this is about the boundary, not
+    about a second solver.
+    """
+
+    @staticmethod
+    def _initial() -> tuple[lucid.Tensor, lucid.Tensor]:
+        return (
+            lucid.tensor([[1.0, 0.0]], dtype=lucid.float64),
+            lucid.tensor([0.0, 1.0], dtype=lucid.float64),
+        )
+
+    def test_trajectory_keeps_component_shapes(self) -> None:
+        y0 = self._initial()
+        traj = diffeq.odeint(
+            _osc_tuple, y0, [0.0, math.pi / 2], rtol=1e-12, atol=1e-14
+        )
+        assert isinstance(traj, tuple) and len(traj) == 2
+        assert traj[0].shape == (2, 1, 2)
+        assert traj[1].shape == (2, 2)
+
+    def test_matches_the_analytic_oscillator(self) -> None:
+        # p(t) = p0 cos t + v0 sin t, v(t) = -p0 sin t + v0 cos t.  A quarter
+        # period swaps them.
+        y0 = self._initial()
+        traj = diffeq.odeint(
+            _osc_tuple, y0, [0.0, math.pi / 2], rtol=1e-12, atol=1e-14
+        )
+        assert traj[0].tolist()[-1][0] == pytest.approx([0.0, 1.0], abs=1e-9)
+        assert traj[1].tolist()[-1] == pytest.approx([-1.0, 0.0], abs=1e-9)
+
+    def test_first_entry_is_y0(self) -> None:
+        y0 = self._initial()
+        traj = diffeq.odeint(_osc_tuple, y0, [0.0, 1.0])
+        assert traj[0].tolist()[0] == y0[0].tolist()
+        assert traj[1].tolist()[0] == y0[1].tolist()
+
+    def test_final_only_keeps_component_shapes(self) -> None:
+        y0 = self._initial()
+        out = diffeq.odeint(
+            _osc_tuple, y0, [0.0, 1.0], return_trajectory=False
+        )
+        assert isinstance(out, tuple)
+        assert [tuple(x.shape) for x in out] == [(1, 2), (2,)]
+
+    def test_matches_the_equivalent_flat_solve(self) -> None:
+        # Packing is supposed to be invisible: the same problem written as one
+        # flat tensor must give the same numbers.
+        y0 = self._initial()
+        traj = diffeq.odeint(_osc_tuple, y0, [0.0, 1.0], rtol=1e-12, atol=1e-14)
+
+        flat0 = lucid.tensor([1.0, 0.0, 0.0, 1.0], dtype=lucid.float64)
+
+        def flat_rhs(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            return lucid.concat([y[2:4], -y[0:2]])
+
+        flat = diffeq.odeint(flat_rhs, flat0, [0.0, 1.0], rtol=1e-12, atol=1e-14)
+        assert traj[0].tolist()[-1][0] == pytest.approx(
+            flat.tolist()[-1][:2], abs=1e-10
+        )
+        assert traj[1].tolist()[-1] == pytest.approx(flat.tolist()[-1][2:], abs=1e-10)
+
+    def test_fixed_step_method(self) -> None:
+        y0 = self._initial()
+        traj = diffeq.odeint(_osc_tuple, y0, _grid(64, t1=math.pi / 2), method="rk4")
+        assert traj[0].tolist()[-1][0] == pytest.approx([0.0, 1.0], abs=1e-8)
+
+    def test_gradient_reaches_every_component(self) -> None:
+        a0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        b0 = lucid.tensor([[2.0]], dtype=lucid.float64, requires_grad=True)
+
+        def rhs(t: lucid.Tensor, y: tuple[lucid.Tensor, ...]) -> tuple[lucid.Tensor, ...]:
+            return (-y[0], -y[1])
+
+        traj = diffeq.odeint(rhs, (a0, b0), [0.0, 1.0], rtol=1e-12, atol=1e-14)
+        (traj[0][-1].sum() + traj[1][-1].sum()).backward()
+        assert a0.grad is not None and b0.grad is not None
+        assert float(a0.grad.item()) == pytest.approx(math.exp(-1.0), abs=1e-9)
+        assert float(b0.grad.item()) == pytest.approx(math.exp(-1.0), abs=1e-9)
+
+    def test_dense_output(self) -> None:
+        y0 = self._initial()
+        dense = diffeq.odeint_dense(
+            _osc_tuple, y0, 0.0, math.pi / 2, rtol=1e-12, atol=1e-14
+        )
+        out = dense(math.pi / 2)
+        assert isinstance(out, tuple)
+        assert out[0].tolist()[0] == pytest.approx([0.0, 1.0], abs=1e-9)
+
+    def test_event(self) -> None:
+        y0 = self._initial()
+        event_t, sol = diffeq.odeint_event(
+            _osc_tuple, y0, 0.0,
+            event_fn=lambda t, y: y[0].reshape(2)[0],
+            rtol=1e-12, atol=1e-14,
+        )
+        assert float(event_t.item()) == pytest.approx(math.pi / 2, abs=1e-8)
+        assert isinstance(sol, tuple)
+        assert [tuple(x.shape) for x in sol] == [(2, 1, 2), (2, 2)]
+
+    def test_adjoint(self) -> None:
+        k = lucid.tensor([0.5], dtype=lucid.float64, requires_grad=True)
+        a0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        b0 = lucid.tensor([[2.0]], dtype=lucid.float64, requires_grad=True)
+
+        def rhs(t: lucid.Tensor, y: tuple[lucid.Tensor, ...]) -> tuple[lucid.Tensor, ...]:
+            return (-k * y[0], -k * y[1])
+
+        out = diffeq.odeint_adjoint(
+            rhs, (a0, b0), [0.0, 1.0], rtol=1e-12, atol=1e-14, adjoint_params=[k]
+        )
+        assert isinstance(out, tuple)
+        (out[0][-1].sum() + out[1][-1].sum()).backward()
+        assert float(a0.grad.item()) == pytest.approx(  # type: ignore[union-attr]
+            math.exp(-0.5), abs=1e-8
+        )
+        # d/dk of (a0 + b0) exp(-k) at k=0.5.
+        assert float(k.grad.item()) == pytest.approx(  # type: ignore[union-attr]
+            -3.0 * math.exp(-0.5), abs=1e-8
+        )
+
+    @pytest.mark.parametrize(
+        ("bad", "exc", "match"),
+        [
+            ((), ValueError, "must not be empty"),
+            (("x",), TypeError, "y0\\[0\\] must be a Tensor"),
+            (123, TypeError, "Tensor or a tuple"),
+        ],
+    )
+    def test_rejects_a_malformed_state(
+        self, bad: object, exc: type[Exception], match: str
+    ) -> None:
+        with pytest.raises(exc, match=match):
+            diffeq.odeint(_osc_tuple, bad, [0.0, 1.0])  # type: ignore[arg-type]
+
+    def test_rejects_a_rhs_that_does_not_return_a_tuple(self) -> None:
+        y0 = self._initial()
+        with pytest.raises(TypeError, match="must return a tuple of tensors"):
+            diffeq.odeint(lambda t, y: y[0], y0, [0.0, 1.0])
+
+    def test_rejects_a_component_count_mismatch(self) -> None:
+        y0 = self._initial()
+        with pytest.raises(ValueError, match="returned 1 components but y0 has 2"):
+            diffeq.odeint(lambda t, y: (y[0],), y0, [0.0, 1.0])
+
+
+class TestAdamsCoefficients:
+    """The Adams weights are derived, so the derivation itself needs a check.
+
+    Deriving beats transcribing a wall of integer tables, but only if the
+    derivation is right — hence the published low-order values below.
+    """
+
+    @pytest.mark.parametrize(
+        ("order", "expected"),
+        [
+            (1, [1.0]),
+            (2, [3 / 2, -1 / 2]),
+            (3, [23 / 12, -16 / 12, 5 / 12]),
+            (4, [55 / 24, -59 / 24, 37 / 24, -9 / 24]),
+            (5, [1901 / 720, -2774 / 720, 2616 / 720, -1274 / 720, 251 / 720]),
+        ],
+    )
+    def test_bashforth_matches_the_published_table(
+        self, order: int, expected: list[float]
+    ) -> None:
+        got = _multistep.coefficients(order, implicit=False)
+        assert list(got) == pytest.approx(expected, rel=1e-14)
+
+    @pytest.mark.parametrize(
+        ("order", "expected"),
+        [
+            (1, [1.0]),
+            (2, [1 / 2, 1 / 2]),
+            (3, [5 / 12, 8 / 12, -1 / 12]),
+            (4, [9 / 24, 19 / 24, -5 / 24, 1 / 24]),
+            (5, [251 / 720, 646 / 720, -264 / 720, 106 / 720, -19 / 720]),
+        ],
+    )
+    def test_moulton_matches_the_published_table(
+        self, order: int, expected: list[float]
+    ) -> None:
+        got = _multistep.coefficients(order, implicit=True)
+        assert list(got) == pytest.approx(expected, rel=1e-14)
+
+    @pytest.mark.parametrize("order", range(1, 13))
+    @pytest.mark.parametrize("implicit", [False, True])
+    def test_weights_sum_to_one(self, order: int, implicit: bool) -> None:
+        # Consistency: a constant derivative must advance the state by exactly
+        # dt.  Any order that fails this is not an Adams method at all.
+        got = _multistep.coefficients(order, implicit=implicit)
+        assert sum(got) == pytest.approx(1.0, abs=1e-12)
+
+
+class TestMultistep:
+    """Adams methods, reachable through ``odeint`` like any other."""
+
+    DECAY_EXACT = math.exp(-1.0)
+
+    @staticmethod
+    def _decay(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+        return -y
+
+    @staticmethod
+    def _uniform(n: int) -> list[float]:
+        return [i / n for i in range(n + 1)]
+
+    @pytest.mark.parametrize("method", ["explicit_adams", "implicit_adams", "fixed_adams"])
+    def test_solves_exponential_decay(self, method: str) -> None:
+        y = diffeq.odeint(
+            self._decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            self._uniform(200),
+            method=method,
+            options={"max_order": 5},
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(self.DECAY_EXACT, abs=1e-11)
+
+    def test_implicit_and_fixed_adams_name_the_same_solver(self) -> None:
+        y0 = lucid.tensor([1.0, 2.0], dtype=lucid.float64)
+        grid = self._uniform(50)
+        a = diffeq.odeint(self._decay, y0, grid, method="implicit_adams")
+        b = diffeq.odeint(self._decay, y0, grid, method="fixed_adams")
+        assert _maxdiff(a, b) == 0.0
+
+    @pytest.mark.parametrize("order", [4, 5])
+    def test_convergence_order(self, order: int) -> None:
+        # Halving the step must shrink the error by ~2**order.  The RK4
+        # startup contributes its own O(h^5), so above order 5 the observed
+        # rate saturates and this check would stop discriminating.
+        errs = []
+        for n in (100, 200):
+            y = diffeq.odeint(
+                self._decay,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                self._uniform(n),
+                method="explicit_adams",
+                options={"max_order": order},
+                return_trajectory=False,
+            )
+            errs.append(abs(float(y.item()) - self.DECAY_EXACT))
+        observed = math.log2(errs[0] / errs[1])
+        assert observed == pytest.approx(order, abs=0.5)
+
+    def test_corrector_beats_the_bare_predictor(self) -> None:
+        grid = self._uniform(60)
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        opts = {"max_order": 5}
+        pred = diffeq.odeint(
+            self._decay, y0, grid, method="explicit_adams",
+            options=opts, return_trajectory=False,
+        )
+        corr = diffeq.odeint(
+            self._decay, y0, grid, method="implicit_adams",
+            options=opts, return_trajectory=False,
+        )
+        assert abs(float(corr.item()) - self.DECAY_EXACT) < abs(
+            float(pred.item()) - self.DECAY_EXACT
+        )
+
+    def test_a_non_uniform_grid_stays_accurate(self) -> None:
+        # The weights assume even spacing, so an uneven grid has to fall back
+        # to Runge-Kutta rather than apply them anyway.
+        grid = [0.0, 0.1, 0.15, 0.4, 0.5, 0.62, 0.8, 1.0]
+        y = diffeq.odeint(
+            self._decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            grid,
+            method="explicit_adams",
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(self.DECAY_EXACT, abs=1e-4)
+
+    def test_step_size_decouples_the_output_grid(self) -> None:
+        y = diffeq.odeint(
+            self._decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            [0.0, 0.37, 1.0],
+            method="implicit_adams",
+            options={"step_size": 0.005, "max_order": 5},
+        )
+        got = y.tolist()
+        assert got[1][0] == pytest.approx(math.exp(-0.37), abs=1e-6)
+        assert got[2][0] == pytest.approx(self.DECAY_EXACT, abs=1e-11)
+
+    @pytest.mark.parametrize("interp", ["linear", "cubic"])
+    def test_interp_option_applies(self, interp: str) -> None:
+        y = diffeq.odeint(
+            self._decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            [0.0, 0.37, 1.0],
+            method="implicit_adams",
+            options={"step_size": 0.01, "interp": interp, "max_order": 5},
+        )
+        assert y.tolist()[1][0] == pytest.approx(math.exp(-0.37), abs=1e-4)
+
+    def test_first_entry_is_y0(self) -> None:
+        y0 = lucid.tensor([1.0, -3.0], dtype=lucid.float64)
+        traj = diffeq.odeint(self._decay, y0, self._uniform(20), method="fixed_adams")
+        assert traj.tolist()[0] == y0.tolist()
+
+    def test_integrates_backwards(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        grid = [1.0 - i / 200 for i in range(201)]
+        y = diffeq.odeint(
+            self._decay, y0, grid, method="implicit_adams",
+            options={"max_order": 5}, return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(math.e, abs=1e-9)
+
+    @pytest.mark.parametrize("method", ["explicit_adams", "implicit_adams"])
+    def test_is_differentiable(self, method: str) -> None:
+        k = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        y = diffeq.odeint(
+            lambda t, s: -k * s,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            self._uniform(100),
+            method=method,
+            options={"max_order": 5},
+            return_trajectory=False,
+        )
+        y.sum().backward()
+        assert k.grad is not None
+        # d/dk exp(-k) at k=1.
+        assert float(k.grad.item()) == pytest.approx(-math.exp(-1.0), abs=1e-8)
+
+    def test_works_under_the_adjoint(self) -> None:
+        k = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        traj = diffeq.odeint_adjoint(
+            lambda t, s: -k * s,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            self._uniform(100),
+            method="implicit_adams",
+            options={"max_order": 5},
+            adjoint_params=[k],
+        )
+        traj[-1].sum().backward()
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx(-math.exp(-1.0), abs=1e-7)
+
+    def test_accepts_a_tuple_state(self) -> None:
+        y0 = (
+            lucid.tensor([[1.0, 0.0]], dtype=lucid.float64),
+            lucid.tensor([0.0, 1.0], dtype=lucid.float64),
+        )
+        grid = [i * (math.pi / 2) / 400 for i in range(401)]
+        traj = diffeq.odeint(
+            _osc_tuple, y0, grid, method="fixed_adams", options={"max_order": 5}
+        )
+        assert [tuple(x.shape) for x in traj] == [(401, 1, 2), (401, 2)]
+        assert traj[0].tolist()[-1][0] == pytest.approx([0.0, 1.0], abs=1e-9)
+
+    @pytest.mark.parametrize(
+        ("options", "match"),
+        [
+            ({"max_order": 0}, r"max_order must lie in \[1, 12\]"),
+            ({"max_order": 13}, r"max_order must lie in \[1, 12\]"),
+            ({"max_order": 2.5}, "must be an int"),
+            ({"max_iters": 0}, "max_iters must be >= 1"),
+            ({"nope": 1}, "unknown option"),
+        ],
+    )
+    def test_rejects_bad_options(self, options: dict[str, object], match: str) -> None:
+        with pytest.raises(ValueError, match=match):
+            diffeq.odeint(
+                self._decay,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                [0.0, 1.0],
+                method="implicit_adams",
+                options=options,
+            )
+
+    def test_the_unknown_method_error_lists_the_adams_names(self) -> None:
+        with pytest.raises(ValueError, match="explicit_adams"):
+            diffeq.odeint(
+                self._decay, lucid.tensor([1.0], dtype=lucid.float64), [0.0, 1.0],
+                method="nope",
+            )
+
+    @pytest.mark.parametrize("method", ["explicit_adams", "implicit_adams", "fixed_adams"])
+    def test_dense_output_refuses_an_adams_method(self, method: str) -> None:
+        # Better a clear refusal than a quietly cruder interpolant.
+        with pytest.raises(NotImplementedError, match="no dense output"):
+            diffeq.odeint_dense(
+                self._decay,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                0.0,
+                1.0,
+                method=method,
+            )
+
+    def test_event_detection_refuses_an_adams_method(self) -> None:
+        with pytest.raises(NotImplementedError, match="no dense output"):
+            diffeq.odeint_event(
+                self._decay,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                0.0,
+                event_fn=lambda t, y: y[0] - 0.5,
+                method="fixed_adams",
+            )

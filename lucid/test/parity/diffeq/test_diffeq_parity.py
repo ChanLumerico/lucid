@@ -488,8 +488,13 @@ class TestEventParity:
             return lucid.stack([y[1], lucid.tensor(-g, dtype=y.dtype)], dim=0)
 
         event_t, sol = diffeq.odeint_event(
-            fall, y0, 0.0, event_fn=lambda t, y: y[0],
-            method=method, rtol=1e-12, atol=1e-14,
+            fall,
+            y0,
+            0.0,
+            event_fn=lambda t, y: y[0],
+            method=method,
+            rtol=1e-12,
+            atol=1e-14,
         )
         want = ref.sqrt(ref.tensor(2 * h0 / g, dtype=ref.float64))
         assert float(event_t.item()) == pytest.approx(float(want), abs=1e-7)
@@ -501,8 +506,12 @@ class TestEventParity:
         y0_val, threshold = 3.0, 0.4
         y0 = lucid.tensor([y0_val], dtype=lucid.float64)
         event_t, sol = diffeq.odeint_event(
-            lambda t, y: -y, y0, 0.0,
-            event_fn=lambda t, y: y[0] - threshold, rtol=1e-12, atol=1e-14,
+            lambda t, y: -y,
+            y0,
+            0.0,
+            event_fn=lambda t, y: y[0] - threshold,
+            rtol=1e-12,
+            atol=1e-14,
         )
         want = ref.log(ref.tensor(y0_val / threshold, dtype=ref.float64))
         assert float(event_t.item()) == pytest.approx(float(want), abs=1e-9)
@@ -514,11 +523,170 @@ class TestEventParity:
         y0 = lucid.tensor([2.0, -1.0], dtype=lucid.float64)
         rhs = lambda t, y: -y + lucid.sin(t)  # noqa: E731
         event_t, sol = diffeq.odeint_event(
-            rhs, y0, 0.0, event_fn=lambda t, y: y[0] - 0.9,
-            rtol=1e-12, atol=1e-14,
+            rhs,
+            y0,
+            0.0,
+            event_fn=lambda t, y: y[0] - 0.9,
+            rtol=1e-12,
+            atol=1e-14,
         )
         direct = diffeq.odeint(
-            rhs, y0, [0.0, float(event_t.item())], rtol=1e-12, atol=1e-14,
+            rhs,
+            y0,
+            [0.0, float(event_t.item())],
+            rtol=1e-12,
+            atol=1e-14,
             return_trajectory=False,
         )
         assert_close(sol[-1], direct, atol=1e-9)
+
+
+# Published Adams coefficients, written out as the exact fractions they are.
+# Lucid derives its own rather than tabulating them, so these are genuinely
+# independent: a slip in the derivation shows up here as a mismatch.
+_BASHFORTH: dict[int, list[float]] = {
+    1: [1.0],
+    2: [3 / 2, -1 / 2],
+    3: [23 / 12, -16 / 12, 5 / 12],
+    4: [55 / 24, -59 / 24, 37 / 24, -9 / 24],
+    5: [1901 / 720, -2774 / 720, 2616 / 720, -1274 / 720, 251 / 720],
+}
+_MOULTON: dict[int, list[float]] = {
+    1: [1.0],
+    2: [1 / 2, 1 / 2],
+    3: [5 / 12, 8 / 12, -1 / 12],
+    4: [9 / 24, 19 / 24, -5 / 24, 1 / 24],
+    5: [251 / 720, 646 / 720, -264 / 720, 106 / 720, -19 / 720],
+}
+
+
+def _ref_adams(
+    ref: Any,
+    func: Callable[[Any, Any], Any],
+    y0: Any,
+    t: Sequence[float],
+    max_order: int,
+    implicit: bool,
+    max_iters: int = 4,
+) -> Any:
+    """Unfused reference Adams loop over the published coefficient tables."""
+    tableau = _METHODS["rk4"]
+    y = y0
+    trajectory = [y0]
+    history: list[Any] = []
+
+    for i in range(len(t) - 1):
+        dt = t[i + 1] - t[i]
+        f0 = func(t[i], y)
+        history.insert(0, f0)
+        del history[max_order:]
+        order = min(len(history), max_order)
+
+        if order < 4:
+            ks = [f0]
+            for stage in range(1, tableau.stages):
+                stage_y = y
+                for j, coeff in enumerate(tableau.a[stage]):
+                    if coeff != 0.0:
+                        stage_y = stage_y + dt * coeff * ks[j]
+                ks.append(func(t[i] + tableau.c[stage] * dt, stage_y))
+            y_next = y
+            for j, coeff in enumerate(tableau.b):
+                if coeff != 0.0:
+                    y_next = y_next + dt * coeff * ks[j]
+        else:
+            y_next = y
+            for j, coeff in enumerate(_BASHFORTH[order]):
+                y_next = y_next + dt * coeff * history[j]
+            if implicit:
+                for _ in range(max_iters):
+                    f_next = func(t[i + 1], y_next)
+                    updated = y
+                    stencil = [f_next, *history[: order - 1]]
+                    for j, coeff in enumerate(_MOULTON[order]):
+                        updated = updated + dt * coeff * stencil[j]
+                    y_next = updated
+
+        trajectory.append(y_next)
+        y = y_next
+    return ref.stack(trajectory, dim=0)
+
+
+@pytest.mark.parity
+class TestMultistepParity:
+    """Adams stepping against an unfused loop over the published tables."""
+
+    @pytest.fixture
+    def problem(self, ref: Any) -> tuple[Any, Any]:
+        return ref.tensor([1.0, -2.0], dtype=ref.float64), ref.float64
+
+    @pytest.mark.parametrize("max_order", [4, 5])
+    @pytest.mark.parametrize(
+        ("method", "implicit"),
+        [("explicit_adams", False), ("implicit_adams", True), ("fixed_adams", True)],
+    )
+    def test_matches_the_unfused_loop(
+        self, ref: Any, method: str, implicit: bool, max_order: int
+    ) -> None:
+        grid = _grid(60)
+        y0_val = [1.0, -2.0]
+
+        got = diffeq.odeint(
+            lambda t, y: -y + lucid.sin(t),
+            lucid.tensor(y0_val, dtype=lucid.float64),
+            grid,
+            method=method,
+            options={"max_order": max_order},
+        )
+        want = _ref_adams(
+            ref,
+            lambda t, y: -y + ref.sin(ref.tensor(t, dtype=ref.float64)),
+            ref.tensor(y0_val, dtype=ref.float64),
+            grid,
+            max_order,
+            implicit,
+        )
+        assert_close(got, want, atol=1e-11)
+
+    @pytest.mark.parametrize("max_order", [1, 2, 3])
+    def test_low_max_order_runs_the_runge_kutta_fallback(
+        self, ref: Any, max_order: int
+    ) -> None:
+        # Below order 4 there is nothing to gain over RK4, so the solver never
+        # applies Adams weights at all and must reproduce rk4 exactly.
+        grid = _grid(40)
+        y0_val = [0.5]
+        got = diffeq.odeint(
+            lambda t, y: -y,
+            lucid.tensor(y0_val, dtype=lucid.float64),
+            grid,
+            method="explicit_adams",
+            options={"max_order": max_order},
+        )
+        want = diffeq.odeint(
+            lambda t, y: -y,
+            lucid.tensor(y0_val, dtype=lucid.float64),
+            grid,
+            method="rk4",
+        )
+        assert float((got - want).abs().max().item()) == 0.0
+
+    def test_matches_torchdiffeq(self, ref: Any) -> None:
+        torchdiffeq = pytest.importorskip("torchdiffeq")
+        grid = _grid(60)
+        y0_val = [1.0, -2.0]
+        got = diffeq.odeint(
+            lambda t, y: -y,
+            lucid.tensor(y0_val, dtype=lucid.float64),
+            grid,
+            method="implicit_adams",
+            options={"max_order": 5},
+        )
+        ref_out = torchdiffeq.odeint(
+            lambda t, y: -y,
+            ref.tensor(y0_val, dtype=ref.float64),
+            ref.tensor(grid, dtype=ref.float64),
+            method="implicit_adams",
+            options={"max_order": 5},
+        )
+        assert_close(got, ref_out, atol=1e-8)
