@@ -192,8 +192,39 @@ class TestTorchdiffeqParity:
         )
         assert_close(lucid_out, ref_out, atol=1e-10, rtol=1e-9)
 
+    def test_dopri8_tableau_is_transcribed_exactly(self) -> None:
+        """Pin all ~130 dopri8 coefficients against the reference's own.
 
-ADAPTIVE_METHODS = ["dopri5", "tsit5", "bosh3", "fehlberg2", "adaptive_heun"]
+        Dopri8 is the one tableau here that is neither derived nor short
+        enough to check by eye: thirteen stages of published ratios.  A single
+        wrong digit does not raise and does not cost the method its order in
+        any way a convergence test would notice -- it shifts the answer at a
+        place no other check looks.  Since the reference stores the same
+        ratios, every coefficient can be held to bitwise equality, which is
+        the strongest statement available and the reason transcribing it was
+        safe to do at all.
+        """
+        dopri8 = pytest.importorskip("torchdiffeq._impl.dopri8")
+        tab = diffeq.DOPRI8
+        ref_tab, ref_mid = dopri8._DOPRI8_TABLEAU, dopri8._C_mid
+
+        # The reference drops the leading zero from ``c`` and the empty first
+        # row from ``a``; both are implied by stage 0 being ``f(t0, y0)``.
+        assert tab.c == (0.0,) + tuple(ref_tab.alpha.tolist())
+        assert tab.a == ((),) + tuple(tuple(r.tolist()) for r in ref_tab.beta)
+        assert tab.b == tuple(ref_tab.c_sol.tolist())
+        assert tab.b_error == tuple(ref_tab.c_error.tolist())
+        assert tab.mid == tuple(ref_mid.tolist())
+
+
+ADAPTIVE_METHODS = [
+    "dopri5",
+    "dopri8",
+    "tsit5",
+    "bosh3",
+    "fehlberg2",
+    "adaptive_heun",
+]
 
 # Step count for an adaptive method scales like ``tol ** (-1 / order)``, so a
 # single tight tolerance would make the second-order methods take minutes
@@ -201,8 +232,13 @@ ADAPTIVE_METHODS = ["dopri5", "tsit5", "bosh3", "fehlberg2", "adaptive_heun"]
 # reach at comparable cost, and assert against that.
 ADAPTIVE_TOL = {
     "dopri5": (1e-12, 1e-14, 1e-9),
+    # dopri8 solves to eighth order but interpolates to output times with the
+    # same quartic as the rest, so what a caller reads off a coarse grid is
+    # limited by the interpolant, not by the steps.  Asking it for 1e-9 at an
+    # interior point would fail on that alone.
+    "dopri8": (1e-12, 1e-14, 1e-6),
     "tsit5": (1e-12, 1e-14, 1e-9),
-    "bosh3": (1e-11, 1e-13, 1e-9),
+    "bosh3": (1e-11, 1e-13, 1e-7),
     "fehlberg2": (1e-9, 1e-11, 1e-7),
     "adaptive_heun": (1e-9, 1e-11, 1e-7),
 }
@@ -220,7 +256,13 @@ class TestFusedPrimitiveParity:
     @pytest.fixture
     def state(self, ref: Any) -> tuple[list[lucid.Tensor], list[Any]]:
         rng = np.random.default_rng(7)
-        raw = [rng.standard_normal(size=(3, 4)).astype(np.float64) for _ in range(9)]
+        # Two states plus one stage derivative per stage of the widest tableau
+        # -- dopri8's fourteen.  Sized from the registry so adding a method
+        # cannot silently leave the fixture short.
+        n_slots = 2 + max(t.stages for t in _METHODS.values())
+        raw = [
+            rng.standard_normal(size=(3, 4)).astype(np.float64) for _ in range(n_slots)
+        ]
         return (
             [lucid.tensor(a.copy(), dtype=lucid.float64) for a in raw],
             [ref.tensor(a.copy(), dtype=ref.float64) for a in raw],

@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add dopri8, closing the last reachable method gap
 
+- add dopri8, closing the last reachable method gap
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
