@@ -247,7 +247,14 @@ def select_initial_step(
     f0 : Tensor
         ``func(t0, y0)``, already computed.
     order : int
-        Order of the method.
+        Order of the *error estimate*, one below the method's own order.  The
+        trial step is sized so the estimated local error lands near the
+        tolerance, and it is the estimate's order that governs how that error
+        shrinks with the step.  Passing the method's order instead makes the
+        first step too large by a factor that grows with the order, which a
+        high-order method never fully recovers from: its step sequence stays
+        shifted, and output times land further inside a step, where only the
+        interpolant's accuracy is available.
     rtol, atol : float
         Tolerances.
     direction : float
@@ -462,7 +469,7 @@ class Stepper:
             step = opts.first_step
         else:
             step = select_initial_step(
-                func, t0, y0, self.f, tableau.order, rtol, atol, direction, scalar
+                func, t0, y0, self.f, tableau.order - 1, rtol, atol, direction, scalar
             )
         self.step = _clamp(step, opts)
 

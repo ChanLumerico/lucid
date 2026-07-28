@@ -30,11 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - implicit Runge-Kutta methods
 
+- add dopri8, closing the last reachable method gap
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
 
 - resolve "rk4" to the same method the reference ODE library does
+
+- size an adaptive method's first step from the error estimate's order
+- size an adaptive method's first step from the error estimate's order
 
 ---
 
