@@ -79,3 +79,6 @@ _converted/
 
 # CLAUDE
 CLAUDE.md
+
+# workspace sync harness (local tooling, not part of the project)
+.sync/
