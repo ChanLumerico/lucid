@@ -1264,6 +1264,155 @@ def _fall(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
     return lucid.stack([y[1], lucid.tensor(-9.8, dtype=y.dtype)], dim=0)
 
 
+class TestEventTimeGradient:
+    """The event time is differentiable through the implicit relation.
+
+    Bisection itself has no derivative -- it compares signs -- so every case
+    here is checking the rerouting, not the search.  Each has a closed form
+    to compare against, because a gradient that is merely plausible is the
+    thing this whole mechanism is most likely to produce.
+    """
+
+    def test_matches_the_closed_form_through_the_initial_state(self) -> None:
+        # Dropped from height h under gravity: t* = sqrt(2h/g), so
+        # dt*/dh = 1 / sqrt(2 h g).
+        h_val, g = 10.0, 9.8
+        h = lucid.tensor([h_val], dtype=lucid.float64, requires_grad=True)
+        y0 = lucid.cat([h, lucid.tensor([0.0], dtype=lucid.float64)], dim=0)
+
+        event_t, _ = diffeq.odeint_event(
+            _fall, y0, 0.0, event_fn=lambda t, y: y[0], rtol=1e-12, atol=1e-14
+        )
+        assert event_t.requires_grad
+        event_t.backward()
+
+        assert h.grad is not None
+        assert float(h.grad.item()) == pytest.approx(
+            1.0 / math.sqrt(2 * h_val * g), rel=1e-9
+        )
+
+    def test_matches_the_closed_form_through_a_parameter(self) -> None:
+        # y' = -k y from 1, event at y = 1/2: t* = ln 2 / k, dt*/dk = -ln 2 / k^2.
+        k = lucid.tensor([2.0], dtype=lucid.float64, requires_grad=True)
+        event_t, _ = diffeq.odeint_event(
+            lambda t, y: -k * y,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            0.0,
+            event_fn=lambda t, y: y[0] - 0.5,
+            rtol=1e-12,
+            atol=1e-14,
+        )
+        event_t.backward()
+
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx(-math.log(2) / 4.0, rel=1e-9)
+
+    def test_accounts_for_the_event_function_depending_on_time(self) -> None:
+        # g(t, y) = y - t, so the denominator picks up a dg/dt term that a
+        # state-only derivation would drop.  Here t* solves e^{-k t} = t and
+        # dt*/dk = -t* e^{-k t*} / (1 + k e^{-k t*}).
+        k_val = 2.0
+        k = lucid.tensor([k_val], dtype=lucid.float64, requires_grad=True)
+        event_t, _ = diffeq.odeint_event(
+            lambda t, y: -k * y,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            0.0,
+            event_fn=lambda t, y: y[0] - t,
+            rtol=1e-12,
+            atol=1e-14,
+        )
+        t_star = float(event_t.item())
+        event_t.backward()
+
+        decay = math.exp(-k_val * t_star)
+        want = -t_star * decay / (1.0 + k_val * decay)
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx(want, rel=1e-8)
+
+    def test_the_state_at_the_event_moves_with_the_event_time(self) -> None:
+        # The state is read off the interpolant at a host float, so nothing
+        # records that shifting t* shifts it too.  Differentiating the
+        # solution as well as the time exercises that correction; without it
+        # this gradient is short by grad_state . f.
+        def solve(k_val: float) -> tuple[lucid.Tensor, lucid.Tensor]:
+            k = lucid.tensor([k_val], dtype=lucid.float64, requires_grad=True)
+            event_t, sol = diffeq.odeint_event(
+                lambda t, y: -k * y,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                0.0,
+                event_fn=lambda t, y: y[0] - 0.5,
+                rtol=1e-13,
+                atol=1e-15,
+            )
+            return k, event_t + sol.sum()
+
+        k, loss = solve(2.0)
+        loss.backward()
+
+        eps = 1e-6
+        hi = float(solve(2.0 + eps)[1].item())
+        lo = float(solve(2.0 - eps)[1].item())
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx((hi - lo) / (2 * eps), rel=1e-5)
+
+    def test_reverse_time_carries_the_gradient_too(self) -> None:
+        # Backwards to y = 2: t* = -ln 2 / k, so the derivative flips sign.
+        k = lucid.tensor([2.0], dtype=lucid.float64, requires_grad=True)
+        event_t, _ = diffeq.odeint_event(
+            lambda t, y: -k * y,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            0.0,
+            event_fn=lambda t, y: y[0] - 2.0,
+            reverse_time=True,
+            rtol=1e-12,
+            atol=1e-14,
+        )
+        event_t.backward()
+
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx(math.log(2) / 4.0, rel=1e-8)
+
+    def test_odeint_with_event_fn_is_differentiable_as_well(self) -> None:
+        # The same rerouting has to reach the tuple-returning form of odeint,
+        # not just the odeint_event convenience wrapper.
+        a = lucid.tensor([1.5], dtype=lucid.float64, requires_grad=True)
+        event_t, _ = diffeq.odeint(
+            _decay,
+            a,
+            [0.0, 1.0],
+            event_fn=lambda t, y: y[0] - 1.0,
+            rtol=1e-12,
+            atol=1e-14,
+        )
+        event_t.backward()
+
+        # y = a e^{-t} reaches 1 at t* = ln a, so dt*/da = 1/a.
+        assert a.grad is not None
+        assert float(a.grad.item()) == pytest.approx(1.0 / 1.5, rel=1e-9)
+
+    def test_costs_nothing_when_no_gradient_is_wanted(self) -> None:
+        # The rerouting evaluates the right-hand side, so it must not run at
+        # all on a graph-free solve.
+        calls = [0]
+
+        def counted(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            calls[0] += 1
+            return -y
+
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        event_t, _ = diffeq.odeint_event(
+            counted, y0, 0.0, event_fn=lambda t, y: y[0] - 0.5
+        )
+        assert not event_t.requires_grad
+        before = calls[0]
+
+        y0_grad = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        calls[0] = 0
+        diffeq.odeint_event(counted, y0_grad, 0.0, event_fn=lambda t, y: y[0] - 0.5)
+        # One extra call: the slope used by the state's correction term.
+        assert calls[0] == before + 1
+
+
 class TestOdeintEvent:
     def test_falling_body_hits_the_ground_at_the_analytic_time(self) -> None:
         y0 = lucid.tensor([10.0, 0.0], dtype=lucid.float64)
@@ -1392,9 +1541,15 @@ class TestOdeintEvent:
         )
         sol[-1].sum().backward()
         assert y0.grad is not None
-        # Holding the event time fixed, y_event = y0 * exp(-t_e) and
-        # exp(-t_e) = 0.5 by construction.
-        assert float(y0.grad.item()) == pytest.approx(0.5, abs=1e-7)
+        # Zero, and not by accident: the event fires exactly when y reaches
+        # 1/2, so the state there is 1/2 whatever y0 was.  Raising y0 only
+        # moves the event later, and the two effects cancel exactly.
+        #
+        # Holding the event time fixed instead gives 1/2, which is what this
+        # asserted while the event time carried no gradient.  The whole point
+        # of the implicit-function rerouting is that the time is no longer
+        # held fixed, so the total derivative is what a caller now gets.
+        assert float(y0.grad.item()) == pytest.approx(0.0, abs=1e-9)
 
     def test_rejects_a_non_scalar_event_fn(self) -> None:
         y0 = lucid.tensor([1.0, 2.0], dtype=lucid.float64)

@@ -494,8 +494,15 @@ def odeint(
             options=options,
             direction=direction,
         )
+        # Bisection compares signs, so the event time arrives with no graph
+        # behind it.  It is still a differentiable function of everything the
+        # trajectory depends on, and this ties it back to the state at the
+        # event, which is the tensor that carries that graph.
+        event_time, y_event = _event.differentiable_event_time(
+            scalar(event_t), y_event, func, event_fn
+        )
         pair = _event.solution_pair(y0, y_event)
-        return scalar(event_t), _unpack(pair, shapes)
+        return event_time, _unpack(pair, shapes)
 
     if multistep is not None:
         y, trajectory = _multistep.integrate(
@@ -755,9 +762,11 @@ def odeint_event(
     step that brackets it, so it costs event-function calls but no extra
     right-hand-side evaluations.
 
-    ``event_t`` carries no gradient.  Making it differentiable needs the
-    implicit-function rerouting the reference implementation applies, which
-    is not implemented here; ``solution`` is differentiable as usual.
+    ``event_t`` is differentiable, though bisection itself is not: the event
+    time is pinned by ``g(t*, y(t*)) = 0``, and differentiating that identity
+    routes its gradient onto the state at the event, which does carry a graph.
+    Expect total derivatives -- the state at the event moves with the event
+    time, so differentiating ``solution[-1]`` accounts for that too.
 
     Examples
     --------

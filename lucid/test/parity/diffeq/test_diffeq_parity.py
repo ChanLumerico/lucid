@@ -192,6 +192,52 @@ class TestTorchdiffeqParity:
         )
         assert_close(lucid_out, ref_out, atol=1e-10, rtol=1e-9)
 
+    @pytest.mark.parametrize("reverse", [False, True])
+    def test_event_time_gradient_matches_torchdiffeq(
+        self, reverse: bool, ref: Any
+    ) -> None:
+        """The implicit-function rerouting has to agree, not merely exist.
+
+        A gradient obtained this way is easy to get plausibly wrong -- a
+        dropped ``dg/dt`` or a sign on the reverse-time branch still produces
+        a finite, believable number.  The event function used here depends on
+        both arguments so neither term can be dropped unnoticed.
+        """
+        torchdiffeq = pytest.importorskip("torchdiffeq")
+        target = 2.0 if reverse else 0.5
+
+        k = lucid.tensor([2.0], dtype=lucid.float64, requires_grad=True)
+        event_t, _ = diffeq.odeint_event(
+            lambda t, y: -k * y,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            0.0,
+            event_fn=lambda t, y: y[0] - target,
+            reverse_time=reverse,
+            rtol=1e-12,
+            atol=1e-14,
+        )
+        event_t.backward()
+
+        ref_k = ref.tensor([2.0], dtype=ref.float64, requires_grad=True)
+        ref_event_t, _ = torchdiffeq.odeint_event(
+            lambda t, y: -ref_k * y,
+            ref.tensor([1.0], dtype=ref.float64),
+            ref.tensor(0.0, dtype=ref.float64),
+            event_fn=lambda t, y: y[0] - target,
+            reverse_time=reverse,
+            rtol=1e-12,
+            atol=1e-14,
+        )
+        ref_event_t.backward()
+
+        assert float(event_t.item()) == pytest.approx(
+            float(ref_event_t.item()), rel=1e-9
+        )
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx(
+            float(ref_k.grad.item()), rel=1e-9
+        )
+
     def test_dopri8_tableau_is_transcribed_exactly(self) -> None:
         """Pin all ~130 dopri8 coefficients against the reference's own.
 

@@ -12,10 +12,12 @@ right-hand-side evaluations along the way.
 """
 
 import math
-from typing import Callable, Sequence
+from typing import Callable, Sequence, cast, final, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid.autograd._functional import vjp as _vjp
+from lucid.autograd.function import Function, FunctionCtx
 from lucid.diffeq import _adaptive, _fixed, _fused, _implicit
 from lucid.diffeq._tableau import ButcherTableau
 
@@ -28,6 +30,10 @@ _EVENT_TOL = 1e-12
 
 # A solve that never fires has to end somehow; this bounds it.
 _MAX_EVENT_STEPS = 100_000
+
+# Keeps the implicit-function denominator from dividing by zero when the event
+# is tangential.  Matches the reference implementation's guard.
+_EVENT_DENOM_FLOOR = 1e-12
 
 
 def _sign(value: float) -> float:
@@ -297,3 +303,140 @@ def solution_pair(y0: Tensor, y_event: Tensor) -> Tensor:
     return lucid.stack(
         [s if s.dtype == target else s.to(target) for s in states], dim=0
     )
+
+
+@final
+class _EventTimeGradient(Function):
+    r"""Give the event time a derivative, by way of the implicit relation.
+
+    Bisection reaches the event time through sign comparisons, and a
+    comparison has no derivative, so the time arrives with no graph behind it.
+    It is still a differentiable function of everything the trajectory depends
+    on, because it is pinned by
+
+    .. math::
+
+        g(t^*, y(t^*)) = 0.
+
+    Differentiating that identity along the trajectory and solving for
+    :math:`t^*` gives
+
+    .. math::
+
+        \frac{\partial t^*}{\partial \theta}
+        = -\frac{\partial_y g \cdot \partial_\theta y}
+                {\partial_t g + \partial_y g \cdot f},
+
+    which says a cotangent arriving at the event time can be turned into one
+    on the state at the event -- and *that* is connected to ``y0`` and to any
+    parameters.  So the node takes the state as its input and the time as its
+    output, and its backward is the fraction above.
+
+    The denominator is the total derivative of the event function along the
+    trajectory.  It vanishes exactly when the event is tangential rather than
+    transversal, which is the case where the event time genuinely has no
+    derivative -- an arbitrarily small change can make the crossing disappear.
+    """
+
+    @override
+    @staticmethod
+    def forward(  # type: ignore[override]  # narrower signature by design
+        ctx: FunctionCtx,
+        state_t: Tensor,
+        *,
+        event_t: Tensor,
+        func: Callable[[Tensor, Tensor], Tensor],
+        event_fn: Callable[[Tensor, Tensor], Tensor],
+    ) -> Tensor:
+        """Hand back the event time; the derivative is all in ``backward``."""
+        ctx.save_for_backward(event_t.detach(), state_t.detach())
+        ctx.func = func
+        ctx.event_fn = event_fn
+        return event_t.detach()
+
+    @override
+    @staticmethod
+    def backward(  # type: ignore[override]  # narrower signature by design
+        ctx: FunctionCtx, grad_t: Tensor
+    ) -> Tensor:
+        """Turn the event time's cotangent into the state's."""
+        event_t, state_t = ctx.saved_tensors
+        func = cast(Callable[[Tensor, Tensor], Tensor], ctx.func)
+        event_fn = cast(Callable[[Tensor, Tensor], Tensor], ctx.event_fn)
+
+        # Both need gradient tracking for the partials of ``g`` to exist; the
+        # graph built here is local to this backward pass.
+        t_var = event_t.detach().requires_grad_(True)
+        y_var = state_t.detach().requires_grad_(True)
+
+        with lucid.enable_grad():
+            f_val = func(t_var, y_var).detach()
+            _, grads = _vjp(
+                lambda tt, yy: event_fn(tt, yy).reshape(()),
+                (t_var, y_var),
+                lucid.ones((), dtype=state_t.dtype),
+            )
+
+        dg_dt, dg_dy = grads
+        if dg_dy is None:
+            # ``g`` ignores the state entirely, so the event time does not
+            # depend on the trajectory and there is nothing to route.
+            return lucid.zeros_like(state_t)
+        if dg_dt is None:
+            dg_dt = lucid.zeros((), dtype=state_t.dtype)
+
+        dcdt = dg_dt + (dg_dy * f_val).sum()
+        return dg_dy * (-grad_t.reshape(()) / (dcdt + _EVENT_DENOM_FLOOR))
+
+
+def differentiable_event_time(
+    event_t: Tensor,
+    state_t: Tensor,
+    func: Callable[[Tensor, Tensor], Tensor],
+    event_fn: Callable[[Tensor, Tensor], Tensor],
+) -> tuple[Tensor, Tensor]:
+    """Attach derivatives to an event time and to the state that shares it.
+
+    Parameters
+    ----------
+    event_t : Tensor
+        The event time found by bisection, carrying no graph.
+    state_t : Tensor
+        The state there -- the tensor holding the graph back to ``y0`` and any
+        parameters.
+    func : callable
+        Right-hand side ``f(t, y)``.
+    event_fn : callable
+        The event function ``g(t, y)``.
+
+    Returns
+    -------
+    tuple of Tensor
+        ``(event_t, state_t)``, both differentiable.
+
+    Notes
+    -----
+    Two derivatives are missing before this runs, and both are restored here.
+    The event time gets one from :class:`_EventTimeGradient`.  The state gets
+    the other from the correction below: the state was read off the
+    interpolant at a *host* float, so nothing recorded that moving the event
+    time moves the state with it, at rate ``f``.  Adding ``f * (t - t.detach())``
+    changes no value -- the bracket is identically zero -- while giving
+    autograd exactly that missing edge.
+
+    When nothing upstream requires a gradient this is a pair of detaches and
+    costs nothing.  Otherwise it costs one right-hand-side evaluation and one
+    vector-Jacobian product through ``event_fn``, both only in ``backward``.
+    """
+    if not state_t.requires_grad:
+        return event_t, state_t
+
+    time = cast(
+        Tensor,
+        _EventTimeGradient.apply(
+            state_t, event_t=event_t, func=func, event_fn=event_fn
+        ),
+    )
+    with lucid.no_grad():
+        slope = func(event_t, state_t)
+    return time, state_t + slope * (time - time.detach())
