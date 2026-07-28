@@ -23,7 +23,15 @@ from typing import Callable, Sequence, SupportsFloat, cast
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.diffeq import _adaptive, _event, _fixed, _flatten, _fused, _multistep
+from lucid.diffeq import (
+    _adaptive,
+    _event,
+    _fixed,
+    _flatten,
+    _fused,
+    _implicit,
+    _multistep,
+)
 from lucid.diffeq._tableau import RK4, ButcherTableau, _DEFAULT_METHOD, _METHODS
 
 # The fixed-grid loop and the tests both reach for this; it is the fused
@@ -316,7 +324,7 @@ def odeint(
 ) -> State | tuple[Tensor, State]:
     r"""Integrate ``dy/dt = f(t, y)``.
 
-    Three families are reachable through the same call, and which one runs
+    Four families are reachable through the same call, and which one runs
     follows from ``method``:
 
     **Adaptive** (the default, and anything carrying an embedded error
@@ -362,8 +370,10 @@ def odeint(
         ``None`` selects ``"dopri5"``.  Otherwise one of ``"dopri5"``,
         ``"tsit5"``, ``"bosh3"``, ``"fehlberg2"``, ``"adaptive_heun"``,
         ``"euler"``, ``"midpoint"``, ``"heun2"``, ``"heun3"``, ``"rk4"``,
-        ``"explicit_adams"``, ``"implicit_adams"``, ``"fixed_adams"``, or a
-        custom :class:`ButcherTableau`.
+        ``"explicit_adams"``, ``"implicit_adams"``, ``"fixed_adams"``,
+        ``"implicit_euler"``, ``"implicit_midpoint"``, ``"trapezoid"``,
+        ``"radauIIA3"``, ``"radauIIA5"``, ``"gl4"``, ``"gl6"``, ``"sdirk2"``,
+        ``"trbdf2"``, or a custom :class:`ButcherTableau`.
     options : dict or None, default=None
         Per-method settings.  Adaptive methods accept ``min_step``,
         ``max_step``, ``first_step``, ``step_t``, ``jump_t``, ``safety``,
@@ -382,6 +392,11 @@ def odeint(
         corrected variants, whose stability holds up far better.  Order also
         ramps from a Runge-Kutta start, which caps the accuracy the first
         steps can contribute regardless of ``max_order``.
+
+        Implicit methods accept the fixed-step keys plus ``max_iters``
+        (default 100), the ceiling on iterations of the nonlinear solve.  A
+        step whose solve runs out of iterations warns rather than passing off
+        an unconverged iterate as a completed step.
     event_fn : callable or None, default=None
         ``g(t, y)`` returning a single-element tensor.  When given, the solve
         ignores every entry of ``t`` but the first, runs until ``g`` changes
@@ -490,6 +505,17 @@ def odeint(
             check,
             rtol=rtol,
             atol=atol,
+            options=options,
+            return_trajectory=return_trajectory,
+        )
+    elif tableau.is_implicit:
+        y, trajectory = _implicit.integrate(
+            func,
+            y0,
+            grid,
+            tableau,
+            scalar,
+            check,
             options=options,
             return_trajectory=return_trajectory,
         )
@@ -623,7 +649,11 @@ def odeint_dense(
 
     scalar, check = _make_callbacks(y0)
 
-    if tableau.is_adaptive:
+    if tableau.is_implicit:
+        segments = _implicit.integrate_dense(
+            func, y0, t0, t1, tableau, scalar, check, options=options
+        )
+    elif tableau.is_adaptive:
         segments = _adaptive.integrate_dense(
             func,
             y0,

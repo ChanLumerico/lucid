@@ -690,3 +690,102 @@ class TestMultistepParity:
             options={"max_order": 5},
         )
         assert_close(got, ref_out, atol=1e-8)
+
+
+IMPLICIT_METHODS = [
+    "implicit_euler",
+    "implicit_midpoint",
+    "trapezoid",
+    "radauIIA3",
+    "radauIIA5",
+    "gl4",
+    "gl6",
+    "sdirk2",
+    "trbdf2",
+]
+
+
+def _stability_step(ref: Any, method: str, z: float) -> float:
+    r"""One step of ``y' = lambda*y`` from the tableau, in closed form.
+
+    For a linear problem the stage equations stop being nonlinear: with
+    ``z = lambda*dt`` they reduce to ``(I - z*A) K = lambda*y*1``, so the step
+    multiplies the state by the method's stability function
+
+    .. math::
+        R(z) = 1 + z\,b^{T}(I - zA)^{-1}\mathbf{1}
+
+    computed here with the reference framework's linear algebra.  Nothing
+    about Lucid's nonlinear solver enters, which is what makes this an
+    independent check on both the derived tableau and the solve that is
+    supposed to land on it.
+    """
+    tableau = _METHODS[method]
+    stages = tableau.stages
+    a = ref.tensor([list(row) for row in tableau.a], dtype=ref.float64)
+    b = ref.tensor(list(tableau.b), dtype=ref.float64)
+    ones = ref.ones(stages, dtype=ref.float64)
+    lhs = ref.eye(stages, dtype=ref.float64) - z * a
+    solved = ref.linalg.solve(lhs, ones)
+    return float(1.0 + z * ref.dot(b, solved))
+
+
+@pytest.mark.parity
+class TestImplicitParity:
+    """Implicit stepping against the closed-form linear solution."""
+
+    @pytest.mark.parametrize("method", IMPLICIT_METHODS)
+    @pytest.mark.parametrize("rate", [-1.0, -50.0, 2.0])
+    def test_matches_the_stability_function(
+        self, ref: Any, method: str, rate: float
+    ) -> None:
+        steps = 20
+        dt = 1.0 / steps
+        got = diffeq.odeint(
+            lambda t, y: rate * y,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            _grid(steps),
+            method=method,
+            return_trajectory=False,
+        )
+        want = _stability_step(ref, method, rate * dt) ** steps
+        assert float(got.item()) == pytest.approx(want, rel=1e-9)
+
+    @pytest.mark.parametrize("method", IMPLICIT_METHODS)
+    def test_matches_the_closed_form_on_a_coupled_system(
+        self, ref: Any, method: str
+    ) -> None:
+        # A 2x2 system, so the stage solve is genuinely multidimensional
+        # rather than a scalar equation dressed up as one.
+        matrix = [[-3.0, 1.0], [1.0, -3.0]]
+        y0_val = [1.0, 0.0]
+        steps = 20
+        dt = 1.0 / steps
+
+        got = diffeq.odeint(
+            lambda t, y: lucid.matmul(
+                lucid.tensor(matrix, dtype=lucid.float64), y.reshape(2, 1)
+            ).reshape(2),
+            lucid.tensor(y0_val, dtype=lucid.float64),
+            _grid(steps),
+            method=method,
+            return_trajectory=False,
+        )
+
+        # Same construction as above, one Kronecker level up: the stage system
+        # is (I - dt*(A kron M)) K = (1 kron M) y.
+        tableau = _METHODS[method]
+        stages = tableau.stages
+        m = ref.tensor(matrix, dtype=ref.float64)
+        a = ref.tensor([list(row) for row in tableau.a], dtype=ref.float64)
+        b = ref.tensor(list(tableau.b), dtype=ref.float64)
+        y = ref.tensor(y0_val, dtype=ref.float64)
+        big_eye = ref.eye(2 * stages, dtype=ref.float64)
+
+        for _ in range(steps):
+            lhs = big_eye - dt * ref.kron(a, m)
+            rhs = ref.cat([m @ y for _ in range(stages)])
+            k = ref.linalg.solve(lhs, rhs).reshape(stages, 2)
+            y = y + dt * (b @ k)
+
+        assert got.tolist() == pytest.approx(y.tolist(), rel=1e-8, abs=1e-12)

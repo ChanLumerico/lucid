@@ -9,7 +9,7 @@ Surface: :func:`odeint` integrates to a set of times you name up front and
 :func:`odeint_adjoint` trades exactness for constant memory when the solve is
 long enough that retained stages dominate, and :func:`odeint_event` runs until a
 condition fires rather than to a time you name;
-:class:`ButcherTableau` is the coefficient table they dispatch on.  Ten
+:class:`ButcherTableau` is the coefficient table they dispatch on.  Nineteen
 built-in tableaux are exported, and a custom tableau is accepted anywhere a
 method name is.
 
@@ -22,12 +22,21 @@ error inside ``rtol`` / ``atol`` and interpolates to the times in ``t``.  A
 :data:`HEUN3`, :data:`RK4` — steps once per interval of ``t``, so ``t`` is the
 integration grid itself.
 
+Two further fixed-step families trade a different way.  **Adams multistep** —
+method names ``"explicit_adams"``, ``"implicit_adams"`` and ``"fixed_adams"``,
+which are not tableaux — reaches high order by reusing derivatives from
+earlier steps, so a step costs one evaluation whatever its order.  **Implicit**
+methods — :data:`IMPLICIT_EULER`, :data:`IMPLICIT_MIDPOINT`, :data:`TRAPEZOID`,
+:data:`RADAU_IIA3`, :data:`RADAU_IIA5`, :data:`GL4`, :data:`GL6`,
+:data:`SDIRK2` and :data:`TRBDF2` — solve a nonlinear system every step, which
+is expensive but is what lets them take large steps on a stiff problem, where
+an explicit method is held to tiny ones by stability alone.
+
 Everything here is reached as ``lucid.diffeq.*`` and nowhere else — there are
 no top-level aliases and no ``Tensor`` methods, so each name has exactly one
 canonical path.
 
-The O(1)-memory adjoint, event handling, implicit methods, and stochastic
-differential equations are not implemented yet.
+Stochastic differential equations are not implemented yet.
 
 Attributes
 ----------
@@ -59,6 +68,33 @@ HEUN3 : ButcherTableau
 RK4 : ButcherTableau
     The classical Runge-Kutta method — four stages, fourth order.  Method
     name ``"rk4"``.
+IMPLICIT_EULER : ButcherTableau
+    Backward Euler — one stage, first order, implicit.  The most stable
+    method here and the least accurate.  Method name ``"implicit_euler"``.
+IMPLICIT_MIDPOINT : ButcherTableau
+    The implicit midpoint rule — one stage, second order, implicit.  Method
+    name ``"implicit_midpoint"``.
+TRAPEZOID : ButcherTableau
+    The trapezoidal rule — two stages, second order, implicit.  Method name
+    ``"trapezoid"``.
+RADAU_IIA3 : ButcherTableau
+    Radau IIA — two stages, third order, implicit.  Method name
+    ``"radauIIA3"``.
+RADAU_IIA5 : ButcherTableau
+    Radau IIA — three stages, fifth order, implicit.  Method name
+    ``"radauIIA5"``.
+GL4 : ButcherTableau
+    Gauss-Legendre — two stages, fourth order, implicit.  Method name
+    ``"gl4"``.
+GL6 : ButcherTableau
+    Gauss-Legendre — three stages, sixth order, implicit.  The highest order
+    per stage any Runge-Kutta method reaches.  Method name ``"gl6"``.
+SDIRK2 : ButcherTableau
+    Singly diagonally implicit — two stages, second order.  Method name
+    ``"sdirk2"``.
+TRBDF2 : ButcherTableau
+    TR-BDF2 — three stages, second order, implicit.  Method name
+    ``"trbdf2"``.
 """
 
 from lucid.diffeq._adjoint import odeint_adjoint
@@ -69,10 +105,19 @@ from lucid.diffeq._tableau import (
     DOPRI5,
     EULER,
     FEHLBERG2,
+    GL4,
+    GL6,
     HEUN2,
     HEUN3,
+    IMPLICIT_EULER,
+    IMPLICIT_MIDPOINT,
     MIDPOINT,
+    RADAU_IIA3,
+    RADAU_IIA5,
     RK4,
+    SDIRK2,
+    TRAPEZOID,
+    TRBDF2,
     TSIT5,
     ButcherTableau,
 )
@@ -93,4 +138,13 @@ __all__ = [
     "HEUN2",
     "HEUN3",
     "RK4",
+    "IMPLICIT_EULER",
+    "IMPLICIT_MIDPOINT",
+    "TRAPEZOID",
+    "RADAU_IIA3",
+    "RADAU_IIA5",
+    "GL4",
+    "GL6",
+    "SDIRK2",
+    "TRBDF2",
 ]

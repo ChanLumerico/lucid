@@ -6,7 +6,7 @@ import pytest
 
 import lucid
 import lucid.diffeq as diffeq
-from lucid.diffeq import _multistep
+from lucid.diffeq import _collocation, _multistep
 from lucid.diffeq._solvers import _combine
 from lucid.diffeq._tableau import _METHODS
 
@@ -55,10 +55,19 @@ class TestButcherTableau:
             "dopri5",
             "euler",
             "fehlberg2",
+            "gl4",
+            "gl6",
             "heun2",
             "heun3",
+            "implicit_euler",
+            "implicit_midpoint",
             "midpoint",
+            "radauIIA3",
+            "radauIIA5",
             "rk4",
+            "sdirk2",
+            "trapezoid",
+            "trbdf2",
             "tsit5",
         ]
         for name, tableau in _METHODS.items():
@@ -84,7 +93,9 @@ class TestButcherTableau:
             diffeq.RK4.order = 5  # type: ignore[misc]
 
     def test_rejects_non_triangular_row(self) -> None:
-        with pytest.raises(ValueError, match="strictly lower triangular"):
+        # One entry per row is neither the ragged shape an explicit tableau
+        # has nor the square one an implicit tableau has.
+        with pytest.raises(ValueError, match="ragged .* or square"):
             diffeq.ButcherTableau(
                 a=((0.0,), (1.0,)), b=(0.5, 0.5), c=(0.0, 1.0), order=2, name="bad"
             )
@@ -245,7 +256,7 @@ class TestMethodResolution:
     def test_unknown_method_lists_alternatives(self) -> None:
         y0 = lucid.tensor([1.0])
         with pytest.raises(ValueError, match="unknown method"):
-            diffeq.odeint(_decay, y0, _grid(2), method="radauIIA5")
+            diffeq.odeint(_decay, y0, _grid(2), method="radauIIA7")
 
     def test_non_method_type_rejected(self) -> None:
         y0 = lucid.tensor([1.0])
@@ -1166,7 +1177,7 @@ class TestOdeintAdjoint:
     def test_rejects_bad_method_before_integrating(self) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         with pytest.raises(ValueError, match="unknown method"):
-            diffeq.odeint_adjoint(_decay, y0, [0.0, 1.0], method="radauIIA5")
+            diffeq.odeint_adjoint(_decay, y0, [0.0, 1.0], method="radauIIA7")
 
 
 def _fall(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
@@ -1437,7 +1448,9 @@ class TestInterpolantQuality:
             assert float(event_t.item()) == pytest.approx(exact, abs=1e-9)
 
 
-def _osc_tuple(t: lucid.Tensor, y: tuple[lucid.Tensor, ...]) -> tuple[lucid.Tensor, ...]:
+def _osc_tuple(
+    t: lucid.Tensor, y: tuple[lucid.Tensor, ...]
+) -> tuple[lucid.Tensor, ...]:
     """Harmonic oscillator over a two-component state of differing shapes."""
     pos, vel = y
     return (vel.reshape(1, 2), -pos.reshape(2))
@@ -1460,9 +1473,7 @@ class TestTupleState:
 
     def test_trajectory_keeps_component_shapes(self) -> None:
         y0 = self._initial()
-        traj = diffeq.odeint(
-            _osc_tuple, y0, [0.0, math.pi / 2], rtol=1e-12, atol=1e-14
-        )
+        traj = diffeq.odeint(_osc_tuple, y0, [0.0, math.pi / 2], rtol=1e-12, atol=1e-14)
         assert isinstance(traj, tuple) and len(traj) == 2
         assert traj[0].shape == (2, 1, 2)
         assert traj[1].shape == (2, 2)
@@ -1471,9 +1482,7 @@ class TestTupleState:
         # p(t) = p0 cos t + v0 sin t, v(t) = -p0 sin t + v0 cos t.  A quarter
         # period swaps them.
         y0 = self._initial()
-        traj = diffeq.odeint(
-            _osc_tuple, y0, [0.0, math.pi / 2], rtol=1e-12, atol=1e-14
-        )
+        traj = diffeq.odeint(_osc_tuple, y0, [0.0, math.pi / 2], rtol=1e-12, atol=1e-14)
         assert traj[0].tolist()[-1][0] == pytest.approx([0.0, 1.0], abs=1e-9)
         assert traj[1].tolist()[-1] == pytest.approx([-1.0, 0.0], abs=1e-9)
 
@@ -1485,9 +1494,7 @@ class TestTupleState:
 
     def test_final_only_keeps_component_shapes(self) -> None:
         y0 = self._initial()
-        out = diffeq.odeint(
-            _osc_tuple, y0, [0.0, 1.0], return_trajectory=False
-        )
+        out = diffeq.odeint(_osc_tuple, y0, [0.0, 1.0], return_trajectory=False)
         assert isinstance(out, tuple)
         assert [tuple(x.shape) for x in out] == [(1, 2), (2,)]
 
@@ -1517,7 +1524,9 @@ class TestTupleState:
         a0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
         b0 = lucid.tensor([[2.0]], dtype=lucid.float64, requires_grad=True)
 
-        def rhs(t: lucid.Tensor, y: tuple[lucid.Tensor, ...]) -> tuple[lucid.Tensor, ...]:
+        def rhs(
+            t: lucid.Tensor, y: tuple[lucid.Tensor, ...]
+        ) -> tuple[lucid.Tensor, ...]:
             return (-y[0], -y[1])
 
         traj = diffeq.odeint(rhs, (a0, b0), [0.0, 1.0], rtol=1e-12, atol=1e-14)
@@ -1538,9 +1547,12 @@ class TestTupleState:
     def test_event(self) -> None:
         y0 = self._initial()
         event_t, sol = diffeq.odeint_event(
-            _osc_tuple, y0, 0.0,
+            _osc_tuple,
+            y0,
+            0.0,
             event_fn=lambda t, y: y[0].reshape(2)[0],
-            rtol=1e-12, atol=1e-14,
+            rtol=1e-12,
+            atol=1e-14,
         )
         assert float(event_t.item()) == pytest.approx(math.pi / 2, abs=1e-8)
         assert isinstance(sol, tuple)
@@ -1551,7 +1563,9 @@ class TestTupleState:
         a0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
         b0 = lucid.tensor([[2.0]], dtype=lucid.float64, requires_grad=True)
 
-        def rhs(t: lucid.Tensor, y: tuple[lucid.Tensor, ...]) -> tuple[lucid.Tensor, ...]:
+        def rhs(
+            t: lucid.Tensor, y: tuple[lucid.Tensor, ...]
+        ) -> tuple[lucid.Tensor, ...]:
             return (-k * y[0], -k * y[1])
 
         out = diffeq.odeint_adjoint(
@@ -1661,7 +1675,9 @@ class TestMultistep:
     def _uniform(n: int) -> list[float]:
         return [i / n for i in range(n + 1)]
 
-    @pytest.mark.parametrize("method", ["explicit_adams", "implicit_adams", "fixed_adams"])
+    @pytest.mark.parametrize(
+        "method", ["explicit_adams", "implicit_adams", "fixed_adams"]
+    )
     def test_solves_exponential_decay(self, method: str) -> None:
         y = diffeq.odeint(
             self._decay,
@@ -1704,12 +1720,20 @@ class TestMultistep:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         opts = {"max_order": 5}
         pred = diffeq.odeint(
-            self._decay, y0, grid, method="explicit_adams",
-            options=opts, return_trajectory=False,
+            self._decay,
+            y0,
+            grid,
+            method="explicit_adams",
+            options=opts,
+            return_trajectory=False,
         )
         corr = diffeq.odeint(
-            self._decay, y0, grid, method="implicit_adams",
-            options=opts, return_trajectory=False,
+            self._decay,
+            y0,
+            grid,
+            method="implicit_adams",
+            options=opts,
+            return_trajectory=False,
         )
         assert abs(float(corr.item()) - self.DECAY_EXACT) < abs(
             float(pred.item()) - self.DECAY_EXACT
@@ -1760,8 +1784,12 @@ class TestMultistep:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         grid = [1.0 - i / 200 for i in range(201)]
         y = diffeq.odeint(
-            self._decay, y0, grid, method="implicit_adams",
-            options={"max_order": 5}, return_trajectory=False,
+            self._decay,
+            y0,
+            grid,
+            method="implicit_adams",
+            options={"max_order": 5},
+            return_trajectory=False,
         )
         assert float(y.item()) == pytest.approx(math.e, abs=1e-9)
 
@@ -1830,11 +1858,15 @@ class TestMultistep:
     def test_the_unknown_method_error_lists_the_adams_names(self) -> None:
         with pytest.raises(ValueError, match="explicit_adams"):
             diffeq.odeint(
-                self._decay, lucid.tensor([1.0], dtype=lucid.float64), [0.0, 1.0],
+                self._decay,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                [0.0, 1.0],
                 method="nope",
             )
 
-    @pytest.mark.parametrize("method", ["explicit_adams", "implicit_adams", "fixed_adams"])
+    @pytest.mark.parametrize(
+        "method", ["explicit_adams", "implicit_adams", "fixed_adams"]
+    )
     def test_dense_output_refuses_an_adams_method(self, method: str) -> None:
         # Better a clear refusal than a quietly cruder interpolant.
         with pytest.raises(NotImplementedError, match="no dense output"):
@@ -1854,4 +1886,310 @@ class TestMultistep:
                 0.0,
                 event_fn=lambda t, y: y[0] - 0.5,
                 method="fixed_adams",
+            )
+
+
+IMPLICIT_ORDERS = [
+    ("implicit_euler", 1),
+    ("implicit_midpoint", 2),
+    ("trapezoid", 2),
+    ("radauIIA3", 3),
+    ("gl4", 4),
+    ("radauIIA5", 5),
+    ("gl6", 6),
+    ("sdirk2", 2),
+    ("trbdf2", 2),
+]
+
+
+class TestDerivedTableaux:
+    """The implicit tableaux are derived at import, so the derivation is tested.
+
+    A mistyped coefficient does not raise — it quietly costs an order, which
+    is the failure mode these checks exist to catch.
+    """
+
+    @pytest.mark.parametrize(("name", "order"), IMPLICIT_ORDERS)
+    def test_reaches_its_stated_order(self, name: str, order: int) -> None:
+        tableau = _METHODS[name]
+        assert _collocation.quadrature_order(tableau.b, tableau.c) == order
+
+    @pytest.mark.parametrize(("name", "_order"), IMPLICIT_ORDERS)
+    def test_rows_are_consistent(self, name: str, _order: int) -> None:
+        # c[i] == sum(a[i]) is what makes the stage times agree with the stage
+        # states; ButcherTableau enforces it, so this pins the derivation.
+        tableau = _METHODS[name]
+        for i, row in enumerate(tableau.a):
+            assert sum(row) == pytest.approx(tableau.c[i], abs=1e-12)
+        assert sum(tableau.b) == pytest.approx(1.0, abs=1e-12)
+
+    @pytest.mark.parametrize(("name", "_order"), IMPLICIT_ORDERS)
+    def test_is_classified_implicit(self, name: str, _order: int) -> None:
+        assert _METHODS[name].is_implicit
+
+    @pytest.mark.parametrize(
+        ("name", "dirk"),
+        [
+            ("implicit_euler", True),
+            ("implicit_midpoint", True),
+            ("trapezoid", True),
+            ("sdirk2", True),
+            ("trbdf2", True),
+            ("radauIIA3", False),
+            ("radauIIA5", False),
+            ("gl4", False),
+            ("gl6", False),
+        ],
+    )
+    def test_dirk_classification(self, name: str, dirk: bool) -> None:
+        # Decides sequential versus coupled stage solves, so getting it wrong
+        # is the difference between an n-by-n Jacobian and an sn-by-sn one.
+        assert _METHODS[name].is_dirk is dirk
+
+    @pytest.mark.parametrize("name", ["euler", "rk4", "dopri5", "tsit5"])
+    def test_explicit_methods_are_not_implicit(self, name: str) -> None:
+        assert not _METHODS[name].is_implicit
+        assert not _METHODS[name].is_dirk
+
+    def test_radau_iia3_matches_its_closed_form(self) -> None:
+        t = _METHODS["radauIIA3"]
+        assert t.a[0] == pytest.approx([5 / 12, -1 / 12], abs=1e-14)
+        assert t.a[1] == pytest.approx([3 / 4, 1 / 4], abs=1e-14)
+        assert t.b == pytest.approx([3 / 4, 1 / 4], abs=1e-14)
+        assert t.c == pytest.approx([1 / 3, 1.0], abs=1e-14)
+
+    def test_gauss_legendre_4_matches_its_closed_form(self) -> None:
+        t = _METHODS["gl4"]
+        root3 = math.sqrt(3.0)
+        assert t.c == pytest.approx([0.5 - root3 / 6, 0.5 + root3 / 6], abs=1e-14)
+        assert t.a[0] == pytest.approx([1 / 4, 1 / 4 - root3 / 6], abs=1e-14)
+        assert t.a[1] == pytest.approx([1 / 4 + root3 / 6, 1 / 4], abs=1e-14)
+
+    def test_radau_iia5_nodes_match_their_closed_form(self) -> None:
+        root6 = math.sqrt(6.0)
+        assert _METHODS["radauIIA5"].c == pytest.approx(
+            [(4 - root6) / 10, (4 + root6) / 10, 1.0], abs=1e-14
+        )
+
+    def test_gauss_legendre_6_nodes_match_their_closed_form(self) -> None:
+        root15 = math.sqrt(15.0)
+        assert _METHODS["gl6"].c == pytest.approx(
+            [0.5 - root15 / 10, 0.5, 0.5 + root15 / 10], abs=1e-14
+        )
+
+    def test_trapezoid_is_the_trapezoidal_rule(self) -> None:
+        t = _METHODS["trapezoid"]
+        assert t.a[0] == pytest.approx([0.0, 0.0], abs=1e-14)
+        assert t.a[1] == pytest.approx([0.5, 0.5], abs=1e-14)
+
+    @pytest.mark.parametrize("stages", [1, 2, 3, 4, 5])
+    def test_gauss_nodes_reach_double_their_count(self, stages: int) -> None:
+        nodes = _collocation.gauss_nodes(stages)
+        _a, b = _collocation.collocation_tableau(nodes)
+        c = [float(node) for node in nodes]
+        assert _collocation.quadrature_order(b, c, limit=2 * stages) == 2 * stages
+
+    @pytest.mark.parametrize("stages", [1, 2, 3, 4, 5])
+    def test_radau_nodes_reach_one_less(self, stages: int) -> None:
+        nodes = _collocation.radau_nodes(stages)
+        _a, b = _collocation.collocation_tableau(nodes)
+        c = [float(node) for node in nodes]
+        assert c[-1] == pytest.approx(1.0, abs=1e-14)
+        assert _collocation.quadrature_order(b, c, limit=2 * stages) == 2 * stages - 1
+
+    def test_lobatto_needs_two_nodes(self) -> None:
+        with pytest.raises(ValueError, match="at least two nodes"):
+            _collocation.lobatto_nodes(1)
+
+    def test_a_square_stage_matrix_is_accepted(self) -> None:
+        t = diffeq.ButcherTableau(
+            a=[[1.0]], b=[1.0], c=[1.0], order=1, name="backward_euler"
+        )
+        assert t.is_implicit and t.is_dirk and t.stages == 1
+
+    def test_mixed_row_widths_are_rejected(self) -> None:
+        # Neither ragged nor square: every coefficient after the bad row would
+        # line up against the wrong stage.
+        with pytest.raises(ValueError, match="ragged .* or square"):
+            diffeq.ButcherTableau(
+                a=[[], [1.0, 2.0, 3.0]],
+                b=[0.5, 0.5],
+                c=[0.0, 1.0],
+                order=1,
+                name="lopsided",
+            )
+
+
+class TestImplicitMethods:
+    """The nine implicit methods, reachable through ``odeint`` like any other."""
+
+    DECAY_EXACT = math.exp(-1.0)
+
+    @pytest.mark.parametrize(("method", "_order"), IMPLICIT_ORDERS)
+    def test_solves_exponential_decay(self, method: str, _order: int) -> None:
+        y = diffeq.odeint(
+            _decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            _grid(100),
+            method=method,
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(self.DECAY_EXACT, abs=2e-3)
+
+    @pytest.mark.parametrize(("method", "order"), IMPLICIT_ORDERS)
+    def test_convergence_order(self, method: str, order: int) -> None:
+        # Coarse grids on purpose: at fine ones the nonlinear solve's residual
+        # tolerance, not the method, sets the error and the rate goes to noise.
+        n1, n2 = (4, 8) if order >= 5 else (8, 16) if order >= 3 else (16, 32)
+        errs = []
+        for n in (n1, n2):
+            y = diffeq.odeint(
+                _decay,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                _grid(n),
+                method=method,
+                return_trajectory=False,
+            )
+            errs.append(abs(float(y.item()) - self.DECAY_EXACT))
+        assert math.log2(errs[0] / errs[1]) == pytest.approx(order, abs=0.35)
+
+    @pytest.mark.parametrize("method", ["implicit_euler", "radauIIA5", "trbdf2"])
+    def test_survives_a_stiff_problem_that_kills_rk4(self, method: str) -> None:
+        # y' = -1000(y - cos t) - sin t has solution cos t, but a decay mode
+        # 1000x faster.  At h = 0.02 that puts h*lambda at -20, far outside
+        # any explicit method's stability region -- which is the entire reason
+        # this family exists.
+        def stiff(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            return -1000.0 * (y - lucid.cos(t)) - lucid.sin(t)
+
+        y0 = lucid.tensor([0.0], dtype=lucid.float64)
+        got = diffeq.odeint(
+            stiff, y0, _grid(50), method=method, return_trajectory=False
+        )
+        assert float(got.item()) == pytest.approx(math.cos(1.0), abs=1e-4)
+
+        blown = diffeq.odeint(
+            stiff, y0, _grid(50), method="rk4", return_trajectory=False
+        )
+        assert abs(float(blown.item())) > 1e10
+
+    def test_first_entry_is_y0(self) -> None:
+        y0 = lucid.tensor([1.0, -3.0], dtype=lucid.float64)
+        traj = diffeq.odeint(_decay, y0, _grid(10), method="gl4")
+        assert traj.tolist()[0] == y0.tolist()
+
+    def test_integrates_backwards(self) -> None:
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        grid = [1.0 - i / 50 for i in range(51)]
+        y = diffeq.odeint(_decay, y0, grid, method="radauIIA3", return_trajectory=False)
+        assert float(y.item()) == pytest.approx(math.e, abs=1e-5)
+
+    # Differentiating the discretisation gives the gradient of the discrete
+    # solution, which trails the true one by the method's own order -- so the
+    # tolerance has to track the method, not be one number for all of them.
+    @pytest.mark.parametrize(("method", "tol"), [("gl4", 1e-6), ("sdirk2", 5e-5)])
+    def test_is_differentiable(self, method: str, tol: float) -> None:
+        k = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        y = diffeq.odeint(
+            lambda t, s: -k * s,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            _grid(50),
+            method=method,
+            return_trajectory=False,
+        )
+        y.sum().backward()
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx(-math.exp(-1.0), abs=tol)
+
+    def test_works_under_the_adjoint(self) -> None:
+        k = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        traj = diffeq.odeint_adjoint(
+            lambda t, s: -k * s,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            _grid(50),
+            method="radauIIA3",
+            adjoint_params=[k],
+        )
+        traj[-1].sum().backward()
+        assert k.grad is not None
+        assert float(k.grad.item()) == pytest.approx(-math.exp(-1.0), abs=1e-5)
+
+    def test_accepts_a_tuple_state(self) -> None:
+        y0 = (
+            lucid.tensor([[1.0, 0.0]], dtype=lucid.float64),
+            lucid.tensor([0.0, 1.0], dtype=lucid.float64),
+        )
+        grid = [i * (math.pi / 2) / 100 for i in range(101)]
+        traj = diffeq.odeint(_osc_tuple, y0, grid, method="gl6")
+        assert [tuple(x.shape) for x in traj] == [(101, 1, 2), (101, 2)]
+        assert traj[0].tolist()[-1][0] == pytest.approx([0.0, 1.0], abs=1e-9)
+
+    def test_dense_output(self) -> None:
+        dense = diffeq.odeint_dense(
+            _decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            0.0,
+            1.0,
+            method="gl4",
+            options={"step_size": 0.02, "interp": "cubic"},
+        )
+        assert float(dense(0.37).item()) == pytest.approx(math.exp(-0.37), abs=1e-8)
+        assert float(dense(1.0).item()) == pytest.approx(self.DECAY_EXACT, abs=1e-9)
+
+    def test_event_detection(self) -> None:
+        event_t, sol = diffeq.odeint_event(
+            _decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            0.0,
+            event_fn=lambda t, y: y[0] - 0.5,
+            method="radauIIA5",
+            options={"step_size": 0.01, "interp": "cubic"},
+        )
+        assert float(event_t.item()) == pytest.approx(math.log(2.0), abs=1e-8)
+        assert sol[-1].tolist()[0] == pytest.approx(0.5, abs=1e-9)
+
+    def test_step_size_decouples_the_output_grid(self) -> None:
+        y = diffeq.odeint(
+            _decay,
+            lucid.tensor([1.0], dtype=lucid.float64),
+            [0.0, 0.37, 1.0],
+            method="radauIIA3",
+            options={"step_size": 0.01, "interp": "cubic"},
+        )
+        got = y.tolist()
+        assert got[1][0] == pytest.approx(math.exp(-0.37), abs=1e-6)
+        assert got[2][0] == pytest.approx(self.DECAY_EXACT, abs=1e-8)
+
+    def test_warns_when_the_solve_will_not_converge(self) -> None:
+        # One iteration cannot resolve a stiff step, and a step that silently
+        # used an unconverged iterate would look like a successful solve.
+        def stiff(t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+            return -1000.0 * y
+
+        with pytest.warns(RuntimeWarning, match="did not converge"):
+            diffeq.odeint(
+                stiff,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                _grid(4),
+                method="gl6",
+                options={"max_iters": 1},
+                return_trajectory=False,
+            )
+
+    @pytest.mark.parametrize(
+        ("options", "match"),
+        [
+            ({"max_iters": 0}, "max_iters must be >= 1"),
+            ({"max_iters": 1.5}, "must be an int"),
+            ({"max_order": 4}, "unknown option"),
+        ],
+    )
+    def test_rejects_bad_options(self, options: dict[str, object], match: str) -> None:
+        with pytest.raises(ValueError, match=match):
+            diffeq.odeint(
+                _decay,
+                lucid.tensor([1.0], dtype=lucid.float64),
+                [0.0, 1.0],
+                method="gl4",
+                options=options,
             )

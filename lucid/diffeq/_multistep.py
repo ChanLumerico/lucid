@@ -28,7 +28,6 @@ from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _fixed, _fused
 from lucid.diffeq._tableau import RK4, ButcherTableau
 
-
 __all__: list[str] = []
 
 

@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - tuple-valued state and Adams multistep methods
 
+- implicit Runge-Kutta methods
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

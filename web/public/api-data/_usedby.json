@@ -756,11 +756,19 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._implicit"
+    },
+    {
+      "kind": "module",
       "module": "lucid.diffeq._multistep"
     },
     {
       "kind": "module",
       "module": "lucid.diffeq._solvers"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._tableau"
     }
   ],
   "lucid.diffeq._adjoint.odeint_adjoint": [
@@ -811,6 +819,10 @@
     {
       "kind": "module",
       "module": "lucid.diffeq._fixed"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._implicit"
     },
     {
       "kind": "module",
@@ -1357,6 +1369,10 @@
     {
       "kind": "module",
       "module": "lucid._ops.composite.blas"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._implicit"
     },
     {
       "kind": "module",

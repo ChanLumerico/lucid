@@ -16,7 +16,7 @@ from typing import Callable, Sequence
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.diffeq import _adaptive, _fixed, _fused
+from lucid.diffeq import _adaptive, _fixed, _fused, _implicit
 from lucid.diffeq._tableau import ButcherTableau
 
 __all__: list[str] = []
@@ -222,15 +222,27 @@ def integrate_until_event(
         dt = direction * fixed_opts.step_size
         t_cur, y = t0, y0
         f0 = check(func(scalar(t0), y), 0, 0) if fixed_opts.interp == "cubic" else None
+        # An implicit tableau's stage rows are square, so the explicit stage
+        # recipe below would read coefficients that do not belong to it.  Its
+        # steps come from the nonlinear solve instead; everything after that —
+        # bracketing, the Hermite fit, the bisection — is shared.
+        implicit_opts = (
+            _implicit.parse_options(options) if tableau.is_implicit else None
+        )
 
         for index in range(_MAX_EVENT_STEPS):
             t_next = t_cur + dt
-            ks: list[Tensor] = []
-            for stage in range(tableau.stages):
-                stage_y = _fused.combine(y, ks, tableau.a[stage], dt)
-                stage_t = scalar(t_cur + tableau.c[stage] * dt)
-                ks.append(check(func(stage_t, stage_y), index, stage))
-            y_next = _fused.combine(y, ks, tableau.b, dt)
+            if implicit_opts is not None:
+                y_next = _implicit._step(
+                    func, y, t_cur, dt, tableau, scalar, check, index, implicit_opts
+                )
+            else:
+                ks: list[Tensor] = []
+                for stage in range(tableau.stages):
+                    stage_y = _fused.combine(y, ks, tableau.a[stage], dt)
+                    stage_t = scalar(t_cur + tableau.c[stage] * dt)
+                    ks.append(check(func(stage_t, stage_y), index, stage))
+                y_next = _fused.combine(y, ks, tableau.b, dt)
 
             if _sign(_evaluate(event_fn, scalar, t_next, y_next)) != sign0:
                 if fixed_opts.interp == "cubic":

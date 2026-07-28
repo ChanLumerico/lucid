@@ -12,7 +12,11 @@ it and can be evaluated in one forward sweep.  Implicit methods need a root
 find per step and are out of scope.
 """
 
+import math
 from dataclasses import dataclass
+from decimal import Decimal
+
+from lucid.diffeq import _collocation
 
 __all__ = [
     "ButcherTableau",
@@ -26,6 +30,15 @@ __all__ = [
     "BOSH3",
     "DOPRI5",
     "TSIT5",
+    "IMPLICIT_EULER",
+    "IMPLICIT_MIDPOINT",
+    "TRAPEZOID",
+    "RADAU_IIA3",
+    "RADAU_IIA5",
+    "GL4",
+    "GL6",
+    "SDIRK2",
+    "TRBDF2",
 ]
 
 
@@ -51,9 +64,11 @@ class ButcherTableau:
     Parameters
     ----------
     a : tuple of tuple of float
-        Strictly lower-triangular stage coefficients, stored row by row with
-        the zeros above the diagonal omitted — row ``i`` holds exactly ``i``
-        entries, so ``a[0]`` is empty.  Sequences of any kind are accepted
+        Stage coefficients, row by row.  Two shapes are accepted.  An
+        *explicit* method is written in ragged form with the zeros above the
+        diagonal omitted — row ``i`` holds exactly ``i`` entries, so ``a[0]``
+        is empty.  An *implicit* method needs those entries, so it is written
+        square: every row holds all ``s``.  Sequences of any kind are accepted
         and coerced to nested tuples.
     b : tuple of float
         Combination weights, one per stage.  Must sum to ``1``.
@@ -133,12 +148,18 @@ class ButcherTableau:
                 f"ButcherTableau stage counts disagree: "
                 f"len(a)={len(self.a)}, len(b)={n}, len(c)={len(self.c)}"
             )
-        for i, row in enumerate(self.a):
-            if len(row) != i:
-                raise ValueError(
-                    f"ButcherTableau row a[{i}] must hold {i} entries "
-                    f"(a is strictly lower triangular), got {len(row)}"
-                )
+        # Ragged rows spell an explicit method, square rows an implicit one.
+        # Mixing the two is always a typo, and left unchecked it would shift
+        # every coefficient in the offending row against its stage.
+        ragged = all(len(row) == i for i, row in enumerate(self.a))
+        square = all(len(row) == n for row in self.a)
+        if not ragged and not square:
+            widths = [len(row) for row in self.a]
+            raise ValueError(
+                f"ButcherTableau rows of a must be either ragged (row i holds "
+                f"i entries, an explicit method) or square (every row holds "
+                f"{n}, an implicit method); got widths {widths}"
+            )
         weight_sum = sum(self.b)
         if abs(weight_sum - 1.0) > _TOL:
             raise ValueError(
@@ -188,6 +209,42 @@ class ButcherTableau:
         on a fixed grid.
         """
         return self.b_error is not None
+
+    @property
+    def is_implicit(self) -> bool:
+        """bool: Whether any stage depends on itself or on a later stage.
+
+        An explicit method computes its stages in order, each from the ones
+        before it.  An implicit one does not: the stage equations are coupled,
+        so a step has to solve a nonlinear system instead of evaluating a
+        recipe.  That is a different solver, not a different coefficient set,
+        which is what this flag selects.
+        """
+        return any(
+            coefficient != 0.0
+            for i, row in enumerate(self.a)
+            for j, coefficient in enumerate(row)
+            if j >= i
+        )
+
+    @property
+    def is_dirk(self) -> bool:
+        """bool: Whether the stage matrix is lower triangular, diagonal included.
+
+        Diagonally implicit methods still couple each stage to itself, but not
+        to any stage after it, so the stages can be solved one at a time.  For
+        a state of ``n`` elements that means ``s`` solves of size ``n`` rather
+        than one of size ``s*n`` — the difference between a dense Jacobian of
+        ``n**2`` entries and one of ``(s*n)**2``.
+        """
+        if not self.is_implicit:
+            return False
+        return all(
+            coefficient == 0.0
+            for i, row in enumerate(self.a)
+            for j, coefficient in enumerate(row)
+            if j > i
+        )
 
     @property
     def is_fsal(self) -> bool:
@@ -405,6 +462,106 @@ TSIT5 = ButcherTableau(
 # Name → tableau lookup backing ``odeint(method=...)``.  Private because the
 # canonical way to reach a method is its name string or the module-level
 # constant; a second public registry would be a second path to the same thing.
+
+# ---------------------------------------------------------------------------
+# Implicit methods.
+#
+# These are ordinary Butcher tableaux whose stage matrix is not strictly lower
+# triangular, so a step solves a nonlinear system rather than evaluating a
+# recipe.  Seven of the nine are collocation methods, meaning the whole table
+# follows from the nodes -- see ``_collocation`` for why they are derived here
+# rather than written out, and what that buys.
+# ---------------------------------------------------------------------------
+
+
+def _collocation_tableau(nodes: list[Decimal], order: int, name: str) -> ButcherTableau:
+    """Build a collocation tableau and check it reached the intended order.
+
+    Raises
+    ------
+    ValueError
+        If the derived weights do not integrate polynomials exactly to
+        ``order``.  A misplaced node does not otherwise announce itself — it
+        silently costs accuracy — so the derivation is verified at import,
+        every time, rather than trusted.
+    """
+    a, b = _collocation.collocation_tableau(nodes)
+    c = tuple(float(node) for node in nodes)
+    reached = _collocation.quadrature_order(b, c)
+    if reached != order:
+        raise ValueError(
+            f"derived tableau {name!r} reached order {reached}, expected {order}"
+        )
+    return ButcherTableau(a=a, b=b, c=c, order=order, name=name)
+
+
+IMPLICIT_EULER = _collocation_tableau(
+    _collocation.radau_nodes(1), order=1, name="implicit_euler"
+)
+
+IMPLICIT_MIDPOINT = _collocation_tableau(
+    _collocation.gauss_nodes(1), order=2, name="implicit_midpoint"
+)
+
+TRAPEZOID = _collocation_tableau(
+    _collocation.lobatto_nodes(2), order=2, name="trapezoid"
+)
+
+RADAU_IIA3 = _collocation_tableau(
+    _collocation.radau_nodes(2), order=3, name="radauIIA3"
+)
+
+RADAU_IIA5 = _collocation_tableau(
+    _collocation.radau_nodes(3), order=5, name="radauIIA5"
+)
+
+GL4 = _collocation_tableau(_collocation.gauss_nodes(2), order=4, name="gl4")
+
+GL6 = _collocation_tableau(_collocation.gauss_nodes(3), order=6, name="gl6")
+
+
+# The last two are not collocation methods, so there is nothing to derive them
+# from -- but each is pinned by a single constant, and the order check below
+# is the same one the collocation tableaux get.
+_SDIRK2_GAMMA = 1.0 - math.sqrt(2.0) / 2.0
+
+SDIRK2 = ButcherTableau(
+    a=(
+        (_SDIRK2_GAMMA, 0.0),
+        (1.0 - _SDIRK2_GAMMA, _SDIRK2_GAMMA),
+    ),
+    b=(1.0 - _SDIRK2_GAMMA, _SDIRK2_GAMMA),
+    c=(_SDIRK2_GAMMA, 1.0),
+    order=2,
+    name="sdirk2",
+)
+
+# TR-BDF2: a trapezoidal step to t + gamma*dt, then a BDF2 step to t + dt,
+# with gamma chosen so the two share a Jacobian.
+_TRBDF2_GAMMA = 2.0 - math.sqrt(2.0)
+_TRBDF2_W = math.sqrt(2.0) / 4.0
+
+TRBDF2 = ButcherTableau(
+    a=(
+        (0.0, 0.0, 0.0),
+        (_TRBDF2_GAMMA / 2.0, _TRBDF2_GAMMA / 2.0, 0.0),
+        (_TRBDF2_W, _TRBDF2_W, 1.0 - math.sqrt(2.0) / 2.0),
+    ),
+    b=(_TRBDF2_W, _TRBDF2_W, 1.0 - math.sqrt(2.0) / 2.0),
+    c=(0.0, _TRBDF2_GAMMA, 1.0),
+    order=2,
+    name="trbdf2",
+)
+
+for _tableau in (SDIRK2, TRBDF2):
+    _reached = _collocation.quadrature_order(_tableau.b, _tableau.c)
+    if _reached != _tableau.order:
+        raise ValueError(
+            f"tableau {_tableau.name!r} reached order {_reached}, "
+            f"expected {_tableau.order}"
+        )
+
+
 _METHODS: dict[str, ButcherTableau] = {
     EULER.name: EULER,
     MIDPOINT.name: MIDPOINT,
@@ -416,6 +573,15 @@ _METHODS: dict[str, ButcherTableau] = {
     BOSH3.name: BOSH3,
     DOPRI5.name: DOPRI5,
     TSIT5.name: TSIT5,
+    IMPLICIT_EULER.name: IMPLICIT_EULER,
+    IMPLICIT_MIDPOINT.name: IMPLICIT_MIDPOINT,
+    TRAPEZOID.name: TRAPEZOID,
+    RADAU_IIA3.name: RADAU_IIA3,
+    RADAU_IIA5.name: RADAU_IIA5,
+    GL4.name: GL4,
+    GL6.name: GL6,
+    SDIRK2.name: SDIRK2,
+    TRBDF2.name: TRBDF2,
 }
 
 # The method ``odeint`` picks when the caller passes ``method=None``.

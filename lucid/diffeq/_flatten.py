@@ -161,8 +161,7 @@ def wrap_rhs(
             )
         if len(parts) != len(shapes):
             raise ValueError(
-                f"func returned {len(parts)} components but y0 has "
-                f"{len(shapes)}"
+                f"func returned {len(parts)} components but y0 has {len(shapes)}"
             )
         return flatten(list(parts))
 
@@ -226,7 +225,5 @@ def check_state(y0: object) -> tuple[Tensor, ...]:
         raise ValueError("y0 tuple must not be empty")
     for index, part in enumerate(y0):
         if not isinstance(part, Tensor):
-            raise TypeError(
-                f"y0[{index}] must be a Tensor, got {type(part).__name__}"
-            )
+            raise TypeError(f"y0[{index}] must be a Tensor, got {type(part).__name__}")
     return tuple(y0)
