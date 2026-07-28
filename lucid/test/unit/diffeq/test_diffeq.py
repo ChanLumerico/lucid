@@ -1631,6 +1631,14 @@ class TestAdamsCoefficients:
         got = _multistep.coefficients(order, implicit=True)
         assert list(got) == pytest.approx(expected, rel=1e-14)
 
+    def test_weights_are_memoised(self) -> None:
+        # The exact-rational derivation is slow enough that recomputing it per
+        # step dominated the whole solve (96% of a 2000-step run) before this
+        # cache existed.  Identity, not equality: a fresh tuple means the
+        # derivation ran again.
+        first = _multistep.coefficients(12, implicit=True)
+        assert _multistep.coefficients(12, implicit=True) is first
+
     @pytest.mark.parametrize("order", range(1, 13))
     @pytest.mark.parametrize("implicit", [False, True])
     def test_weights_sum_to_one(self, order: int, implicit: bool) -> None:

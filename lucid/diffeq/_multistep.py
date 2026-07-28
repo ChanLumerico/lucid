@@ -21,6 +21,7 @@ otherwise be a wall of integer tables.
 import math
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import lru_cache
 from typing import Callable
 
 from lucid._tensor.tensor import Tensor
@@ -137,6 +138,7 @@ def _polymul(a: list[Fraction], b: list[Fraction]) -> list[Fraction]:
     return out
 
 
+@lru_cache(maxsize=None)
 def coefficients(order: int, implicit: bool) -> tuple[float, ...]:
     r"""Adams weights for one step of the given order.
 
@@ -163,6 +165,10 @@ def coefficients(order: int, implicit: bool) -> tuple[float, ...]:
 
     They always sum to ``1`` — the consistency condition, and a cheap check
     that the derivation stayed correct.
+
+    Memoised: the weights depend on nothing but the arguments, and the exact
+    arithmetic is slow enough that re-deriving them every step dominated the
+    solve outright.
     """
     nodes = [Fraction(1 - j) if implicit else Fraction(-j) for j in range(order)]
     weights: list[Fraction] = []
