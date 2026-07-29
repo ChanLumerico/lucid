@@ -14,8 +14,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <vector>
 #include <variant>
+#include <vector>
 
 #include <mlx/ops.h>
 
@@ -58,23 +58,23 @@ double sum_squares(const T* data, std::size_t n) {
 double read_any_scalar(const CpuStorage& cs, Dtype dtype) {
     const void* p = cs.ptr.get();
     switch (dtype) {
-        case Dtype::F64:
-            return *reinterpret_cast<const double*>(p);
-        case Dtype::F32:
-            return static_cast<double>(*reinterpret_cast<const float*>(p));
-        case Dtype::I64:
-            return static_cast<double>(*reinterpret_cast<const std::int64_t*>(p));
-        case Dtype::I32:
-            return static_cast<double>(*reinterpret_cast<const std::int32_t*>(p));
-        case Dtype::I16:
-            return static_cast<double>(*reinterpret_cast<const std::int16_t*>(p));
-        case Dtype::I8:
-            return static_cast<double>(*reinterpret_cast<const std::int8_t*>(p));
-        case Dtype::Bool:
-            return *reinterpret_cast<const bool*>(p) ? 1.0 : 0.0;
-        default:
-            throw NotImplementedError("broyden_probe: info dtype " +
-                                      std::string(dtype_name(dtype)) + " is not supported");
+    case Dtype::F64:
+        return *reinterpret_cast<const double*>(p);
+    case Dtype::F32:
+        return static_cast<double>(*reinterpret_cast<const float*>(p));
+    case Dtype::I64:
+        return static_cast<double>(*reinterpret_cast<const std::int64_t*>(p));
+    case Dtype::I32:
+        return static_cast<double>(*reinterpret_cast<const std::int32_t*>(p));
+    case Dtype::I16:
+        return static_cast<double>(*reinterpret_cast<const std::int16_t*>(p));
+    case Dtype::I8:
+        return static_cast<double>(*reinterpret_cast<const std::int8_t*>(p));
+    case Dtype::Bool:
+        return *reinterpret_cast<const bool*>(p) ? 1.0 : 0.0;
+    default:
+        throw NotImplementedError("broyden_probe: info dtype " + std::string(dtype_name(dtype)) +
+                                  " is not supported");
     }
 }
 

@@ -80,9 +80,8 @@ inline void check_operand(const TensorImplPtr& t,
         throw DeviceMismatch(std::string(device_name(spec.device)),
                              std::string(device_name(t->device())), std::string(spec.op));
 
-    const bool ok = rule == ShapeRule::Exact
-                        ? t->shape() == spec.shape
-                        : shape_numel(t->shape()) == shape_numel(spec.shape);
+    const bool ok = rule == ShapeRule::Exact ? t->shape() == spec.shape
+                                             : shape_numel(t->shape()) == shape_numel(spec.shape);
     if (!ok)
         throw ShapeMismatch(spec.shape, t->shape(), std::string(spec.op));
 }

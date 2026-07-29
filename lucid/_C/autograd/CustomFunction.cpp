@@ -124,8 +124,8 @@ std::vector<Storage> PythonBackwardNode::apply_barrier() {
         Storage g = grad_slots_[i].has_value()
                         ? std::move(*grad_slots_[i])
                         : make_zero_storage(out_shapes[i], out_dtypes[i], out_devices[i]);
-        grads[i] = py::cast(std::make_shared<TensorImpl>(std::move(g), out_shapes[i],
-                                                         out_dtypes[i], out_devices[i], false));
+        grads[i] = py::cast(std::make_shared<TensorImpl>(std::move(g), out_shapes[i], out_dtypes[i],
+                                                         out_devices[i], false));
     }
     grad_slots_.clear();
 
