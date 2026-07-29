@@ -443,6 +443,10 @@
     {
       "kind": "module",
       "module": "lucid.autograd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._event"
     }
   ],
   "lucid.autograd._grad_mode.enable_grad": [
@@ -586,6 +590,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._event"
+    },
+    {
+      "kind": "module",
       "module": "lucid.fft"
     },
     {
@@ -617,6 +625,10 @@
     {
       "kind": "module",
       "module": "lucid.diffeq._adjoint"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.diffeq._event"
     },
     {
       "kind": "module",
