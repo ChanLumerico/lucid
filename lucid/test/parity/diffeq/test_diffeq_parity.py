@@ -234,9 +234,7 @@ class TestTorchdiffeqParity:
             float(ref_event_t.item()), rel=1e-9
         )
         assert k.grad is not None
-        assert float(k.grad.item()) == pytest.approx(
-            float(ref_k.grad.item()), rel=1e-9
-        )
+        assert float(k.grad.item()) == pytest.approx(float(ref_k.grad.item()), rel=1e-9)
 
     def test_dopri8_tableau_is_transcribed_exactly(self) -> None:
         """Pin all ~130 dopri8 coefficients against the reference's own.

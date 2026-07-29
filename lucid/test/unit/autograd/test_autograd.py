@@ -490,6 +490,4 @@ class TestCheckpointMultiOutput:
         (c.sum() * 2.0 + d.sum()).backward()
 
         assert direct.grad is not None and saved.grad is not None
-        np.testing.assert_allclose(
-            saved.grad.numpy(), direct.grad.numpy(), atol=1e-6
-        )
+        np.testing.assert_allclose(saved.grad.numpy(), direct.grad.numpy(), atol=1e-6)
