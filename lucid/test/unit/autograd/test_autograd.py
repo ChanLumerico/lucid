@@ -346,3 +346,150 @@ class TestCheckpoint:
         for name, p in list(l1.named_parameters()) + list(l2.named_parameters()):
             assert p.grad is not None, f"{name}.grad is None"
             assert float((p.grad * p.grad).sum().item()) > 0.0, f"{name}.grad is zero"
+
+
+class TestMultiOutputFunction:
+    """A ``Function`` whose ``forward`` returns several tensors.
+
+    Each output is a separate entry point into the same node, so their
+    gradients arrive at different points in the traversal.  The node has to
+    wait for all of them and call ``backward`` once with the full set --
+    which is why these tests care about *which* outputs were used, not only
+    about the values.
+    """
+
+    @staticmethod
+    def _split_class() -> type:
+        from lucid.autograd import Function, FunctionCtx
+
+        class Split(Function):
+            """``x -> (2x, 3x)``, so the combined gradient is ``2ga + 3gb``."""
+
+            @staticmethod
+            def forward(
+                ctx: FunctionCtx, x: lucid.Tensor
+            ) -> tuple[lucid.Tensor, lucid.Tensor]:
+                ctx.save_for_backward(x)
+                # Detached, as a hand-written backward normally would be:
+                # if the node were skipped, these would carry no gradient at
+                # all and the failure would be silent.
+                return (x * 2.0).detach(), (x * 3.0).detach()
+
+            @staticmethod
+            def backward(
+                ctx: FunctionCtx, ga: lucid.Tensor, gb: lucid.Tensor
+            ) -> lucid.Tensor:
+                return ga * 2.0 + gb * 3.0
+
+        return Split
+
+    def test_custom_backward_actually_runs(self) -> None:
+        split = self._split_class()
+        x = lucid.tensor([1.0, 2.0], requires_grad=True)
+        a, b = split.apply(x)
+
+        assert a.requires_grad and b.requires_grad
+        (a.sum() + b.sum()).backward()
+
+        assert x.grad is not None
+        np.testing.assert_allclose(x.grad.numpy(), [5.0, 5.0], atol=1e-6)
+
+    def test_unused_output_contributes_zero(self) -> None:
+        # Only the first output is differentiated.  The second never receives
+        # a gradient, and ``backward`` must still be handed a real tensor for
+        # it rather than being skipped or given ``None``.
+        split = self._split_class()
+        x = lucid.tensor([1.0, 2.0], requires_grad=True)
+        a, _ = split.apply(x)
+        a.sum().backward()
+
+        assert x.grad is not None
+        np.testing.assert_allclose(x.grad.numpy(), [2.0, 2.0], atol=1e-6)
+
+    def test_outputs_weighted_separately(self) -> None:
+        # Different coefficients on each output prove the gradients are kept
+        # in their own slots rather than summed on arrival.
+        split = self._split_class()
+        x = lucid.tensor([1.0], requires_grad=True)
+        a, b = split.apply(x)
+        (a.sum() * 10.0 + b.sum()).backward()
+
+        assert x.grad is not None
+        # 2 * 10 + 3 * 1
+        np.testing.assert_allclose(x.grad.numpy(), [23.0], atol=1e-6)
+
+    def test_one_output_reaching_the_loss_by_two_paths(self) -> None:
+        # A slot can be written more than once; the second arrival has to
+        # accumulate onto the first, not replace it.
+        split = self._split_class()
+        x = lucid.tensor([1.0], requires_grad=True)
+        a, _ = split.apply(x)
+        (a.sum() + a.sum() * 4.0).backward()
+
+        assert x.grad is not None
+        # 2 * (1 + 4)
+        np.testing.assert_allclose(x.grad.numpy(), [10.0], atol=1e-6)
+
+    def test_single_output_is_unaffected(self) -> None:
+        # The single-output path must stay on the engine's direct route.
+        from lucid.autograd import Function, FunctionCtx
+
+        class Double(Function):
+            @staticmethod
+            def forward(ctx: FunctionCtx, x: lucid.Tensor) -> lucid.Tensor:
+                return (x * 2.0).detach()
+
+            @staticmethod
+            def backward(ctx: FunctionCtx, g: lucid.Tensor) -> lucid.Tensor:
+                return g * 2.0
+
+        x = lucid.tensor([1.0, 2.0], requires_grad=True)
+        Double.apply(x).sum().backward()
+
+        assert x.grad is not None
+        np.testing.assert_allclose(x.grad.numpy(), [2.0, 2.0], atol=1e-6)
+
+
+class TestCheckpointMultiOutput:
+    """``lucid.utils.checkpoint`` on a block that returns several tensors.
+
+    This is the shape attention and recurrent layers return, and it used to
+    lose gradients entirely: the outputs came back detached and ``backward``
+    reported ``None`` without raising.
+    """
+
+    def test_gradients_survive(self) -> None:
+        from lucid.utils.checkpoint import checkpoint
+
+        def block(x: lucid.Tensor) -> tuple[lucid.Tensor, lucid.Tensor]:
+            return x * 2.0, x * 3.0
+
+        x = lucid.tensor([1.0, 2.0], requires_grad=True)
+        a, b = checkpoint(block, x)
+
+        assert a.requires_grad and b.requires_grad
+        (a.sum() + b.sum()).backward()
+
+        assert x.grad is not None
+        np.testing.assert_allclose(x.grad.numpy(), [5.0, 5.0], atol=1e-6)
+
+    def test_matches_the_uncheckpointed_gradient(self) -> None:
+        from lucid.utils.checkpoint import checkpoint
+
+        def block(x: lucid.Tensor) -> tuple[lucid.Tensor, lucid.Tensor]:
+            return lucid.sin(x), x * x
+
+        raw = [0.3, -1.2, 2.0]
+
+        direct = lucid.tensor(raw, requires_grad=True)
+        a, b = block(direct)
+        (a.sum() * 2.0 + b.sum()).backward()
+
+        saved = lucid.tensor(raw, requires_grad=True)
+        c, d = checkpoint(block, saved)
+        (c.sum() * 2.0 + d.sum()).backward()
+
+        assert direct.grad is not None and saved.grad is not None
+        np.testing.assert_allclose(
+            saved.grad.numpy(), direct.grad.numpy(), atol=1e-6
+        )

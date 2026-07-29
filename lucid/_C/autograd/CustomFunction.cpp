@@ -17,6 +17,7 @@
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "Helpers.h"
 
 namespace py = pybind11;
 
@@ -87,9 +88,54 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     auto grad_impl =
         std::make_shared<TensorImpl>(std::move(grad_out), grad_shape, grad_dt, grad_dev, false);
 
+    py::tuple grads(1);
+    grads[0] = py::cast(grad_impl);
+    return invoke_backward(grads);
+}
+
+void PythonBackwardNode::accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) {
+    if (grad_slots_.size() < out_shapes.size())
+        grad_slots_.resize(out_shapes.size());
+    if (input_nr >= grad_slots_.size())
+        return;
+
+    auto& slot = grad_slots_[input_nr];
+    if (!slot.has_value())
+        slot = std::move(grad);
+    else
+        accumulate_into(*slot, grad);
+}
+
+std::vector<Storage> PythonBackwardNode::apply_barrier() {
+    py::gil_scoped_acquire gil;
+
+    if (!py_backward_fn || py_backward_fn.is_none()) {
+        ErrorBuilder("PythonBackwardNode::apply_barrier").fail("backward function is not set");
+    }
+
+    const std::size_t n = out_shapes.size();
+    grad_slots_.resize(n);
+
+    py::tuple grads(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        // An output the loss never used contributes nothing, but ``backward``
+        // is still written against a fixed argument list, so give it zeros
+        // rather than ``None`` and let the arithmetic take care of itself.
+        Storage g = grad_slots_[i].has_value()
+                        ? std::move(*grad_slots_[i])
+                        : make_zero_storage(out_shapes[i], out_dtypes[i], out_devices[i]);
+        grads[i] = py::cast(std::make_shared<TensorImpl>(std::move(g), out_shapes[i],
+                                                         out_dtypes[i], out_devices[i], false));
+    }
+    grad_slots_.clear();
+
+    return invoke_backward(grads);
+}
+
+std::vector<Storage> PythonBackwardNode::invoke_backward(const py::tuple& grads) {
     py::object result;
     try {
-        result = py_backward_fn(py_ctx, py::cast(grad_impl));
+        result = py_backward_fn(py_ctx, *grads);
     } catch (py::error_already_set& e) {
         throw std::runtime_error(std::string("PythonBackward raised: ") + e.what());
     }
@@ -180,14 +226,39 @@ void register_custom_function(py::module_& m) {
     // Marks output as a non-leaf tensor requiring gradients.
     m.def(
         "_register_python_backward_node",
-        [](std::shared_ptr<TensorImpl> output, std::shared_ptr<PythonBackwardNode> node,
+        [](const std::vector<std::shared_ptr<TensorImpl>>& outputs,
+           std::shared_ptr<PythonBackwardNode> node,
            const std::vector<std::shared_ptr<TensorImpl>>& inputs) {
-            if (!output || !node)
+            if (!node)
                 ErrorBuilder("_register_python_backward_node").fail("null argument");
+            if (outputs.empty())
+                ErrorBuilder("_register_python_backward_node").fail("no outputs");
+            for (const auto& out : outputs) {
+                if (!out)
+                    ErrorBuilder("_register_python_backward_node").fail("null argument");
+            }
 
-            node->out_shape = output->shape();
-            node->out_dtype = output->dtype();
-            node->out_device = output->device();
+            // Single-output metadata is kept as-is so that path stays on the
+            // engine's direct (non-barrier) route.  The vectors are what make
+            // the node a barrier, and they are filled for every arity so the
+            // barrier branch has complete information when it applies.
+            node->out_shape = outputs.front()->shape();
+            node->out_dtype = outputs.front()->dtype();
+            node->out_device = outputs.front()->device();
+
+            node->out_shapes.clear();
+            node->out_dtypes.clear();
+            node->out_devices.clear();
+            if (outputs.size() > 1) {
+                node->out_shapes.reserve(outputs.size());
+                node->out_dtypes.reserve(outputs.size());
+                node->out_devices.reserve(outputs.size());
+                for (const auto& out : outputs) {
+                    node->out_shapes.push_back(out->shape());
+                    node->out_dtypes.push_back(out->dtype());
+                    node->out_devices.push_back(out->device());
+                }
+            }
 
             std::vector<Edge> edges;
             edges.reserve(inputs.size());
@@ -213,12 +284,18 @@ void register_custom_function(py::module_& m) {
             node->set_next_edges(std::move(edges));
             node->set_saved_versions(std::move(versions));
 
-            output->set_grad_fn(std::move(node));
-            output->set_leaf(false);
-            output->set_requires_grad(true);
+            // Every output shares the one node; ``grad_output_nr`` is what
+            // tells the engine which slot an arriving gradient belongs to,
+            // and it is the index the barrier reads back.
+            for (std::size_t i = 0; i < outputs.size(); ++i) {
+                outputs[i]->set_grad_fn(node);
+                outputs[i]->set_grad_output_nr(static_cast<std::uint32_t>(i));
+                outputs[i]->set_leaf(false);
+                outputs[i]->set_requires_grad(true);
+            }
         },
-        py::arg("output"), py::arg("node"), py::arg("inputs"),
-        "Wire a PythonBackwardNode into the autograd graph for `output`.");
+        py::arg("outputs"), py::arg("node"), py::arg("inputs"),
+        "Wire a PythonBackwardNode into the autograd graph for `outputs`.");
 }
 
 }  // namespace lucid

@@ -16,7 +16,7 @@ class _FunctionClass(Protocol):
 
 
 def _register(
-    output: Tensor,
+    outputs: Tensor | tuple[Tensor, ...],
     fn_class: _FunctionClass,
     py_ctx: object,
     tensor_inputs: list[Tensor],
@@ -24,34 +24,40 @@ def _register(
     """
     Wire a Python backward function into the C++ autograd graph.
 
-    The C++ engine calls backward_fn(cpp_ctx, grad_impl) during backprop.
-    We use a closure to capture py_ctx and the user's backward() method.
+    The C++ engine calls backward_fn(cpp_ctx, *grad_impls) during backprop —
+    one gradient per forward output. We use a closure to capture py_ctx and
+    the user's backward() method.
+
+    A ``forward`` returning several tensors registers them all against this
+    one node. Their gradients come back at different points in the traversal,
+    so the node runs as a barrier on the C++ side and calls back exactly once
+    with the complete set; outputs the loss never used arrive as zeros.
     """
     # C++ FunctionCtx — used as a carrier; C++ engine needs it to be non-null
     cpp_ctx = _C_engine.FunctionCtx()
 
     def backward_fn(
-        _cpp_ctx: object, grad_impl: _C_engine.TensorImpl
-    ) -> list[_C_engine.TensorImpl]:
-        """Called by C++ engine: (cpp_ctx, grad_impl) → list[TensorImpl | None]"""
-        grad_tensor = _wrap(grad_impl)
-        grads = fn_class.backward(py_ctx, grad_tensor)
+        _cpp_ctx: object, *grad_impls: _C_engine.TensorImpl
+    ) -> list[_C_engine.TensorImpl | None]:
+        """Called by C++ engine: (cpp_ctx, *grad_impls) → list[TensorImpl | None]"""
+        grads = fn_class.backward(py_ctx, *(_wrap(g) for g in grad_impls))
         if not isinstance(grads, (list, tuple)):
             grads = [grads]
 
         result: list[_C_engine.TensorImpl | None] = []
         for g in grads:
-            if g is None:
-                result.append(None)
-            elif isinstance(g, Tensor):
+            if isinstance(g, Tensor):
                 result.append(_unwrap(g))
             else:
                 result.append(None)
-        return result  # type: ignore[return-value]  # C++ accepts None for missing grads
+        return result
 
     node = _C_engine._PythonBackwardNode()
     node.ctx = cpp_ctx
     node.backward_fn = backward_fn
 
     impl_inputs = [_unwrap(t) for t in tensor_inputs]
-    _C_engine._register_python_backward_node(output._impl, node, impl_inputs)
+    out_seq = outputs if isinstance(outputs, tuple) else (outputs,)
+    _C_engine._register_python_backward_node(
+        [t._impl for t in out_seq], node, impl_inputs
+    )

@@ -41,7 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - resolve "rk4" to the same method the reference ODE library does
 
 - size an adaptive method's first step from the error estimate's order
-- size an adaptive method's first step from the error estimate's order
+
+- run the backward of a Function that returns several tensors
 
 ---
 

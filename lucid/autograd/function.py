@@ -201,6 +201,13 @@ def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
             tensor_inputs = [a for a in args if isinstance(a, Tensor)]
             if isinstance(output, Tensor):
                 _register(output, klass, ctx, tensor_inputs)  # type: ignore[arg-type]
+            elif isinstance(output, tuple):
+                # A ``forward`` may return non-tensor entries alongside
+                # tensors; only the tensors can carry a gradient, and
+                # ``backward`` is handed one gradient per *tensor* output.
+                outs = tuple(o for o in output if isinstance(o, Tensor))
+                if outs:
+                    _register(outs, klass, ctx, tensor_inputs)  # type: ignore[arg-type]
 
         return cast(Tensor | tuple[Tensor, ...], output)
 

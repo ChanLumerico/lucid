@@ -22,6 +22,7 @@
 #include <pybind11/pybind11.h>
 
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -197,6 +198,21 @@ public:
     Dtype out_dtype = Dtype::F32;
     Device out_device = Device::CPU;
 
+    // Metadata of every forward output, when ``forward`` returned more than
+    // one tensor.  Empty for the single-output case, which keeps the
+    // original non-barrier path untouched.
+    //
+    // A ``Function`` returning a tuple produces several tensors sharing this
+    // one node, distinguished by their ``grad_output_nr``.  Their gradients
+    // arrive independently and at different times during the traversal, so
+    // the node becomes a barrier: it parks each arriving gradient in
+    // :attr:`grad_slots_` and runs the user's ``backward`` once, with the
+    // full set, when the engine reaches it.  The topological order
+    // guarantees every contributor has already run by then.
+    std::vector<Shape> out_shapes;
+    std::vector<Dtype> out_dtypes;
+    std::vector<Device> out_devices;
+
     // Human-readable node name for debugger / profiler output.
     //
     // Returns
@@ -232,6 +248,52 @@ public:
     //     The Python ``backward_fn`` is unset, or it raised an exception
     //     during execution (the original message is preserved).
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Whether this node stands behind several forward outputs.
+    //
+    // Returns
+    // -------
+    // bool
+    //     ``true`` once :attr:`out_shapes` describes more than one output,
+    //     which routes the engine through the barrier protocol.  A
+    //     single-output custom op stays on the direct path, exactly as
+    //     before multi-output support existed.
+    bool is_barrier() const noexcept override { return out_shapes.size() > 1; }
+
+    // Park one output's gradient until the rest arrive.
+    //
+    // Parameters
+    // ----------
+    // input_nr : std::uint32_t
+    //     Which forward output this gradient belongs to.  Out-of-range
+    //     values are ignored rather than throwing, matching the other
+    //     barrier nodes and keeping the engine robust against pruned graphs.
+    // grad : Storage
+    //     The arriving gradient.  A slot reached by more than one path
+    //     accumulates rather than overwrites.
+    void accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) override;
+
+    // Run the user's ``backward`` once with every output's gradient.
+    //
+    // Outputs that never received a gradient — because the loss did not
+    // depend on them — are materialised as zeros of the right shape, dtype
+    // and device, so ``backward`` always sees one real tensor per output
+    // and never has to guard against ``None``.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     One :class:`Storage` per forward input, as for :func:`apply`.
+    std::vector<Storage> apply_barrier() override;
+
+private:
+    // One slot per forward output; engaged once a gradient has arrived.
+    std::vector<std::optional<Storage>> grad_slots_;
+
+    // Shared tail of ``apply`` and ``apply_barrier``: call into Python with
+    // the prepared gradient tensors and unpack the returned per-input
+    // gradients.
+    std::vector<Storage> invoke_backward(const py::tuple& grads);
 };
 
 // Register the custom-function bindings into a pybind11 module.

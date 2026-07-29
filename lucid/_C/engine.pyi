@@ -894,7 +894,7 @@ class _PythonBackwardNode:
     backward_fn: object
 
 def _register_python_backward_node(
-    output: TensorImpl,
+    outputs: list[TensorImpl],
     node: _PythonBackwardNode,
     inputs: list[TensorImpl],
 ) -> None: ...
