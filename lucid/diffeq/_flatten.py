@@ -12,6 +12,7 @@ from typing import Callable, Sequence
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid.diffeq._typing import EventFunction, RightHandSide
 
 __all__: list[str] = []
 
@@ -129,7 +130,7 @@ def unflatten_rows(flat: Tensor, shapes: Sequence[tuple[int, ...]]) -> list[Tens
 def wrap_rhs(
     func: Callable[[Tensor, tuple[Tensor, ...]], Sequence[Tensor]],
     shapes: Sequence[tuple[int, ...]],
-) -> Callable[[Tensor, Tensor], Tensor]:
+) -> RightHandSide:
     """Adapt a tuple-valued right-hand side to the flat state the solver uses.
 
     Parameters
@@ -171,7 +172,7 @@ def wrap_rhs(
 def wrap_event(
     event_fn: Callable[[Tensor, tuple[Tensor, ...]], Tensor],
     shapes: Sequence[tuple[int, ...]],
-) -> Callable[[Tensor, Tensor], Tensor]:
+) -> EventFunction:
     """Adapt a tuple-valued event function to the flat state.
 
     Parameters

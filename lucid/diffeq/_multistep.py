@@ -22,11 +22,11 @@ import math
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
-from typing import Callable
 
 from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _fixed, _fused
 from lucid.diffeq._tableau import RK4, ButcherTableau
+from lucid.diffeq._typing import RightHandSide, ScalarFactory, StageCheck
 
 __all__: list[str] = []
 
@@ -185,12 +185,12 @@ def coefficients(order: int, implicit: bool) -> tuple[float, ...]:
 
 
 def _rk_step(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y: Tensor,
     t0: float,
     dt: float,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     step: int,
     f0: Tensor,
     tableau: ButcherTableau = RK4,
@@ -204,12 +204,12 @@ def _rk_step(
 
 
 def integrate(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     grid: list[float],
     implicit: bool,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     rtol: float,
     atol: float,
@@ -328,7 +328,7 @@ def integrate(
 
 
 def _correct(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y: Tensor,
     predicted: Tensor,
     history: list[Tensor],
@@ -336,8 +336,8 @@ def _correct(
     dt: float,
     order: int,
     opts: AdamsOptions,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     step: int,
     rtol: float,
     atol: float,

@@ -33,17 +33,19 @@ from lucid.diffeq import (
     _multistep,
 )
 from lucid.diffeq._tableau import RK4, ButcherTableau, _DEFAULT_METHOD, _METHODS
+from lucid.diffeq._typing import (
+    EventFunction,
+    RightHandSide,
+    ScalarFactory,
+    StageCheck,
+    State,
+)
 
 # The fixed-grid loop and the tests both reach for this; it is the fused
 # stage combination that every explicit method reduces to.
 _combine = _fused.combine
 
 __all__ = ["odeint", "odeint_dense", "odeint_event"]
-
-# A state is either one tensor or a tuple of them.  The solvers integrate a
-# single flat vector either way; the tuple form is packed on the way in and
-# split on the way out, so nothing below this boundary knows about it.
-State = Tensor | tuple[Tensor, ...]
 
 
 def _resolve_method(method: str | ButcherTableau | None) -> ButcherTableau:
@@ -196,9 +198,9 @@ def _pack_state(
     y0: State,
     event_fn: Callable[..., Tensor] | None,
 ) -> tuple[
-    Callable[[Tensor, Tensor], Tensor],
+    RightHandSide,
     Tensor,
-    Callable[[Tensor, Tensor], Tensor] | None,
+    EventFunction | None,
     list[tuple[int, ...]] | None,
 ]:
     """Reduce a possibly-tuple state to the flat one the solvers integrate.
@@ -221,9 +223,9 @@ def _pack_state(
     """
     if isinstance(y0, Tensor):
         return (
-            cast(Callable[[Tensor, Tensor], Tensor], func),
+            cast(RightHandSide, func),
             y0,
-            cast(Callable[[Tensor, Tensor], Tensor] | None, event_fn),
+            cast(EventFunction | None, event_fn),
             None,
         )
 
@@ -263,7 +265,7 @@ def _unpack(stacked: Tensor, shapes: list[tuple[int, ...]] | None) -> State:
 
 def _make_callbacks(
     y0: Tensor,
-) -> tuple[Callable[[float], Tensor], Callable[[object, int, int], Tensor]]:
+) -> tuple[ScalarFactory, StageCheck]:
     """Build the time-tensor factory and right-hand-side validator for a solve.
 
     Parameters

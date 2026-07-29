@@ -32,6 +32,7 @@ import lucid.linalg as linalg
 from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _fixed, _fused
 from lucid.diffeq._tableau import ButcherTableau
+from lucid.diffeq._typing import RightHandSide, ScalarFactory, StageCheck
 
 __all__: list[str] = []
 
@@ -218,13 +219,13 @@ def _broyden(
 
 
 def _step(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y: Tensor,
     t0: float,
     dt: float,
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     step_index: int,
     opts: ImplicitOptions,
 ) -> Tensor:
@@ -295,12 +296,12 @@ def _step(
 
 
 def integrate(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     grid: list[float],
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     options: dict[str, object] | None,
     return_trajectory: bool,
@@ -372,13 +373,13 @@ def integrate(
 
 
 def integrate_dense(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     t0: float,
     t1: float,
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     options: dict[str, object] | None,
 ) -> list[tuple[float, float, list[Tensor]]]:

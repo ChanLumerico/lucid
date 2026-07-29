@@ -16,11 +16,12 @@ so the price stays at exactly one sync rather than several.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Sequence, SupportsFloat, cast
+from typing import Sequence, SupportsFloat, cast
 
 from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _fused
 from lucid.diffeq._tableau import ButcherTableau
+from lucid.diffeq._typing import RightHandSide, ScalarFactory, StageCheck
 
 __all__: list[str] = []
 
@@ -224,7 +225,7 @@ def optimal_step_size(
 
 
 def select_initial_step(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     t0: float,
     y0: Tensor,
     f0: Tensor,
@@ -232,7 +233,7 @@ def select_initial_step(
     rtol: float,
     atol: float,
     direction: float,
-    scalar: Callable[[float], Tensor],
+    scalar: ScalarFactory,
 ) -> float:
     """Pick a starting step magnitude from the local scale of the problem.
 
@@ -439,12 +440,12 @@ class Stepper:
 
     def __init__(
         self,
-        func: Callable[[Tensor, Tensor], Tensor],
+        func: RightHandSide,
         y0: Tensor,
         t0: float,
         tableau: ButcherTableau,
-        scalar: Callable[[float], Tensor],
-        check: Callable[[object, int, int], Tensor],
+        scalar: ScalarFactory,
+        check: StageCheck,
         rtol: float,
         atol: float,
         opts: AdaptiveOptions,
@@ -576,12 +577,12 @@ class Stepper:
 
 
 def integrate(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     grid: list[float],
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     rtol: float,
     atol: float,
@@ -656,13 +657,13 @@ def integrate(
 
 
 def integrate_dense(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     t0: float,
     t1: float,
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     rtol: float,
     atol: float,

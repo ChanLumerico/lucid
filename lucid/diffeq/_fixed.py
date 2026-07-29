@@ -17,11 +17,20 @@ from typing import Callable, Sequence, SupportsFloat, cast
 from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _fused
 from lucid.diffeq._tableau import ButcherTableau
+from lucid.diffeq._typing import (
+    InterpKind,
+    RightHandSide,
+    ScalarFactory,
+    StageCheck,
+    is_interp_kind,
+)
 
 __all__: list[str] = []
 
 
-_INTERP_KINDS = ("linear", "cubic")
+# The complete set of accepted values, kept beside the validating helper
+# so the runtime check and the static type cannot drift apart.
+_INTERP_KINDS: tuple[InterpKind, ...] = ("linear", "cubic")
 
 
 @dataclass(frozen=True)
@@ -36,7 +45,7 @@ class FixedOptions:
     grid_constructor : callable or None
         ``f(func, y0, t) -> grid`` building the integration grid explicitly.
         Takes precedence over ``step_size``.
-    interp : str
+    interp : InterpKind
         ``"linear"`` or ``"cubic"``, how to reach output times that fall
         inside a step.  Unused when the integration grid is the output grid.
     perturb : bool
@@ -47,7 +56,7 @@ class FixedOptions:
 
     step_size: float | None = None
     grid_constructor: Callable[..., object] | None = None
-    interp: str = "linear"
+    interp: InterpKind = "linear"
     perturb: bool = False
 
 
@@ -101,7 +110,7 @@ def parse_options(options: dict[str, object] | None) -> FixedOptions:
         )
 
     interp = options.get("interp", "linear")
-    if interp not in _INTERP_KINDS:
+    if not is_interp_kind(interp):
         raise ValueError(f"interp must be one of {_INTERP_KINDS}, got {interp!r}")
 
     perturb = options.get("perturb", False)
@@ -113,14 +122,14 @@ def parse_options(options: dict[str, object] | None) -> FixedOptions:
     return FixedOptions(
         step_size=step,
         grid_constructor=cast(Callable[..., object] | None, builder),
-        interp=cast(str, interp),
+        interp=interp,
         perturb=perturb,
     )
 
 
 def build_grid(
     opts: FixedOptions,
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     t: list[float],
 ) -> list[float]:
@@ -226,12 +235,12 @@ def _interp_evaluate(
 
 
 def integrate(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     grid: list[float],
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     options: dict[str, object] | None,
     return_trajectory: bool,
@@ -329,13 +338,13 @@ def integrate(
 
 
 def integrate_dense(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     t0: float,
     t1: float,
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     options: dict[str, object] | None,
 ) -> list[tuple[float, float, list[Tensor]]]:

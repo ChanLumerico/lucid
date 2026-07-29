@@ -12,7 +12,7 @@ right-hand-side evaluations along the way.
 """
 
 import math
-from typing import Callable, Sequence, cast, final, override
+from typing import Sequence, cast, final, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -20,6 +20,13 @@ from lucid.autograd._functional import vjp as _vjp
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.diffeq import _adaptive, _fixed, _fused, _implicit
 from lucid.diffeq._tableau import ButcherTableau
+from lucid.diffeq._typing import (
+    EventFunction,
+    Interpolant,
+    RightHandSide,
+    ScalarFactory,
+    StageCheck,
+)
 
 __all__: list[str] = []
 
@@ -46,8 +53,8 @@ def _sign(value: float) -> float:
 
 
 def _evaluate(
-    event_fn: Callable[[Tensor, Tensor], Tensor],
-    scalar: Callable[[float], Tensor],
+    event_fn: EventFunction,
+    scalar: ScalarFactory,
     t: float,
     y: Tensor,
 ) -> float:
@@ -85,12 +92,12 @@ def _evaluate(
 
 
 def find_event(
-    interp: Callable[[float], Tensor],
+    interp: Interpolant,
     sign0: float,
     t0: float,
     t1: float,
-    event_fn: Callable[[Tensor, Tensor], Tensor],
-    scalar: Callable[[float], Tensor],
+    event_fn: EventFunction,
+    scalar: ScalarFactory,
     tol: float = _EVENT_TOL,
 ) -> tuple[float, Tensor]:
     """Bisect a bracketing interval down to the event time.
@@ -138,13 +145,13 @@ def find_event(
 
 
 def integrate_until_event(
-    func: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
     y0: Tensor,
     t0: float,
-    event_fn: Callable[[Tensor, Tensor], Tensor],
+    event_fn: EventFunction,
     tableau: ButcherTableau,
-    scalar: Callable[[float], Tensor],
-    check: Callable[[object, int, int], Tensor],
+    scalar: ScalarFactory,
+    check: StageCheck,
     *,
     rtol: float,
     atol: float,
@@ -345,8 +352,8 @@ class _EventTimeGradient(Function):
         state_t: Tensor,
         *,
         event_t: Tensor,
-        func: Callable[[Tensor, Tensor], Tensor],
-        event_fn: Callable[[Tensor, Tensor], Tensor],
+        func: RightHandSide,
+        event_fn: EventFunction,
     ) -> Tensor:
         """Hand back the event time; the derivative is all in ``backward``."""
         ctx.save_for_backward(event_t.detach(), state_t.detach())
@@ -361,8 +368,8 @@ class _EventTimeGradient(Function):
     ) -> Tensor:
         """Turn the event time's cotangent into the state's."""
         event_t, state_t = ctx.saved_tensors
-        func = cast(Callable[[Tensor, Tensor], Tensor], ctx.func)
-        event_fn = cast(Callable[[Tensor, Tensor], Tensor], ctx.event_fn)
+        func = cast(RightHandSide, ctx.func)
+        event_fn = cast(EventFunction, ctx.event_fn)
 
         # Both need gradient tracking for the partials of ``g`` to exist; the
         # graph built here is local to this backward pass.
@@ -392,8 +399,8 @@ class _EventTimeGradient(Function):
 def differentiable_event_time(
     event_t: Tensor,
     state_t: Tensor,
-    func: Callable[[Tensor, Tensor], Tensor],
-    event_fn: Callable[[Tensor, Tensor], Tensor],
+    func: RightHandSide,
+    event_fn: EventFunction,
 ) -> tuple[Tensor, Tensor]:
     """Attach derivatives to an event time and to the state that shares it.
 

@@ -30,7 +30,6 @@ from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.diffeq import _flatten
 from lucid.diffeq._solvers import (
-    State,
     _pack_state,
     _resolve_grid,
     _validate_method,
@@ -38,6 +37,7 @@ from lucid.diffeq._solvers import (
     odeint,
 )
 from lucid.diffeq._tableau import ButcherTableau
+from lucid.diffeq._typing import RightHandSide, State
 
 __all__ = ["odeint_adjoint"]
 
@@ -46,7 +46,7 @@ __all__ = ["odeint_adjoint"]
 class _Config:
     """Everything the backward pass needs that is not a tensor."""
 
-    func: Callable[[Tensor, Tensor], Tensor]
+    func: RightHandSide
     grid: list[float]
     rtol: float
     atol: float
@@ -109,7 +109,7 @@ def _augmented_dynamics(
     cfg: _Config,
     params: tuple[Tensor, ...],
     shapes: list[tuple[int, ...]],
-) -> Callable[[Tensor, Tensor], Tensor]:
+) -> RightHandSide:
     """Build the right-hand side of the augmented backward system.
 
     Parameters

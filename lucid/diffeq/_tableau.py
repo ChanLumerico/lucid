@@ -14,6 +14,7 @@ find per step and are out of scope.
 
 import math
 from dataclasses import dataclass
+from functools import cached_property
 from decimal import Decimal
 
 from lucid.diffeq import _collocation
@@ -201,7 +202,7 @@ class ButcherTableau:
                 f"ButcherTableau mid must hold {n} entries, got {len(self.mid)}"
             )
 
-    @property
+    @cached_property
     def is_adaptive(self) -> bool:
         """bool: Whether the tableau carries an embedded error estimate.
 
@@ -212,7 +213,7 @@ class ButcherTableau:
         """
         return self.b_error is not None
 
-    @property
+    @cached_property
     def is_implicit(self) -> bool:
         """bool: Whether any stage depends on itself or on a later stage.
 
@@ -229,7 +230,7 @@ class ButcherTableau:
             if j >= i
         )
 
-    @property
+    @cached_property
     def is_dirk(self) -> bool:
         """bool: Whether the stage matrix is lower triangular, diagonal included.
 
@@ -248,7 +249,7 @@ class ButcherTableau:
             if j > i
         )
 
-    @property
+    @cached_property
     def is_fsal(self) -> bool:
         """bool: Whether the last stage derivative equals ``f(t + dt, y_next)``.
 
