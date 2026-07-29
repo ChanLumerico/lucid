@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make the event time differentiable
 
+- fuse the implicit solver's per-iteration host reads into one engine op
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

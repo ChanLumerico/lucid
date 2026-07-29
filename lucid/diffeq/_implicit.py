@@ -163,35 +163,51 @@ def _broyden(
     approximate Jacobian stops the iteration immediately, and exhausting
     ``max_iters`` warns.  Silence in either case would mean a step that looks
     successful and is not.
+
+    Each iteration needs three scalars on the host -- the residual norm, the
+    solve's status, and the step norm -- and asking for them one at a time is
+    what an implicit solve on the GPU actually spends its time on: MLX
+    evaluates lazily, so every read waits on the whole queued pipeline.
+    :func:`lucid.diffeq._fused.broyden_probe` returns all three from one pass,
+    leaving a single synchronisation per iteration.
     """
     x = guess
     f = residual(x)
     size = int(f.shape[0])
     jacobian = lucid.eye(size, dtype=f.dtype, device=f.device)
+    # Seeded once so the first pass has something to test; every later value
+    # comes from the probe below, which measures the residual it has just
+    # produced.  That is what lets one probe answer both this iteration's
+    # step questions and the next one's convergence question.
+    residual_sq, _, _ = _fused.broyden_probe(f, f)
 
     for _ in range(max_iters):
-        if float((f * f).sum().item()) <= tol * tol:
+        if residual_sq <= tol * tol:
             return x
 
-        step, info = linalg.solve_ex(jacobian, (-f).reshape(size, 1))
-        if float(info.item()) != 0.0:
-            # A singular approximation carries no information about where to
-            # go next; iterating on a zero-filled solve would just spin.
-            return x
-        step = step.reshape(size)
+        column, info = linalg.solve_ex(jacobian, (-f).reshape(size, 1))
+        step = column.reshape(size)
+        x_next = x + step
+        f_next = residual(x_next)
 
-        x = x + step
-        previous, f = f, residual(x)
+        residual_sq, step_sq, singular = _fused.broyden_probe(f_next, column, info)
 
-        change = f - previous
-        denominator = float((step * step).sum().item())
-        if denominator == 0.0:
+        # A singular approximation carries no information about where to go
+        # next, and a zero step means the iteration has stalled; either way
+        # the last trustworthy iterate is the one before this step.  The
+        # residual just computed is discarded along with it -- evaluating it
+        # before knowing the step was usable costs nothing on the common path
+        # and only this one wasted call on a path that is already ending.
+        if singular != 0.0 or step_sq == 0.0:
             return x
-        correction = change - (jacobian @ step.reshape(size, 1)).reshape(size)
+
+        change = f_next - f
+        correction = change - (jacobian @ column).reshape(size)
         outer = correction.reshape(size, 1) * step.reshape(1, size)
-        jacobian = jacobian + outer / denominator
+        jacobian = jacobian + outer / step_sq
+        x, f = x_next, f_next
 
-    if float((f * f).sum().item()) > tol * tol:
+    if residual_sq > tol * tol:
         warnings.warn(
             f"implicit solve did not converge at {where} after {max_iters} "
             f"iterations; the step was taken with the best iterate found",

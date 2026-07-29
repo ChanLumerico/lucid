@@ -181,3 +181,44 @@ def poly_eval(coeffs: Sequence[Tensor], t0: float, t1: float, t: float) -> Tenso
     x = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
     last = len(coeffs) - 1
     return lincomb(list(coeffs), [x ** (last - i) for i in range(len(coeffs))])
+
+
+def broyden_probe(
+    residual: Tensor, step: Tensor, info: Tensor | None = None
+) -> tuple[float, float, float]:
+    """Answer one Broyden iteration's three questions in a single pass.
+
+    Parameters
+    ----------
+    residual : Tensor
+        Current residual vector.
+    step : Tensor
+        Proposed Newton step.  Same element count as ``residual``; its shape
+        need not match, since the linear solve returns a column.
+    info : Tensor or None, default=None
+        Status scalar from the linear solve; non-zero means singular.  ``None``
+        for the seeding call made before any solve, which reports zero.
+
+    Returns
+    -------
+    tuple of float
+        ``(sum(residual**2), sum(step**2), info)``, on the host.
+
+    Notes
+    -----
+    All three are branched on every iteration, so they cross to the host no
+    matter how they are computed.  Asking for them separately costs three
+    device synchronisations, and on the GPU a synchronisation is not the price
+    of moving eight bytes -- MLX evaluates lazily, so it waits for everything
+    queued behind it.  Fused, an iteration pays for one.
+
+    The engine kernel carries only float32 and float64, matching
+    :func:`error_ratio`; a lower-precision state is promoted here rather than
+    the kernel growing a half-precision path.
+    """
+    operands = _promote([residual, step])
+    if operands[0].dtype not in (lucid.float32, lucid.float64):
+        operands = tuple(t.to(lucid.float32) for t in operands)
+    res, stp = operands
+    raw = None if info is None else _unwrap(info)
+    return _C_engine.diffeq.broyden_probe(_unwrap(res), _unwrap(stp), raw)

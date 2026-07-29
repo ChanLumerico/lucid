@@ -7,6 +7,7 @@
 
 #include "../../autograd/Engine.h"
 #include "../../core/Error.h"
+#include "../../ops/diffeq/BroydenProbe.h"
 #include "../../ops/diffeq/RkCombine.h"
 #include "../../ops/diffeq/RkErrorNorm.h"
 #include "../../ops/ufunc/Reductions.h"
@@ -222,4 +223,68 @@ TEST(RkErrorNorm, RejectsNonFloatDtype) {
     auto y1 = cpu_ones({2}, Dtype::I32);
     auto k0 = cpu_ones({2}, Dtype::I32);
     EXPECT_THROW(rk_error_norm_op(y0, y1, {k0}, {1.0}, 1.0, 1e-3, 1e-6), NotImplementedError);
+}
+
+// ── BroydenProbe ────────────────────────────────────────────────────────────
+//
+// The op exists to collapse three host reads into one, so what the tests have
+// to pin is that the three answers are still individually right — a fused
+// reduction that quietly mixes two of them would still return three numbers.
+
+TEST(BroydenProbe, ReturnsEachNormSeparately) {
+    // Distinct values per operand so a swapped or shared accumulator shows.
+    auto residual = cpu_full({4}, 2.0);   // sum of squares = 16
+    auto step = cpu_full({4}, 3.0);       // sum of squares = 36
+    auto info = cpu_full({}, 0.0);
+    const BroydenProbeResult r = broyden_probe_op(residual, step, info);
+    EXPECT_NEAR(r.residual_sq, 16.0, 1e-12);
+    EXPECT_NEAR(r.step_sq, 36.0, 1e-12);
+    EXPECT_NEAR(r.info, 0.0, 1e-12);
+}
+
+TEST(BroydenProbe, CarriesTheSolveStatusThrough) {
+    // Non-zero info is how the caller learns the Jacobian was singular; it
+    // must survive the round trip rather than being folded into a norm.
+    auto residual = cpu_full({3}, 1.0);
+    auto step = cpu_full({3}, 1.0);
+    auto info = cpu_full({}, 2.0);
+    const BroydenProbeResult r = broyden_probe_op(residual, step, info);
+    EXPECT_NEAR(r.info, 2.0, 1e-12);
+}
+
+TEST(BroydenProbe, AcceptsAColumnShapedStep) {
+    // The linear solve hands back an (n, 1) column while the residual is
+    // flat.  Matching on element count rather than shape is what lets the
+    // caller skip a reshape it would otherwise pay for every iteration.
+    auto residual = cpu_full({4}, 1.0);
+    auto step = cpu_full({4, 1}, 2.0);
+    auto info = cpu_full({}, 0.0);
+    const BroydenProbeResult r = broyden_probe_op(residual, step, info);
+    EXPECT_NEAR(r.residual_sq, 4.0, 1e-12);
+    EXPECT_NEAR(r.step_sq, 16.0, 1e-12);
+}
+
+TEST(BroydenProbe, InfoMayBeAbsent) {
+    // The seeding call happens before any solve exists to report on.
+    auto residual = cpu_full({4}, 2.0);
+    const BroydenProbeResult r = broyden_probe_op(residual, residual, nullptr);
+    EXPECT_NEAR(r.residual_sq, 16.0, 1e-12);
+    EXPECT_NEAR(r.info, 0.0, 1e-12);
+}
+
+TEST(BroydenProbe, RejectsAMismatchedElementCount) {
+    auto residual = cpu_full({4}, 1.0);
+    auto step = cpu_full({5}, 1.0);
+    auto info = cpu_full({}, 0.0);
+    EXPECT_THROW(broyden_probe_op(residual, step, info), ShapeMismatch);
+}
+
+TEST(BroydenProbe, SumsInDoubleRegardlessOfInputPrecision) {
+    // A float32 accumulator would lose the tail of a long sum, and this feeds
+    // a convergence test that decides on exactly that tail.
+    auto residual = cpu_full({4096}, 1.0f / 1024.0f, Dtype::F32);
+    auto info = cpu_full({}, 0.0, Dtype::F32);
+    const BroydenProbeResult r = broyden_probe_op(residual, residual, info);
+    // 4096 * (1/1024)^2 = 4096 / 1048576 = 0.00390625, exact in binary.
+    EXPECT_NEAR(r.residual_sq, 0.00390625, 1e-12);
 }

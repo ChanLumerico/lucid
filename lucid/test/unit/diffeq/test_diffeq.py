@@ -6,7 +6,7 @@ import pytest
 
 import lucid
 import lucid.diffeq as diffeq
-from lucid.diffeq import _collocation, _multistep
+from lucid.diffeq import _collocation, _fused, _multistep
 from lucid.diffeq._solvers import _combine
 from lucid.diffeq._tableau import _METHODS
 
@@ -2427,3 +2427,60 @@ class TestImplicitMethods:
                 method="gl4",
                 options=options,
             )
+
+
+class TestBroydenProbe:
+    """The fused probe behind every implicit step.
+
+    It exists to answer three questions in one device round-trip, so what
+    matters is that the three answers stay separable -- a fused reduction
+    that merged two of them would still hand back three numbers.
+    """
+
+    def test_reports_each_norm_separately(self) -> None:
+        residual = lucid.tensor([1.0, -2.0, 2.0], dtype=lucid.float64)
+        step = lucid.tensor([3.0, 0.0, 4.0], dtype=lucid.float64)
+        info = lucid.zeros((), dtype=lucid.float64)
+
+        residual_sq, step_sq, singular = _fused.broyden_probe(residual, step, info)
+        assert residual_sq == pytest.approx(9.0)
+        assert step_sq == pytest.approx(25.0)
+        assert singular == 0.0
+
+    def test_carries_the_solve_status_through(self) -> None:
+        # Non-zero info is how the solver learns the Jacobian was singular.
+        one = lucid.ones((3,), dtype=lucid.float64)
+        info = lucid.ones((), dtype=lucid.float64) * 3.0
+        assert _fused.broyden_probe(one, one, info)[2] == pytest.approx(3.0)
+
+    def test_accepts_the_column_the_linear_solve_returns(self) -> None:
+        # solve_ex hands back (n, 1) while the residual is flat; matching on
+        # element count is what lets the caller skip a per-iteration reshape.
+        residual = lucid.ones((4,), dtype=lucid.float64)
+        column = lucid.ones((4, 1), dtype=lucid.float64) * 2.0
+        residual_sq, step_sq, _ = _fused.broyden_probe(residual, column)
+        assert residual_sq == pytest.approx(4.0)
+        assert step_sq == pytest.approx(16.0)
+
+    def test_info_is_optional(self) -> None:
+        # The seeding call happens before any solve exists to report on.
+        residual = lucid.tensor([2.0, 2.0], dtype=lucid.float64)
+        residual_sq, _, singular = _fused.broyden_probe(residual, residual)
+        assert residual_sq == pytest.approx(8.0)
+        assert singular == 0.0
+
+    def test_agrees_with_the_unfused_spelling(self) -> None:
+        # The arithmetic the op replaces, written out.
+        rng = [0.3, -1.25, 4.0, 0.0, -2.5]
+        residual = lucid.tensor(rng, dtype=lucid.float64)
+        step = lucid.tensor([v * 2.0 - 1.0 for v in rng], dtype=lucid.float64)
+
+        residual_sq, step_sq, _ = _fused.broyden_probe(residual, step)
+        assert residual_sq == pytest.approx(float((residual * residual).sum().item()))
+        assert step_sq == pytest.approx(float((step * step).sum().item()))
+
+    def test_rejects_a_mismatched_element_count(self) -> None:
+        a = lucid.ones((4,), dtype=lucid.float64)
+        b = lucid.ones((5,), dtype=lucid.float64)
+        with pytest.raises(Exception):
+            _fused.broyden_probe(a, b)
