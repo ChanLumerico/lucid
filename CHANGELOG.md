@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - give the engine ops one shared operand check
 - name the package's callables and cache its derived flags
 
+### Performance
+
+- find the event time by Illinois rather than bisection
+
 ---
 
 ## [3.7.1] — 2026-07-27

@@ -93,7 +93,6 @@ def _evaluate(
 
 def find_event(
     interp: Interpolant,
-    sign0: float,
     t0: float,
     t1: float,
     event_fn: EventFunction,
@@ -106,8 +105,6 @@ def find_event(
     ----------
     interp : callable
         ``interp(t) -> y``, the step's polynomial.
-    sign0 : float
-        Sign of the event function at ``t0``.
     t0, t1 : float
         Ends of a step known to bracket the crossing.
     event_fn : callable
@@ -124,21 +121,77 @@ def find_event(
 
     Notes
     -----
-    The iteration count is fixed up front from the bracket width, so this
-    costs a predictable number of event-function calls and no
-    right-hand-side evaluations at all — the state comes from the
-    interpolant.
+    Costs event-function calls only -- no right-hand-side evaluations at all,
+    since the state comes from the interpolant the step already fitted.
+
+    The search is Illinois, a regula-falsi variant, rather than bisection.
+    Both keep a bracket around the root and so are equally safe, but bisection
+    needs one call per bit of the answer: narrowing a step of order 0.1 to
+    1e-12 takes about thirty-seven of them.  Illinois interpolates instead and
+    reaches the same tolerance in single digits on a smooth event function,
+    which is what the interpolant makes it.
+
+    That matters more than the call count suggests.  Each call queues GPU work
+    and then reads a sign back, and on a lazily-evaluated backend reading
+    anything waits for everything queued behind it -- so the iterations are
+    serialised flushes, and this search was over half the cost of an event
+    solve on Metal.
+
+    Plain regula falsi can stall, approaching the root from one side while the
+    opposite endpoint never moves.  The Illinois correction halves the stale
+    endpoint's value each time it is retained, which restores fast convergence,
+    and a width check falls back to bisection if a step ever fails to shrink
+    the bracket usefully.  The iteration cap is bisection's own count, so this
+    can never take more calls than the method it replaces.
     """
     width = abs(t1 - t0)
-    steps = 1 if width <= tol else int(math.ceil(math.log2(width / tol)))
+    max_steps = 1 if width <= tol else int(math.ceil(math.log2(width / tol)))
 
     low, high = t0, t1
-    for _ in range(steps):
-        mid = (low + high) / 2.0
-        if _sign(_evaluate(event_fn, scalar, mid, interp(mid))) == sign0:
-            low = mid
+    g_low = _evaluate(event_fn, scalar, low, interp(low))
+    g_high = _evaluate(event_fn, scalar, high, interp(high))
+    previous = math.inf
+
+    for _ in range(max_steps):
+        if abs(high - low) <= tol:
+            break
+
+        # Secant through the bracket endpoints, guarded: a denominator that
+        # has collapsed, or a root outside the bracket, means the linear model
+        # is useless here and bisection is the honest fallback.
+        span = g_high - g_low
+        guess = (
+            low + (high - low) * 0.5
+            if span == 0.0
+            else low - g_low * (high - low) / span
+        )
+        margin = 0.01 * abs(high - low)
+        if not (min(low, high) + margin <= guess <= max(low, high) - margin):
+            guess = (low + high) / 2.0
+
+        # Convergence is measured on how far the estimate moved, not on the
+        # bracket width.  Regula falsi narrows the bracket from one side only,
+        # so its width can stay wide long after the root itself has settled --
+        # testing the width instead would throw away the speed this method
+        # exists for.
+        if abs(guess - previous) <= tol:
+            low = high = guess
+            break
+        previous = guess
+
+        g_guess = _evaluate(event_fn, scalar, guess, interp(guess))
+        if g_guess == 0.0:
+            low = high = guess
+            break
+
+        if _sign(g_guess) == _sign(g_low):
+            low, g_low = guess, g_guess
+            # Illinois: the retained endpoint's value is halved so it cannot
+            # anchor the secant indefinitely.
+            g_high *= 0.5
         else:
-            high = mid
+            high, g_high = guess, g_guess
+            g_low *= 0.5
 
     event_t = (low + high) / 2.0
     return event_t, interp(event_t)
@@ -221,9 +274,7 @@ def integrate_until_event(
             ) -> Tensor:
                 return _fused.poly_eval(_c, _s.t0, _s.t1, t)
 
-            return find_event(
-                interp_adaptive, sign0, step.t0, step.t1, event_fn, scalar
-            )
+            return find_event(interp_adaptive, step.t0, step.t1, event_fn, scalar)
     else:
         fixed_opts = _fixed.parse_options(options)
         if fixed_opts.step_size is None:
@@ -273,7 +324,7 @@ def integrate_until_event(
                 ) -> Tensor:
                     return _fused.poly_eval(_c, _a, _b, t)
 
-                return find_event(interp_fixed, sign0, t_cur, t_next, event_fn, scalar)
+                return find_event(interp_fixed, t_cur, t_next, event_fn, scalar)
 
             if fixed_opts.interp == "cubic":
                 f0 = check(func(scalar(t_next), y_next), index, tableau.stages)
