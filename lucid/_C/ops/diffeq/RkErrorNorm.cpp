@@ -31,6 +31,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../utils/Contiguous.h"
+#include "Operand.h"
 
 namespace lucid {
 
@@ -110,20 +111,10 @@ double rk_error_norm_op(const TensorImplPtr& y0,
         throw NotImplementedError("rk_error_norm: dtype " + std::string(dtype_name(dtype)) +
                                   " is not supported; promote to float32 or float64 first");
 
-    auto check = [&](const TensorImplPtr& t, const char* label) {
-        Validator::input(t, label).non_null();
-        if (t->dtype() != dtype)
-            throw DtypeMismatch(std::string(dtype_name(dtype)), std::string(dtype_name(t->dtype())),
-                                "rk_error_norm");
-        if (t->device() != device)
-            throw DeviceMismatch(std::string(device_name(device)),
-                                 std::string(device_name(t->device())), "rk_error_norm");
-        if (t->shape() != shape)
-            throw ShapeMismatch(shape, t->shape(), "rk_error_norm");
-    };
-    check(y1, "rk_error_norm.y1");
+    const diffeq::OperandSpec spec = diffeq::OperandSpec::from(y0, "rk_error_norm");
+    diffeq::check_operand(y1, "rk_error_norm.y1", spec);
     for (const auto& k : ks)
-        check(k, "rk_error_norm.ks");
+        diffeq::check_operand(k, "rk_error_norm.ks", spec);
 
     OpScopeFull scope{"rk_error_norm", device, dtype, shape};
 

@@ -29,6 +29,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../utils/Contiguous.h"
+#include "Operand.h"
 
 namespace lucid {
 
@@ -98,14 +99,10 @@ BroydenProbeResult broyden_probe_op(const TensorImplPtr& residual,
         throw NotImplementedError("broyden_probe: dtype " + std::string(dtype_name(dtype)) +
                                   " is not supported; promote to float32 or float64 first");
 
-    if (step->dtype() != dtype)
-        throw DtypeMismatch(std::string(dtype_name(dtype)), std::string(dtype_name(step->dtype())),
-                            "broyden_probe");
-    if (step->device() != device)
-        throw DeviceMismatch(std::string(device_name(device)),
-                             std::string(device_name(step->device())), "broyden_probe");
-    if (shape_numel(step->shape()) != shape_numel(shape))
-        throw ShapeMismatch(shape, step->shape(), "broyden_probe");
+    const diffeq::OperandSpec spec = diffeq::OperandSpec::from(residual, "broyden_probe");
+    // The linear solve returns an (n, 1) column against a flat residual, so
+    // only the element count has to agree.
+    diffeq::check_operand(step, "broyden_probe.step", spec, diffeq::ShapeRule::SameCount);
     if (info && info->device() != device)
         throw DeviceMismatch(std::string(device_name(device)),
                              std::string(device_name(info->device())), "broyden_probe");

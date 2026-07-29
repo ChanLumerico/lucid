@@ -33,6 +33,7 @@
 #include "../bfunc/Mul.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Contiguous.h"
+#include "Operand.h"
 
 namespace lucid {
 
@@ -115,17 +116,9 @@ TensorImplPtr rk_combine_op(const TensorImplPtr& y0,
     const Device device = y0->device();
     const Shape shape = y0->shape();
 
-    for (std::size_t i = 0; i < ks.size(); ++i) {
-        Validator::input(ks[i], "rk_combine.ks[" + std::to_string(i) + "]").non_null();
-        if (ks[i]->dtype() != dtype)
-            throw DtypeMismatch(std::string(dtype_name(dtype)),
-                                std::string(dtype_name(ks[i]->dtype())), "rk_combine");
-        if (ks[i]->device() != device)
-            throw DeviceMismatch(std::string(device_name(device)),
-                                 std::string(device_name(ks[i]->device())), "rk_combine");
-        if (ks[i]->shape() != shape)
-            throw ShapeMismatch(shape, ks[i]->shape(), "rk_combine");
-    }
+    const diffeq::OperandSpec spec = diffeq::OperandSpec::from(y0, "rk_combine");
+    for (std::size_t i = 0; i < ks.size(); ++i)
+        diffeq::check_operand(ks[i], "rk_combine.ks[" + std::to_string(i) + "]", spec);
 
     OpScopeFull scope{"rk_combine", device, dtype, shape};
     scope.set_attr("stages", static_cast<std::int64_t>(ks.size()));
