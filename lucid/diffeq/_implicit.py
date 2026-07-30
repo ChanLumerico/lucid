@@ -29,6 +29,7 @@ from typing import Callable
 
 import lucid
 import lucid.linalg as linalg
+from lucid._dtype import finfo
 from lucid._tensor.tensor import Tensor
 from lucid.diffeq import _fixed, _fused
 from lucid.diffeq._tableau import ButcherTableau
@@ -39,9 +40,7 @@ __all__: list[str] = []
 
 _DEFAULT_MAX_ITERS = 100
 
-# Residual norm below which a stage counts as solved, per precision.  Each
-# sits a few orders above what its dtype can resolve, so the iteration always
-# has somewhere to converge to.
+# Residual norm below which a stage counts as solved, per precision.
 #
 # The float64 entry is deliberately tighter than the reference's 1e-8.  A
 # stage residual of eps leaves an error of about dt*eps in the step, which put
@@ -49,8 +48,21 @@ _DEFAULT_MAX_ITERS = 100
 # their own right, so the two highest-order methods were being held to roughly
 # fourth-order accuracy no matter the step size.  Implementing them and then
 # capping them there defeats the point of having them.
+#
+# These are targets, not promises: an absolute residual bound is not always
+# reachable, because the residual's own noise floor scales with the problem
+# rather than with the number written here.  What guarantees termination is
+# the step test in :func:`_broyden`, not this table.
 _TOL_BY_DTYPE = {"float64": 1e-12, "float32": 1e-6, "float16": 1e-3}
 _FALLBACK_TOL = 1e-6
+
+# Multiple of the state's machine epsilon at which a Broyden step stops being
+# able to move the iterate.  Adding a step of eps*||x|| to x changes x by
+# about one unit in the last place, so a step below that is arithmetic noise
+# and iterating on it cannot improve anything.  The margin covers the residual
+# noise the step is computed from, which is a small multiple of eps*||x||
+# rather than eps*||x|| exactly.
+_STEP_FLOOR_FACTOR = 16.0
 
 _IMPLICIT_KEYS = frozenset({"max_iters"})
 
@@ -159,17 +171,36 @@ def _broyden(
     first step is then simply ``-F``, and the approximation improves from
     there.
 
-    Two ways out other than convergence, both of which return the current
-    iterate rather than a wrong answer dressed up as a right one: a singular
-    approximate Jacobian stops the iteration immediately, and exhausting
-    ``max_iters`` warns.  Silence in either case would mean a step that looks
-    successful and is not.
+    The iteration stops for one of two good reasons and one bad one.  It has
+    converged when the residual meets ``tol``.  It has finished when the step
+    falls below ``eps * (1 + ||x||)`` — a step that small cannot change the
+    iterate at the state's precision, so further passes would burn iterations
+    to return the same answer.  That second test is what makes an unreachable
+    ``tol`` harmless: an absolute residual bound assumes the residual can be
+    driven that low, and on a stiff problem in float32 it often cannot, since
+    the residual's own noise floor rises with the stiffness.  Judging the step
+    instead measures against the state's magnitude, which is where the
+    precision limit actually lives, and needs no tuned patience count.
 
-    Each iteration needs three scalars on the host -- the residual norm, the
-    solve's status, and the step norm -- and asking for them one at a time is
-    what an implicit solve on the GPU actually spends its time on: MLX
-    evaluates lazily, so every read waits on the whole queued pipeline.
-    :func:`lucid.diffeq._fused.broyden_probe` returns all three from one pass,
+    A step test alone would not do, and neither would a stagnation test: the
+    approximate Jacobian starts as the identity, so the first few passes make
+    little progress before the approximation becomes useful, and reading that
+    warm-up as failure makes the iteration abandon a step it was about to
+    solve.  A short step is immune to that confusion in a way a flat residual
+    is not — while the Jacobian is still the identity the step *is* the
+    residual, so a warm-up pass is never a short one.
+
+    Two further ways out, both returning the last trustworthy iterate rather
+    than a wrong answer dressed up as a right one: a singular approximate
+    Jacobian stops the iteration immediately, and exhausting ``max_iters``
+    warns.  Silence in either case would mean a step that looks successful and
+    is not.
+
+    Each iteration needs several scalars on the host -- the residual norm, the
+    solve's status, and the step and state norms -- and asking for them one at
+    a time is what an implicit solve on the GPU actually spends its time on:
+    MLX evaluates lazily, so every read waits on the whole queued pipeline.
+    :func:`lucid.diffeq._fused.broyden_probe` returns them all from one pass,
     leaving a single synchronisation per iteration.
     """
     x = guess
@@ -180,7 +211,10 @@ def _broyden(
     # comes from the probe below, which measures the residual it has just
     # produced.  That is what lets one probe answer both this iteration's
     # step questions and the next one's convergence question.
-    residual_sq, _, _ = _fused.broyden_probe(f, f)
+    residual_sq, _, _, _ = _fused.broyden_probe(f, f, x)
+    # Keyed on the state rather than on the promoted probe dtype: what limits
+    # the iteration is the precision `x + step` is accumulated at.
+    floor = _STEP_FLOOR_FACTOR * finfo(x.dtype).eps
 
     for _ in range(max_iters):
         if residual_sq <= tol * tol:
@@ -191,7 +225,9 @@ def _broyden(
         x_next = x + step
         f_next = residual(x_next)
 
-        residual_sq, step_sq, singular = _fused.broyden_probe(f_next, column, info)
+        residual_sq, step_sq, state_sq, singular = _fused.broyden_probe(
+            f_next, column, x_next, info
+        )
 
         # A singular approximation carries no information about where to go
         # next, and a zero step means the iteration has stalled; either way
@@ -201,6 +237,13 @@ def _broyden(
         # and only this one wasted call on a path that is already ending.
         if singular != 0.0 or step_sq == 0.0:
             return x
+
+        # Below the floor the step is smaller than the rounding of the
+        # addition that applied it, so `x_next` is as far as this precision
+        # goes.  It is the better of the two iterates, so it is the one kept.
+        limit = floor * (1.0 + math.sqrt(state_sq))
+        if step_sq <= limit * limit:
+            return x_next
 
         change = f_next - f
         correction = change - (jacobian @ column).reshape(size)

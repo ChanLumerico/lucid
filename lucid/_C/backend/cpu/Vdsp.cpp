@@ -102,6 +102,14 @@ void vsmul_f64(const double* in, double scalar, double* out, std::size_t n) {
     vDSP_vsmulD(in, 1, &scalar, out, 1, L(n));
 }
 
+void vsma_f32(const float* a, float scalar, const float* b, float* out, std::size_t n) {
+    vDSP_vsma(a, 1, &scalar, b, 1, out, 1, L(n));
+}
+
+void vsma_f64(const double* a, double scalar, const double* b, double* out, std::size_t n) {
+    vDSP_vsmaD(a, 1, &scalar, b, 1, out, 1, L(n));
+}
+
 void vrelu_f32(const float* in, float* out, std::size_t n) {
     float zero = 0.0f;
     vDSP_vthres(in, 1, &zero, out, 1, L(n));

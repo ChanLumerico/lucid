@@ -3,11 +3,11 @@
 // Implements the fused Broyden iteration probe.  Two kernels, one per device
 // family, behind the validation the public entry point performs once.
 //
-// The GPU path is the reason this op exists: it builds the three reductions
-// as one lazy MLX expression and downloads them together, so an iteration
-// costs a single pipeline flush.  The CPU path has no flush to amortise but
-// still wins, because the three intermediate tensors the equivalent Python
-// would allocate never come into being.
+// The GPU path is the reason this op exists: it builds the reductions as one
+// lazy MLX expression and downloads them together, so an iteration costs a
+// single pipeline flush.  The CPU path has no flush to amortise but still
+// wins, because the intermediate tensors the equivalent Python would allocate
+// never come into being.
 
 #include "BroydenProbe.h"
 
@@ -87,9 +87,11 @@ double read_any_scalar(const CpuStorage& cs, Dtype dtype) {
 // nothing.
 BroydenProbeResult broyden_probe_op(const TensorImplPtr& residual,
                                     const TensorImplPtr& step,
+                                    const TensorImplPtr& state,
                                     const TensorImplPtr& info) {
     Validator::input(residual, "broyden_probe.residual").non_null();
     Validator::input(step, "broyden_probe.step").non_null();
+    Validator::input(state, "broyden_probe.state").non_null();
 
     const Dtype dtype = residual->dtype();
     const Device device = residual->device();
@@ -101,8 +103,10 @@ BroydenProbeResult broyden_probe_op(const TensorImplPtr& residual,
 
     const diffeq::OperandSpec spec = diffeq::OperandSpec::from(residual, "broyden_probe");
     // The linear solve returns an (n, 1) column against a flat residual, so
-    // only the element count has to agree.
+    // only the element count has to agree.  Every operand here is reduced to a
+    // scalar, so shape never enters the arithmetic.
     diffeq::check_operand(step, "broyden_probe.step", spec, diffeq::ShapeRule::SameCount);
+    diffeq::check_operand(state, "broyden_probe.state", spec, diffeq::ShapeRule::SameCount);
     if (info && info->device() != device)
         throw DeviceMismatch(std::string(device_name(device)),
                              std::string(device_name(info->device())), "broyden_probe");
@@ -116,6 +120,7 @@ BroydenProbeResult broyden_probe_op(const TensorImplPtr& residual,
     NoGradGuard no_grad;
     const TensorImplPtr res_c = residual->is_contiguous() ? residual : contiguous_op(residual);
     const TensorImplPtr step_c = step->is_contiguous() ? step : contiguous_op(step);
+    const TensorImplPtr state_c = state->is_contiguous() ? state : contiguous_op(state);
     const TensorImplPtr info_c = (!info || info->is_contiguous()) ? info : contiguous_op(info);
 
     BroydenProbeResult out;
@@ -123,31 +128,34 @@ BroydenProbeResult broyden_probe_op(const TensorImplPtr& residual,
     if (device == Device::CPU) {
         const auto& rs = std::get<CpuStorage>(res_c->storage());
         const auto& ss = std::get<CpuStorage>(step_c->storage());
+        const auto& xs = std::get<CpuStorage>(state_c->storage());
         if (dtype == Dtype::F64) {
             out.residual_sq = sum_squares(reinterpret_cast<const double*>(rs.ptr.get()), n);
             out.step_sq = sum_squares(reinterpret_cast<const double*>(ss.ptr.get()), n);
+            out.state_sq = sum_squares(reinterpret_cast<const double*>(xs.ptr.get()), n);
         } else {
             out.residual_sq = sum_squares(reinterpret_cast<const float*>(rs.ptr.get()), n);
             out.step_sq = sum_squares(reinterpret_cast<const float*>(ss.ptr.get()), n);
+            out.state_sq = sum_squares(reinterpret_cast<const float*>(xs.ptr.get()), n);
         }
         if (info_c)
             out.info = read_any_scalar(std::get<CpuStorage>(info_c->storage()), info_c->dtype());
         return out;
     }
 
-    // GPU: one lazy expression covering all three values, so the download
-    // below is the only point at which anything evaluates.  Packing them into
-    // a single array is what makes it one flush rather than three.
+    // GPU: one lazy expression covering every value, so the download below is
+    // the only point at which anything evaluates.  Packing them into a single
+    // array is what makes it one flush rather than one per question.
     namespace mx = ::mlx::core;
     const mx::array& r = *std::get<GpuStorage>(res_c->storage()).arr;
     const mx::array& s = *std::get<GpuStorage>(step_c->storage()).arr;
+    const mx::array& x = *std::get<GpuStorage>(state_c->storage()).arr;
     const mx::Dtype mdt = r.dtype();
 
     // Reductions are taken over the flattened arrays so a column-shaped step
     // needs no reshape of its own.
-    mx::array res_sq = mx::sum(mx::multiply(r, r));
-    mx::array step_sq = mx::sum(mx::multiply(s, s));
-    std::vector<mx::array> parts{res_sq, step_sq};
+    std::vector<mx::array> parts{mx::sum(mx::multiply(r, r)), mx::sum(mx::multiply(s, s)),
+                                 mx::sum(mx::multiply(x, x))};
     if (info_c) {
         const mx::array& i = *std::get<GpuStorage>(info_c->storage()).arr;
         parts.push_back(mx::astype(mx::reshape(i, {}), mdt));
@@ -162,14 +170,16 @@ BroydenProbeResult broyden_probe_op(const TensorImplPtr& residual,
         const auto* p = reinterpret_cast<const double*>(host.ptr.get());
         out.residual_sq = p[0];
         out.step_sq = p[1];
+        out.state_sq = p[2];
         if (info_c)
-            out.info = p[2];
+            out.info = p[3];
     } else {
         const auto* p = reinterpret_cast<const float*>(host.ptr.get());
         out.residual_sq = static_cast<double>(p[0]);
         out.step_sq = static_cast<double>(p[1]);
+        out.state_sq = static_cast<double>(p[2]);
         if (info_c)
-            out.info = static_cast<double>(p[2]);
+            out.info = static_cast<double>(p[3]);
     }
     return out;
 }

@@ -2432,40 +2432,44 @@ class TestImplicitMethods:
 class TestBroydenProbe:
     """The fused probe behind every implicit step.
 
-    It exists to answer three questions in one device round-trip, so what
-    matters is that the three answers stay separable -- a fused reduction
-    that merged two of them would still hand back three numbers.
+    It exists to answer an iteration's questions in one device round-trip, so
+    what matters is that the answers stay separable -- a fused reduction that
+    merged two of them would still hand back the same count of numbers.
     """
 
     def test_reports_each_norm_separately(self) -> None:
         residual = lucid.tensor([1.0, -2.0, 2.0], dtype=lucid.float64)
         step = lucid.tensor([3.0, 0.0, 4.0], dtype=lucid.float64)
+        state = lucid.tensor([0.0, 6.0, 8.0], dtype=lucid.float64)
         info = lucid.zeros((), dtype=lucid.float64)
 
-        residual_sq, step_sq, singular = _fused.broyden_probe(residual, step, info)
+        residual_sq, step_sq, state_sq, singular = _fused.broyden_probe(
+            residual, step, state, info
+        )
         assert residual_sq == pytest.approx(9.0)
         assert step_sq == pytest.approx(25.0)
+        assert state_sq == pytest.approx(100.0)
         assert singular == 0.0
 
     def test_carries_the_solve_status_through(self) -> None:
         # Non-zero info is how the solver learns the Jacobian was singular.
         one = lucid.ones((3,), dtype=lucid.float64)
         info = lucid.ones((), dtype=lucid.float64) * 3.0
-        assert _fused.broyden_probe(one, one, info)[2] == pytest.approx(3.0)
+        assert _fused.broyden_probe(one, one, one, info)[3] == pytest.approx(3.0)
 
     def test_accepts_the_column_the_linear_solve_returns(self) -> None:
         # solve_ex hands back (n, 1) while the residual is flat; matching on
         # element count is what lets the caller skip a per-iteration reshape.
         residual = lucid.ones((4,), dtype=lucid.float64)
         column = lucid.ones((4, 1), dtype=lucid.float64) * 2.0
-        residual_sq, step_sq, _ = _fused.broyden_probe(residual, column)
+        residual_sq, step_sq, _, _ = _fused.broyden_probe(residual, column, residual)
         assert residual_sq == pytest.approx(4.0)
         assert step_sq == pytest.approx(16.0)
 
     def test_info_is_optional(self) -> None:
         # The seeding call happens before any solve exists to report on.
         residual = lucid.tensor([2.0, 2.0], dtype=lucid.float64)
-        residual_sq, _, singular = _fused.broyden_probe(residual, residual)
+        residual_sq, _, _, singular = _fused.broyden_probe(residual, residual, residual)
         assert residual_sq == pytest.approx(8.0)
         assert singular == 0.0
 
@@ -2474,13 +2478,124 @@ class TestBroydenProbe:
         rng = [0.3, -1.25, 4.0, 0.0, -2.5]
         residual = lucid.tensor(rng, dtype=lucid.float64)
         step = lucid.tensor([v * 2.0 - 1.0 for v in rng], dtype=lucid.float64)
+        state = lucid.tensor([v + 7.0 for v in rng], dtype=lucid.float64)
 
-        residual_sq, step_sq, _ = _fused.broyden_probe(residual, step)
+        residual_sq, step_sq, state_sq, _ = _fused.broyden_probe(residual, step, state)
         assert residual_sq == pytest.approx(float((residual * residual).sum().item()))
         assert step_sq == pytest.approx(float((step * step).sum().item()))
+        assert state_sq == pytest.approx(float((state * state).sum().item()))
 
     def test_rejects_a_mismatched_element_count(self) -> None:
         a = lucid.ones((4,), dtype=lucid.float64)
         b = lucid.ones((5,), dtype=lucid.float64)
         with pytest.raises(Exception):
-            _fused.broyden_probe(a, b)
+            _fused.broyden_probe(a, b, a)
+        with pytest.raises(Exception):
+            _fused.broyden_probe(a, a, b)
+
+
+class TestRkCombine:
+    """The fused affine combination every method's steps reduce to.
+
+    Each device family evaluates it in one pass rather than a chain of
+    scalar multiplies and adds, so what these pin is that the one pass
+    still agrees with the arithmetic it stands in for -- on every shape
+    the pass has a special case for, and on both devices, since the two
+    implementations share nothing but their contract.
+    """
+
+    @staticmethod
+    def _unfused(
+        y0: lucid.Tensor,
+        ks: list[lucid.Tensor],
+        coeffs: list[float],
+        dt: float,
+    ) -> lucid.Tensor:
+        out = y0
+        for k, c in zip(ks, coeffs):
+            out = out + (dt * c) * k
+        return out
+
+    @staticmethod
+    def _operands(
+        shape: tuple[int, ...], stages: int, device: str
+    ) -> tuple[lucid.Tensor, list[lucid.Tensor], list[float]]:
+        n = math.prod(shape)
+        y0 = lucid.tensor(
+            [0.5 - 0.25 * i for i in range(n)], device=device, dtype=lucid.float32
+        ).reshape(*shape)
+        ks = [
+            lucid.tensor(
+                [1.0 + 0.5 * j - 0.125 * i for i in range(n)],
+                device=device,
+                dtype=lucid.float32,
+            ).reshape(*shape)
+            for j in range(stages)
+        ]
+        return y0, ks, [1.0 / (j + 2.0) for j in range(stages)]
+
+    # 1 stage takes the two-node shortcut, 2+ the packed reduction; 14 is
+    # dopri8's row, the widest any method asks for.
+    @pytest.mark.parametrize("stages", [1, 2, 3, 7, 14])
+    def test_agrees_with_the_unfused_spelling(self, device: str, stages: int) -> None:
+        y0, ks, coeffs = self._operands((6,), stages, device)
+        fused = _fused.combine(y0, ks, coeffs, 0.125)
+        plain = self._unfused(y0, ks, coeffs, 0.125)
+        assert fused.shape == y0.shape
+        assert float((fused - plain).abs().max().item()) < 1e-5
+
+    @pytest.mark.parametrize("shape", [(), (1,), (2, 3), (2, 3, 4)])
+    def test_holds_for_every_state_rank(self, device: str, shape: tuple) -> None:
+        # The packed form reshapes the terms into a leading axis, so a state
+        # with no leading axis of its own (0-d) takes a different route.
+        y0, ks, coeffs = self._operands(shape, 4, device)
+        fused = _fused.combine(y0, ks, coeffs, -0.5)
+        plain = self._unfused(y0, ks, coeffs, -0.5)
+        assert fused.shape == y0.shape
+        assert float((fused - plain).abs().max().item()) < 1e-5
+
+    def test_skips_stages_whose_coefficient_is_zero(self, device: str) -> None:
+        # Butcher rows are strictly lower triangular, so most entries are
+        # zero; dropping them must not shift the remaining weights.
+        y0, ks, _ = self._operands((5,), 4, device)
+        coeffs = [0.0, 0.25, 0.0, -0.75]
+        fused = _fused.combine(y0, ks, coeffs, 0.5)
+        plain = self._unfused(y0, ks, coeffs, 0.5)
+        assert float((fused - plain).abs().max().item()) < 1e-5
+
+    def test_all_zero_coefficients_return_the_base(self, device: str) -> None:
+        y0, ks, _ = self._operands((5,), 3, device)
+        fused = _fused.combine(y0, ks, [0.0, 0.0, 0.0], 0.5)
+        assert float((fused - y0).abs().max().item()) == 0.0
+
+    def test_accepts_non_contiguous_operands(self, device: str) -> None:
+        # A stage arriving as a view has to be materialised; the packed form
+        # reads raw buffers, so a stride left unhandled would read garbage.
+        base = lucid.tensor(
+            [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device=device, dtype=lucid.float32
+        )
+        y0 = base.T[0]
+        ks = [base.T[1], base.T[2]]
+        coeffs = [0.5, -0.25]
+        fused = _fused.combine(y0, ks, coeffs, 2.0)
+        plain = self._unfused(y0, ks, coeffs, 2.0)
+        assert float((fused - plain).abs().max().item()) < 1e-5
+
+    def test_backward_still_scales_each_stage(self, device: str) -> None:
+        # The forward is one pass; the backward is not, and fusing the one
+        # must not quietly detach the other.
+        y0 = lucid.ones((3,), device=device, requires_grad=True)
+        ks = [
+            lucid.tensor(
+                [j + 1.0] * 3, device=device, dtype=lucid.float32, requires_grad=True
+            )
+            for j in range(3)
+        ]
+        coeffs = [0.5, 0.0, -1.5]
+        _fused.combine(y0, ks, coeffs, 0.25).sum().backward()
+
+        assert y0.grad is not None
+        assert float((y0.grad - 1.0).abs().max().item()) == pytest.approx(0.0, abs=1e-6)
+        for k, c in zip(ks, coeffs):
+            assert k.grad is not None
+            assert float(k.grad.max().item()) == pytest.approx(0.25 * c, abs=1e-6)

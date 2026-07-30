@@ -195,4 +195,54 @@ LUCID_INTERNAL void dgemv(bool transA,
                           double* y,
                           int incy);
 
+// Single-precision scaled vector accumulation, $y \leftarrow \alpha x + y$.
+//
+// The BLAS name for "add a scaled copy of one vector to another", and the
+// building block of any linear combination of same-shaped buffers.  Preferred
+// over a multiply into a temporary followed by an add: it needs no temporary,
+// touches $y$ once per term instead of three times, and Accelerate's kernel
+// contracts the multiply and the add into a single rounding.
+//
+// Parameters
+// ----------
+// n : int
+//     Element count.
+// alpha : float
+//     Scale applied to $x$.
+// x : const float*
+//     Vector to accumulate; unchanged.
+// y : float*
+//     Accumulator, updated in place.
+//
+// Math
+// ----
+// $$ y_i \leftarrow \alpha x_i + y_i $$
+//
+// References
+// ----------
+// Accelerate.framework ``cblas_saxpy``.
+LUCID_INTERNAL void saxpy(int n, float alpha, const float* x, float* y);
+
+// Double-precision scaled vector accumulation, $y \leftarrow \alpha x + y$.
+//
+// Parameters
+// ----------
+// n : int
+//     Element count.
+// alpha : double
+//     Scale applied to $x$.
+// x : const double*
+//     Vector to accumulate; unchanged.
+// y : double*
+//     Accumulator, updated in place.
+//
+// Math
+// ----
+// $$ y_i \leftarrow \alpha x_i + y_i $$
+//
+// References
+// ----------
+// Accelerate.framework ``cblas_daxpy``.
+LUCID_INTERNAL void daxpy(int n, double alpha, const double* x, double* y);
+
 }  // namespace lucid::backend::cpu

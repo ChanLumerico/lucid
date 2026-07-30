@@ -334,6 +334,61 @@ LUCID_INTERNAL void vsadd_f64(const double* in, double scalar, double* out, std:
 // Accelerate.framework ``vDSP_vsmulD``.
 LUCID_INTERNAL void vsmul_f64(const double* in, double scalar, double* out, std::size_t n);
 
+// Single-precision scaled vector plus vector, $out = a \cdot s + b$.
+//
+// The three-buffer form of a scaled accumulation: unlike a BLAS ``axpy`` the
+// addend and the destination are separate, so the first term of a linear
+// combination can be written straight into a fresh output without copying the
+// base into it first.
+//
+// Parameters
+// ----------
+// a : const float*
+//     Vector to scale.
+// scalar : float
+//     Scale applied to ``a``.
+// b : const float*
+//     Vector added to the scaled result; may alias ``out``.
+// out : float*
+//     Output buffer.
+// n : std::size_t
+//     Element count.
+//
+// Math
+// ----
+// $$ \text{out}_i = s \cdot a_i + b_i $$
+//
+// References
+// ----------
+// Accelerate.framework ``vDSP_vsma``.
+LUCID_INTERNAL void
+vsma_f32(const float* a, float scalar, const float* b, float* out, std::size_t n);
+
+// Double-precision scaled vector plus vector, $out = a \cdot s + b$.
+//
+// Parameters
+// ----------
+// a : const double*
+//     Vector to scale.
+// scalar : double
+//     Scale applied to ``a``.
+// b : const double*
+//     Vector added to the scaled result; may alias ``out``.
+// out : double*
+//     Output buffer.
+// n : std::size_t
+//     Element count.
+//
+// Math
+// ----
+// $$ \text{out}_i = s \cdot a_i + b_i $$
+//
+// References
+// ----------
+// Accelerate.framework ``vDSP_vsmaD``.
+LUCID_INTERNAL void
+vsma_f64(const double* a, double scalar, const double* b, double* out, std::size_t n);
+
 // Single-precision ReLU clamp.
 //
 // Computes $\text{out}_i = \max(0, \text{in}_i)$ via ``vDSP_vthres`` with

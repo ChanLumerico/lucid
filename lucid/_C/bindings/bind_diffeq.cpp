@@ -37,17 +37,19 @@ void register_diffeq(py::module_& m) {
           "RMS norm of (dt * sum_i coeffs[i] * ks[i]) / (atol + rtol * max(|y0|, |y1|)).");
 
     // Returned as a tuple of host floats for the same reason: an implicit
-    // method's quasi-Newton iteration branches on all three every pass, and
+    // method's quasi-Newton iteration branches on all of them every pass, and
     // computing them together makes that one device synchronisation instead
-    // of three.
+    // of one per question.
     m.def(
         "broyden_probe",
-        [](const TensorImplPtr& residual, const TensorImplPtr& step, const TensorImplPtr& info) {
-            const BroydenProbeResult r = broyden_probe_op(residual, step, info);
-            return py::make_tuple(r.residual_sq, r.step_sq, r.info);
+        [](const TensorImplPtr& residual, const TensorImplPtr& step, const TensorImplPtr& state,
+           const TensorImplPtr& info) {
+            const BroydenProbeResult r = broyden_probe_op(residual, step, state, info);
+            return py::make_tuple(r.residual_sq, r.step_sq, r.state_sq, r.info);
         },
-        py::arg("residual"), py::arg("step"), py::arg("info") = py::none(),
-        "(sum(residual^2), sum(step^2), info) for one Broyden iteration, in one pass.");
+        py::arg("residual"), py::arg("step"), py::arg("state"), py::arg("info") = py::none(),
+        "(sum(residual^2), sum(step^2), sum(state^2), info) for one Broyden iteration, in one "
+        "pass.");
 }
 
 }  // namespace lucid::bindings

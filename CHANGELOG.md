@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 
 - find the event time by Illinois rather than bisection
+- make the implicit solve stop on the step, and fuse rk_combine
 
 ---
 

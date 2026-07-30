@@ -1,11 +1,11 @@
 // lucid/_C/ops/diffeq/BroydenProbe.h
 //
 // Public API for the fused probe that drives one Broyden iteration inside an
-// implicit Runge-Kutta step.  Returns three host ``double``s rather than
-// tensors, for the same reason ``rk_error_norm`` does: the iteration branches
-// on all three, so they have to cross to the host no matter how they are
-// computed.  Producing them together makes that exactly one synchronisation
-// per iteration instead of three.
+// implicit Runge-Kutta step.  Returns host ``double``s rather than tensors,
+// for the same reason ``rk_error_norm`` does: the iteration branches on all of
+// them, so they have to cross to the host no matter how they are computed.
+// Producing them together makes that exactly one synchronisation per
+// iteration instead of one per question.
 
 #pragma once
 
@@ -14,7 +14,7 @@
 
 namespace lucid {
 
-// The three scalars one Broyden iteration has to know.
+// The scalars one Broyden iteration has to know.
 //
 // Attributes
 // ----------
@@ -24,30 +24,36 @@ namespace lucid {
 // step_sq : double
 //     ``sum_i step_i^2``.  Denominator of the rank-one Jacobian update, and
 //     zero exactly when the iteration has stalled.
+// state_sq : double
+//     ``sum_i state_i^2``.  Sets the scale the step is judged against, so
+//     that "this step is too small to move the iterate" is a statement about
+//     the state's own magnitude rather than an absolute number.
 // info : double
 //     The linear solve's status, carried through unchanged.  Non-zero means
 //     the approximate Jacobian was singular.
 struct BroydenProbeResult {
     double residual_sq = 0.0;
     double step_sq = 0.0;
+    double state_sq = 0.0;
     double info = 0.0;
 };
 
-// Answer all three of a Broyden iteration's questions in one pass.
+// Answer all of a Broyden iteration's questions in one pass.
 //
 // An implicit method solves its stage equations by quasi-Newton iteration,
-// and each iteration has to decide three things on the host: whether the
-// residual is small enough to stop, whether the linear solve succeeded, and
-// whether the step is long enough for the rank-one update to be defined.
+// and each iteration has to decide several things on the host: whether the
+// residual is small enough to stop, whether the step has fallen below what
+// the state's precision can represent, whether the linear solve succeeded,
+// and whether the step is long enough for the rank-one update to be defined.
 //
-// Written separately, those are three reductions, three temporaries, and --
-// on the GPU -- three pipeline flushes.  MLX evaluates lazily, so reading any
-// one scalar waits for everything queued behind it; measured on an M4 Max,
-// that wait is around 120 microseconds while the arithmetic it interrupts is
+// Written separately, those are four reductions, four temporaries, and -- on
+// the GPU -- four pipeline flushes.  MLX evaluates lazily, so reading any one
+// scalar waits for everything queued behind it; measured on an M4 Max, that
+// wait is around 120 microseconds while the arithmetic it interrupts is
 // closer to 10.  The flushes, not the arithmetic, are what an implicit solve
 // spends its time on.  Fusing them costs one flush and no temporaries, and on
-// the CPU it also drops the three intermediate tensors the Python spelling
-// would allocate.
+// the CPU it also drops the intermediate tensors the Python spelling would
+// allocate.
 //
 // Parameters
 // ----------
@@ -57,29 +63,32 @@ struct BroydenProbeResult {
 //     Proposed Newton step.  Same dtype and device as ``residual`` and the
 //     same element count, though not necessarily the same shape -- the linear
 //     solve returns a column, the residual is flat.
+// state : TensorImplPtr
+//     Current iterate.  Same dtype, device, and element count as ``residual``.
 // info : TensorImplPtr
 //     Status scalar from the linear solve.  Any dtype; read as a number.
 //     May be null, for the seeding call made before any solve has happened;
-//     ``info`` then reports zero and only the two norms are computed.
+//     ``info`` then reports zero and only the norms are computed.
 //
 // Returns
 // -------
 // BroydenProbeResult
-//     The three scalars, already on the host.
+//     The scalars, already on the host.
 //
 // Raises
 // ------
 // NotImplementedError
 //     If ``residual`` is neither F32 nor F64.
 // DtypeMismatch, DeviceMismatch, ShapeMismatch
-//     If ``step`` disagrees with ``residual`` on dtype, device, or element
-//     count.
+//     If ``step`` or ``state`` disagrees with ``residual`` on dtype, device,
+//     or element count.
 //
 // See Also
 // --------
 // rk_error_norm_op : the same trade for adaptive step-size control.
 LUCID_API BroydenProbeResult broyden_probe_op(const TensorImplPtr& residual,
                                               const TensorImplPtr& step,
+                                              const TensorImplPtr& state,
                                               const TensorImplPtr& info);
 
 }  // namespace lucid

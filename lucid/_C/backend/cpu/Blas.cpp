@@ -78,4 +78,14 @@ void dgemv(bool transA,
     cblas_dgemv(CblasRowMajor, T(transA), M, N, alpha, A, lda, x, incx, beta, y, incy);
 }
 
+// Unit strides throughout: the callers accumulate over whole contiguous
+// buffers, so exposing incx/incy would be parameters nobody sets.
+void saxpy(int n, float alpha, const float* x, float* y) {
+    cblas_saxpy(n, alpha, x, 1, y, 1);
+}
+
+void daxpy(int n, double alpha, const double* x, double* y) {
+    cblas_daxpy(n, alpha, x, 1, y, 1);
+}
+
 }  // namespace lucid::backend::cpu
