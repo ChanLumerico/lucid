@@ -7,7 +7,7 @@ the Tensor class by _inject_dunders() at module import time.
 
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap
+from lucid._dispatch import _unwrap_or_scalar, _wrap
 from lucid._tensor._indexing import _getitem, _setitem
 
 if TYPE_CHECKING:
@@ -57,44 +57,6 @@ def _maybe_promote(
     if db != tgt:
         b_impl = _C_engine.astype(b_impl, tgt)
     return a_impl, b_impl
-
-
-def _unwrap_or_scalar(
-    x: TensorOrScalar,
-    ref_impl: _C_engine.TensorImpl | None = None,
-) -> _C_engine.TensorImpl:
-    """
-    Return TensorImpl for Tensor; convert scalars to scalar TensorImpl.
-    ref_impl is used to match dtype/device for scalar→TensorImpl conversion.
-    """
-    # Avoid circular import: check duck-type attribute instead of isinstance.
-    # Annotate ``object`` (not the implicit ``Any`` from ``getattr(..., default)``)
-    # so the isinstance guard narrows reliably across mypy versions.
-    impl: object = getattr(x, "_impl", None)
-    if impl is not None and isinstance(impl, _C_engine.TensorImpl):
-        return impl
-    if isinstance(x, _C_engine.TensorImpl):
-        return x
-
-    # scalar → 0-dim scalar TensorImpl; the engine's binary ops (arithmetic AND
-    # comparison) broadcast it against the other operand.  A 0-dim constant
-    # (rather than one materialised to ref_impl's full shape) is what lets scalar
-    # arithmetic ride the symbolic-batch (dynamic) compile path — a full pinned
-    # to the trace-time batch would mismatch the symbolic input and abort
-    # MPSGraph's MLIR pass — and it skips allocating a full-shape buffer in
-    # eager.  dtype / device still track ref_impl so dtype promotion is
-    # unchanged.  (Comparison ops gained 0-dim broadcast in bfunc/Compare.cpp;
-    # before that this had to materialise the full shape.)
-    if isinstance(x, (int, float, bool)):
-        if ref_impl is not None:
-            dtype = ref_impl.dtype
-            device = ref_impl.device
-        else:
-            dtype = _C_engine.Dtype.F32
-            device = _C_engine.Device.CPU
-        return _C_engine.full([], float(x), dtype, device)
-
-    raise TypeError(f"Cannot convert {type(x).__name__} to TensorImpl")
 
 
 def _inject_dunders(cls: type) -> None:

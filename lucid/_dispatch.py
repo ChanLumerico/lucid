@@ -61,6 +61,134 @@ def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
     raise TypeError(f"Expected Tensor or TensorImpl, got {type(t).__name__}")
 
 
+# Kind of each engine dtype, ordered so that a larger number wins a mixed-kind
+# comparison: bool < integer < floating < complex.  Only the ordering matters
+# here; width promotion between two *tensors* is the arithmetic adapter's job.
+_DTYPE_KIND: dict[_C_engine.Dtype, int] = {
+    _C_engine.Dtype.Bool: 0,
+    _C_engine.Dtype.I8: 1,
+    _C_engine.Dtype.I16: 1,
+    _C_engine.Dtype.I32: 1,
+    _C_engine.Dtype.I64: 1,
+    _C_engine.Dtype.F16: 2,
+    _C_engine.Dtype.F32: 2,
+    _C_engine.Dtype.F64: 2,
+    _C_engine.Dtype.C64: 3,
+}
+
+# What a Python scalar of each kind falls back to when it out-ranks the tensor
+# it is combined with.  A bool never out-ranks anything, so it needs no entry.
+_KIND_FALLBACK: dict[int, _C_engine.Dtype] = {
+    1: _C_engine.Dtype.I64,
+    2: _C_engine.Dtype.F32,
+}
+
+
+def _scalar_dtype(
+    x: int | float | bool,
+    ref: _C_engine.Dtype,
+    device: _C_engine.Device,
+) -> _C_engine.Dtype:
+    """Pick the engine dtype a Python scalar takes beside a tensor of ``ref``.
+
+    Parameters
+    ----------
+    x : int or float or bool
+        The scalar operand.
+    ref : lucid._C.engine.Dtype
+        Dtype of the tensor it is combined with.
+    device : lucid._C.engine.Device
+        Where the pair lives; the GPU stream cannot hold float64.
+
+    Returns
+    -------
+    lucid._C.engine.Dtype
+        ``ref`` when the scalar's kind does not exceed the tensor's, so the
+        scalar never forces a width change; otherwise the default dtype for
+        the scalar's own kind, narrowed to what ``device`` can represent.
+    """
+    kind = 0 if isinstance(x, bool) else (1 if isinstance(x, int) else 2)
+    if kind <= _DTYPE_KIND.get(ref, 2):
+        return ref
+    if kind != 2:
+        return _KIND_FALLBACK[kind]
+
+    # Track the session default so `set_default_dtype(float64)` reaches scalar
+    # promotion too, as it does every other dtype decision -- except on the
+    # GPU stream, where no tensor can be float64 in the first place, so
+    # promoting to it would produce an operand the device cannot hold.
+    fallback = to_engine_dtype(get_default_dtype())
+    if device != _C_engine.Device.CPU and fallback == _C_engine.Dtype.F64:
+        return _C_engine.Dtype.F32
+    return fallback
+
+
+def _unwrap_or_scalar(
+    x: object,
+    ref_impl: _C_engine.TensorImpl | None = None,
+) -> _C_engine.TensorImpl:
+    """Return the TensorImpl for a Tensor, or build one from a Python scalar.
+
+    Parameters
+    ----------
+    x : Tensor or TensorImpl or int or float or bool
+        Operand to normalise.
+    ref_impl : TensorImpl or None, default=None
+        Tensor the scalar is being combined with; supplies the dtype and
+        device so that promotion behaves as if the scalar had been written
+        as a tensor.  Defaults to float32 on the CPU.
+
+    Returns
+    -------
+    TensorImpl
+        ``x`` itself when it already is one, else a 0-d constant.
+
+    Raises
+    ------
+    TypeError
+        If ``x`` is neither a tensor nor a Python number.
+
+    Notes
+    -----
+    The scalar becomes a **0-d** constant rather than one materialised to
+    ``ref_impl``'s full shape.  The engine's binary ops — arithmetic and
+    comparison alike — broadcast it, and staying 0-d is what lets scalar
+    arithmetic ride the symbolic-batch compile path: a full pinned to the
+    trace-time batch would mismatch the symbolic input and abort MPSGraph's
+    MLIR pass.  It also skips allocating a full-shape buffer in eager.
+
+    This is the single place a scalar crosses into the engine.  Every entry
+    point that accepts ``Tensor | scalar`` — the dunders, and the arithmetic
+    and elementwise adapters behind the method and free-function forms —
+    routes through it, so ``a + 2``, ``a.add(2)`` and ``lucid.add(a, 2)``
+    cannot drift from one another.
+
+    A scalar is *weak*: it contributes its kind (bool < int < float) but not
+    its width, so it can widen the result's kind but never its precision.
+    ``float16_tensor + 1.5`` stays float16 rather than being dragged up to
+    the default float dtype, while ``int32_tensor + 1.5`` becomes float —
+    taking the tensor's dtype unconditionally silently truncated the scalar
+    to an integer and returned the wrong numbers with no error at all.
+    """
+    impl: object = getattr(x, "_impl", None)
+    if impl is not None and isinstance(impl, _C_engine.TensorImpl):
+        return impl
+    if isinstance(x, _C_engine.TensorImpl):
+        return x
+
+    if isinstance(x, (int, float, bool)):
+        if ref_impl is None:
+            return _C_engine.full(
+                [], float(x), _C_engine.Dtype.F32, _C_engine.Device.CPU
+            )
+        device = ref_impl.device
+        return _C_engine.full(
+            [], float(x), _scalar_dtype(x, ref_impl.dtype, device), device
+        )
+
+    raise TypeError(f"Cannot convert {type(x).__name__} to TensorImpl")
+
+
 def _wrap(impl: _C_engine.TensorImpl) -> Tensor:
     """Wrap a TensorImpl in a Tensor (zero-copy)."""
     from lucid._tensor.tensor import Tensor

@@ -336,8 +336,8 @@ _REGISTRY: list[OpEntry] = [
 
     # ── elementwise math compositions (binary) ──────────────────────────────
     OpEntry("atan2",     _R.atan2,     2, method_name="atan2",     free_fn_name="atan2"),
-    OpEntry("fmod",      _R.fmod,      2, method_name="fmod",      free_fn_name="fmod"),
-    OpEntry("remainder", _R.remainder, 2, method_name="remainder", free_fn_name="remainder"),
+    OpEntry("fmod",      A._make_arith_adapter(_R.fmod),      2, method_name="fmod",      free_fn_name="fmod"),
+    OpEntry("remainder", A._make_arith_adapter(_R.remainder), 2, method_name="remainder", free_fn_name="remainder"),
     OpEntry("hypot",     _R.hypot,     2, method_name="hypot",     free_fn_name="hypot"),
     OpEntry("logaddexp", _R.logaddexp, 2, method_name="logaddexp", free_fn_name="logaddexp"),
     OpEntry("nextafter", _R.nextafter, 2, method_name="nextafter", free_fn_name="nextafter"),
@@ -395,12 +395,12 @@ _REGISTRY: list[OpEntry] = [
     # ══ aliases of existing primitives (no new C++ — share engine kernels) ══
 
     # Comparison short names — same kernels as equal/not_equal/less/...
-    OpEntry("eq", _R.eq, 2, method_name="eq", free_fn_name="eq"),
-    OpEntry("ne", _R.ne, 2, method_name="ne", free_fn_name="ne"),
-    OpEntry("lt", _R.lt, 2, method_name="lt", free_fn_name="lt"),
-    OpEntry("le", _R.le, 2, method_name="le", free_fn_name="le"),
-    OpEntry("gt", _R.gt, 2, method_name="gt", free_fn_name="gt"),
-    OpEntry("ge", _R.ge, 2, method_name="ge", free_fn_name="ge"),
+    OpEntry("eq", A._make_arith_adapter(_R.eq), 2, method_name="eq", free_fn_name="eq"),
+    OpEntry("ne", A._make_arith_adapter(_R.ne), 2, method_name="ne", free_fn_name="ne"),
+    OpEntry("lt", A._make_arith_adapter(_R.lt), 2, method_name="lt", free_fn_name="lt"),
+    OpEntry("le", A._make_arith_adapter(_R.le), 2, method_name="le", free_fn_name="le"),
+    OpEntry("gt", A._make_arith_adapter(_R.gt), 2, method_name="gt", free_fn_name="gt"),
+    OpEntry("ge", A._make_arith_adapter(_R.ge), 2, method_name="ge", free_fn_name="ge"),
 
     # Trig short names — share kernels with arcsin/arccos/arctan.
     OpEntry("asin", _R.asin, 1, method_name="asin", free_fn_name="asin"),
@@ -410,15 +410,15 @@ _REGISTRY: list[OpEntry] = [
     # ``bitwise_not`` is the reference framework's name for ``invert``.
     OpEntry("bitwise_not", _R.bitwise_not, 1,
             method_name="bitwise_not", free_fn_name="bitwise_not"),
-    OpEntry("bitwise_and", _R.bitwise_and, 2,
+    OpEntry("bitwise_and", A._make_arith_adapter(_R.bitwise_and), 2,
             method_name="bitwise_and", free_fn_name="bitwise_and"),
-    OpEntry("bitwise_or",  _R.bitwise_or,  2,
+    OpEntry("bitwise_or",  A._make_arith_adapter(_R.bitwise_or),  2,
             method_name="bitwise_or",  free_fn_name="bitwise_or"),
-    OpEntry("bitwise_xor", _R.bitwise_xor, 2,
+    OpEntry("bitwise_xor", A._make_arith_adapter(_R.bitwise_xor), 2,
             method_name="bitwise_xor", free_fn_name="bitwise_xor"),
-    OpEntry("bitwise_left_shift", _R.bitwise_left_shift, 2,
+    OpEntry("bitwise_left_shift", A._make_arith_adapter(_R.bitwise_left_shift), 2,
             method_name="bitwise_left_shift", free_fn_name="bitwise_left_shift"),
-    OpEntry("bitwise_right_shift", _R.bitwise_right_shift, 2,
+    OpEntry("bitwise_right_shift", A._make_arith_adapter(_R.bitwise_right_shift), 2,
             method_name="bitwise_right_shift", free_fn_name="bitwise_right_shift"),
 
     # masked_select: engine kernel returns a flat 1-D tensor of selected

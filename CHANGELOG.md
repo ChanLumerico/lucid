@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - run the backward of a Function that returns several tensors
 
+- coerce and promote scalar operands the way the operator form does
+
 ### Changed
 
 - give the engine ops one shared operand check

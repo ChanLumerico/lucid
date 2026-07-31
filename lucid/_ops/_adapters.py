@@ -24,7 +24,7 @@ adapters and live at the top of the module.
 from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap
+from lucid._dispatch import _unwrap, _unwrap_or_scalar
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -67,19 +67,36 @@ def _arith_result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.D
 def _make_arith_adapter(
     engine_fn: Callable[[_Impl, _Impl], _Impl],
 ) -> Callable[[_Impl, _Impl], _Impl]:
-    """Wrap an arithmetic binary engine function with automatic dtype promotion.
+    """Wrap an arithmetic binary engine function with scalars and dtype promotion.
 
-    When both operands have the same dtype the call is a zero-overhead
-    passthrough.  Otherwise each operand is cast to the promoted dtype before
+    A Python number in either operand becomes a 0-d constant of the other
+    operand's dtype and device, so ``a.add(2)`` and ``lucid.add(a, 2)`` mean
+    what ``a + 2`` means.  Without it the raw number reached the engine and
+    the promotion below raised ``AttributeError: 'int' object has no
+    attribute 'dtype'`` — every arithmetic op's method and free-function form
+    rejected the scalar its operator form accepted.
+
+    When both operands then have the same dtype the call is a zero-overhead
+    passthrough.  Otherwise each is cast to the promoted dtype before
     forwarding to the engine — matching the type-promotion behaviour of the
     reference framework.
 
-    Only arithmetic ops (add/sub/mul/div/pow/maximum/minimum) should use this
-    wrapper.  matmul/dot/inner/outer deliberately bypass it because they have
-    their own dtype constraints that the engine enforces.
+    Used by the arithmetic ops (add/sub/mul/div/pow/maximum/minimum) and by
+    the elementwise binaries the reference framework also accepts a scalar
+    for: the comparisons, fmod/remainder, and the bitwise pair ops.  Those
+    return their own dtype — Bool for a comparison — but they still want both
+    operands at a common one first, so the promotion applies unchanged.
+
+    matmul/dot/inner/outer deliberately bypass it: a scalar operand is
+    meaningless there, and they have their own dtype constraints that the
+    engine enforces.
     """
 
     def _adapter(a: _Impl, b: _Impl) -> _Impl:
+        if not isinstance(b, _C_engine.TensorImpl):
+            b = _unwrap_or_scalar(b, a if isinstance(a, _C_engine.TensorImpl) else None)
+        if not isinstance(a, _C_engine.TensorImpl):
+            a = _unwrap_or_scalar(a, b)
         da, db = a.dtype, b.dtype
         if da != db:
             tgt = _arith_result_dtype(da, db)

@@ -370,14 +370,17 @@ def shadow_alloc() -> Iterator[None]:
     _ORIGINAL["__unwrap_sites__"] = (_orig_unwrap, _unwrap_rebindings)
 
     # Same treatment for ``_unwrap_or_scalar`` — defined in
-    # ``lucid._tensor._dunders`` and used by every binary-arithmetic
-    # dunder.  CoAtNet's ``_init_rel_idx`` exercises this path during
-    # ``__init__`` (computing relative-position offsets on tiny
-    # arange-backed tensors).  The default impl rejects anything whose
-    # impl isn't a TensorImpl; we extend it to also accept phantoms.
-    from lucid._tensor import _dunders as _dunders_mod
+    # ``lucid._dispatch`` and used by every binary-arithmetic dunder and by
+    # the arithmetic op adapters behind their method and free-function forms.
+    # CoAtNet's ``_init_rel_idx`` exercises this path during ``__init__``
+    # (computing relative-position offsets on tiny arange-backed tensors).
+    # The default impl rejects anything whose impl isn't a TensorImpl; we
+    # extend it to also accept phantoms.  Taken from the defining module
+    # rather than from one of its importers, so the sweep below still finds
+    # every site that holds a reference to it.
+    from lucid import _dispatch as _dispatch_mod
 
-    _orig_uos = _dunders_mod._unwrap_or_scalar
+    _orig_uos = _dispatch_mod._unwrap_or_scalar
 
     def _shadow_uos(x: Any, ref_impl: Any = None) -> Any:
         impl = getattr(x, "_impl", None)
