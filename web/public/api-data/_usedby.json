@@ -166,6 +166,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.diffeq._solvers"
+    },
+    {
+      "kind": "module",
       "module": "lucid.einops"
     },
     {
