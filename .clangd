@@ -1,19 +1,39 @@
 # clangd configuration for the Lucid project.
 #
-# Without this file clangd can't locate compile_commands.json (it lives
-# in the build tree, not the repo root) and falls back to ad-hoc include
+# Without a compilation database clangd falls back to ad-hoc include
 # guessing — which misfires on:
 #   - Metal / MetalPerformanceShadersGraph framework headers (.mm files)
 #   - MLX includes (pip-installed under site-packages)
 #   - pybind11 headers (same)
 # producing the red-squiggle errors that aren't actual compile errors.
 #
-# Pointing CompilationDatabase at the build dir gives clangd the exact
-# flags ninja used (framework search paths, ARC flags, isystem
+# Pointing CompilationDatabase at a configured build tree gives clangd the
+# exact flags the build used (framework search paths, ARC flags, isystem
 # directives, the works), so per-file indexing matches the build.
+#
+# ``build/ide`` is that tree, and it has to be created once per machine:
+#
+#   cmake -S lucid/_C -B build/ide -DBUILD_TESTING=ON \
+#         -DPython3_EXECUTABLE="$PWD/.venv/bin/python" -DCMAKE_BUILD_TYPE=Release
+#
+# Configure only — nothing needs to be compiled, the database is written at
+# generate time.  ``-DPython3_EXECUTABLE`` is not optional: without it CMake
+# takes the first python3 on PATH and indexes a *different* MLX than the one
+# the project builds against (the same trap that produced the rpath bug —
+# see obsidian/debug/debug-build-wrong-venv-rpath.md).  ``-DBUILD_TESTING=ON``
+# is what puts lucid/_C/test/**.cpp in the database too.
+#
+# ``build/`` is git-ignored and excluded from the machine sync, so each
+# machine generates its own with its own absolute paths.  Re-run the command
+# after adding or removing a source file.
+#
+# This previously pointed at ``build/temp.macosx-*/lucid__C_engine``, which
+# was where setup.py used to build.  The project builds through
+# scikit-build-core now, which uses a temporary directory and leaves nothing
+# behind, so that path had stopped existing and every engine file was red.
 
 CompileFlags:
-  CompilationDatabase: build/temp.macosx-10.15-universal2-cpython-314/lucid__C_engine
+  CompilationDatabase: build/ide
   # Explicitly drop the warnings that emitters trip by design (unused
   # `ctx`/`node` in one-input emitters, shadowed `graph` locals named
   # after the BuilderContext getter, etc.) — the build already passes

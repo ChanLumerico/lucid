@@ -258,7 +258,7 @@ inline std::size_t grad_numel(const TensorImplPtr& t) {
 // ```
 #define EXPECT_TENSOR_SHAPE(tensor_impl_ptr, expected_shape)                   \
     do {                                                                        \
-        auto _t = (tensor_impl_ptr);                                           \
+        const auto& _t = (tensor_impl_ptr);                                    \
         const auto& _s = _t->shape();                                          \
         const Shape _e = (expected_shape);                                     \
         EXPECT_EQ(_s, _e) << "Tensor shape mismatch.";                         \

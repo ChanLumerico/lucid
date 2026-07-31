@@ -10,6 +10,13 @@ endif()
 
 project(lucid_engine LANGUAGES CXX OBJCXX)
 
+# Always emit compile_commands.json.  clangd and the C/C++ extension both read
+# it to learn where MLX, pybind11 and the Metal frameworks live; without one
+# they fall back to guessing include paths and light the whole engine up with
+# red squiggles that are not compile errors.  Costs nothing to write, and the
+# editor configs in the repo root point at a tree configured by this file.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
     message(FATAL_ERROR "Lucid C++ engine supports macOS arm64 Apple Silicon only")
 endif()
