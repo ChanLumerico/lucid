@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - coerce and promote scalar operands the way the operator form does
 
+- fail loudly, honour seminorm, and say what the interpolant is
+
 ### Changed
 
 - give the engine ops one shared operand check

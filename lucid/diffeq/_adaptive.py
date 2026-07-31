@@ -53,6 +53,13 @@ class AdaptiveOptions:
         shrink in one adjustment.
     max_num_steps : int
         Budget of accepted steps before the solve gives up.
+    norm_prefix : int or None
+        When set, the error norm covers only the first this-many elements of
+        the state.  Private, and set only by :func:`odeint_adjoint` for
+        ``adjoint_options={"norm": "seminorm"}``: the augmented backward state
+        is ``[y | adjoint | parameter gradients]``, and the gradient block is
+        a quadrature whose error never feeds back into the dynamics, so
+        letting it drive the step size costs steps and buys nothing.
     """
 
     min_step: float = 0.0
@@ -64,6 +71,7 @@ class AdaptiveOptions:
     ifactor: float = _IFACTOR
     dfactor: float = _DFACTOR
     max_num_steps: int = _MAX_NUM_STEPS
+    norm_prefix: int | None = None
 
 
 _ADAPTIVE_KEYS = frozenset(
@@ -79,6 +87,11 @@ _ADAPTIVE_KEYS = frozenset(
         "max_num_steps",
         "dtype",
         "norm",
+        # Private, injected by `odeint_adjoint` for `norm="seminorm"`; see
+        # `norm_prefix` on AdaptiveOptions.  Not part of the public option
+        # surface -- the leading underscore marks it Tier 3, like every other
+        # `_`-prefixed name in the package.
+        "_norm_prefix",
     }
 )
 
@@ -104,9 +117,14 @@ def parse_options(options: dict[str, object] | None) -> AdaptiveOptions:
     Notes
     -----
     ``dtype`` is accepted and ignored: step control here runs in host doubles
-    unconditionally, which is what that option exists to request.  ``norm`` is
-    accepted and ignored too — the fused kernel implements the RMS norm, and
-    swapping it would mean giving up the fusion.
+    unconditionally, which is what that option exists to request.
+
+    ``norm`` is **rejected** rather than ignored.  The error norm is a fused
+    engine kernel, so a caller-supplied one cannot be honoured, and accepting
+    the key silently would leave someone believing they had changed the step
+    control when they had not — the one value that does have an effect,
+    ``"seminorm"``, is handled by :func:`odeint_adjoint` before the options
+    reach here.
     """
     if options is None:
         return AdaptiveOptions()
@@ -115,6 +133,13 @@ def parse_options(options: dict[str, object] | None) -> AdaptiveOptions:
         raise ValueError(
             f"unknown option(s) for an adaptive method: {sorted(unknown)}; "
             f"expected a subset of {sorted(_ADAPTIVE_KEYS)}"
+        )
+    if "norm" in options:
+        raise NotImplementedError(
+            "option 'norm' is not supported: the error norm is a fused engine "
+            "kernel, so a caller-supplied norm cannot be honoured. The one "
+            "value with an effect, 'seminorm', is accepted by odeint_adjoint "
+            "through adjoint_options."
         )
 
     def _real(key: str, default: float) -> float:
@@ -169,6 +194,9 @@ def parse_options(options: dict[str, object] | None) -> AdaptiveOptions:
         ifactor=_real("ifactor", _IFACTOR),
         dfactor=_real("dfactor", _DFACTOR),
         max_num_steps=_count("max_num_steps", _MAX_NUM_STEPS),
+        norm_prefix=(
+            None if options.get("_norm_prefix") is None else _count("_norm_prefix", 0)
+        ),
     )
     if parsed.min_step > parsed.max_step:
         raise ValueError(
@@ -180,6 +208,8 @@ def parse_options(options: dict[str, object] | None) -> AdaptiveOptions:
         raise ValueError(f"dfactor must lie in (0, 1], got {parsed.dfactor}")
     if parsed.max_num_steps < 1:
         raise ValueError(f"max_num_steps must be >= 1, got {parsed.max_num_steps}")
+    if parsed.norm_prefix is not None and parsed.norm_prefix < 1:
+        raise ValueError(f"_norm_prefix must be >= 1, got {parsed.norm_prefix}")
     return parsed
 
 
@@ -283,6 +313,17 @@ def select_initial_step(
 
     h0 = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
 
+    # A state or derivative that is already non-finite drives `h0` to zero or
+    # NaN, and every line below divides by it.  These norms are host floats,
+    # so that is a ZeroDivisionError -- an arithmetic accident that says
+    # nothing about the problem.  Returning a zero step instead lets the
+    # stepper's underflow guard report it against the integration, which is
+    # both the useful message and what the reference ends up doing (its norms
+    # are tensors, so the same division yields an infinity and the step it
+    # eventually derives is zero).
+    if not (h0 > 0.0) or not math.isfinite(h0):
+        return 0.0
+
     y1 = _fused.combine(y0, [f0], [1.0], direction * h0)
     f1 = func(scalar(t0 + direction * h0), y1)
     d2 = _fused.error_ratio(y0, y0, [f1, f0], [1.0, -1.0], 1.0, rtol, atol) / h0
@@ -290,7 +331,12 @@ def select_initial_step(
     if d1 <= 1e-15 and d2 <= 1e-15:
         h1 = max(1e-6, h0 * 1e-3)
     else:
-        h1 = (0.01 / max(d1, d2)) ** (1.0 / (order + 1))
+        # `max` picks the first argument when the comparison is false, so a
+        # NaN here would slip through as `d1`; guard the divisor rather than
+        # trusting it.  An infinite one needs no guard -- the division simply
+        # gives zero, which is the right answer for "no step is small enough".
+        largest = max(d1, d2)
+        h1 = (0.01 / largest) ** (1.0 / (order + 1)) if largest > 0.0 else 0.0
 
     return min(100.0 * h0, h1)
 
@@ -497,14 +543,21 @@ class Stepper:
             limit = _next_forced(self._forced, self.t, self._direction)
             if limit is not None:
                 self.step = min(self.step, abs(limit - self.t))
-            if self.step <= 0.0:
-                raise RuntimeError(
-                    f"step size collapsed to {self.step!r} at t={self.t!r}; the "
-                    f"problem may be too stiff for an explicit method"
-                )
 
             dt = self._direction * self.step
             t_next = self.t + dt
+            # `not (... > 0)` rather than `<= 0`, and `t_next == self.t`
+            # rather than a threshold on the step: both survive a NaN, and a
+            # NaN step is exactly what a diverging problem produces.  The
+            # second condition is the one that matters -- a step can be
+            # positive and still too small to move `t` at all, which loops
+            # forever rather than failing.
+            if not (self.step > 0.0) or t_next == self.t:
+                raise RuntimeError(
+                    f"underflow in dt {self.step!r} at t={self.t!r}: the step "
+                    f"size can no longer advance the integration; the problem "
+                    f"may be diverging, or too stiff for an explicit method"
+                )
             ks: list[Tensor] = [self.f]
             for stage in range(1, tableau.stages):
                 stage_y = _fused.combine(self.y, ks, tableau.a[stage], dt)
@@ -515,9 +568,23 @@ class Stepper:
 
             y_next = _fused.combine(self.y, ks, tableau.b, dt)
             assert tableau.b_error is not None
-            ratio = _fused.error_ratio(
-                self.y, y_next, ks, tableau.b_error, dt, self._rtol, self._atol
-            )
+            # A leading slice of a contiguous 1-D state is itself contiguous,
+            # so restricting the norm costs metadata and no copy.
+            prefix = self._opts.norm_prefix
+            if prefix is None:
+                ratio = _fused.error_ratio(
+                    self.y, y_next, ks, tableau.b_error, dt, self._rtol, self._atol
+                )
+            else:
+                ratio = _fused.error_ratio(
+                    self.y[:prefix],
+                    y_next[:prefix],
+                    [k[:prefix] for k in ks],
+                    tableau.b_error,
+                    dt,
+                    self._rtol,
+                    self._atol,
+                )
 
             proposed = _clamp(
                 optimal_step_size(
@@ -530,7 +597,29 @@ class Stepper:
                 ),
                 self._opts,
             )
-            if ratio > 1.0:
+            # `not (ratio <= 1.0)` rather than `ratio > 1.0`.  The difference
+            # only shows when the ratio is NaN, and that is the case that
+            # matters: a diverging problem drives the state to NaN, every
+            # comparison against NaN is false, and written the other way round
+            # the step would be *accepted* -- so the solver would march to the
+            # end and hand back NaN without a word.  A non-finite ratio is a
+            # rejection, and the guards below turn a rejection that cannot be
+            # retried into an error.
+            if not (ratio <= 1.0):
+                if not (proposed < self.step):
+                    # The step cannot shrink any further, so retrying would
+                    # loop forever on the same rejected step.
+                    if not math.isfinite(ratio):
+                        raise RuntimeError(
+                            f"non-finite values in the state at t={t_next!r}: "
+                            f"the error estimate is {ratio!r}, so the step "
+                            f"cannot be judged; the problem is diverging"
+                        )
+                    raise RuntimeError(
+                        f"step rejected at the min_step floor "
+                        f"({self._opts.min_step!r}) at t={self.t!r} with error "
+                        f"ratio {ratio!r}; loosen rtol/atol or lower min_step"
+                    )
                 self.step = proposed
                 continue
 

@@ -261,6 +261,41 @@ class ButcherTableau:
         """
         return self.b[-1] == 0.0 and self.a[-1] == self.b[:-1]
 
+    @cached_property
+    def mid_order(self) -> int:
+        r"""int: Order to which ``mid`` reproduces the state at the midpoint.
+
+        Zero when the tableau carries no ``mid`` at all.
+
+        The dense output is a quartic anchored on the midpoint estimate, so
+        this bounds how accurate any interpolated value can be — and it is not
+        implied by ``order``.  Several tableaux pair a genuinely derived
+        interpolant with their steps (``dopri5`` and ``tsit5`` reach 4 here,
+        ``dopri8`` reaches 5) while others carry only a first-order
+        placeholder: a half-step of Euler, which is what ``mid`` reduces to
+        when its weights put ``1/2`` in a single slot.  ``bosh3`` takes third
+        order steps and interpolates to first, and nothing about the method's
+        name says so.
+
+        Computed from the quadrature conditions the midpoint weights would
+        have to satisfy, the same way the collocation tableaux verify their
+        own order at import:
+
+        .. math::
+
+            \sum_i \text{mid}_i\, c_i^{\,k-1} = \frac{(1/2)^k}{k}
+        """
+        if self.mid is None:
+            return 0
+        reached = 0
+        for k in range(1, len(self.mid) + 2):
+            lhs = sum(m * c ** (k - 1) for m, c in zip(self.mid, self.c))
+            rhs = 0.5**k / k
+            if abs(lhs - rhs) > 1e-10 * max(1.0, abs(rhs)):
+                break
+            reached = k
+        return reached
+
     @property
     def stages(self) -> int:
         """int: Number of stage derivatives evaluated per step.

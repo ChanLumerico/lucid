@@ -243,6 +243,60 @@ class _AdjointSolve(Function):
         return (adjoint, *grads)
 
 
+def _resolve_adjoint_norm(
+    adjoint_options: dict[str, object] | None, state_elements: int
+) -> dict[str, object] | None:
+    """Translate ``norm="seminorm"`` into the private prefix the stepper reads.
+
+    Parameters
+    ----------
+    adjoint_options : dict or None
+        Options destined for the backward solve.
+    state_elements : int
+        Element count of ``y`` alone, so that ``y`` and the adjoint together
+        occupy the first ``2 * state_elements`` of the augmented state.
+
+    Returns
+    -------
+    dict or None
+        The options with ``norm`` replaced by the internal prefix, or the
+        input unchanged when no ``norm`` was given.
+
+    Raises
+    ------
+    NotImplementedError
+        For any other ``norm``, including a callable.
+
+    Notes
+    -----
+    The augmented backward state is ``[y | adjoint | parameter gradients]``.
+    The default norm judges the step on all of it; a seminorm drops the
+    parameter block.  That block is a quadrature — it accumulates
+    ``dL/dtheta`` but never feeds back into the dynamics — so holding it to
+    the same tolerance buys no accuracy in the trajectory and costs steps.
+
+    A caller-supplied norm cannot be honoured at all: the error norm is a
+    fused engine kernel, and replacing it with a Python callable would give
+    up the fusion and the single host synchronisation per step that goes with
+    it.  Refusing loudly beats accepting and ignoring, which is what this
+    option used to do.
+    """
+    if adjoint_options is None or "norm" not in adjoint_options:
+        return adjoint_options
+
+    norm = adjoint_options["norm"]
+    if norm != "seminorm":
+        raise NotImplementedError(
+            f"adjoint_options['norm'] = {norm!r} is not supported; only "
+            f"'seminorm' is. The error norm is a fused engine kernel, so a "
+            f"caller-supplied norm cannot be honoured."
+        )
+
+    resolved = {k: v for k, v in adjoint_options.items() if k != "norm"}
+    resolved["_norm_prefix"] = 2 * state_elements
+    return resolved
+
+
 def odeint_adjoint(
     func: Callable[..., object],
     y0: State,
@@ -294,6 +348,9 @@ def odeint_adjoint(
         Method for the backward solve.  ``None`` inherits ``method``.
     adjoint_options : dict or None, default=None
         Options for the backward solve.  ``None`` inherits ``options``.
+        ``{"norm": "seminorm"}`` drops the parameter-gradient block from the
+        backward solve's error norm, which is the one norm setting that has an
+        effect here; any other value, including a callable, is refused.
     adjoint_params : sequence of Tensor or None, default=None
         Tensors to accumulate gradients for.  ``None`` uses
         ``func.parameters()`` when ``func`` exposes it, otherwise nothing.
@@ -365,7 +422,10 @@ def odeint_adjoint(
         adjoint_rtol=rtol if adjoint_rtol is None else adjoint_rtol,
         adjoint_atol=atol if adjoint_atol is None else adjoint_atol,
         adjoint_method=method if adjoint_method is None else adjoint_method,
-        adjoint_options=options if adjoint_options is None else adjoint_options,
+        adjoint_options=_resolve_adjoint_norm(
+            options if adjoint_options is None else adjoint_options,
+            int(flat_y0.shape[0]),
+        ),
         n_params=len(params),
     )
     # ``apply`` is typed to allow a tuple of outputs; this op returns one.

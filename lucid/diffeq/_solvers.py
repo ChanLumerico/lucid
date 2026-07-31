@@ -19,6 +19,7 @@ the network forwards themselves.
 
 import bisect
 import math
+import warnings
 from typing import Callable, Sequence, SupportsFloat, cast
 
 import lucid
@@ -330,6 +331,53 @@ def _make_callbacks(
     return scalar, check
 
 
+def _warn_coarse_interpolant(tableau: ButcherTableau, what: str) -> None:
+    """Warn when a method interpolates far below the order it steps at.
+
+    Parameters
+    ----------
+    tableau : ButcherTableau
+        The method about to be used.
+    what : str
+        What the interpolant is being asked for, named in the message.
+
+    Notes
+    -----
+    Everything between steps — dense output, and the event time found inside
+    a step — comes from a quartic anchored on the tableau's midpoint
+    estimate.  Some tableaux carry a genuinely derived one and some carry a
+    first-order placeholder, and the method's own order says nothing about
+    which: ``bosh3`` takes third-order steps and interpolates to first.
+
+    The warning states that fact and stops there, deliberately.  It is
+    tempting to say the interpolated value will be inaccurate, but measurement
+    does not support it — how much the low order costs depends on the problem
+    and on how large the steps end up being.  On a free-fall event at default
+    tolerances ``bosh3`` lands 2.9e-02 from the true time against ``dopri5``'s
+    2.6e-13, eleven orders apart; on an exponential decay at ``rtol=1e-10``
+    the steps are small enough that ``adaptive_heun`` — also first-order here
+    — is the most accurate of all six at 1.0e-12, while ``dopri8`` is the
+    worst at 1.9e-07.  So silence is not a promise either: ``dopri8`` steps at
+    order eight and still interpolates with a quartic, which is its own
+    documented ceiling.
+
+    What the caller cannot otherwise see is the order itself, and that is what
+    is worth saying.  Inherited from the reference tableaux, so this is a
+    caution rather than a defect — the coefficients are transcribed correctly.
+    """
+    if tableau.mid is None or tableau.mid_order > 1:
+        return
+    warnings.warn(
+        f"method {tableau.name!r} takes order-{tableau.order} steps but "
+        f"interpolates between them at order 1, so {what} is bounded by the "
+        f"latter rather than by rtol/atol. How much that costs depends on the "
+        f"step sizes the solve settles on. Use 'dopri5' or 'tsit5' for a "
+        f"derived interpolant.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+
+
 def odeint(
     func: Callable[..., object],
     y0: State,
@@ -500,6 +548,7 @@ def odeint(
 
     if event_fn is not None:
         _reject_multistep(method, "event detection")
+        _warn_coarse_interpolant(tableau, "the event time")
         direction = 1.0 if grid[-1] > grid[0] else -1.0
         event_t, y_event = _event.integrate_until_event(
             func,
@@ -670,6 +719,7 @@ def odeint_dense(
 
     _reject_multistep(method, "odeint_dense")
     tableau = _resolve_method(method)
+    _warn_coarse_interpolant(tableau, "the continuous solution")
     func, y0, _unused, shapes = _pack_state(func, y0, None)
     if not y0.is_floating_point():
         raise ValueError(

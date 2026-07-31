@@ -438,6 +438,7 @@ class TestOdeintDenseParity:
     """The continuous solution must agree with the grid solve and the truth."""
 
     @pytest.mark.parametrize("method", ADAPTIVE_METHODS)
+    @pytest.mark.filterwarnings("ignore:method .*interpolates:RuntimeWarning")
     def test_matches_the_reference_framework_closed_form(
         self, method: str, ref: Any
     ) -> None:

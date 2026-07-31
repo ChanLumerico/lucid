@@ -1,6 +1,7 @@
 """``lucid.diffeq`` — Butcher tableaux and fixed-step Runge-Kutta integration."""
 
 import math
+import warnings
 
 import pytest
 
@@ -785,19 +786,34 @@ class TestAdaptiveOptions:
         with pytest.raises(ValueError, match=match):
             diffeq.odeint(_decay, y0, [0.0, 1.0], options=bad)
 
-    def test_dtype_and_norm_are_accepted_and_ignored(self) -> None:
-        # Both exist upstream to control step-control precision and the error
-        # norm; here step control is always host-double and the norm is fused
-        # into the kernel, so they are accepted for signature compatibility.
+    def test_dtype_is_accepted_and_ignored(self) -> None:
+        # Upstream this asks for the precision step control runs at; here that
+        # is always host-double, so the key is accepted for signature
+        # compatibility and has nothing to do.
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         y = diffeq.odeint(
             _decay,
             y0,
             [0.0, 1.0],
-            options={"dtype": lucid.float64, "norm": "rms"},
+            options={"dtype": lucid.float64},
             return_trajectory=False,
         )
         assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-7)
+
+    def test_norm_is_refused_rather_than_ignored(self) -> None:
+        # The error norm is a fused engine kernel, so a caller-supplied one
+        # cannot be honoured.  Accepting the key and quietly doing nothing --
+        # which is what this used to do -- leaves the caller believing they
+        # changed the step control when they did not, so it is refused.
+        y0 = lucid.tensor([1.0], dtype=lucid.float64)
+        with pytest.raises(NotImplementedError, match="norm"):
+            diffeq.odeint(
+                _decay,
+                y0,
+                [0.0, 1.0],
+                options={"norm": "rms"},
+                return_trajectory=False,
+            )
 
 
 class TestFixedStepOptions:
@@ -1000,7 +1016,11 @@ class TestOdeintDense:
             ("adaptive_heun", 1e-9, 1e-6),
         ],
     )
+    @pytest.mark.filterwarnings("ignore:method .*interpolates:RuntimeWarning")
     def test_every_adaptive_method(self, method: str, tol: float, want: float) -> None:
+        # Two of the parametrised methods interpolate at order 1 and warn
+        # about it; that is the point of the tolerances chosen above, not a
+        # surprise, so the warning is filtered rather than left to accumulate.
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         dense = diffeq.odeint_dense(
             _decay, y0, 0.0, 1.0, method=method, rtol=tol, atol=tol * 100
@@ -1063,6 +1083,7 @@ class TestOdeintDense:
         assert y0.grad is not None
         assert float(y0.grad.item()) == pytest.approx(math.exp(-k), abs=1e-7)
 
+    @pytest.mark.filterwarnings("ignore:method .*interpolates:RuntimeWarning")
     def test_endpoints_are_tighter_than_interior_points(self) -> None:
         # Worth knowing rather than rediscovering: a dense query inside a step
         # is only as good as the interpolant, which is anchored on the
@@ -1473,6 +1494,7 @@ class TestOdeintEvent:
         assert float(event_t.item()) == pytest.approx(-math.log(2.0), abs=1e-8)
 
     @pytest.mark.parametrize("method", ["dopri5", "tsit5", "bosh3"])
+    @pytest.mark.filterwarnings("ignore:method .*interpolates:RuntimeWarning")
     def test_every_adaptive_method_finds_it(self, method: str) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
         event_t, _ = diffeq.odeint_event(
@@ -2492,6 +2514,191 @@ class TestBroydenProbe:
             _fused.broyden_probe(a, b, a)
         with pytest.raises(Exception):
             _fused.broyden_probe(a, a, b)
+
+
+class TestFailureModes:
+    """What a solve does when it cannot succeed.
+
+    Every parity test before this one compares a problem that converges.  That
+    left the failure paths unexamined, and they were wrong in the way silence
+    always is: a diverging problem drove the state to NaN, every comparison
+    against NaN is false, so the step controller *accepted* each bad step and
+    the solve returned NaN without a warning.  The reference raises for the
+    same input.  These pin the behaviour the reference has and this did not.
+    """
+
+    @staticmethod
+    def _grid() -> lucid.Tensor:
+        return lucid.linspace(0.0, 1.0, 5, dtype=lucid.float64)
+
+    @staticmethod
+    def _one() -> lucid.Tensor:
+        return lucid.ones(1, dtype=lucid.float64)
+
+    def test_a_diverging_problem_raises_instead_of_returning_nan(self) -> None:
+        # y' = 1e4 y^2 escapes to infinity in finite time.  The step shrinks
+        # until it can no longer move t, which is the moment to give up.
+        with pytest.raises(RuntimeError, match="underflow in dt"):
+            diffeq.odeint(
+                lambda t, y: y * y * 1e4,
+                self._one(),
+                self._grid(),
+                return_trajectory=False,
+            )
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+    def test_a_non_finite_right_hand_side_raises(self, bad: float) -> None:
+        with pytest.raises(RuntimeError, match="underflow in dt"):
+            diffeq.odeint(
+                lambda t, y: y * bad,
+                self._one(),
+                self._grid(),
+                return_trajectory=False,
+            )
+
+    def test_a_non_finite_initial_state_raises(self) -> None:
+        with pytest.raises(RuntimeError, match="underflow in dt"):
+            diffeq.odeint(
+                _decay,
+                lucid.tensor([float("nan")], dtype=lucid.float64),
+                self._grid(),
+                return_trajectory=False,
+            )
+
+    def test_the_step_budget_is_enforced(self) -> None:
+        with pytest.raises(RuntimeError, match="max_num_steps"):
+            diffeq.odeint(
+                lambda t, y: y * y * 1e4,
+                self._one(),
+                self._grid(),
+                options={"max_num_steps": 10},
+                return_trajectory=False,
+            )
+
+    def test_a_step_stuck_at_min_step_raises(self) -> None:
+        # With a floor under the step the controller cannot shrink its way out,
+        # so the rejection would otherwise repeat forever.
+        with pytest.raises(RuntimeError, match="min_step"):
+            diffeq.odeint(
+                lambda t, y: y * y * 1e4,
+                self._one(),
+                self._grid(),
+                options={"min_step": 1e-3},
+                return_trajectory=False,
+            )
+
+    def test_a_fixed_grid_method_marches_through_a_blow_up(self) -> None:
+        # Nothing to detect: a fixed grid has no step control, so it takes the
+        # steps it was told to and reports whatever they produce.  The
+        # reference does the same, to the same value.
+        y = diffeq.odeint(
+            lambda t, y: y * y * 1e4,
+            self._one(),
+            self._grid(),
+            method="euler",
+            return_trajectory=False,
+        )
+        assert float(y.item()) == pytest.approx(9.343075802364849e50, rel=1e-12)
+
+    def test_a_well_posed_problem_is_untouched(self) -> None:
+        # The guards are NaN-shaped; none of them may fire on a normal solve.
+        y = diffeq.odeint(_decay, self._one(), self._grid(), return_trajectory=False)
+        assert float(y.item()) == pytest.approx(math.exp(-1.0), abs=1e-7)
+
+
+class TestAdjointSeminorm:
+    """``adjoint_options={"norm": "seminorm"}``.
+
+    The augmented backward state is ``[y | adjoint | parameter gradients]``.
+    The gradient block is a quadrature -- it never feeds back into the
+    dynamics -- so holding it to the same tolerance costs steps and buys no
+    accuracy.  This used to be accepted and silently ignored, which is the
+    worst of the three options.
+    """
+
+    @staticmethod
+    def _problem() -> tuple:
+        k = lucid.tensor([0.7], dtype=lucid.float64, requires_grad=True)
+        y0 = lucid.tensor([1.0], dtype=lucid.float64, requires_grad=True)
+        grid = [0.0, 1.0]
+
+        class Field:
+            def parameters(self) -> list[lucid.Tensor]:
+                return [k]
+
+            def __call__(self, t: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
+                return -k * y
+
+        return Field(), y0, grid, k
+
+    def test_it_matches_the_default_norm(self) -> None:
+        # y(1) = y0 exp(-k), so dL/dk = -exp(-k) for L = y(1).  Dropping the
+        # parameter block from the *step control* must not change the answer.
+        for seminorm in (False, True):
+            field, y0, grid, k = self._problem()
+            out = diffeq.odeint_adjoint(
+                field,
+                y0,
+                grid,
+                rtol=1e-10,
+                atol=1e-12,
+                adjoint_options={"norm": "seminorm"} if seminorm else None,
+            )
+            out[-1].sum().backward()
+            assert k.grad is not None
+            assert float(k.grad.item()) == pytest.approx(
+                -math.exp(-0.7), abs=1e-8
+            ), f"seminorm={seminorm}"
+
+    def test_any_other_norm_is_refused(self) -> None:
+        field, y0, grid, _ = self._problem()
+        with pytest.raises(NotImplementedError, match="seminorm"):
+            diffeq.odeint_adjoint(
+                field, y0, grid, adjoint_options={"norm": lambda x: 0.0}
+            )
+
+
+class TestInterpolantOrder:
+    """``mid_order`` and the caution built on it.
+
+    A tableau's step order says nothing about how well it interpolates
+    between steps, and nothing at the call site reveals the difference.
+    """
+
+    @pytest.mark.parametrize(
+        "method,expected",
+        [
+            ("adaptive_heun", 1),
+            ("fehlberg2", 1),
+            ("bosh3", 1),
+            ("dopri5", 4),
+            ("tsit5", 4),
+            ("dopri8", 5),
+        ],
+    )
+    def test_midpoint_order_is_measured_from_the_tableau(
+        self, method: str, expected: int
+    ) -> None:
+        assert _METHODS[method].mid_order == expected
+
+    def test_a_fixed_grid_tableau_has_no_midpoint(self) -> None:
+        assert _METHODS["rk4"].mid is None
+        assert _METHODS["rk4"].mid_order == 0
+
+    @pytest.mark.parametrize("method", ["bosh3", "fehlberg2", "adaptive_heun"])
+    def test_a_first_order_interpolant_is_flagged(self, method: str) -> None:
+        with pytest.warns(RuntimeWarning, match="interpolates between them at order 1"):
+            diffeq.odeint_dense(
+                _decay, lucid.ones(1, dtype=lucid.float64), 0.0, 1.0, method=method
+            )
+
+    @pytest.mark.parametrize("method", ["dopri5", "tsit5", "dopri8"])
+    def test_a_derived_interpolant_is_not_flagged(self, method: str) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            diffeq.odeint_dense(
+                _decay, lucid.ones(1, dtype=lucid.float64), 0.0, 1.0, method=method
+            )
 
 
 class TestRkErrorNorm:
