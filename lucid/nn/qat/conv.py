@@ -579,7 +579,7 @@ class ConvReLU1d(Conv1d):
 
     @classmethod
     @override
-    def from_float(cls, mod: nn.Module) -> "ConvReLU1d":
+    def from_float(cls, mod: nn.Module) -> ConvReLU1d:
         return cast("ConvReLU1d", _fused_conv_from_float(cls, mod))
 
 
@@ -690,7 +690,7 @@ class ConvReLU2d(Conv2d):
 
     @classmethod
     @override
-    def from_float(cls, mod: nn.Module) -> "ConvReLU2d":
+    def from_float(cls, mod: nn.Module) -> ConvReLU2d:
         return cast("ConvReLU2d", _fused_conv_from_float(cls, mod))
 
 
@@ -800,5 +800,5 @@ class ConvReLU3d(Conv3d):
 
     @classmethod
     @override
-    def from_float(cls, mod: nn.Module) -> "ConvReLU3d":
+    def from_float(cls, mod: nn.Module) -> ConvReLU3d:
         return cast("ConvReLU3d", _fused_conv_from_float(cls, mod))

@@ -490,7 +490,7 @@ class TestTimmComparison:
                 shuffle=True,
             )
         timm_s.set_epoch(0)
-        # The RNG is platform-specific (timm uses torch.Generator,
+        # The RNG is platform-specific (timm uses the reference's Generator,
         # lucid uses random.Random) so we don't insist on equal
         # *sequences*, only on equal *lengths* and equal *multisets*
         # within the repeat structure.

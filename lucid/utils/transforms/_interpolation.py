@@ -51,7 +51,7 @@ _CV2_CODES = {
 }
 
 
-def as_interpolation(mode: "str | int | Interpolation") -> Interpolation:
+def as_interpolation(mode: str | int | Interpolation) -> Interpolation:
     r"""Coerce a string, OpenCV ``INTER_*`` int code, or enum member
     to an :class:`Interpolation` value.
 

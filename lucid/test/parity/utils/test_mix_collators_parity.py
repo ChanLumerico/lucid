@@ -1,6 +1,7 @@
-"""Numerical parity for Lucid's Mixup + CutMix collators vs torchvision.
+"""Numerical parity for Lucid's Mixup + CutMix collators.
 
-Opt-in tier — auto-skips when torch / torchvision aren't installed.
+Opt-in tier — auto-skips when the reference framework and its vision
+package aren't installed.
 
 Direct seed-by-seed parity is not achievable here: Lucid samples
 :math:`\\lambda` via ``lucid.distributions.Beta`` driven by Lucid's RNG,
@@ -37,16 +38,17 @@ from lucid.utils.data._mix import (
     MixupCollator,
     _sample_lambda,
 )
+from lucid.test._fixtures.ref_framework import require_ref, require_ref_vision
 from lucid.test._helpers.compare import assert_close
 
-torch_mod = pytest.importorskip("torch")
-v2 = pytest.importorskip("torchvision.transforms.v2")
+_ref = require_ref(module_level=True)
+v2 = require_ref_vision(module_level=True).transforms.v2
 
-# torchvision.transforms.v2 ships MixUp / CutMix only on recent versions
+# The reference vision package ships MixUp / CutMix only on recent versions
 # — skip cleanly when running against an older install.
 if not hasattr(v2, "MixUp") or not hasattr(v2, "CutMix"):
     pytest.skip(
-        "torchvision.transforms.v2 is missing MixUp/CutMix — skipping",
+        "the reference vision package is missing MixUp/CutMix — skipping",
         allow_module_level=True,
     )
 
@@ -325,7 +327,7 @@ class TestLambdaDistributionParity:
 
     @pytest.mark.parametrize("alpha", [0.2, 0.5, 1.0, 2.0])
     def test_lambda_moments_match_beta(self, alpha: float, ref: Any) -> None:
-        # noqa: ARG002 — `ref` triggers auto-skip-without-torch infrastructure
+        # noqa: ARG002 — `ref` triggers the auto-skip infrastructure
         _ = ref
         n_samples = 2000
         lucid.manual_seed(0)

@@ -5,8 +5,11 @@ import pytest
 
 import lucid
 from lucid.nn.functional import embedding_bag
+from lucid.test._fixtures.ref_framework import require_ref
 
-ref = pytest.importorskip("torch")
+# The reference name itself lives in the fixture module, which is the one
+# place H5 exempts; every other test reaches it through this call.
+ref = require_ref(module_level=True)
 
 
 def _ref(

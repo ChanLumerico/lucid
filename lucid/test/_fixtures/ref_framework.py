@@ -68,21 +68,51 @@ def ref_vision_module() -> ModuleType | None:
         return None
 
 
-def require_ref() -> ModuleType:
-    """Return the reference module or skip the calling test when it's
-    unavailable.  Use inside test bodies that need the reference but
-    can't take it as a fixture (e.g. parametrize-time)."""
+def require_ref(*, module_level: bool = False) -> ModuleType:
+    """Return the reference module or skip when it's unavailable.
+
+    Parameters
+    ----------
+    module_level : bool, default=False
+        Pass ``True`` when calling at import time.  A bare ``pytest.skip``
+        outside a test is a collection *error*, so a module that binds the
+        reference at the top has to say so explicitly — that is the call
+        that replaces ``pytest.importorskip`` in the parity modules, and
+        the reason they no longer name the framework themselves.
+
+    Returns
+    -------
+    ModuleType
+        The reference framework module.
+    """
     mod = ref_module()
     if mod is None:
-        pytest.skip(f"reference framework ({_REF_NAME}) is not installed")
+        pytest.skip(
+            f"reference framework ({_REF_NAME}) is not installed",
+            allow_module_level=module_level,
+        )
     return mod
 
 
-def require_ref_vision() -> ModuleType:
-    """Return the reference vision package or skip the calling test."""
+def require_ref_vision(*, module_level: bool = False) -> ModuleType:
+    """Return the reference vision package or skip.
+
+    Parameters
+    ----------
+    module_level : bool, default=False
+        As for :func:`require_ref`.
+
+    Returns
+    -------
+    ModuleType
+        The reference vision package.
+    """
     mod = ref_vision_module()
     if mod is None:
-        pytest.skip(f"reference vision package ({_REF_NAME}vision) is not installed")
+        pytest.skip(
+            f"reference vision package ({_REF_NAME}vision) is not installed",
+            allow_module_level=module_level,
+        )
     return mod
 
 

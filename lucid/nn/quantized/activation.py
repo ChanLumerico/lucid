@@ -7,7 +7,7 @@ float ``nn.Sigmoid`` / ``nn.Hardswish`` / … for these so a standalone activati
 inside a quantized region is requantized rather than left at full precision.
 """
 
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Self, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -52,7 +52,7 @@ class _QuantizedActivation(nn.Module):
         )
 
     @classmethod
-    def from_float(cls, mod: nn.Module) -> "_QuantizedActivation":
+    def from_float(cls, mod: nn.Module) -> Self:
         """Build from a calibrated float activation (reads its output observer)."""
         scale, zero_point, qdtype = activation_qparams(mod)
         obj = cls(scale, zero_point, qdtype)

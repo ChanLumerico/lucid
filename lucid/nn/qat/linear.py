@@ -286,7 +286,7 @@ class LinearReLU(Linear):
 
     @classmethod
     @override
-    def from_float(cls, mod: nn.Module) -> "LinearReLU":
+    def from_float(cls, mod: nn.Module) -> LinearReLU:
         """Build from a fused float ``nni.LinearReLU`` (its inner linear)."""
         inner = cast("nn.Sequential", mod)[0]
         inner.qconfig = mod.qconfig

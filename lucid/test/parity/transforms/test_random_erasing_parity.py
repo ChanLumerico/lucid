@@ -1,7 +1,8 @@
 """Numerical parity for Lucid's RandomErasing vs the reference framework.
 
 Opt-in tier (mirrors the reference-framework parity policy): the whole
-module auto-skips when ``torch`` / ``torchvision`` aren't installed.
+module auto-skips when the reference framework and its vision package
+aren't installed.
 
 Two tiers:
 
@@ -26,17 +27,18 @@ import numpy as np
 import pytest
 
 import lucid
+from lucid.test._fixtures.ref_framework import require_ref, require_ref_vision
 from lucid.test._helpers.compare import assert_close
 from lucid.utils.transforms._erasing import RandomErasing, _ErasingParams
 
 # Reference framework imports are guarded by ``parity/conftest.py`` —
-# the whole module is skipped at collection time when ``torch`` itself
-# is missing.  ``torchvision`` is a separate optional dependency, so
+# the whole module is skipped at collection time when the reference itself
+# is missing.  The vision package is a separate optional dependency, so
 # we still guard it explicitly with ``importorskip``.
-torchvision = pytest.importorskip("torchvision")
-TF_ref = pytest.importorskip("torchvision.transforms.functional")
-T_ref = pytest.importorskip("torchvision.transforms")
-torch_mod = pytest.importorskip("torch")
+_ref = require_ref(module_level=True)
+_ref_vision = require_ref_vision(module_level=True)
+TF_ref = _ref_vision.transforms.functional
+T_ref = _ref_vision.transforms
 
 
 # ── helpers ─────────────────────────────────────────────────────────
@@ -49,20 +51,18 @@ def _matched_image(
     rng = np.random.default_rng(seed)
     arr = rng.random((c, h, w), dtype=np.float32)
     lucid_img = lucid.tensor(arr.tolist())
-    ref_img = torch_mod.from_numpy(arr.copy())
+    ref_img = _ref.from_numpy(arr.copy())
     return lucid_img, ref_img
 
 
 def _ref_scalar_fill(value: float, c: int, h: int, w: int) -> object:
     """Reference framework constant scalar fill tensor of shape ``(c, h, w)``."""
-    return torch_mod.full((c, h, w), float(value), dtype=torch_mod.float32)
+    return _ref.full((c, h, w), float(value), dtype=_ref.float32)
 
 
 def _ref_per_channel_fill(values: tuple[float, ...], h: int, w: int) -> object:
     """Reference framework per-channel fill tensor of shape ``(C, h, w)``."""
-    col = torch_mod.tensor(list(values), dtype=torch_mod.float32).view(
-        len(values), 1, 1
-    )
+    col = _ref.tensor(list(values), dtype=_ref.float32).view(len(values), 1, 1)
     return col.expand(len(values), h, w).contiguous()
 
 
@@ -235,8 +235,8 @@ def _sample_ref_rects(
 
     Filters out no-op fits the same way the Lucid sampler does.
     """
-    torch_mod.manual_seed(seed)
-    img = torch_mod.zeros(3, img_h, img_w)
+    _ref.manual_seed(seed)
+    img = _ref.zeros(3, img_h, img_w)
     tf = T_ref.RandomErasing(p=1.0, scale=scale, ratio=ratio, value=0)
     rects: list[tuple[int, int, int, int]] = []
     for _ in range(n):

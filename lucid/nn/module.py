@@ -79,7 +79,7 @@ class Module:
     training: bool
     _parameters: OrderedDict[str, Parameter | None]
     _buffers: OrderedDict[str, Tensor | None]
-    _modules: OrderedDict[str, "Module | None"]
+    _modules: OrderedDict[str, Module | None]
     _non_persistent_buffers: set[str]
     _forward_pre_hooks: OrderedDict[int, Callable[..., object]]
     _forward_hooks: OrderedDict[int, Callable[..., object]]

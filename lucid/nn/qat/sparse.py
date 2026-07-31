@@ -6,7 +6,7 @@ the trained, fake-quantized table into a quantized
 :class:`~lucid.nn.quantized.Embedding`.
 """
 
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Self, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -146,7 +146,7 @@ class Embedding(nn.Embedding):
         return F.embedding(x, w_q, self.padding_idx)
 
     @classmethod
-    def from_float(cls, mod: nn.Module) -> "Embedding":
+    def from_float(cls, mod: nn.Module) -> Self:
         """Build a QAT ``Embedding`` from a float one (shares the trained table)."""
         emb = cast("nn.Embedding", mod)
         qat = cls(

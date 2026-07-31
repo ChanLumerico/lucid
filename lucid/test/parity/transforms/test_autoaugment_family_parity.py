@@ -38,6 +38,7 @@ import pytest
 
 import lucid
 import lucid.utils.transforms as T
+from lucid.test._fixtures.ref_framework import require_ref, require_ref_vision
 from lucid.test._helpers.compare import assert_close
 from lucid.utils.transforms._autoaugment import (
     _CIFAR10_POLICY,
@@ -51,19 +52,21 @@ from lucid.utils.transforms._autoaugment import (
 from lucid.utils.transforms._interpolation import Interpolation
 
 # Reference framework is gated through the ``ref`` fixture machinery —
-# but the AutoAugment helpers live in the torchvision package, which
+# but the AutoAugment helpers live in the vision package, which
 # is a separate import.
-T_ref = pytest.importorskip("torchvision.transforms")
-TF_ref = pytest.importorskip("torchvision.transforms.functional")
-torch_mod = pytest.importorskip("torch")
+_ref = require_ref(module_level=True)
+_ref_vision = require_ref_vision(module_level=True)
+T_ref = _ref_vision.transforms
+TF_ref = _ref_vision.transforms.functional
 
 # Best-effort access to the reference framework's internal ``_apply_op``.
 # It's a private helper but stable across versions; we fall back to a
 # manual dispatch if the symbol is ever renamed.
 try:
-    from torchvision.transforms.autoaugment import _apply_op as ref_apply_op
-    from torchvision.transforms.autoaugment import AutoAugmentPolicy
-except ImportError:  # pragma: no cover — defensive fallback
+    _autoaugment = _ref_vision.transforms.autoaugment
+    ref_apply_op = _autoaugment._apply_op  # noqa: SLF001 — see above
+    AutoAugmentPolicy = _autoaugment.AutoAugmentPolicy
+except AttributeError:  # pragma: no cover — defensive fallback
     ref_apply_op = None
     AutoAugmentPolicy = None
 
@@ -94,14 +97,14 @@ def _make_image(
     arr_aligned = arr_u8.astype(np.float32) / 255.0
     return (
         lucid.tensor(arr_aligned.tolist()),
-        torch_mod.from_numpy(arr_aligned.copy()),
-        torch_mod.from_numpy(arr_u8),
+        _ref.from_numpy(arr_aligned.copy()),
+        _ref.from_numpy(arr_u8),
     )
 
 
 def _uint8_to_float(x: object) -> object:
     """Reference-framework uint8 → float [0, 1] for diffable comparison."""
-    return x.to(torch_mod.float32) / 255.0  # type: ignore[attr-defined]
+    return x.to(_ref.float32) / 255.0  # type: ignore[attr-defined]
 
 
 # ── Part 1 — apply_op dispatch parity ───────────────────────────────
@@ -139,7 +142,7 @@ class TestApplyOpDispatchParity:
         """Build a matched ``(lucid, ref)`` image with a single high pixel."""
         arr = np.zeros((1, size, size), dtype=np.float32)
         arr[0, src_y, src_x] = 1.0
-        return lucid.tensor(arr.tolist()), torch_mod.from_numpy(arr.copy())
+        return lucid.tensor(arr.tolist()), _ref.from_numpy(arr.copy())
 
     def _marker_pos(self, out_np: np.ndarray) -> tuple[int, int] | None:
         """Return the marker's ``(y, x)`` position, or ``None`` if it left frame."""
@@ -281,7 +284,7 @@ class TestApplyOpDispatchParity:
         reference framework uses the image-convention (positive
         degrees → CW).  ``apply_op`` negates the angle internally to
         align with the reference framework's convention so users
-        coming from timm / torchvision recipes get the expected
+        coming from timm / reference recipes get the expected
         visual transform."""
         self._skip_if_ref_apply_op_missing()
         cl, ct = self._marker_image(src_y, src_x)
@@ -654,7 +657,7 @@ def _make_fixed_image() -> tuple[lucid.Tensor, object]:
     arr = rng.random(_FIXED_IMG_SHAPE, dtype=np.float32)
     return (
         lucid.tensor(arr.tolist()),
-        torch_mod.from_numpy((arr * 255.0).clip(0, 255).astype(np.uint8)),
+        _ref.from_numpy((arr * 255.0).clip(0, 255).astype(np.uint8)),
     )
 
 
@@ -678,10 +681,10 @@ class TestTrivialAugmentWideDistribution:
         out_l = T.TrivialAugmentWide()(chw_l)
         assert tuple(out_l.shape) == _FIXED_IMG_SHAPE
 
-        torch_mod.manual_seed(0)
+        _ref.manual_seed(0)
         out_t = T_ref.TrivialAugmentWide()(chw_u8)
         assert tuple(out_t.shape) == _FIXED_IMG_SHAPE
-        assert out_t.dtype == torch_mod.uint8
+        assert out_t.dtype == _ref.uint8
 
     def test_op_distribution_uniform(self) -> None:
         """``make_params`` should pick each op with ~equal frequency
@@ -716,7 +719,7 @@ class TestTrivialAugmentWideDistribution:
         tf_l = T.TrivialAugmentWide()
         l_imgs = np.stack([tf_l(chw_l).numpy() for _ in range(_N_SAMPLES)], axis=0)
 
-        torch_mod.manual_seed(1234)
+        _ref.manual_seed(1234)
         tf_t = T_ref.TrivialAugmentWide()
         t_imgs = np.stack(
             [
@@ -756,7 +759,7 @@ class TestRandAugmentDistribution:
         out_l = T.RandAugment(num_ops=2, magnitude=9)(chw_l)
         assert tuple(out_l.shape) == _FIXED_IMG_SHAPE
 
-        torch_mod.manual_seed(0)
+        _ref.manual_seed(0)
         out_t = T_ref.RandAugment(num_ops=2, magnitude=9)(chw_u8)
         assert tuple(out_t.shape) == _FIXED_IMG_SHAPE
 
@@ -790,7 +793,7 @@ class TestRandAugmentDistribution:
         tf_l = T.RandAugment(num_ops=2, magnitude=9)
         l_imgs = np.stack([tf_l(chw_l).numpy() for _ in range(_N_SAMPLES)], axis=0)
 
-        torch_mod.manual_seed(99)
+        _ref.manual_seed(99)
         tf_t = T_ref.RandAugment(num_ops=2, magnitude=9)
         t_imgs = np.stack(
             [
@@ -821,7 +824,7 @@ class TestAutoAugmentDistribution:
 
         if AutoAugmentPolicy is None:
             pytest.skip("AutoAugmentPolicy not importable from reference framework")
-        torch_mod.manual_seed(0)
+        _ref.manual_seed(0)
         ref_policy_enum = {
             "imagenet": AutoAugmentPolicy.IMAGENET,
             "cifar10": AutoAugmentPolicy.CIFAR10,
@@ -884,7 +887,7 @@ class TestAutoAugmentDistribution:
 
         if AutoAugmentPolicy is None:
             pytest.skip("AutoAugmentPolicy not importable from reference framework")
-        torch_mod.manual_seed(2026)
+        _ref.manual_seed(2026)
         tf_t = T_ref.AutoAugment(policy=AutoAugmentPolicy.IMAGENET)
         t_imgs = np.stack(
             [

@@ -1,6 +1,7 @@
-"""Numerical parity for Lucid's new AutoAugment-family functional ops vs torchvision.
+"""Numerical parity for Lucid's new AutoAugment-family functional ops.
 
-Opt-in tier — auto-skips when torch / torchvision aren't installed.
+Opt-in tier — auto-skips when the reference framework and its vision
+package are not installed.
 
 Covers five new functions in :mod:`lucid.utils.transforms.functional`:
 
@@ -15,15 +16,18 @@ Run with::
     pytest -m parity lucid/test/parity/transforms/test_strong_aug_functional_parity.py
 """
 
+from typing import Any
+
 import numpy as np
 import pytest
 
 import lucid
 import lucid.utils.transforms.functional as F
+from lucid.test._fixtures.ref_framework import require_ref, require_ref_vision
 from lucid.test._helpers.compare import assert_close
 
-TF = pytest.importorskip("torchvision.transforms.functional")
-torch_mod = pytest.importorskip("torch")
+_ref = require_ref(module_level=True)
+TF = require_ref_vision(module_level=True).transforms.functional
 
 
 # ── helpers ────────────────────────────────────────────────────────
@@ -34,11 +38,11 @@ def _make_float_image(
     c: int = 3,
     h: int = 24,
     w: int = 32,
-) -> tuple[lucid.Tensor, "torch_mod.Tensor"]:
-    """Build a matched (lucid (C,H,W), torch (C,H,W)) float pair in [0,1]."""
+) -> tuple[lucid.Tensor, Any]:
+    """Build a matched (lucid (C,H,W), reference (C,H,W)) float pair in [0,1]."""
     rng = np.random.default_rng(seed)
     arr = rng.random((c, h, w), dtype=np.float32)
-    return lucid.tensor(arr.tolist()), torch_mod.from_numpy(arr.copy())
+    return lucid.tensor(arr.tolist()), _ref.from_numpy(arr.copy())
 
 
 def _make_float_batch(
@@ -47,11 +51,11 @@ def _make_float_batch(
     c: int = 3,
     h: int = 24,
     w: int = 32,
-) -> tuple[lucid.Tensor, "torch_mod.Tensor"]:
-    """Build a matched (lucid (B,C,H,W), torch (B,C,H,W)) float pair in [0,1]."""
+) -> tuple[lucid.Tensor, Any]:
+    """Build a matched (lucid (B,C,H,W), reference (B,C,H,W)) float pair in [0,1]."""
     rng = np.random.default_rng(seed)
     arr = rng.random((b, c, h, w), dtype=np.float32)
-    return lucid.tensor(arr.tolist()), torch_mod.from_numpy(arr.copy())
+    return lucid.tensor(arr.tolist()), _ref.from_numpy(arr.copy())
 
 
 def _interior(arr: np.ndarray, border: int = 1) -> np.ndarray:
@@ -108,7 +112,7 @@ class TestAdjustSharpnessParity:
     def test_zero_image(self) -> None:
         arr = np.zeros((3, 24, 32), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.adjust_sharpness(lx, 1.5).numpy()
         ref = TF.adjust_sharpness(tx, 1.5).numpy()
         assert_close(got, ref, atol=1e-6, rtol=1e-5)
@@ -116,7 +120,7 @@ class TestAdjustSharpnessParity:
     def test_all_ones_image(self) -> None:
         arr = np.ones((3, 24, 32), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.adjust_sharpness(lx, 1.5).numpy()
         ref = TF.adjust_sharpness(tx, 1.5).numpy()
         # Interior of a flat image is the same flat constant — and clipped
@@ -151,7 +155,7 @@ class TestAutocontrastParity:
         arr = rng.random((3, 16, 20), dtype=np.float32)
         arr[1, :, :] = 0.42  # flat green channel
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.autocontrast(lx).numpy()
         ref = TF.autocontrast(tx).numpy()
         assert_close(got, ref, atol=1e-5, rtol=1e-4)
@@ -161,7 +165,7 @@ class TestAutocontrastParity:
     def test_zero_image(self) -> None:
         arr = np.zeros((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.autocontrast(lx).numpy()
         ref = TF.autocontrast(tx).numpy()
         assert_close(got, ref, atol=1e-5, rtol=1e-4)
@@ -169,7 +173,7 @@ class TestAutocontrastParity:
     def test_all_ones_image(self) -> None:
         arr = np.ones((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.autocontrast(lx).numpy()
         ref = TF.autocontrast(tx).numpy()
         assert_close(got, ref, atol=1e-5, rtol=1e-4)
@@ -179,7 +183,7 @@ class TestAutocontrastParity:
         ramp = np.linspace(0.0, 1.0, 32, dtype=np.float32)
         arr = np.broadcast_to(ramp, (3, 24, 32)).copy()
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.autocontrast(lx).numpy()
         ref = TF.autocontrast(tx).numpy()
         assert_close(got, ref, atol=1e-5, rtol=1e-4)
@@ -203,9 +207,7 @@ class TestPosterizeParity:
         rng = np.random.default_rng(100 + num_bits)
         arr = rng.random((3, 24, 32), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx_u8 = torch_mod.from_numpy(
-            (arr * 255.0).round().clip(0, 255).astype(np.uint8)
-        )
+        tx_u8 = _ref.from_numpy((arr * 255.0).round().clip(0, 255).astype(np.uint8))
         got = F.posterize(lx, num_bits).numpy()
         ref_u8 = TF.posterize(tx_u8, num_bits).numpy()
         ref = ref_u8.astype(np.float32) / 255.0
@@ -220,9 +222,7 @@ class TestPosterizeParity:
         rng = np.random.default_rng(200 + num_bits)
         arr = rng.random((2, 3, 24, 32), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx_u8 = torch_mod.from_numpy(
-            (arr * 255.0).round().clip(0, 255).astype(np.uint8)
-        )
+        tx_u8 = _ref.from_numpy((arr * 255.0).round().clip(0, 255).astype(np.uint8))
         got = F.posterize(lx, num_bits).numpy()
         ref_u8 = TF.posterize(tx_u8, num_bits).numpy()
         ref = ref_u8.astype(np.float32) / 255.0
@@ -238,7 +238,7 @@ class TestPosterizeParity:
     def test_zero_image(self) -> None:
         arr = np.zeros((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx_u8 = torch_mod.from_numpy((arr * 255.0).astype(np.uint8))
+        tx_u8 = _ref.from_numpy((arr * 255.0).astype(np.uint8))
         got = F.posterize(lx, 4).numpy()
         ref = TF.posterize(tx_u8, 4).numpy().astype(np.float32) / 255.0
         assert_close(got, ref, atol=0.0, rtol=0.0)
@@ -246,7 +246,7 @@ class TestPosterizeParity:
     def test_all_ones_image(self) -> None:
         arr = np.ones((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx_u8 = torch_mod.from_numpy((arr * 255.0).astype(np.uint8))
+        tx_u8 = _ref.from_numpy((arr * 255.0).astype(np.uint8))
         got = F.posterize(lx, 4).numpy()
         ref = TF.posterize(tx_u8, 4).numpy().astype(np.float32) / 255.0
         assert_close(got, ref, atol=1.0 / 255.0, rtol=0.0)
@@ -277,7 +277,7 @@ class TestSolarizeParity:
     def test_zero_image(self) -> None:
         arr = np.zeros((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.solarize(lx, 0.5).numpy()
         ref = TF.solarize(tx, 0.5).numpy()
         assert_close(got, ref, atol=1e-6, rtol=1e-5)
@@ -286,7 +286,7 @@ class TestSolarizeParity:
         # Every pixel >= 0.5: all get inverted to 0.
         arr = np.ones((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.solarize(lx, 0.5).numpy()
         ref = TF.solarize(tx, 0.5).numpy()
         assert_close(got, ref, atol=1e-6, rtol=1e-5)
@@ -295,7 +295,7 @@ class TestSolarizeParity:
         ramp = np.linspace(0.0, 1.0, 32, dtype=np.float32)
         arr = np.broadcast_to(ramp, (3, 24, 32)).copy()
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.solarize(lx, 0.5).numpy()
         ref = TF.solarize(tx, 0.5).numpy()
         assert_close(got, ref, atol=1e-6, rtol=1e-5)
@@ -324,7 +324,7 @@ class TestInvertParity:
     def test_zero_image(self) -> None:
         arr = np.zeros((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.invert(lx).numpy()
         ref = TF.invert(tx).numpy()
         assert_close(got, ref, atol=0.0, rtol=0.0)
@@ -332,7 +332,7 @@ class TestInvertParity:
     def test_all_ones_image(self) -> None:
         arr = np.ones((3, 8, 10), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.invert(lx).numpy()
         ref = TF.invert(tx).numpy()
         assert_close(got, ref, atol=0.0, rtol=0.0)
@@ -341,7 +341,7 @@ class TestInvertParity:
         ramp = np.linspace(0.0, 1.0, 32, dtype=np.float32)
         arr = np.broadcast_to(ramp, (3, 24, 32)).copy()
         lx = lucid.tensor(arr.tolist())
-        tx = torch_mod.from_numpy(arr.copy())
+        tx = _ref.from_numpy(arr.copy())
         got = F.invert(lx).numpy()
         ref = TF.invert(tx).numpy()
         assert_close(got, ref, atol=1e-6, rtol=1e-5)

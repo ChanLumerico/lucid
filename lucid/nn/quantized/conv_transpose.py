@@ -9,7 +9,7 @@ transposed convolution, then fake-quantizes the output to the calibrated
 activation grid.
 """
 
-from typing import TYPE_CHECKING, Protocol, cast, override
+from typing import TYPE_CHECKING, Protocol, Self, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -18,10 +18,13 @@ from lucid.nn.quantized._utils import activation_qparams
 from lucid.quantization._functional import dequantize, fake_quantize, quantize
 from lucid.quantization._qscheme import QDtype, per_channel_symmetric, qint8, quint8
 
+# An alias of builtins, so it costs nothing at runtime and does not need to
+# hide inside TYPE_CHECKING — which is what forced the annotations below to be
+# strings, against H7.
+_IntTuple = int | tuple[int, ...]
+
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-    _IntTuple = int | tuple[int, ...]
 
     class _FloatConvT(Protocol):
         """Structural view of a calibrated float transposed conv."""
@@ -52,11 +55,11 @@ class _QuantizedConvTransposeNd(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: "_IntTuple",
-        stride: "_IntTuple",
-        padding: "_IntTuple",
-        output_padding: "_IntTuple",
-        dilation: "_IntTuple",
+        kernel_size: _IntTuple,
+        stride: _IntTuple,
+        padding: _IntTuple,
+        output_padding: _IntTuple,
+        dilation: _IntTuple,
         groups: int,
         bias: bool,
     ) -> None:
@@ -110,7 +113,7 @@ class _QuantizedConvTransposeNd(nn.Module):
         )
 
     @classmethod
-    def from_float(cls, mod: nn.Module) -> "_QuantizedConvTransposeNd":
+    def from_float(cls, mod: nn.Module) -> Self:
         """Quantize a calibrated float transposed conv (per-channel int8 weight)."""
         from lucid.quantization.observer import PerChannelMinMaxObserver
 
