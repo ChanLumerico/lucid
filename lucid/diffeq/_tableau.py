@@ -1,15 +1,23 @@
-"""Butcher tableaux for the explicit Runge-Kutta family.
+"""Butcher tableaux for the Runge-Kutta family.
 
 A Butcher tableau is the complete specification of a Runge-Kutta method: the
 stage coefficient matrix :math:`a`, the combination weights :math:`b`, and the
 stage times :math:`c`.  Splitting it out from the solver means a new method is
-data, not code — the four built-ins below and any user-supplied tableau run
-through exactly the same integration loop.
+data, not code — the twenty-one built-ins below and any user-supplied tableau
+run through exactly the same integration loop.
 
-Only *explicit* methods are representable here: :math:`a` is required to be
-strictly lower triangular, so stage :math:`i` depends only on stages before
-it and can be evaluated in one forward sweep.  Implicit methods need a root
-find per step and are out of scope.
+Both explicit and implicit methods are representable, and the shape of
+:math:`a` is what distinguishes them.  Strictly lower triangular means stage
+:math:`i` depends only on stages before it, so the stages evaluate in one
+forward sweep.  Anything on or above the diagonal means a stage depends on
+itself, and the step becomes a nonlinear solve — expensive per step, and the
+reason those methods can take large ones on a stiff problem.
+
+The implicit tableaux are not transcribed.  Seven of the nine are collocation
+methods, so :mod:`lucid.diffeq._collocation` derives them from the Legendre
+roots at sixty decimal digits and checks the result against the theoretical
+order at import: a transcription slip in an irrational coefficient would
+otherwise cost order silently, with no error to notice.
 """
 
 import math
@@ -101,6 +109,30 @@ class ButcherTableau:
         has the wrong length for a strictly lower-triangular matrix, if ``b``
         does not sum to ``1``, if any ``c[i] != sum(a[i])``, or if ``order``
         or ``name`` are unset.
+
+    Notes
+    -----
+    Six derived properties read the table rather than being stored on it, so
+    they cannot fall out of step with the coefficients:
+
+    * :attr:`stages` — how many derivatives a step evaluates, ``len(b)``.
+    * :attr:`is_adaptive` — whether ``b_error`` is present, which is what
+      sends a solve to the adaptive stepper instead of the fixed-grid one.
+    * :attr:`is_implicit` — whether any stage depends on itself or on a later
+      one, which is what forces a nonlinear solve per step.
+    * :attr:`is_dirk` — whether the stage matrix is lower triangular including
+      the diagonal, so the stages can be solved one at a time.
+    * :attr:`is_fsal` — whether the last stage already evaluated the
+      right-hand side at the new state, in which case the next step reuses it
+      and the method costs one evaluation less than it has stages.
+    * :attr:`mid_order` — the order to which ``mid`` reproduces the true
+      midpoint.  This bounds every interpolated value and is *not* implied by
+      ``order``: a method can take third-order steps and interpolate to first.
+
+    The constructor validates the table on the way in — stage counts agree,
+    ``b`` sums to one, each ``c[i]`` equals ``sum(a[i])``, and ``b_error``
+    sums to zero — so an inconsistent tableau fails where it is written rather
+    than as a silent loss of order several steps into a solve.
 
     Examples
     --------
