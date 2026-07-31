@@ -334,6 +334,25 @@ LUCID_INTERNAL void vsadd_f64(const double* in, double scalar, double* out, std:
 // Accelerate.framework ``vDSP_vsmulD``.
 LUCID_INTERNAL void vsmul_f64(const double* in, double scalar, double* out, std::size_t n);
 
+// Widen a single-precision buffer to double precision.
+//
+// Lets a kernel that must accumulate in ``double`` still read float32 inputs
+// through Accelerate rather than an element-at-a-time cast loop.
+//
+// Parameters
+// ----------
+// in : const float*
+//     Input buffer.
+// out : double*
+//     Output buffer.
+// n : std::size_t
+//     Element count.
+//
+// References
+// ----------
+// Accelerate.framework ``vDSP_vspdp``.
+LUCID_INTERNAL void widen_f32_f64(const float* in, double* out, std::size_t n);
+
 // Single-precision scaled vector plus vector, $out = a \cdot s + b$.
 //
 // The three-buffer form of a scaled accumulation: unlike a BLAS ``axpy`` the

@@ -22,6 +22,8 @@ import math
 from typing import Callable, Sequence, SupportsFloat, cast
 
 import lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
 from lucid.diffeq import (
     _adaptive,
@@ -286,10 +288,25 @@ def _make_callbacks(
     live here rather than being left to the engine so a mistake in ``func``
     is reported against ``func``, not as a shape or device error deep inside
     an internal fused op.
+
+    Both callbacks run once per stage per step, which on a small state is a
+    measurable share of the whole solve, so everything about ``y0`` that
+    cannot change during it is read once here.  The comparisons are made on
+    the engine's own dtype and device values rather than on the user-facing
+    wrappers: reading ``Tensor.device`` builds a fresh ``device`` object, and
+    doing that twice per stage to compare two of them is the sort of cost
+    that only shows up in a profile.
     """
+    base = _unwrap(y0)
+    dtype_enum = base.dtype
+    device_enum = base.device
+    shape = y0.shape
 
     def scalar(value: float) -> Tensor:
-        return lucid.tensor(value, dtype=y0.dtype, device=y0.device)
+        # A 0-d constant straight from the engine, rather than the general
+        # `lucid.tensor` path, which re-resolves dtype and device and goes
+        # looking for a buffer protocol on a Python float.
+        return _wrap(_C_engine.full([], value, dtype_enum, device_enum))
 
     def check(result: object, step: int, stage: int) -> Tensor:
         if not isinstance(result, Tensor):
@@ -297,12 +314,13 @@ def _make_callbacks(
                 f"func must return a Tensor, got {type(result).__name__} "
                 f"at step {step}, stage {stage}"
             )
-        if result.shape != y0.shape:
+        impl = _unwrap(result)
+        if tuple(impl.shape) != shape:
             raise ValueError(
-                f"func returned shape {result.shape} but y0 has shape {y0.shape} "
+                f"func returned shape {result.shape} but y0 has shape {shape} "
                 f"(step {step}, stage {stage})"
             )
-        if result.device != y0.device:
+        if impl.device != device_enum:
             raise ValueError(
                 f"func returned a tensor on {result.device} but y0 is on "
                 f"{y0.device} (step {step}, stage {stage})"

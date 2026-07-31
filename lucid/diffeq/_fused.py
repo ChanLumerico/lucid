@@ -33,11 +33,24 @@ def _promote(terms: Sequence[Tensor]) -> tuple[Tensor, ...]:
     -------
     tuple of Tensor
         The same tensors, each at the promoted dtype.
+
+    Notes
+    -----
+    Every stage of every step passes through here, and on all but the mixed
+    dtype paths it has nothing to do — a solver's stages inherit the state's
+    dtype.  So the dtypes are read once each and compared before any promotion
+    is attempted, rather than read once to fold, once to compare, and folded
+    pairwise in between.  ``dtype`` objects come from a fixed table, so
+    identity settles the common case without calling ``__eq__``.
     """
-    target = terms[0].dtype
-    for t in terms[1:]:
-        target = lucid.promote_types(target, t.dtype)
-    return tuple(t if t.dtype == target else t.to(target) for t in terms)
+    dtypes = [t.dtype for t in terms]
+    target = dtypes[0]
+    if all(d is target for d in dtypes):
+        return tuple(terms)
+
+    for d in dtypes[1:]:
+        target = lucid.promote_types(target, d)
+    return tuple(t if d == target else t.to(target) for t, d in zip(terms, dtypes))
 
 
 def combine(

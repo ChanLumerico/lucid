@@ -2494,6 +2494,106 @@ class TestBroydenProbe:
             _fused.broyden_probe(a, a, b)
 
 
+class TestRkErrorNorm:
+    """The fused embedded-error norm behind adaptive step control.
+
+    Both device streams take more than one route through it — the CPU stream
+    materialises the error vector only when the stage count and the state size
+    make that pay, and the GPU stream reuses one compiled kernel across every
+    shape, stage count and dtype it is called with.  What these pin is that
+    the routes agree with the arithmetic they stand in for, since a reduction
+    that silently used a stale trace would still return a plausible number.
+    """
+
+    @staticmethod
+    def _reference(
+        y0: lucid.Tensor,
+        y1: lucid.Tensor,
+        ks: list[lucid.Tensor],
+        coeffs: list[float],
+        dt: float,
+        rtol: float,
+        atol: float,
+    ) -> float:
+        # The op written out: RMS of the embedded estimate over its tolerance.
+        err = None
+        for k, c in zip(ks, coeffs):
+            term = (dt * c) * k
+            err = term if err is None else err + term
+        assert err is not None
+        tol = atol + rtol * lucid.maximum(y0.abs(), y1.abs())
+        ratio = err / tol
+        return float((ratio * ratio).mean().item()) ** 0.5
+
+    @staticmethod
+    def _operands(
+        shape: tuple, stages: int, device: str
+    ) -> tuple[lucid.Tensor, lucid.Tensor, list[lucid.Tensor], list[float]]:
+        # The GPU stream has no float64 at all, so the device picks the dtype.
+        dt = lucid.float64 if device == "cpu" else lucid.float32
+        n = math.prod(shape) if shape else 1
+        y0 = lucid.tensor(
+            [1.0 + 0.5 * i for i in range(n)], dtype=dt, device=device
+        ).reshape(*shape)
+        y1 = lucid.tensor(
+            [1.1 + 0.5 * i for i in range(n)], dtype=dt, device=device
+        ).reshape(*shape)
+        ks = [
+            lucid.tensor(
+                [0.25 * (j + 1) - 0.03 * i for i in range(n)], dtype=dt, device=device
+            ).reshape(*shape)
+            for j in range(stages)
+        ]
+        return y0, y1, ks, [(-1.0) ** j / (j + 3.0) for j in range(stages)]
+
+    # 1 and 2 stages take the register-only route, 3+ the materialised one;
+    # the state sizes straddle the element-count guard and the stack scratch.
+    @pytest.mark.parametrize("stages", [1, 2, 3, 7, 14])
+    @pytest.mark.parametrize("n", [1, 8, 64, 300, 4096])
+    def test_agrees_with_the_unfused_spelling(self, stages: int, n: int) -> None:
+        y0, y1, ks, coeffs = self._operands((n,), stages, "cpu")
+        got = _fused.error_ratio(y0, y1, ks, coeffs, 0.25, 1e-6, 1e-9)
+        want = self._reference(y0, y1, ks, coeffs, 0.25, 1e-6, 1e-9)
+        assert got == pytest.approx(want, rel=1e-12)
+
+    @pytest.mark.parametrize("stages", [1, 3, 7])
+    @pytest.mark.parametrize("shape", [(), (5,), (2, 3), (2, 3, 4)])
+    def test_holds_for_every_state_rank(
+        self, device: str, stages: int, shape: tuple
+    ) -> None:
+        y0, y1, ks, coeffs = self._operands(shape, stages, device)
+        got = _fused.error_ratio(y0, y1, ks, coeffs, 0.25, 1e-6, 1e-9)
+        want = self._reference(y0, y1, ks, coeffs, 0.25, 1e-6, 1e-9)
+        assert got == pytest.approx(want, rel=1e-6)
+
+    def test_one_call_does_not_poison_the_next(self, device: str) -> None:
+        # The GPU stream compiles the reduction once and reuses it across
+        # shapes and stage counts.  A trace that captured either would keep
+        # returning the first call's answer, so the shapes and stage counts
+        # are deliberately interleaved rather than grouped.
+        plan = [(3, 8), (7, 64), (3, 8), (7, 300), (5, 8), (3, 4096), (14, 9), (3, 8)]
+        for stages, n in plan:
+            y0, y1, ks, coeffs = self._operands((n,), stages, device)
+            got = _fused.error_ratio(y0, y1, ks, coeffs, 0.25, 1e-6, 1e-9)
+            want = self._reference(y0, y1, ks, coeffs, 0.25, 1e-6, 1e-9)
+            assert got == pytest.approx(want, rel=1e-6), f"stages={stages} n={n}"
+
+    def test_tolerances_are_not_baked_into_the_trace(self, device: str) -> None:
+        # rtol and atol are inputs, not constants; a compiled kernel that
+        # folded them in would ignore a later change.
+        y0, y1, ks, coeffs = self._operands((32,), 4, device)
+        loose = _fused.error_ratio(y0, y1, ks, coeffs, 0.25, 1e-2, 1e-4)
+        tight = _fused.error_ratio(y0, y1, ks, coeffs, 0.25, 1e-8, 1e-10)
+        assert tight > loose
+        assert loose == pytest.approx(
+            self._reference(y0, y1, ks, coeffs, 0.25, 1e-2, 1e-4), rel=1e-6
+        )
+
+    def test_all_zero_coefficients_accept_the_step(self, device: str) -> None:
+        y0, y1, ks, _ = self._operands((6,), 3, device)
+        assert _fused.error_ratio(y0, y1, ks, [0.0, 0.0, 0.0], 0.25, 1e-6, 1e-9) == 0.0
+
+
 class TestRkCombine:
     """The fused affine combination every method's steps reduce to.
 

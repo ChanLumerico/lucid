@@ -6,20 +6,27 @@
 // caller differentiates.  Returning a host double instead of a tensor makes
 // that structural rather than a convention.
 //
-// Two paths, matching the engine's device split: a single-pass scalar loop on
-// the CPU stream, and an MLX expression on the GPU stream whose evaluation is
+// Two paths, matching the engine's device split: Accelerate on the CPU
+// stream, and a compiled MLX kernel on the GPU stream whose evaluation is
 // forced exactly once by the download at the end.
 
 #include "RkErrorNorm.h"
 
 #include <cmath>
 #include <cstddef>
+#include <functional>
+#include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 
+#include <mlx/compile.h>
 #include <mlx/ops.h>
 
+#include "../../backend/cpu/Blas.h"
+#include "../../backend/cpu/Vdsp.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -52,18 +59,58 @@ const OpSchema RkErrorNormOp::schema_v1{"rk_error_norm",  1, AmpPolicy::KeepInpu
 
 LUCID_REGISTER_OP(RkErrorNormOp)
 
-// Single-pass CPU kernel.  ``j`` is the inner loop so the error estimate for
-// element ``i`` is formed in a register and never stored — the stage buffers
-// are read as a handful of parallel sequential streams, which prefetches
-// well and keeps the whole thing to one pass over the data.
+// Scratch the error vector fits in before the kernel reaches for the
+// allocator.  An ODE state is usually small, and at those sizes a heap round
+// trip is a large fraction of the whole call.
+constexpr std::size_t kStackScratchDoubles = 256;
+
+// Stage count from which materialising the error vector pays for itself.
+//
+// The two-pass form below trades one extra pass over `err` -- writing it,
+// then reading it back -- for vectorised reads of the stages.  The trade is
+// 2n against roughly 2.4x on s*n, so it breaks even just below three stages,
+// which is what the measurements show: at n=4096 two terms cost 6.9us
+// materialised against 6.0us in a single register-only pass, while fourteen
+// cost 13.4us against 38.2us.
+constexpr std::size_t kMaterialiseFromStages = 3;
+
+// Element count from which an Accelerate call does more work than it costs to
+// make.  A vector routine has a fixed entry cost of a few tens of
+// nanoseconds; the register-only loop it replaces runs at roughly 0.7ns per
+// element per stage, so the two meet around forty elements.  Below that the
+// materialised form loses even at fourteen stages (measured: 1.99us against
+// 1.86us at n=4), and an ODE state that small is common.
+constexpr std::size_t kMinMaterialiseElements = 64;
+
+// Reduce a materialised error vector against the tolerance.
+//
+// One pass over three contiguous arrays with no indirection, which is what
+// lets the compiler vectorise it.
 template <typename T>
-double error_norm_cpu(const T* y0,
-                      const T* y1,
-                      const std::vector<const T*>& ks,
-                      const std::vector<double>& scales,
-                      std::size_t n,
-                      double rtol,
-                      double atol) {
+double
+reduce_ratio(const T* y0, const T* y1, const double* err, std::size_t n, double rtol, double atol) {
+    double acc = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const double a0 = std::abs(static_cast<double>(y0[i]));
+        const double a1 = std::abs(static_cast<double>(y1[i]));
+        const double ratio = err[i] / (atol + rtol * (a0 > a1 ? a0 : a1));
+        acc += ratio * ratio;
+    }
+    return std::sqrt(acc / static_cast<double>(n));
+}
+
+// One-pass form, for the stage counts that do not repay a materialised error
+// vector.  The error estimate for element `i` is formed in a register and
+// never stored; with one or two stages the compiler has few enough pointers
+// to keep the loop worthwhile even without vectorising it.
+template <typename T>
+double error_norm_inline(const T* y0,
+                         const T* y1,
+                         const std::vector<const T*>& ks,
+                         const std::vector<double>& scales,
+                         std::size_t n,
+                         double rtol,
+                         double atol) {
     double acc = 0.0;
     for (std::size_t i = 0; i < n; ++i) {
         double err = 0.0;
@@ -76,6 +123,102 @@ double error_norm_cpu(const T* y0,
         acc += ratio * ratio;
     }
     return std::sqrt(acc / static_cast<double>(n));
+}
+
+// CPU kernel, in two vectorised passes: build `err = sum_j scales[j]*ks[j]`
+// through Accelerate, then reduce it against the tolerance.
+//
+// The obvious single pass -- stage index innermost, error formed in a
+// register and never stored -- reads the stages through a table of pointers
+// the compiler cannot prove non-aliasing, and loses the vector units for it.
+// Materialising `err` costs a buffer and an extra pass over it and still wins
+// by up to 5x (measured on an M1 Pro at n=65536, fourteen stages: 822us
+// against 164us), because everything it does is vectorised.
+//
+// Accumulation stays in `double` whatever the input precision, as it did
+// before: the error estimate is a difference of two nearly equal results, so
+// it is exactly where cancellation bites.  A float32 input is therefore
+// widened rather than accumulated in place.
+template <typename T>
+double error_norm_cpu(const T* y0,
+                      const T* y1,
+                      const std::vector<const T*>& ks,
+                      const std::vector<double>& scales,
+                      std::size_t n,
+                      double rtol,
+                      double atol) {
+    if (ks.size() < kMaterialiseFromStages || n < kMinMaterialiseElements)
+        return error_norm_inline<T>(y0, y1, ks, scales, n, rtol, atol);
+
+    const bool on_stack = n <= kStackScratchDoubles;
+    double stack_err[kStackScratchDoubles];
+    // A float32 input needs a second buffer to widen each stage into; a
+    // double one is read straight from the caller's storage.
+    const bool widening = sizeof(T) != sizeof(double);
+    double stack_tmp[kStackScratchDoubles];
+
+    std::shared_ptr<std::byte[]> heap;
+    double* err = stack_err;
+    double* tmp = stack_tmp;
+    if (!on_stack) {
+        heap = allocate_aligned_bytes(n * sizeof(double) * (widening ? 2 : 1), Device::CPU);
+        err = reinterpret_cast<double*>(heap.get());
+        tmp = err + n;
+    }
+
+    for (std::size_t j = 0; j < ks.size(); ++j) {
+        const double* term;
+        if constexpr (sizeof(T) == sizeof(double)) {
+            term = reinterpret_cast<const double*>(ks[j]);
+        } else {
+            backend::cpu::widen_f32_f64(reinterpret_cast<const float*>(ks[j]), tmp, n);
+            term = tmp;
+        }
+        if (j == 0)
+            backend::cpu::vsmul_f64(term, scales[0], err, n);
+        else
+            backend::cpu::daxpy(static_cast<int>(n), scales[j], term, err);
+    }
+
+    return reduce_ratio<T>(y0, y1, err, n, rtol, atol);
+}
+
+// The GPU stream's whole reduction, as one compiled Metal kernel.
+//
+// MLX does not fuse element-wise chains in eager mode, so the expression this
+// replaces put two nodes per stage plus six more into the graph and launched
+// every one of them.  Compiled, the stages are read once and reduced in
+// place.  The same reasoning and the same shape of lambda as
+// `rk_combine`'s -- capture-less, arity read from the input list, scales
+// passed as inputs rather than baked in so one trace serves every tableau.
+//
+// Layout: [y0, y1, k_0 .. k_{m-1}, w_0 .. w_{m-1}, rtol, atol].
+//
+// It returns the *sum* of the squared ratios, not the root-mean-square: the
+// mean would divide by an element count, and a shapeless trace is reused
+// across shapes, so a count captured at trace time would be silently wrong
+// for every later call with a different state size.  The division and the
+// square root are host arithmetic on a scalar and cost nothing.
+const std::function<std::vector<::mlx::core::array>(const std::vector<::mlx::core::array>&)>&
+fused_error_norm() {
+    namespace mx = ::mlx::core;
+    static const std::function<std::vector<mx::array>(const std::vector<mx::array>&)> compiled =
+        mx::compile(
+            [](const std::vector<mx::array>& ins) -> std::vector<mx::array> {
+                const std::size_t m = (ins.size() - 4) / 2;
+                mx::array err = mx::multiply(ins[2], ins[2 + m]);
+                for (std::size_t j = 1; j < m; ++j)
+                    err = mx::add(err, mx::multiply(ins[2 + j], ins[2 + m + j]));
+
+                const mx::array& rtol = ins[ins.size() - 2];
+                const mx::array& atol = ins[ins.size() - 1];
+                mx::array tol = mx::add(
+                    atol, mx::multiply(rtol, mx::maximum(mx::abs(ins[0]), mx::abs(ins[1]))));
+                mx::array ratio = mx::divide(err, tol);
+                return {mx::sum(mx::multiply(ratio, ratio), /*keepdims=*/false)};
+            },
+            /*shapeless=*/true);
+    return compiled;
 }
 
 // Reads element 0 of a freshly downloaded one-element CPU buffer.
@@ -172,28 +315,25 @@ double rk_error_norm_op(const TensorImplPtr& y0,
                                      rtol, atol);
     }
 
-    // GPU: build the whole reduction as one lazy MLX expression so the
-    // download below is the single point where it evaluates.
+    // GPU: one compiled kernel for the whole reduction, so the download below
+    // is the single point where anything evaluates.  See `fused_error_norm`.
     namespace mx = ::mlx::core;
-    const mx::array& a0 = *std::get<GpuStorage>(y0_c->storage()).arr;
-    const mx::array& a1 = *std::get<GpuStorage>(y1_c->storage()).arr;
-    const mx::Dtype mdt = a0.dtype();
+    const mx::Dtype mdt = std::get<GpuStorage>(y0_c->storage()).arr->dtype();
 
-    mx::array err = mx::multiply(*std::get<GpuStorage>(ks_c[0]->storage()).arr,
-                                 gpu::mlx_scalar(scales[0], mdt));
-    for (std::size_t j = 1; j < ks_c.size(); ++j)
-        err = mx::add(err, mx::multiply(*std::get<GpuStorage>(ks_c[j]->storage()).arr,
-                                        gpu::mlx_scalar(scales[j], mdt)));
+    std::vector<mx::array> ins;
+    ins.reserve(2 * ks_c.size() + 4);
+    ins.push_back(*std::get<GpuStorage>(y0_c->storage()).arr);
+    ins.push_back(*std::get<GpuStorage>(y1_c->storage()).arr);
+    for (const auto& k : ks_c)
+        ins.push_back(*std::get<GpuStorage>(k->storage()).arr);
+    for (const double scale : scales)
+        ins.push_back(mx::array(scale, mdt));
+    ins.push_back(mx::array(rtol, mdt));
+    ins.push_back(mx::array(atol, mdt));
 
-    mx::array tol =
-        mx::add(gpu::mlx_scalar(atol, mdt),
-                mx::multiply(gpu::mlx_scalar(rtol, mdt), mx::maximum(mx::abs(a0), mx::abs(a1))));
-    mx::array ratio = mx::divide(err, tol);
-    mx::array out = mx::sqrt(mx::mean(mx::multiply(ratio, ratio), /*keepdims=*/false));
-
-    GpuStorage gs = gpu::wrap_mlx_array(std::move(out), dtype);
+    GpuStorage gs = gpu::wrap_mlx_array(std::move(fused_error_norm()(ins)[0]), dtype);
     const CpuStorage host = gpu::download_gpu_to_cpu(gs, Shape{});
-    return read_scalar(host, dtype);
+    return std::sqrt(read_scalar(host, dtype) / static_cast<double>(n));
 }
 
 }  // namespace lucid

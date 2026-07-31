@@ -17,8 +17,7 @@ import pytest
 
 @pytest.mark.smoke
 def test_lucid_works_without_numpy() -> None:
-    script = textwrap.dedent(
-        """
+    script = textwrap.dedent("""
         import sys
 
         # Eject any cached numpy and refuse new imports.
@@ -74,8 +73,7 @@ def test_lucid_works_without_numpy() -> None:
             "numpy was imported during a numpy-blocked Lucid session"
         )
         print("OK")
-        """
-    )
+        """)
     result = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
