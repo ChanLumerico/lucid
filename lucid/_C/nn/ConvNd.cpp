@@ -34,7 +34,11 @@
 #include "../kernel/BinaryKernel.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/ufunc/Reductions.h"
+#include "../ops/ufunc/Transpose.h"
+#include "ConvTransposeNd.h"
 
 namespace lucid {
 
@@ -227,6 +231,60 @@ std::vector<Storage> ConvNdBackward<N>::apply(Storage grad_out) {
     // Returns [dx, dW, db].
     return be.conv_nd_backward(grad_out, this->saved_inputs_[0], this->saved_inputs_[1], B, Cin,
                                Cout, Cin_g, Cout_g, S, K, O, opts, this->dtype_);
+}
+
+template <int N>
+std::vector<TensorImplPtr> ConvNdBackward<N>::apply_for_graph(const TensorImplPtr& grad_out) {
+    // A convolution's adjoint is two more convolutions.  dx is the
+    // transposed convolution of the gradient with the same weights; dW is a
+    // correlation of the input against the gradient with batch and channel
+    // swapped, so the batch axis plays the role of the reduction; db is the
+    // gradient summed over everything but the output channel.
+    //
+    // Restricted to the ungrouped, undilated 2-D case, which is what
+    // conv_transpose2d_op itself accepts — it takes neither groups nor
+    // dilation.  Anything else is refused rather than answered wrongly.
+    const auto& x = this->saved_impl_inputs_[0];
+    const auto& W = this->saved_impl_inputs_[1];
+    if (!x || !W)
+        ErrorBuilder("conv").fail("graph-mode backward is missing a saved input");
+    if constexpr (N != 2) {
+        ErrorBuilder("conv").not_implemented("create_graph=True is 2-D only for now");
+        return {};
+    } else {
+        if (this->groups_ != 1 || this->dilation_[0] != 1 || this->dilation_[1] != 1)
+            ErrorBuilder("conv").not_implemented(
+                "create_graph=True needs groups == 1 and dilation == 1");
+
+        const Shape& xs = this->input_shapes_[0];
+        const Shape& ws = this->input_shapes_[1];
+        const std::int64_t cout = ws[0];
+        const int sh = this->stride_[0], sw = this->stride_[1];
+        const int ph = this->pad_[0], pw = this->pad_[1];
+
+        // conv_transpose grows the spatial extent to (O-1)*s - 2p + K; the
+        // remainder is what output_padding exists to recover.
+        const int opad_h =
+            static_cast<int>(xs[2] - ((this->out_shape_[2] - 1) * sh - 2 * ph + ws[2]));
+        const int opad_w =
+            static_cast<int>(xs[3] - ((this->out_shape_[3] - 1) * sw - 2 * pw + ws[3]));
+
+        auto no_bias_x = zeros_op(Shape{xs[1]}, this->dtype_, this->device_);
+        auto dx = conv_transpose2d_op(grad_out, W, no_bias_x, sh, sw, ph, pw, opad_h, opad_w);
+
+        // Swapping batch with channel turns the weight gradient into an
+        // ordinary correlation: stride and dilation trade places.
+        const std::vector<int> swap{1, 0, 2, 3};
+        // With batch and channel swapped the kernel is the gradient, so this
+        // convolution's output channel count is Cout, not Cin.
+        auto no_bias_w = zeros_op(Shape{cout}, this->dtype_, this->device_);
+        auto dW = conv2d_op(permute_op(x, swap), permute_op(grad_out, swap), no_bias_w,
+                            /*stride*/ 1, 1, ph, pw, /*dilation*/ sh, sw);
+        dW = permute_op(dW, swap);
+
+        auto db = sum_op(grad_out, std::vector<int>{0, 2, 3}, /*keepdims=*/false);
+        return {dx, dW, db};
+    }
 }
 
 template class ConvNdBackward<1>;

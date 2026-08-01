@@ -69,6 +69,11 @@ public:
     int dilation_[N];  // Dilation (hole size) per spatial axis.
     int groups_ = 1;   // Number of filter groups.
 
+    // Graph-mode backward.  Covers the ungrouped, undilated 2-D case —
+    // which is every convolution in the model zoo — and refuses the rest by
+    // name; see the definition.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
     // Run the forward cross-correlation and attach the backward node.
     //
     // Parameters
