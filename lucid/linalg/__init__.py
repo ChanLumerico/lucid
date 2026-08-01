@@ -85,8 +85,7 @@ def inv(x: Tensor) -> Tensor:
     >>> from lucid.linalg import inv
     >>> A = lucid.tensor([[4.0, 7.0], [2.0, 6.0]])
     >>> inv(A)
-    Tensor([[ 0.6000, -0.7000],
-            [-0.2000,  0.4000]])
+    tensor([[0.6, -0.7], [-0.2, 0.4]])
     """
     return _la.inv(x)  # type: ignore[arg-type, return-value]
 
@@ -125,7 +124,7 @@ def det(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import det
     >>> det(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))
-    Tensor(-2.0)
+    tensor(-2.)
     """
     return _la.det(x)  # type: ignore[arg-type, return-value]
 
@@ -170,7 +169,7 @@ def solve(A: Tensor, b: Tensor) -> Tensor:
     >>> A = lucid.tensor([[3.0, 1.0], [1.0, 2.0]])
     >>> b = lucid.tensor([9.0, 8.0])
     >>> solve(A, b)
-    Tensor([2.0000, 3.0000])
+    tensor([2., 3.])
     """
     return _la.solve(A, b)  # type: ignore[arg-type, return-value]
 
@@ -226,11 +225,9 @@ def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
     >>> A = lucid.tensor([[4.0, 2.0], [2.0, 3.0]])  # SPD
     >>> L = cholesky(A)
     >>> L
-    Tensor([[2.0000, 0.0000],
-            [1.0000, 1.4142]])
+    tensor([[2., 0.], [1., 1.414]])
     >>> L @ L.T
-    Tensor([[4.0000, 2.0000],
-            [2.0000, 3.0000]])
+    tensor([[4., 2.], [2., 3.]])
     """
     return cast(Tensor, _CholeskyAutograd.apply(x, upper))
 
@@ -362,7 +359,7 @@ def norm(
     >>> import lucid
     >>> from lucid.linalg import norm
     >>> norm(lucid.tensor([3.0, 4.0]))
-    Tensor(5.0)
+    tensor(5.)
     """
     # Forward user kwargs into the engine's positional signature:
     #   norm(a, ord=2.0, dim=[], keepdims=False)
@@ -576,7 +573,7 @@ def svd(x: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     >>> A = lucid.tensor([[1.0, 0.0], [0.0, 2.0], [0.0, 0.0]])
     >>> U, S, Vh = svd(A, full_matrices=False)
     >>> S
-    Tensor([2.0000, 1.0000])
+    tensor([2., 1.])
     """
     _svd_result = _la.svd(_unwrap(x))
     u_impl: _C_engine.TensorImpl
@@ -625,7 +622,7 @@ def svdvals(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import svdvals
     >>> svdvals(lucid.tensor([[3.0, 0.0], [0.0, 4.0]]))
-    Tensor([4.0000, 3.0000])
+    tensor([4., 3.])
     """
     if _C_engine.grad_enabled() and x.requires_grad:
         _, S, _ = svd(x)
@@ -882,9 +879,8 @@ def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
     >>> from lucid.linalg import qr
     >>> A = lucid.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
     >>> Q, R = qr(A)
-    >>> Q.T @ Q
-    Tensor([[1.0000, 0.0000],
-            [0.0000, 1.0000]])
+    >>> lucid.allclose(Q.T @ Q, lucid.eye(2), atol=1e-5)   # Q is orthonormal
+    True
     """
     q_impl, r_impl = _la.qr(_unwrap(x))
     if not _C_engine.grad_enabled() or not x.requires_grad:
@@ -934,8 +930,7 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     >>> from lucid.linalg import matrix_power
     >>> A = lucid.tensor([[1.0, 1.0], [0.0, 1.0]])
     >>> matrix_power(A, 5)
-    Tensor([[1.0000, 5.0000],
-            [0.0000, 1.0000]])
+    tensor([[1., 5.], [0., 1.]])
     """
     if not isinstance(n, int):
         raise TypeError(f"matrix_power exponent must be int, got {type(n).__name__}")
@@ -1016,9 +1011,8 @@ def pinv(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import pinv
     >>> A = lucid.tensor([[1.0, 0.0], [0.0, 2.0], [0.0, 0.0]])
-    >>> pinv(A) @ A
-    Tensor([[1.0000, 0.0000],
-            [0.0000, 1.0000]])
+    >>> lucid.allclose(pinv(A) @ A, lucid.eye(2), atol=1e-5)
+    True
     """
     sh: tuple[int, ...] = tuple(_unwrap(x).shape)
     if len(sh) >= 2 and sh[-1] == sh[-2]:
@@ -1074,7 +1068,7 @@ def eig(x: Tensor) -> tuple[Tensor, Tensor]:
     >>> A = lucid.tensor([[2.0, 0.0], [0.0, 3.0]])
     >>> w, V = eig(A)
     >>> w
-    Tensor([2.0000, 3.0000])
+    tensor([2., 3.])
     """
     vals, vecs = _la.eig(_unwrap(x))
     return _wrap(vals), _wrap(vecs)
@@ -1109,7 +1103,7 @@ def eigvals(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import eigvals
     >>> eigvals(lucid.tensor([[2.0, 0.0], [0.0, 3.0]]))
-    Tensor([2.0000, 3.0000])
+    tensor([2., 3.])
     """
     vals, _ = _la.eig(_unwrap(x))
     return _wrap(vals)
@@ -1245,7 +1239,7 @@ def eigh(x: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
     >>> A = lucid.tensor([[2.0, 1.0], [1.0, 3.0]])
     >>> w, V = eigh(A)
     >>> w
-    Tensor([1.3820, 3.6180])
+    tensor([1.382, 3.618])
     """
     w_impl, V_impl = _la.eigh(_unwrap(x))
     if not _C_engine.grad_enabled() or not x.requires_grad:
@@ -1286,7 +1280,7 @@ def eigvalsh(x: Tensor, UPLO: str = "L") -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import eigvalsh
     >>> eigvalsh(lucid.tensor([[2.0, 1.0], [1.0, 3.0]]))
-    Tensor([1.3820, 3.6180])
+    tensor([1.382, 3.618])
     """
     if _C_engine.grad_enabled() and x.requires_grad:
         w, _ = eigh(x, UPLO)
@@ -1342,8 +1336,7 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     >>> LU, piv = lu_factor(A)
     >>> b = lucid.tensor([[3.0], [13.0]])
     >>> lu_solve(LU, piv, b)
-    Tensor([[0.8000],
-            [1.4000]])
+    tensor([[0.8], [1.4]])
     """
     lu, pivots = _la.lu_factor(_unwrap(A))
     return _wrap(lu), _wrap(pivots)
@@ -1390,7 +1383,7 @@ def slogdet(A: Tensor) -> tuple[Tensor, Tensor]:
     >>> from lucid.linalg import slogdet
     >>> sign, logabs = slogdet(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))
     >>> sign, logabs
-    (Tensor(-1.0), Tensor(0.6931))
+    (tensor(-1.), tensor(0.6931))
     """
     d = cast(Tensor, det(A))
     sign = _wrap(_C_engine.sign(_unwrap(d)))
@@ -1443,7 +1436,7 @@ def matrix_rank(
     >>> import lucid
     >>> from lucid.linalg import matrix_rank
     >>> matrix_rank(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]))
-    Tensor(1)
+    tensor(1, dtype=lucid.int64)
     """
     _, S, _ = svd(A)
     m, n = int(A.shape[-2]), int(A.shape[-1])
@@ -1509,7 +1502,7 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import cond
     >>> cond(lucid.tensor([[1.0, 0.0], [0.0, 1e-6]]))
-    Tensor(1000000.0)
+    tensor(1e+06)
     """
     if p is None or p == 2:
         _, S, _ = svd(A)
@@ -1570,7 +1563,7 @@ def multi_dot(tensors: list[Tensor]) -> Tensor:
     >>> B = lucid.tensor([[3.0], [4.0]])
     >>> C = lucid.tensor([[5.0]])
     >>> multi_dot([A, B, C])
-    Tensor([[55.0000]])
+    tensor([[55.]])
     """
     if len(tensors) == 0:
         raise ValueError("multi_dot requires at least one tensor")
@@ -1635,8 +1628,7 @@ def solve_triangular(
     >>> A = lucid.tensor([[2.0, 1.0], [0.0, 3.0]])  # upper
     >>> b = lucid.tensor([[5.0], [9.0]])
     >>> solve_triangular(A, b, upper=True)
-    Tensor([[1.0000],
-            [3.0000]])
+    tensor([[1.], [3.]])
     """
     if not left:
         # X A = B  ⟺  Aᵀ Xᵀ = Bᵀ — solve the transposed system, transpose result.
@@ -1694,9 +1686,7 @@ def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import vander
     >>> vander(lucid.tensor([1.0, 2.0, 3.0]), N=3, increasing=True)
-    Tensor([[1.0000, 1.0000, 1.0000],
-            [1.0000, 2.0000, 4.0000],
-            [1.0000, 3.0000, 9.0000]])
+    tensor([[1., 1., 1.], [1., 2., 4.], [1., 3., 9.]])
     """
     n = int(x.shape[0])
     if N is None:
@@ -1768,9 +1758,9 @@ def vector_norm(
     >>> import lucid
     >>> from lucid.linalg import vector_norm
     >>> vector_norm(lucid.tensor([3.0, 4.0]))
-    Tensor(5.0)
+    tensor(5.)
     >>> vector_norm(lucid.tensor([1.0, -2.0, 3.0]), ord=1)
-    Tensor(6.0)
+    tensor(6.)
     """
     import math
 
@@ -1849,7 +1839,7 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import cross
     >>> cross(lucid.tensor([1.0, 0.0, 0.0]), lucid.tensor([0.0, 1.0, 0.0]))
-    Tensor([0.0000, 0.0000, 1.0000])
+    tensor([0., 0., 1.])
     """
     xi = _unwrap(x)
     yi = _unwrap(y)
@@ -1915,7 +1905,7 @@ def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     >>> x = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
     >>> y = lucid.tensor([[1.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
     >>> vecdot(x, y)
-    Tensor([-2.0000,  5.0000])
+    tensor([-2., 5.])
     """
     prod = _C_engine.mul(_unwrap(x), _unwrap(y))
     return _wrap(_C_engine.sum(prod, [dim], False))
@@ -1951,7 +1941,7 @@ def dot(x: Tensor, y: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import dot
     >>> dot(lucid.tensor([1.0, 2.0, 3.0]), lucid.tensor([4.0, 5.0, 6.0]))
-    Tensor(32.0)
+    tensor(32.)
     """
     return _wrap(_C_engine.dot(_unwrap(x), _unwrap(y)))
 
@@ -1991,7 +1981,7 @@ def inner(x: Tensor, y: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import inner
     >>> inner(lucid.tensor([1.0, 2.0]), lucid.tensor([3.0, 4.0]))
-    Tensor(11.0)
+    tensor(11.)
     """
     return _wrap(_C_engine.inner(_unwrap(x), _unwrap(y)))
 
@@ -2030,8 +2020,7 @@ def outer(x: Tensor, y: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import outer
     >>> outer(lucid.tensor([1.0, 2.0]), lucid.tensor([3.0, 4.0]))
-    Tensor([[3.0000, 4.0000],
-            [6.0000, 8.0000]])
+    tensor([[3., 4.], [6., 8.]])
     """
     return _wrap(_C_engine.outer(_unwrap(x), _unwrap(y)))
 
@@ -2085,7 +2074,7 @@ def matrix_norm(
     >>> from lucid.linalg import matrix_norm
     >>> A = lucid.tensor([[3.0, 4.0], [0.0, 0.0]])
     >>> matrix_norm(A, ord="fro")
-    Tensor(5.0)
+    tensor(5.)
     """
     xi = _unwrap(x)
     d0, d1 = int(dim[0]), int(dim[1])
@@ -2193,8 +2182,7 @@ def lstsq(
     >>> b = lucid.tensor([[6.0], [9.0], [12.0]])
     >>> sol, *_ = lstsq(A, b)
     >>> sol
-    Tensor([[3.0000],
-            [3.0000]])
+    tensor([3., 3.])
     """
     sol = _wrap(_la.lstsq(_unwrap(A), _unwrap(B)))
     dev = _unwrap(A).device
@@ -2245,8 +2233,7 @@ def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     >>> LU, piv = lu_factor(A)
     >>> b = lucid.tensor([[9.0], [8.0]])
     >>> lu_solve(LU, piv, b)
-    Tensor([[2.0000],
-            [3.0000]])
+    tensor([[2.], [3.]])
     """
     return _wrap(_la.lu_solve(_unwrap(LU), _unwrap(pivots), _unwrap(B)))
 
@@ -2812,8 +2799,7 @@ def matrix_exp(A: Tensor) -> Tensor:
     >>> from lucid.linalg import matrix_exp
     >>> A = lucid.tensor([[0.0, 1.0], [-1.0, 0.0]])  # 90-deg rotation generator
     >>> matrix_exp(A)
-    Tensor([[ 0.5403,  0.8415],
-            [-0.8415,  0.5403]])
+    tensor([[0.5403, 0.8415], [-0.8415, 0.5403]])
     """
     import math as _math
 
@@ -2928,9 +2914,9 @@ def diagonal(
     >>> from lucid.linalg import diagonal
     >>> A = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
     >>> diagonal(A)
-    Tensor([1.0000, 4.0000])
+    tensor([1., 4.])
     >>> diagonal(A, offset=1)
-    Tensor([2.0000])
+    tensor([2.])
     """
     return lucid.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)
 

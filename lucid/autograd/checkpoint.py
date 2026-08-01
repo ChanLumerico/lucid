@@ -83,10 +83,16 @@ def checkpoint(
 
     Examples
     --------
+    >>> import lucid
+    >>> W = lucid.tensor([[1.0, 0.0], [0.0, 1.0]], requires_grad=True)
+    >>> b = lucid.tensor([0.0, 0.0], requires_grad=True)
+    >>> x = lucid.tensor([[1.0, -2.0]], requires_grad=True)
     >>> def block(x):
     ...     return lucid.nn.functional.relu(x @ W + b)
     >>> y = lucid.autograd.checkpoint(block, x)
     >>> y.sum().backward()
+    >>> x.grad
+    tensor([[1., 0.]])
     """
     if not use_reentrant:
         raise NotImplementedError(

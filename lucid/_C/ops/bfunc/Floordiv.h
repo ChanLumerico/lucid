@@ -43,8 +43,9 @@ namespace lucid {
 //
 // Shape
 // -----
-// ``a.shape == b.shape``.  The result is the same shape; the dtype is always
-// I64.
+// ``a.shape == b.shape``.  The result is the same shape.  Integer operands
+// give an I64 result; floating-point operands keep their own dtype, which
+// is what Python's ``//`` and the reference framework both do.
 //
 // Raises
 // ------
@@ -54,9 +55,9 @@ namespace lucid {
 // Notes
 // -----
 // Behaviour on division by zero is delegated to the backend primitive
-// (``backend.floordiv``).  Because the output is forced to I64, any
-// floating-point ``NaN`` / ``Inf`` produced by the backend is reinterpreted
-// to a platform-defined integer value.
+// (``backend.floordiv``) for integers.  The float path is ``floor(a / b)``,
+// so ``NaN`` and ``Inf`` propagate as they do everywhere else rather than
+// collapsing to platform-defined integers.
 //
 // See Also
 // --------

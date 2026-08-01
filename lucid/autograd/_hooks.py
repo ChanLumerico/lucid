@@ -95,6 +95,7 @@ class RemovableHandle:
     >>> x = lucid.tensor([1.0, 2.0], requires_grad=True)
     >>> handle = x.register_hook(lambda g: print('grad =', g))
     >>> (x * x).sum().backward()
+    grad = tensor([2., 4.])
     >>> handle.remove()
 
     As a context manager:

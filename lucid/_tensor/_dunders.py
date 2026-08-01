@@ -907,6 +907,111 @@ def _inject_dunders(cls: type) -> None:
         """
         return _wrap(_C_engine.invert(self._impl))
 
+    def __int__(self: Tensor) -> int:
+        """Convert a single-element tensor to a Python ``int``.
+
+        Returns
+        -------
+        int
+            The tensor's only element, truncated toward zero if it is a
+            float — matching what ``int()`` does to a Python float.
+
+        Raises
+        ------
+        LucidError
+            If the tensor holds more than one element.  Which element
+            would have been meant is not something to guess at.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> int(lucid.tensor(3))
+        3
+        >>> int(lucid.tensor(3.7))
+        3
+        """
+        return int(self.item())
+
+    def __index__(self: Tensor) -> int:
+        """Use a single-element integer tensor where an index is expected.
+
+        This is what lets a tensor appear in ``range()``, in a slice, or
+        as a list subscript.  Unlike :meth:`__int__` it refuses floats:
+        silently truncating an index is how off-by-one bugs are made.
+
+        Returns
+        -------
+        int
+            The tensor's only element.
+
+        Raises
+        ------
+        TypeError
+            If the dtype is not integral.
+        LucidError
+            If the tensor holds more than one element.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> [10, 20, 30][lucid.tensor(1)]
+        20
+        """
+        value = self.item()
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(
+                f"only integer tensors can be used as an index, "
+                f"got dtype {self.dtype}"
+            )
+        return value
+
+    def __float__(self: Tensor) -> float:
+        """Convert a single-element tensor to a Python ``float``.
+
+        The ordinary way to read a loss or a metric out of the graph —
+        ``float(loss)`` — and the reason it is worth having as an
+        operator rather than only as ``.item()``.
+
+        Returns
+        -------
+        float
+            The tensor's only element.
+
+        Raises
+        ------
+        LucidError
+            If the tensor holds more than one element.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> float(lucid.tensor(2.5))
+        2.5
+        """
+        return float(self.item())
+
+    def __complex__(self: Tensor) -> complex:
+        """Convert a single-element tensor to a Python ``complex``.
+
+        Returns
+        -------
+        complex
+            The tensor's only element.  Real dtypes give a zero
+            imaginary part, as Python's own ``complex()`` does.
+
+        Raises
+        ------
+        LucidError
+            If the tensor holds more than one element.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> complex(lucid.tensor(2.0))
+        (2+0j)
+        """
+        return complex(self.item())
+
     def __mod__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise remainder: ``self % other``.
 
@@ -1651,6 +1756,10 @@ def _inject_dunders(cls: type) -> None:
         ("__ror__", __ror__),
         ("__xor__", __xor__),
         ("__rxor__", __rxor__),
+        ("__int__", __int__),
+        ("__index__", __index__),
+        ("__float__", __float__),
+        ("__complex__", __complex__),
         ("__mod__", __mod__),
         ("__rmod__", __rmod__),
         ("__divmod__", __divmod__),

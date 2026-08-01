@@ -298,7 +298,7 @@ _REGISTRY: list[OpEntry] = [
     # ── linear algebra ─────────────────────────────────────────────────────
     OpEntry("tensordot",  A._tensordot_adapter, 2, free_fn_name="tensordot",
             extra_kwargs=["dims"]),
-    OpEntry("clip",       _R.clip,      1, method_name="clip",       free_fn_name="clip",
+    OpEntry("clip",       A._clip_adapter, 1, method_name="clip",    free_fn_name="clip",
             extra_kwargs=["min", "max"]),
 
     # ── floating-point predicates (output is always bool) ──────────────────
@@ -314,7 +314,7 @@ _REGISTRY: list[OpEntry] = [
     # clone: deep-copy preserving autograd history (contiguous = storage copy).
     OpEntry("clone",       _R.contiguous,   1, method_name="clone",  free_fn_name="clone"),
     # clamp is an alias for clip (same signature, same engine op).
-    OpEntry("clamp",       _R.clip,         1, method_name="clamp",  free_fn_name="clamp",
+    OpEntry("clamp",       A._clip_adapter, 1, method_name="clamp",  free_fn_name="clamp",
             extra_kwargs=["min", "max"]),
     # scatter_add: arg order differs — adapter reorders before calling engine.
     # Python:  scatter_add(x, dim, index, src)

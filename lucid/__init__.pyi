@@ -2746,7 +2746,7 @@ def rsqrt(input: Tensor) -> Tensor:
     ...
 def any(input: Tensor) -> Tensor: ...
 def all(input: Tensor) -> Tensor: ...
-def clip(input: Tensor, min: Scalar | None, max: Scalar | None) -> Tensor:
+def clip(input: Tensor, min: Scalar | None = ..., max: Scalar | None = ...) -> Tensor:
     r"""    Element-wise clamping to a closed interval.
     
     Clips each entry of ``input`` so that it lies within ``[min, max]``. Either bound
@@ -2991,7 +2991,7 @@ def clone(input: Tensor) -> Tensor:
     False
     """
     ...
-def clamp(input: Tensor, min: Scalar | None, max: Scalar | None) -> Tensor:
+def clamp(input: Tensor, min: Scalar | None = ..., max: Scalar | None = ...) -> Tensor:
     r"""    Element-wise clamping to a closed interval.
     
     Constrains each entry of ``input`` to lie within ``[min, max]``. Either bound

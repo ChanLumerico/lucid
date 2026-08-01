@@ -101,7 +101,7 @@ def backward(
     >>> y = (x * x).sum()
     >>> backward(y)
     >>> x.grad
-    Tensor([2., 4., 6.])
+    tensor([2., 4., 6.])
     """
     if not isinstance(tensors, (list, tuple)):
         tensors = [tensors]
@@ -186,11 +186,11 @@ def grad(
 
     >>> import lucid
     >>> from lucid.autograd import grad
-    >>> x = lucid.randn(3, requires_grad=True)
+    >>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
     >>> y = (x * x).sum()
     >>> (gx,) = grad(y, [x])
     >>> gx                         # equals 2 * x
-    Tensor([...])
+    tensor([2., 4., 6.])
 
     Vector output — explicit seed:
 
@@ -203,6 +203,8 @@ def grad(
     >>> y = (x ** 3).sum()
     >>> (g,) = grad(y, [x], create_graph=True)
     >>> (gg,) = grad(g.sum(), [x])    # second derivative: 6x
+    >>> gg
+    tensor([6., 12., 18.])
     """
     if not isinstance(outputs, (list, tuple)):
         outputs = [outputs]

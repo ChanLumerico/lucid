@@ -577,6 +577,28 @@ def _meshgrid_adapter(*tensors: Tensor, indexing: str = "ij") -> list[_Impl]:
     return _C_engine.meshgrid(impls, indexing == "xy")
 
 
+def _clip_adapter(
+    x_impl: _Impl,
+    min: Scalar | None = None,
+    max: Scalar | None = None,
+) -> _Impl:
+    """clip(x, min, max) — either bound may be omitted.
+
+    The engine primitive wants both ends, so a one-sided clamp used to
+    raise a pybind argument error rather than doing the obvious thing.
+    Substituting an infinity would have been wrong for integer dtypes,
+    where it has no representable value; routing a single bound through
+    ``maximum`` / ``minimum`` instead keeps the dtype exactly as it was.
+    """
+    if min is None and max is None:
+        raise ValueError("clip: at least one of min or max must be given")
+    if max is None:
+        return _C_engine.maximum(x_impl, _unwrap_or_scalar(min, x_impl))
+    if min is None:
+        return _C_engine.minimum(x_impl, _unwrap_or_scalar(max, x_impl))
+    return _C_engine.clip(x_impl, float(min), float(max))
+
+
 def _where_adapter(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> _Impl:
     """where(cond, x, y) — bool-cast the condition, promote scalar branches.
 
