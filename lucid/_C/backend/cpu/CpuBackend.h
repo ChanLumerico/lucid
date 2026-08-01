@@ -9999,6 +9999,32 @@ private:
             }
             break;
         }
+        case Dtype::Bool: {
+            auto* p = reinterpret_cast<std::uint8_t*>(ptr);
+            for (std::size_t i = 0; i < n; ++i)
+                p[i] = 1;
+            break;
+        }
+        case Dtype::I8: {
+            auto* p = reinterpret_cast<std::int8_t*>(ptr);
+            for (std::size_t i = 0; i < n; ++i)
+                p[i] = 1;
+            break;
+        }
+        case Dtype::I16: {
+            auto* p = reinterpret_cast<std::int16_t*>(ptr);
+            for (std::size_t i = 0; i < n; ++i)
+                p[i] = 1;
+            break;
+        }
+        case Dtype::F16: {
+            // 1.0 as IEEE binary16 is 0x3C00.  Writing the pattern avoids
+            // needing a half type here for what is only a fill.
+            auto* p = reinterpret_cast<std::uint16_t*>(ptr);
+            for (std::size_t i = 0; i < n; ++i)
+                p[i] = 0x3C00;
+            break;
+        }
         default:
             ErrorBuilder("cpu_backend::ones").not_implemented("dtype not supported");
         }
@@ -10064,7 +10090,58 @@ private:
             fni64(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
                   reinterpret_cast<const std::int64_t*>(cb.ptr.get()),
                   reinterpret_cast<std::int64_t*>(ptr.get()), n);
-        else
+        else if (dt == Dtype::Bool || dt == Dtype::I8 || dt == Dtype::I16) {
+            // Accelerate has no vector arithmetic below 32 bits, so these
+            // widen, reuse the I32 kernel, and narrow back.  Bool follows the
+            // reference convention that ``True + True`` is ``True``: the sum
+            // is taken as a number and then read as "non-zero".
+            std::vector<std::int32_t> wa(n), wb(n), wo(n);
+            const auto load = [&](const std::byte* src, std::vector<std::int32_t>& dst) {
+                if (dt == Dtype::I16) {
+                    const auto* p = reinterpret_cast<const std::int16_t*>(src);
+                    for (std::size_t i = 0; i < n; ++i)
+                        dst[i] = p[i];
+                } else if (dt == Dtype::I8) {
+                    const auto* p = reinterpret_cast<const std::int8_t*>(src);
+                    for (std::size_t i = 0; i < n; ++i)
+                        dst[i] = p[i];
+                } else {
+                    const auto* p = reinterpret_cast<const std::uint8_t*>(src);
+                    for (std::size_t i = 0; i < n; ++i)
+                        dst[i] = p[i] ? 1 : 0;
+                }
+            };
+            load(reinterpret_cast<const std::byte*>(ca.ptr.get()), wa);
+            load(reinterpret_cast<const std::byte*>(cb.ptr.get()), wb);
+            fni32(wa.data(), wb.data(), wo.data(), n);
+            if (dt == Dtype::I16) {
+                auto* o = reinterpret_cast<std::int16_t*>(ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    o[i] = static_cast<std::int16_t>(wo[i]);
+            } else if (dt == Dtype::I8) {
+                auto* o = reinterpret_cast<std::int8_t*>(ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    o[i] = static_cast<std::int8_t>(wo[i]);
+            } else {
+                auto* o = reinterpret_cast<std::uint8_t*>(ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    o[i] = wo[i] != 0 ? 1 : 0;
+            }
+        } else if (dt == Dtype::F16) {
+            // Half has no host scalar to compute in; widen through float and
+            // round once on the way back, which is what the astype path does.
+            const auto* pa = reinterpret_cast<const std::uint16_t*>(ca.ptr.get());
+            const auto* pb = reinterpret_cast<const std::uint16_t*>(cb.ptr.get());
+            std::vector<float> wa(n), wb(n), wo(n);
+            for (std::size_t i = 0; i < n; ++i) {
+                wa[i] = detail::half_bits_to_float(pa[i]);
+                wb[i] = detail::half_bits_to_float(pb[i]);
+            }
+            fn32(wa.data(), wb.data(), wo.data(), n);
+            auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                o[i] = detail::float_to_half_bits(wo[i]);
+        } else
             ErrorBuilder("cpu_backend::binary").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nb, dt}};
     }
@@ -11005,14 +11082,35 @@ private:
             for (std::size_t i = 0; i < n; ++i)
                 dst[i] = c[i] ? xp[i] : yp[i];
         };
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cx.ptr.get()),
-                reinterpret_cast<const float*>(cy.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()), reinterpret_cast<const double*>(cx.ptr.get()),
-                reinterpret_cast<const double*>(cy.ptr.get()));
-        else
+        // Selection copies bits; it never reads them as numbers.  Dispatching
+        // on element width rather than dtype therefore covers every type —
+        // bool, the integers and both float widths — with four branches and
+        // no per-type code.  The float-only version this replaces was why a
+        // masked integer index had to be written as a clamp elsewhere.
+        switch (dtype_size(dt)) {
+        case 1:
+            run(reinterpret_cast<std::uint8_t*>(ptr.get()),
+                reinterpret_cast<const std::uint8_t*>(cx.ptr.get()),
+                reinterpret_cast<const std::uint8_t*>(cy.ptr.get()));
+            break;
+        case 2:
+            run(reinterpret_cast<std::uint16_t*>(ptr.get()),
+                reinterpret_cast<const std::uint16_t*>(cx.ptr.get()),
+                reinterpret_cast<const std::uint16_t*>(cy.ptr.get()));
+            break;
+        case 4:
+            run(reinterpret_cast<std::uint32_t*>(ptr.get()),
+                reinterpret_cast<const std::uint32_t*>(cx.ptr.get()),
+                reinterpret_cast<const std::uint32_t*>(cy.ptr.get()));
+            break;
+        case 8:
+            run(reinterpret_cast<std::uint64_t*>(ptr.get()),
+                reinterpret_cast<const std::uint64_t*>(cx.ptr.get()),
+                reinterpret_cast<const std::uint64_t*>(cy.ptr.get()));
+            break;
+        default:
             ErrorBuilder("cpu_backend::where_op").not_implemented("dtype not supported");
+        }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
