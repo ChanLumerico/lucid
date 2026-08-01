@@ -438,6 +438,15 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
             Storage grad_src = grad_src_impl->storage();
             return {std::move(grad_base), std::move(grad_src)};
         }
+
+        std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& g) override {
+            // Both halves are already op-level: the base passes the gradient
+            // through untouched, and the source takes back exactly the
+            // elements it scattered.  The saved indices are integers with no
+            // derivative of their own, so reusing them is safe here in a way
+            // it is not for a saved statistic.
+            return {g, gather_op(g, saved_indices_, dim_)};
+        }
     };
 
     auto bwd = std::make_shared<ScatterAddNode>();
