@@ -39,6 +39,9 @@
 #include "../../kernel/NaryKernel.h"
 #include "../../kernel/VariadicKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../composite/Indexing.h"  // narrow_op
+#include "Pad.h"                    // pad_op
+#include "View.h"                   // reshape_op
 #include "_Detail.h"
 
 namespace lucid {
@@ -115,6 +118,20 @@ public:
         return grads;
     }
 
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        // Concatenation's adjoint is the split that undoes it: each input
+        // gets back the window it wrote.
+        std::vector<TensorImplPtr> grads;
+        grads.reserve(input_shapes_.size());
+        std::int64_t offset = 0;
+        for (const auto& shape : input_shapes_) {
+            const std::int64_t len = shape[static_cast<std::size_t>(axis_)];
+            grads.push_back(narrow_op(grad_out, axis_, offset, len));
+            offset += len;
+        }
+        return grads;
+    }
+
     void validate_versions() override {
         for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
             check_version_match(input_tensors_[i],
@@ -162,6 +179,19 @@ public:
             // Reshape (drop the size-1 stacked dimension) to recover input_shape_.
             grads.push_back(backend::Dispatcher::for_device(device_).reshape(piece, slice_shape,
                                                                              input_shape_, dtype_));
+        }
+        return grads;
+    }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        // Stacking's adjoint: take each single-element slab and drop the
+        // axis the stack introduced.
+        std::vector<std::int64_t> target(input_shape_.begin(), input_shape_.end());
+        std::vector<TensorImplPtr> grads;
+        grads.reserve(input_tensors_.size());
+        for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
+            auto slab = narrow_op(grad_out, axis_, static_cast<std::int64_t>(i), 1);
+            grads.push_back(reshape_op(slab, target));
         }
         return grads;
     }
@@ -214,6 +244,25 @@ public:
         }
         return {insert_axis_slice_storage(slice_grad, slice_shape_, input_shapes_[0], axis_,
                                           offset_, dtype_, device_)};
+    }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        // Putting a slab back where it was cut from is zero-padding: the
+        // gradient sits at ``offset_`` along ``axis_`` and everything
+        // around it is zero.  pad_op carries its own graph-mode formula,
+        // so the pair narrow/pad are each other's adjoint in both modes.
+        TensorImplPtr g = grad_out;
+        if (squeeze_axis_) {
+            std::vector<std::int64_t> restored(slice_shape_.begin(), slice_shape_.end());
+            g = reshape_op(g, restored);
+        }
+        const auto axis = static_cast<std::size_t>(axis_);
+        const std::int64_t taken = slice_shape_[axis];
+        const std::int64_t whole = input_shapes_[0][axis];
+
+        std::vector<std::pair<std::int64_t, std::int64_t>> width(input_shapes_[0].size(), {0, 0});
+        width[axis] = {offset_, whole - offset_ - taken};
+        return {pad_op(g, std::move(width), 0.0)};
     }
 };
 

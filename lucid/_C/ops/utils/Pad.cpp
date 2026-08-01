@@ -31,6 +31,7 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../composite/Indexing.h"  // narrow_op
 #include "_Detail.h"
 
 namespace lucid {
@@ -69,6 +70,17 @@ public:
             current_shape = std::move(next_shape);
         }
         return {std::move(current)};
+    }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        // Padding's adjoint is a crop: take back exactly the window the
+        // forward wrote the input into, one axis at a time.
+        TensorImplPtr current = grad_out;
+        for (std::size_t d = 0; d < input_shapes_[0].size(); ++d) {
+            current =
+                narrow_op(current, static_cast<int>(d), pad_width_[d].first, input_shapes_[0][d]);
+        }
+        return {current};
     }
 };
 

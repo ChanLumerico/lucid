@@ -64,6 +64,10 @@ public:
     Shape output_shape_;
     // Backward — sums ``grad_out`` across broadcast axes back to the input shape.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode twin: the same sum, written in ops so the result can be
+    // differentiated again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Collapse a contiguous range of axes into a single dimension.

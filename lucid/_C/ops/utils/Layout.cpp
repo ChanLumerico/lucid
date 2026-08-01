@@ -37,6 +37,7 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../ufunc/Reductions.h"  // sum_op
 #include "Contiguous.h"
 #include "View.h"
 #include "_Detail.h"
@@ -109,6 +110,29 @@ Storage reduce_broadcast(const Storage& grad,
 // set is computed by the backend from input_shape_ vs. output_shape_.
 std::vector<Storage> BroadcastBackward::apply(Storage grad_out) {
     return {reduce_broadcast(grad_out, input_shape_, output_shape_, dtype_, device_)};
+}
+
+std::vector<TensorImplPtr> BroadcastBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // The adjoint of an expansion is a sum over exactly the axes it
+    // invented.  A broadcast left-pads the input shape with 1s, so an axis
+    // was invented when the padded input is 1 there and the output is not.
+    const std::size_t out_rank = output_shape_.size();
+    const std::size_t in_rank = input_shape_.size();
+    const std::size_t pad = out_rank - in_rank;
+
+    std::vector<int> axes;
+    for (std::size_t i = 0; i < out_rank; ++i) {
+        const std::int64_t in_dim = (i < pad) ? 1 : input_shape_[i - pad];
+        if (in_dim == 1 && output_shape_[i] != 1)
+            axes.push_back(static_cast<int>(i));
+    }
+
+    TensorImplPtr reduced = grad_out;
+    if (!axes.empty())
+        reduced = sum_op(reduced, axes, /*keepdims=*/true);
+    // Drop the padded axes and restore the input's own rank.
+    std::vector<std::int64_t> target(input_shape_.begin(), input_shape_.end());
+    return {reshape_op(reduced, target)};
 }
 
 LUCID_REGISTER_OP(BroadcastBackward)
