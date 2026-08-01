@@ -206,6 +206,12 @@ public:
     // std::vector<Storage>
     //     Three-element vector ``{dx, d_gamma, d_beta}``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward.  Rebuilds the batch statistics from the saved
+    // input: the stashed mean and rstd are plain Storages, so reusing them
+    // would drop d(rstd)/dx from the second derivative while leaving the
+    // first one exact.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Convenience alias: BatchNormNdBackward specialised to 1-D spatial inputs
