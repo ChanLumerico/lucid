@@ -41,7 +41,8 @@ namespace lucid {
 // K_{N-1}$ window of the (optionally zero-padded) input:
 // $y[b, c, o] = \max_{0 \le k < K} x[b, c, s\,o + k]$ (extended to
 // $N$ axes).  The forward pass also produces a tensor of *argmax*
-// indices into the flat padded-input buffer; these are saved as
+// plane-local indices into the *unpadded* input (size prod(S)), with a
+// negative entry marking a window that saw only padding; these are saved as
 // ``saved_argmax_`` and consumed by the backward pass to route each
 // gradient back to exactly one input element.
 //
@@ -65,10 +66,14 @@ template <int N>
 class LUCID_API MaxPoolNdBackward : public FuncOp<MaxPoolNdBackward<N>, 1> {
 public:
     static const OpSchema schema_v1;
-    int K_[N];              // Pooling window size per axis.
-    int stride_[N];         // Stride per axis (already resolved from 0 in forward).
-    int pad_[N];            // Zero-padding per axis.
-    Storage saved_argmax_;  // Flat argmax indices, same shape as output.
+    int K_[N];       // Pooling window size per axis.
+    int stride_[N];  // Stride per axis (already resolved from 0 in forward).
+    int pad_[N];     // Zero-padding per axis.
+    // Winner index per output element, plane-local into the unpadded
+    // input; -1 where the window covered only padding.  Verified against
+    // cpu::max_pool2d_backward_typed, which writes dxb[idx] += gb[o] with
+    // dxb offset by (b*C + c) * H * W and no crop.
+    Storage saved_argmax_;
 
     // Forward — pool each window down to its maximum element.
     //
