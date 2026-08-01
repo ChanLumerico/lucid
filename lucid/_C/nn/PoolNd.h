@@ -75,6 +75,9 @@ public:
     // dxb offset by (b*C + c) * H * W and no crop.
     Storage saved_argmax_;
 
+    // Graph-mode backward — the same scatter, written in ops.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
     // Forward — pool each window down to its maximum element.
     //
     // Parameters
@@ -147,6 +150,11 @@ public:
     int K_[N];
     int stride_[N];
     int pad_[N];
+
+    // Graph-mode backward.  Covers the non-overlapping, unpadded window —
+    // which is what ``avg_pool2d(x, k)`` means — and refuses the rest
+    // rather than answering it wrongly; see the definition.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 
     // Forward — emit the mean of each window.
     //

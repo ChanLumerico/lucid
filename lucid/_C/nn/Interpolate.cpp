@@ -31,6 +31,8 @@
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/ufunc/Reductions.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -173,6 +175,27 @@ InterpolateNearestBackward2D::forward(const TensorImplPtr& input, int H_out, int
 std::vector<Storage> InterpolateNearestBackward2D::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return {be.interpolate_nearest_2d_backward(grad_out, orig_shape_, H_out_, W_out_, dtype_)};
+}
+
+std::vector<TensorImplPtr>
+InterpolateNearestBackward2D::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Nearest-neighbour upscaling by an integer factor repeats each input
+    // pixel over a k x k block, so its adjoint sums each block back down.
+    // That is the mirror of the expand this file's forward performs, and it
+    // is expressible as reshape + sum.  A non-integer ratio maps blocks of
+    // uneven size and is refused rather than approximated.
+    if (H_out_ % H_in_ != 0 || W_out_ % W_in_ != 0)
+        ErrorBuilder("interpolate")
+            .not_implemented("create_graph=True needs an integer scale factor for nearest mode");
+    const std::int64_t kh = H_out_ / H_in_;
+    const std::int64_t kw = W_out_ / W_in_;
+
+    const std::int64_t n = orig_shape_[0];
+    const std::int64_t ch = orig_shape_[1];
+    auto split = reshape_op(grad_out, {n, ch, H_in_, kh, W_in_, kw});
+    auto summed = sum_op(split, std::vector<int>{3, 5}, /*keepdims=*/false);
+    std::vector<std::int64_t> orig(orig_shape_.begin(), orig_shape_.end());
+    return {reshape_op(summed, orig)};
 }
 
 TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out) {

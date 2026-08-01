@@ -215,6 +215,10 @@ public:
     int H_in_ = 0, W_in_ = 0, H_out_ = 0, W_out_ = 0;
     Shape orig_shape_;  // Full (N, C, H_in, W_in) shape for backward.
 
+    // Graph-mode backward.  Covers integer upscaling — the case a decoder
+    // actually uses — and refuses anything else by name; see the definition.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
     // Compute the nearest-neighbour resize with autograd wiring.
     //
     // Parameters

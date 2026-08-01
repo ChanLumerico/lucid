@@ -34,7 +34,15 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Compare.h"
+#include "../ops/bfunc/Div.h"
+#include "../ops/bfunc/Maximum.h"
+#include "../ops/bfunc/Mul.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Astype.h"
+#include "../ops/utils/Layout.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -240,9 +248,89 @@ std::vector<Storage> AvgPoolNdBackward<N>::apply(Storage grad_out) {
                                     this->dtype_)};
 }
 
+template <int N>
+std::vector<TensorImplPtr> MaxPoolNdBackward<N>::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Max pooling sends each output's gradient back to the one input it came
+    // from, so the adjoint is a scatter at the saved winners.  Those are
+    // integers with no derivative, which is why reusing them costs nothing —
+    // unlike a saved statistic, which depends on the input and has to be
+    // recomputed.
+    const Shape& xs = this->input_shapes_[0];
+    std::int64_t planes = xs[0] * xs[1];
+    std::int64_t in_plane = 1, out_plane = 1;
+    for (std::size_t i = 2; i < xs.size(); ++i)
+        in_plane *= xs[i];
+    for (std::size_t i = 2; i < this->out_shape_.size(); ++i)
+        out_plane *= this->out_shape_[i];
+
+    const std::vector<std::int64_t> flat_out{planes, out_plane};
+
+    // The index stays I32: scatter_add's backend reads it as int32_t and
+    // never sees a dtype, so widening it here would be read back at half
+    // width — the gradient lands on the wrong elements and nothing raises.
+    auto idx = std::make_shared<TensorImpl>(this->saved_argmax_, this->out_shape_, Dtype::I32,
+                                            this->device_, false);
+    idx = reshape_op(idx, flat_out);
+    auto g = reshape_op(grad_out, flat_out);
+
+    // A window that saw only padding has no winner.  Clamping the index and
+    // masking the gradient says that in dtypes both streams support; the CPU
+    // backend has no integer ``where``.
+    auto zeros_idx = zeros_like_op(idx);
+    auto mask = astype_op(greater_equal_op(idx, zeros_idx), this->dtype_);
+    auto safe_idx = maximum_op(idx, zeros_idx);
+    auto src = mul_op(g, mask);
+
+    std::vector<std::int64_t> in_shape(xs.begin(), xs.end());
+    auto base = zeros_op(Shape{planes, in_plane}, this->dtype_, this->device_);
+    auto dx = scatter_add_op(base, safe_idx, src, /*dim=*/1);
+    return {reshape_op(dx, in_shape)};
+}
+
 template class MaxPoolNdBackward<1>;
 template class MaxPoolNdBackward<2>;
 template class MaxPoolNdBackward<3>;
+template <int N>
+std::vector<TensorImplPtr> AvgPoolNdBackward<N>::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Average pooling spreads each output's gradient evenly over its window,
+    // so with non-overlapping unpadded windows the adjoint is exactly a
+    // repeat: expand each output element across its K positions and divide
+    // by the window size.  Overlapping or padded windows are a
+    // conv-transpose against a constant kernel instead, and conv-transpose
+    // has no graph-mode formula yet — so those are refused by name rather
+    // than answered with the wrong tensor.
+    const Shape& xs = this->input_shapes_[0];
+    for (int i = 0; i < N; ++i) {
+        const bool tiles = this->stride_[i] == this->K_[i] && this->pad_[i] == 0 &&
+                           xs[static_cast<std::size_t>(2 + i)] ==
+                               this->out_shape_[static_cast<std::size_t>(2 + i)] * this->K_[i];
+        if (!tiles)
+            ErrorBuilder("avg_pool")
+                .not_implemented(
+                    "create_graph=True needs non-overlapping, unpadded windows that tile "
+                    "the input exactly (stride == kernel, padding == 0)");
+    }
+
+    // (B, C, O0, O1, ...) -> (B, C, O0, 1, O1, 1, ...) -> broadcast the 1s to
+    // K -> (B, C, O0*K0, O1*K1, ...).
+    std::vector<std::int64_t> split{xs[0], xs[1]};
+    std::vector<std::int64_t> blown{xs[0], xs[1]};
+    for (int i = 0; i < N; ++i) {
+        split.push_back(this->out_shape_[static_cast<std::size_t>(2 + i)]);
+        split.push_back(1);
+        blown.push_back(this->out_shape_[static_cast<std::size_t>(2 + i)]);
+        blown.push_back(this->K_[i]);
+    }
+    std::int64_t window = 1;
+    for (int i = 0; i < N; ++i)
+        window *= this->K_[i];
+
+    auto spread = broadcast_to_op(reshape_op(grad_out, split), Shape(blown.begin(), blown.end()));
+    std::vector<std::int64_t> in_shape(xs.begin(), xs.end());
+    auto dx = reshape_op(spread, in_shape);
+    return {div_op(dx, full_like_op(dx, static_cast<double>(window)))};
+}
+
 template class AvgPoolNdBackward<1>;
 template class AvgPoolNdBackward<2>;
 template class AvgPoolNdBackward<3>;
