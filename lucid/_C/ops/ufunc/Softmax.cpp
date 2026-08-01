@@ -20,7 +20,10 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Mul.h"
+#include "../bfunc/Sub.h"
 #include "../bfunc/_BinaryOp.h"
+#include "Reductions.h"
 
 namespace lucid {
 
@@ -72,6 +75,17 @@ std::vector<Storage> SoftmaxBackward::apply(Storage grad_out) {
 TensorImplPtr softmax_op(const TensorImplPtr& a, int axis) {
     return SoftmaxBackward::forward(a, axis);
 }
+std::vector<TensorImplPtr> SoftmaxBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // dL/dx = p * (g - sum(g * p))  along axis_, with p recomputed so it
+    // carries its own dependence on x.
+    const auto& x = saved_impl_inputs_[0];
+    if (!x)
+        ErrorBuilder("softmax").fail("graph-mode backward is missing its saved input");
+    auto p = softmax_op(x, axis_);
+    auto dot = sum_op(mul_op(grad_out, p), std::vector<int>{axis_}, /*keepdims=*/true);
+    return {mul_op(p, sub_op(grad_out, dot))};
+}
+
 LUCID_REGISTER_OP(SoftmaxBackward)
 
 // log_softmax — ForceFP32 for the same numerical stability reason as softmax.
@@ -117,6 +131,16 @@ std::vector<Storage> LogSoftmaxBackward::apply(Storage grad_out) {
 TensorImplPtr log_softmax_op(const TensorImplPtr& a, int axis) {
     return LogSoftmaxBackward::forward(a, axis);
 }
+std::vector<TensorImplPtr> LogSoftmaxBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // dL/dx = g - softmax(x) * sum(g)  along axis_.
+    const auto& x = saved_impl_inputs_[0];
+    if (!x)
+        ErrorBuilder("log_softmax").fail("graph-mode backward is missing its saved input");
+    auto p = softmax_op(x, axis_);
+    auto total = sum_op(grad_out, std::vector<int>{axis_}, /*keepdims=*/true);
+    return {sub_op(grad_out, mul_op(p, total))};
+}
+
 LUCID_REGISTER_OP(LogSoftmaxBackward)
 
 }  // namespace lucid

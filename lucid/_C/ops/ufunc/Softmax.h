@@ -95,6 +95,12 @@ public:
     // which evaluates $p \odot (\partial L/\partial y - \langle p,
     // \partial L/\partial y\rangle)$ in a single fused pass along ``axis_``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward.  Recomputes the forward from the saved
+    // input rather than reusing the saved output Storage: the adjoint
+    // depends on that output, so a data-only stand-in would silently
+    // drop the whole d(out)/d(in) path from the second derivative.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Numerically stable softmax $p_i = e^{x_i} / \sum_j e^{x_j}$ along ``axis``.
@@ -187,6 +193,12 @@ public:
     // which computes $\partial L/\partial x = \partial L/\partial y
     // - e^{y}\,\sum_{\text{axis}}\partial L/\partial y$.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward.  Recomputes the forward from the saved
+    // input rather than reusing the saved output Storage: the adjoint
+    // depends on that output, so a data-only stand-in would silently
+    // drop the whole d(out)/d(in) path from the second derivative.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Numerically stable log-softmax $y = x - \mathrm{logsumexp}(x, \text{axis})$.

@@ -33,7 +33,13 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Mul.h"
+#include "../bfunc/Sub.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../gfunc/Gfunc.h"
+#include "../utils/Layout.h"
+#include "../utils/View.h"
+#include "Reductions.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -74,6 +80,32 @@ public:
         Storage scaled = mul_scalar_storage(g_b, 2.0 / (double)count_, n, dtype_, device_);
         Storage dx = multiply_storages(centered, scaled, n, dtype_, device_);
         return {std::move(dx)};
+    }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        // dVar/dx = (2 / count) * (x - mean) * g, with the mean recomputed
+        // from the input so it keeps its own dependence on x — the saved
+        // mean is data only, and reusing it would drop that term from the
+        // second derivative without anything looking wrong.
+        const auto& x = saved_impl_inputs_[0];
+        if (!x)
+            ErrorBuilder("var").fail("graph-mode backward is missing its saved input");
+
+        auto mean = mean_op(x, axes_, /*keepdims=*/true);
+        auto centered = sub_op(x, mean);
+
+        // Put the reduced gradient back onto the input's shape.
+        TensorImplPtr g = grad_out;
+        if (!keepdims_ && !axes_.empty()) {
+            std::vector<std::int64_t> keep(input_shape_.begin(), input_shape_.end());
+            for (int ax : axes_)
+                keep[static_cast<std::size_t>(ax)] = 1;
+            g = reshape_op(g, keep);
+        }
+        g = broadcast_to_op(g, input_shape_);
+
+        auto scale = full_like_op(x, 2.0 / static_cast<double>(count_));
+        return {mul_op(centered, mul_op(g, scale))};
     }
 };
 
