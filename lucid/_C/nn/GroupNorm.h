@@ -104,6 +104,9 @@ public:
     int B_ = 0, C_ = 0, G_ = 0;
     // Per-axis spatial sizes ``[S_0, S_1, ...]``.
     std::vector<int> spatial_dims_;
+    // Needed to rebuild rstd from x in graph mode; the saved rstd is a
+    // plain Storage and would drop d(rstd)/dx from the second derivative.
+    double eps_ = 1e-5;
 
     // Run the forward pass.
     //
@@ -168,6 +171,10 @@ public:
     // std::vector<Storage>
     //     Three-element vector ``{dx, d_gamma, d_beta}``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward — the normalisation is rebuilt from the saved
+    // inputs so all three gradients stay differentiable.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public free-function entry point for Group Normalization.

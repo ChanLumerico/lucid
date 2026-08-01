@@ -26,7 +26,13 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Add.h"
+#include "../ops/bfunc/Mul.h"
+#include "../ops/bfunc/Sub.h"
+#include "../ops/gfunc/Gfunc.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/ufunc/Exponential.h"
+#include "../ops/ufunc/Reductions.h"
 
 namespace lucid {
 
@@ -130,6 +136,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     bwd->saved_rstd_ = std::move(forward[2]);
     bwd->outer_ = outer;
     bwd->N_ = N;
+    bwd->eps_ = eps;
     // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
     kernel::NaryKernel<LayerNormBackward, 3>::wire_autograd(std::move(bwd),
                                                             {x_eff, gamma_eff, beta_eff}, out);
@@ -141,6 +148,44 @@ std::vector<Storage> LayerNormBackward::apply(Storage grad_out) {
     return backend::Dispatcher::for_device(device_).layer_norm_backward(
         saved_inputs_[0], saved_inputs_[1], saved_mean_, saved_rstd_, grad_out, outer_, N_,
         input_shapes_[0], input_shapes_[1], input_shapes_[2], dtype_);
+}
+
+std::vector<TensorImplPtr> LayerNormBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    const auto& x = saved_impl_inputs_[0];
+    const auto& gamma = saved_impl_inputs_[1];
+    if (!x || !gamma)
+        ErrorBuilder("layer_norm").fail("graph-mode backward is missing a saved input");
+
+    // The normalised axes are the trailing ones gamma spans.
+    const std::size_t rank = input_shapes_[0].size();
+    const std::size_t norm_rank = input_shapes_[1].size();
+    std::vector<int> dims;
+    for (std::size_t i = rank - norm_rank; i < rank; ++i)
+        dims.push_back(static_cast<int>(i));
+    std::vector<int> outer_dims;
+    for (std::size_t i = 0; i + norm_rank < rank; ++i)
+        outer_dims.push_back(static_cast<int>(i));
+
+    // Rebuild the normalisation rather than reusing the saved mean/rstd:
+    // both depend on x, and a Storage stand-in would drop that path.
+    auto mu = mean_op(x, dims, /*keepdims=*/true);
+    auto xc = sub_op(x, mu);
+    auto var = mean_op(mul_op(xc, xc), dims, /*keepdims=*/true);
+    auto rstd = rsqrt_op(add_op(var, full_like_op(var, eps_)));
+    auto xhat = mul_op(xc, rstd);
+
+    auto gg = mul_op(grad_out, gamma);
+    auto term = sub_op(gg, mean_op(gg, dims, /*keepdims=*/true));
+    term = sub_op(term, mul_op(xhat, mean_op(mul_op(gg, xhat), dims, /*keepdims=*/true)));
+    auto dx = mul_op(rstd, term);
+
+    auto d_gamma = mul_op(grad_out, xhat);
+    auto d_beta = grad_out;
+    if (!outer_dims.empty()) {
+        d_gamma = sum_op(d_gamma, outer_dims, /*keepdims=*/false);
+        d_beta = sum_op(d_beta, outer_dims, /*keepdims=*/false);
+    }
+    return {dx, d_gamma, d_beta};
 }
 
 TensorImplPtr layer_norm_op(const TensorImplPtr& x,

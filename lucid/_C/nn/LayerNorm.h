@@ -98,6 +98,11 @@ public:
     std::size_t outer_ = 0;
     // Product of normalised (trailing) dims of ``x`` (== numel(gamma)).
     std::size_t N_ = 0;
+    // Kept so the graph-mode backward can rebuild rstd from x.  The saved
+    // rstd is a plain Storage and carries no dependence on the input, so
+    // reusing it would cost the second derivative its whole d(rstd)/dx
+    // term without anything looking wrong.
+    double eps_ = 1e-5;
 
     // Run the forward pass.
     //
@@ -158,6 +163,10 @@ public:
     // std::vector<Storage>
     //     Three-element vector ``{dx, d_gamma, d_beta}``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward — the same three gradients, recomputed from
+    // the saved inputs so each stays differentiable.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public free-function entry point for Layer Normalization.
