@@ -11,11 +11,11 @@ while ``NeuralODEConfig``'s example raised ``ValueError`` on the first
 line and claimed a ``data_dim`` the code never returns — that checker
 validates presence and shape, not whether an example is true.
 
-Scoped to ``lucid.models.generative`` on purpose.  The rest of the
-package is not clean yet: ``lucid/optim``'s examples are deliberate
-sketches over an undefined ``model``, and ``lucid/linalg``'s were written
-against an older tensor repr.  Both are worth a sweep; neither is a
-reason to gate nothing.
+Scoped to ``lucid.models.generative`` because that is where this file
+lives, not because the rest is unclean — ``lucid/linalg``,
+``lucid/autograd`` and ``lucid/optim`` were swept and now run too.  A
+package-wide gate is the obvious next step; it needs the model zoo's
+slower examples costed first.
 """
 
 import contextlib

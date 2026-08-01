@@ -68,6 +68,11 @@ class RMSprop(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.RMSprop(model.parameters(), lr=1e-3, alpha=0.99)
     >>> optimizer.zero_grad()
@@ -173,6 +178,11 @@ class Adagrad(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adagrad(model.parameters(), lr=1e-2)
     >>> optimizer.zero_grad()
@@ -267,6 +277,11 @@ class Adadelta(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adadelta(model.parameters(), rho=0.9, eps=1e-6)
     >>> optimizer.zero_grad()
@@ -359,6 +374,11 @@ class Adamax(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adamax(model.parameters(), lr=2e-3)
     >>> optimizer.zero_grad()
@@ -468,6 +488,11 @@ class RAdam(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.RAdam(model.parameters(), lr=1e-3)
     >>> optimizer.zero_grad()
@@ -560,6 +585,11 @@ class NAdam(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.NAdam(model.parameters(), lr=2e-3)
     >>> optimizer.zero_grad()
@@ -663,6 +693,11 @@ class ASGD(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.ASGD(model.parameters(), lr=1e-2, t0=1e5)
     >>> optimizer.zero_grad()
@@ -771,6 +806,11 @@ class Rprop(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.Rprop(model.parameters(), lr=1e-2, etas=(0.5, 1.2))
     >>> optimizer.zero_grad()
@@ -874,10 +914,12 @@ class SparseAdam(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> import lucid.optim as optim
-    >>> optimizer = optim.SparseAdam(
-    ...     model.embedding.parameters(), lr=1e-3
-    ... )
+    >>> embedding = nn.Embedding(100, 8)
+    >>> loss = embedding(lucid.tensor([[3, 17, 3]])).sum()
+    >>> optimizer = optim.SparseAdam(embedding.parameters(), lr=1e-3)
     >>> optimizer.zero_grad()
     >>> loss.backward()
     >>> optimizer.step()
@@ -928,8 +970,13 @@ class SparseAdam(Optimizer):
 
         Examples
         --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> embedding = nn.Embedding(100, 8)
+        >>> optimizer = optim.SparseAdam(embedding.parameters(), lr=1e-3)
         >>> optimizer.zero_grad()
-        >>> loss = model(inputs)
+        >>> loss = embedding(lucid.tensor([[3, 17, 3]])).sum()
         >>> loss.backward()
         >>> optimizer.step()
         """

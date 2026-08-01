@@ -96,14 +96,20 @@ class LBFGS(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> x = lucid.randn(1, 4)
+    >>> y = lucid.zeros((1, 2))
+    >>> criterion = nn.MSELoss()
     >>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)
     >>> def closure():
     ...     optimizer.zero_grad()
     ...     loss = criterion(model(x), y)
     ...     loss.backward()
     ...     return loss
-    >>> optimizer.step(closure)
+    >>> loss = optimizer.step(closure)   # step returns the closure's loss
     """
 
     def __init__(
@@ -323,12 +329,20 @@ class LBFGS(Optimizer):
 
         Examples
         --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> model = nn.Linear(4, 2)
+        >>> x = lucid.randn(1, 4)
+        >>> y = lucid.zeros((1, 2))
+        >>> criterion = nn.MSELoss()
+        >>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)
         >>> def closure():
         ...     optimizer.zero_grad()
         ...     loss = criterion(model(x), y)
         ...     loss.backward()
         ...     return loss
-        >>> optimizer.step(closure)
+        >>> loss = optimizer.step(closure)   # step returns the closure's loss
         """
         for group in self.param_groups:
             for p in cast(list[Tensor], group["params"]):
@@ -376,13 +390,21 @@ class LBFGS(Optimizer):
 
         Examples
         --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> model = nn.Linear(4, 2)
+        >>> x = lucid.randn(1, 4)
+        >>> y = lucid.zeros((1, 2))
+        >>> criterion = nn.MSELoss()
+        >>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)
         >>> def closure():
         ...     optimizer.zero_grad()
         ...     output = model(x)
         ...     loss = criterion(output, y)
         ...     loss.backward()
         ...     return loss
-        >>> optimizer.step(closure)
+        >>> loss = optimizer.step(closure)   # step returns the closure's loss
         """
 
         if closure is None:
