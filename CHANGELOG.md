@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add Flow Matching, simulation-free flow training
 
+- add the Rectified Flow family
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

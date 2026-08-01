@@ -80,6 +80,15 @@ from lucid.models.generative.flow_matching import (
     flow_matching_cifar_gen, flow_matching_imagenet32_gen,
     flow_matching_imagenet64_gen, flow_matching_imagenet128_gen,
 )
+# 2023 — Rectified Flow (Liu, Gong & Liu)
+from lucid.models.generative.rectified_flow import (
+    RectifiedFlowConfig, RectifiedFlowModel, RectifiedFlowForImageGeneration,
+    rectified_flow_cifar, rectified_flow_bedroom, rectified_flow_church,
+    rectified_flow_celeba_hq, rectified_flow_afhq_cat,
+    rectified_flow_cifar_gen, rectified_flow_bedroom_gen,
+    rectified_flow_church_gen, rectified_flow_celeba_hq_gen,
+    rectified_flow_afhq_cat_gen,
+)
 # 2019 — NCSN (Song & Ermon)
 from lucid.models.generative.ncsn import (
     NCSNConfig, NCSNModel, NCSNForImageGeneration,
@@ -705,6 +714,13 @@ __all__ = [
     "flow_matching_imagenet64", "flow_matching_imagenet128",
     "flow_matching_cifar_gen", "flow_matching_imagenet32_gen",
     "flow_matching_imagenet64_gen", "flow_matching_imagenet128_gen",
+    # ── Generative (2023) Rectified Flow ──────────────────────────────────────
+    "RectifiedFlowConfig", "RectifiedFlowModel", "RectifiedFlowForImageGeneration",
+    "rectified_flow_cifar", "rectified_flow_bedroom", "rectified_flow_church",
+    "rectified_flow_celeba_hq", "rectified_flow_afhq_cat",
+    "rectified_flow_cifar_gen", "rectified_flow_bedroom_gen",
+    "rectified_flow_church_gen", "rectified_flow_celeba_hq_gen",
+    "rectified_flow_afhq_cat_gen",
     # ── Generative (2019) NCSN ────────────────────────────────────────────────
     "NCSNConfig", "NCSNModel", "NCSNForImageGeneration",
     "ncsn_cifar", "ncsn_celeba",

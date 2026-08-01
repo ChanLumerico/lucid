@@ -342,5 +342,15 @@
   "flow_matching_imagenet32": "6b1790065f54a133",
   "flow_matching_imagenet32_gen": "6b1790065f54a133",
   "flow_matching_imagenet64": "6b1790065f54a133",
-  "flow_matching_imagenet64_gen": "6b1790065f54a133"
+  "flow_matching_imagenet64_gen": "6b1790065f54a133",
+  "rectified_flow_afhq_cat": "09080681dad2a057",
+  "rectified_flow_afhq_cat_gen": "09080681dad2a057",
+  "rectified_flow_bedroom": "09080681dad2a057",
+  "rectified_flow_bedroom_gen": "09080681dad2a057",
+  "rectified_flow_celeba_hq": "09080681dad2a057",
+  "rectified_flow_celeba_hq_gen": "09080681dad2a057",
+  "rectified_flow_church": "09080681dad2a057",
+  "rectified_flow_church_gen": "09080681dad2a057",
+  "rectified_flow_cifar": "09080681dad2a057",
+  "rectified_flow_cifar_gen": "09080681dad2a057"
 }

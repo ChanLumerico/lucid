@@ -226,6 +226,131 @@ def test_flow_matching_trains_one_step_on_device(device):
         assert str(g.device) == f"device('{device}')"
 
 
+def test_rectified_flow_matches_across_devices():
+    """Path, target, a fixed-noise solve, and the straightness measure.
+
+    ``straightness`` is included because it is the only quantity here that
+    both solves *and* reduces over the whole batch, so a stray CPU tensor
+    inside the loop would show up as a disagreement rather than as a
+    crash.
+    """
+    cpu, metal = _paired(
+        "rectified_flow_cifar",
+        sample_size=8,
+        base_channels=16,
+        channel_mult=(1, 2),
+        num_res_blocks=1,
+        attention_resolutions=(),
+        resnet_groups=8,
+        init_scale=1.0,
+    )
+    x1 = lucid.randn((2, 3, 8, 8))
+    x0 = lucid.randn((2, 3, 8, 8))
+    t = lucid.tensor([0.3, 0.7])
+    g1, g0, gt = x1.to("metal"), x0.to("metal"), t.to("metal")
+
+    _agree(cpu.path_sample(x1, x0, t), metal.path_sample(g1, g0, gt), 1e-6, "path")
+    _agree(
+        cpu.conditional_target(x1, x0, t),
+        metal.conditional_target(g1, g0, gt),
+        1e-6,
+        "target",
+    )
+    _agree(
+        cpu.sample(noise=x0, steps=8), metal.sample(noise=g0, steps=8), 1e-4, "sample"
+    )
+    _agree(cpu.one_step(x0), metal.one_step(g0), 1e-4, "one_step")
+
+    s_cpu = float(cpu.straightness(x0, steps=8))
+    s_metal = float(metal.straightness(g0, steps=8))
+    assert abs(s_cpu - s_metal) / max(abs(s_cpu), 1e-8) < 1e-3
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_rectified_flow_reflow_round_trips_on_device(device):
+    """Generate couplings, then train on them — both halves must stay put.
+
+    This is the one training path in the flow families that contains a
+    solve, so it is where a device leak would be easiest to miss.
+    """
+    lucid.manual_seed(0)
+    model = M.create_model(
+        "rectified_flow_cifar_gen",
+        sample_size=8,
+        base_channels=16,
+        channel_mult=(1, 2),
+        num_res_blocks=1,
+        attention_resolutions=(),
+        resnet_groups=8,
+        init_scale=1.0,
+    ).to(device)
+
+    model.eval()
+    z0, z1 = model.reflow_pairs(n_samples=2, device=device, steps=4)
+    assert str(z0.device) == f"device('{device}')"
+    assert str(z1.device) == f"device('{device}')"
+
+    model.train()
+    optimizer = lucid.optim.SGD(model.parameters(), lr=1e-4)
+    out = model(z1, noise=z0)
+    optimizer.zero_grad()
+    out.loss.backward()
+    optimizer.step()
+
+    grads = [p.grad for p in model.parameters() if p.grad is not None]
+    assert grads, "rectified_flow: no parameter received a gradient"
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_rectified_flow_trains_one_step_on_device(device):
+    """The objective is simulation-free, so no solve should appear here."""
+    lucid.manual_seed(0)
+    model = M.create_model(
+        "rectified_flow_cifar_gen",
+        sample_size=8,
+        base_channels=16,
+        channel_mult=(1, 2),
+        num_res_blocks=1,
+        attention_resolutions=(),
+        resnet_groups=8,
+    ).to(device)
+    model.train()
+    optimizer = lucid.optim.SGD(model.parameters(), lr=1e-4)
+    out = model(lucid.randn((2, 3, 8, 8), device=device))
+    optimizer.zero_grad()
+    out.loss.backward()
+    optimizer.step()
+
+    assert model.nfe == 0
+    grads = [p.grad for p in model.parameters() if p.grad is not None]
+    assert grads, "rectified_flow: no parameter received a gradient"
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"
+
+
+def test_rectified_flow_high_resolution_path_matches_across_devices():
+    """Filtered resampling and both pyramids — buffers must travel with ``.to()``."""
+    cpu, metal = _paired(
+        "rectified_flow_afhq_cat",
+        sample_size=16,
+        base_channels=8,
+        channel_mult=(1, 2, 2),
+        num_res_blocks=1,
+        attention_resolutions=(4,),
+        init_scale=1.0,
+    )
+    x = lucid.randn((2, 3, 16, 16))
+    t = lucid.tensor(0.4)
+    _agree(
+        cpu(x, t).sample,
+        metal(x.to("metal"), t.to("metal")).sample,
+        1e-3,
+        "fir + pyramid field",
+    )
+
+
 @pytest.mark.parametrize("device", DEVICES)
 def test_neural_ode_trains_one_step_on_device(device):
     """Here a solve *is* the forward pass, and its gradients must stay put."""
