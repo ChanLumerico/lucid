@@ -7,6 +7,8 @@
     * Flow prior density / sampling (``flow_prior_log_prob`` /
       ``flow_prior_sample``)                                      — flows
     * Activation dispatch (``generative_activation``)             — all
+    * Vector-field divergence (``trace_probe`` /
+      ``hutchinson_divergence`` / ``exact_divergence``)      — continuous flows
 
 All operations are stateless and side-effect free.
 """
@@ -14,6 +16,7 @@ All operations are stateless and side-effect free.
 import math
 
 import lucid
+import lucid.autograd
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid._types import Reduction
@@ -27,6 +30,9 @@ __all__ = [
     "flow_prior_log_prob",
     "flow_prior_sample",
     "generative_activation",
+    "trace_probe",
+    "hutchinson_divergence",
+    "exact_divergence",
 ]
 
 
@@ -336,3 +342,152 @@ def make_sigma_schedule(
         for i in range(num_noise_levels)
     ]
     return lucid.tensor(sigmas, device=device)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Continuous flows: divergence of a vector field
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def trace_probe(like: Tensor, noise: str) -> Tensor:
+    r"""Draw a Hutchinson probe vector shaped like ``like``.
+
+    The estimator :math:`\operatorname{tr}(A) =
+    \mathbb{E}[\boldsymbol{\epsilon}^{\mathsf{T}} A \boldsymbol{\epsilon}]`
+    is unbiased for any :math:`\boldsymbol{\epsilon}` with zero mean and
+    identity covariance.  Both choices here qualify; Rademacher has the
+    lower variance of the two, measurably so.
+
+    Parameters
+    ----------
+    like : Tensor
+        Shape and device to match.
+    noise : {"rademacher", "gaussian"}
+        Which distribution to draw from.
+
+    Returns
+    -------
+    Tensor
+        Probe vector of the same shape as ``like``.
+
+    Raises
+    ------
+    ValueError
+        If ``noise`` names neither distribution.
+    """
+    if noise == "rademacher":
+        # sign() of a centred uniform: ±1 with equal probability.
+        return lucid.sign(lucid.rand(like.shape, device=like.device) - 0.5)
+    if noise == "gaussian":
+        return lucid.randn(like.shape, device=like.device)
+    raise ValueError(
+        f"trace_probe: noise must be 'rademacher' or 'gaussian', got {noise!r}"
+    )
+
+
+def hutchinson_divergence(
+    velocity: Tensor, state: Tensor, probe: Tensor, *, create_graph: bool = True
+) -> Tensor:
+    r"""Unbiased estimate of :math:`\operatorname{tr}(\partial v / \partial x)`.
+
+    One vector-Jacobian product regardless of the dimension, which is what
+    makes a continuous flow's log-density affordable at image scale.
+
+    Parameters
+    ----------
+    velocity : Tensor
+        ``(B, D)`` field value, differentiably connected to ``state``.
+    state : Tensor
+        ``(B, D)`` point the field was evaluated at; must require grad.
+    probe : Tensor
+        ``(B, D)`` probe held **fixed for the whole solve** — see
+        :func:`trace_probe`.  Redrawing it per step makes the right-hand
+        side stochastic, and an adaptive solver cannot converge on a
+        function that changes under it.
+    create_graph : bool, default=True
+        Keep the estimate differentiable.  Required when the divergence
+        is inside a training objective — a flow trained by maximum
+        likelihood differentiates through it, so the field's own ops must
+        supply second derivatives.  Set ``False`` when the density is only
+        being *reported*: the estimate then costs one ordinary backward
+        pass and places no second-derivative demand on the field, which is
+        what lets a convolutional field be scored at all.
+
+    Returns
+    -------
+    Tensor
+        ``(B,)`` estimate; differentiable only when ``create_graph``.
+
+    Notes
+    -----
+    Reference: Grathwohl et al., *"FFJORD: Free-Form Continuous Dynamics
+    for Scalable Reversible Generative Models"*, ICLR, 2019
+    (arXiv:1810.01367), §3.
+    """
+    (row,) = lucid.autograd.grad(
+        velocity,
+        [state],
+        grad_outputs=[probe],
+        create_graph=create_graph,
+        retain_graph=True,
+    )
+    if row is None:
+        raise RuntimeError(
+            "hutchinson_divergence: the field does not depend on the state; "
+            "the divergence is undefined"
+        )
+    return (row * probe).sum(dim=-1)
+
+
+def exact_divergence(
+    velocity: Tensor,
+    state: Tensor,
+    seeds: list[Tensor],
+    *,
+    create_graph: bool = True,
+) -> Tensor:
+    r"""Exact :math:`\operatorname{tr}(\partial v / \partial x)`, one VJP per dimension.
+
+    Seeding the backward pass with :math:`\mathbf{e}_i` returns row
+    :math:`i` of the Jacobian, whose :math:`i`-th entry is the diagonal
+    element wanted.  Linear in the dimension, which is why it is only
+    affordable at the scale the original continuous-flow experiments run
+    at.
+
+    Parameters
+    ----------
+    velocity : Tensor
+        ``(B, D)`` field value, differentiably connected to ``state``.
+    state : Tensor
+        ``(B, D)`` point the field was evaluated at; must require grad.
+    seeds : list of Tensor
+        ``D`` tensors of shape ``(B, D)``, the identity rows broadcast over
+        the batch.  ``grad_outputs`` has to match the output shape exactly,
+        so the rows cannot simply be broadcast in place.
+    create_graph : bool, default=True
+        Keep the trace differentiable — see :func:`hutchinson_divergence`.
+
+    Returns
+    -------
+    Tensor
+        ``(B,)`` exact trace; differentiable only when ``create_graph``.
+    """
+    total: Tensor | None = None
+    for index, seed in enumerate(seeds):
+        (row,) = lucid.autograd.grad(
+            velocity,
+            [state],
+            grad_outputs=[seed],
+            create_graph=create_graph,
+            retain_graph=True,
+        )
+        if row is None:
+            raise RuntimeError(
+                "exact_divergence: the field does not depend on the state; "
+                "the divergence is undefined"
+            )
+        piece = row[:, index]
+        total = piece if total is None else total + piece
+    if total is None:
+        raise ValueError("exact_divergence: seeds must not be empty")
+    return total

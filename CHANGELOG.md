@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - double-backward formulas for linear, silu and gelu
 
+- divergence helpers for continuous normalizing flows
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
