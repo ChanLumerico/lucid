@@ -67,6 +67,11 @@ from lucid.models.generative.realnvp import (
     realnvp_cifar_gen, realnvp_imagenet32_gen, realnvp_imagenet64_gen,
     realnvp_lsun_gen, realnvp_celeba_gen,
 )
+# 2018 — Neural ODE (Chen, Rubanova, Bettencourt & Duvenaud)
+from lucid.models.generative.neural_ode import (
+    NeuralODEConfig, NeuralODEModel, NeuralODEForImageGeneration,
+    neural_ode, neural_ode_gen,
+)
 # 2019 — NCSN (Song & Ermon)
 from lucid.models.generative.ncsn import (
     NCSNConfig, NCSNModel, NCSNForImageGeneration,
@@ -683,6 +688,9 @@ __all__ = [
     "realnvp_lsun", "realnvp_celeba",
     "realnvp_cifar_gen", "realnvp_imagenet32_gen", "realnvp_imagenet64_gen",
     "realnvp_lsun_gen", "realnvp_celeba_gen",
+    # ── Generative (2018) Neural ODE ──────────────────────────────────────────
+    "NeuralODEConfig", "NeuralODEModel", "NeuralODEForImageGeneration",
+    "neural_ode", "neural_ode_gen",
     # ── Generative (2019) NCSN ────────────────────────────────────────────────
     "NCSNConfig", "NCSNModel", "NCSNForImageGeneration",
     "ncsn_cifar", "ncsn_celeba",
