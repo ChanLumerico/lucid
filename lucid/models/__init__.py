@@ -72,6 +72,14 @@ from lucid.models.generative.neural_ode import (
     NeuralODEConfig, NeuralODEModel, NeuralODEForImageGeneration,
     neural_ode, neural_ode_gen,
 )
+# 2023 — Flow Matching (Lipman, Chen, Ben-Hamu, Nickel & Le)
+from lucid.models.generative.flow_matching import (
+    FlowMatchingConfig, FlowMatchingModel, FlowMatchingForImageGeneration,
+    flow_matching_cifar, flow_matching_imagenet32,
+    flow_matching_imagenet64, flow_matching_imagenet128,
+    flow_matching_cifar_gen, flow_matching_imagenet32_gen,
+    flow_matching_imagenet64_gen, flow_matching_imagenet128_gen,
+)
 # 2019 — NCSN (Song & Ermon)
 from lucid.models.generative.ncsn import (
     NCSNConfig, NCSNModel, NCSNForImageGeneration,
@@ -691,6 +699,12 @@ __all__ = [
     # ── Generative (2018) Neural ODE ──────────────────────────────────────────
     "NeuralODEConfig", "NeuralODEModel", "NeuralODEForImageGeneration",
     "neural_ode", "neural_ode_gen",
+    # ── Generative (2023) Flow Matching ───────────────────────────────────────
+    "FlowMatchingConfig", "FlowMatchingModel", "FlowMatchingForImageGeneration",
+    "flow_matching_cifar", "flow_matching_imagenet32",
+    "flow_matching_imagenet64", "flow_matching_imagenet128",
+    "flow_matching_cifar_gen", "flow_matching_imagenet32_gen",
+    "flow_matching_imagenet64_gen", "flow_matching_imagenet128_gen",
     # ── Generative (2019) NCSN ────────────────────────────────────────────────
     "NCSNConfig", "NCSNModel", "NCSNForImageGeneration",
     "ncsn_cifar", "ncsn_celeba",
