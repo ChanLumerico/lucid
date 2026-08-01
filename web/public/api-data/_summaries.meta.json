@@ -332,5 +332,15 @@
   "realnvp_imagenet64": "664f126a1dfb9d92",
   "realnvp_imagenet64_gen": "664f126a1dfb9d92",
   "realnvp_lsun": "664f126a1dfb9d92",
-  "realnvp_lsun_gen": "664f126a1dfb9d92"
+  "realnvp_lsun_gen": "664f126a1dfb9d92",
+  "neural_ode": "fa37aaeff2b872e0",
+  "neural_ode_gen": "fa37aaeff2b872e0",
+  "flow_matching_cifar": "6b1790065f54a133",
+  "flow_matching_cifar_gen": "6b1790065f54a133",
+  "flow_matching_imagenet128": "6b1790065f54a133",
+  "flow_matching_imagenet128_gen": "6b1790065f54a133",
+  "flow_matching_imagenet32": "6b1790065f54a133",
+  "flow_matching_imagenet32_gen": "6b1790065f54a133",
+  "flow_matching_imagenet64": "6b1790065f54a133",
+  "flow_matching_imagenet64_gen": "6b1790065f54a133"
 }

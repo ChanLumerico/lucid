@@ -372,6 +372,18 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models._utils._generative"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.module"
     },
     {
@@ -785,6 +797,14 @@
     {
       "kind": "module",
       "module": "lucid.diffeq._tableau"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._model"
     }
   ],
   "lucid.diffeq._adjoint.odeint_adjoint": [
@@ -1688,7 +1708,15 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._model"
     },
     {
       "kind": "module",
@@ -2468,6 +2496,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
     }
   ],
@@ -2482,7 +2514,15 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._model"
     },
     {
       "kind": "module",
@@ -2661,6 +2701,10 @@
     {
       "kind": "module",
       "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._model"
     },
     {
       "kind": "module",
@@ -2858,7 +2902,15 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.flow_matching._pretrained"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ncsn._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._pretrained"
     },
     {
       "kind": "module",
@@ -3193,6 +3245,94 @@
       "module": "lucid.models.weights"
     }
   ],
+  "lucid.models.generative.flow_matching": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.flow_matching._config.FlowMatchingConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._pretrained"
+    }
+  ],
+  "lucid.models.generative.flow_matching._model.FlowMatchingForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._pretrained"
+    }
+  ],
+  "lucid.models.generative.flow_matching._model.FlowMatchingModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._pretrained"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_cifar": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_cifar_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_imagenet128": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_imagenet128_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_imagenet32": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_imagenet32_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_imagenet64": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.flow_matching._pretrained.flow_matching_imagenet64_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching"
+    }
+  ],
   "lucid.models.generative.ncsn": [
     {
       "kind": "module",
@@ -3255,6 +3395,58 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ncsn"
+    }
+  ],
+  "lucid.models.generative.neural_ode": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.neural_ode._config.NeuralODEConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._pretrained"
+    }
+  ],
+  "lucid.models.generative.neural_ode._model.NeuralODEForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._pretrained"
+    }
+  ],
+  "lucid.models.generative.neural_ode._model.NeuralODEModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._pretrained"
+    }
+  ],
+  "lucid.models.generative.neural_ode._pretrained.neural_ode": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode"
+    }
+  ],
+  "lucid.models.generative.neural_ode._pretrained.neural_ode_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode"
     }
   ],
   "lucid.models.generative.nice": [
@@ -9108,6 +9300,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.nice._model"
     },
     {
@@ -9443,6 +9643,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._model"
     },
     {
       "kind": "module",

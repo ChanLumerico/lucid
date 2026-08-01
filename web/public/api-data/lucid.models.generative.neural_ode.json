@@ -1,0 +1,874 @@
+{
+  "slug": "lucid.models.generative.neural_ode",
+  "name": "neural_ode",
+  "path": "lucid.models.generative.neural_ode",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/__init__.py#L1",
+  "members": [
+    {
+      "name": "NeuralODEConfig",
+      "path": "lucid.models.generative.neural_ode._config.NeuralODEConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "NormalizingFlowConfig"
+      ],
+      "labels": [],
+      "signature": "NeuralODEConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', prior: FlowPrior = 'gaussian', hidden_dim: int = 64, num_blocks: int = 2, solver: str = 'dopri5', rtol: float = 1e-05, atol: float = 1e-05, use_adjoint: bool = True, trace_method: TraceMethod | None = None, trace_noise: TraceNoise = 'rademacher', exact_trace_max_dim: int = 32)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_config.py#L30",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "data_dim",
+          "path": "lucid.models.generative.neural_ode._config.NeuralODEConfig.data_dim",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "data_dim: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_config.py#L183",
+          "summary": "int: Flattened width of one sample, the dimension the flow acts on.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "resolved_trace_method",
+          "path": "lucid.models.generative.neural_ode._config.NeuralODEConfig.resolved_trace_method",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "resolved_trace_method: TraceMethod",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_config.py#L190",
+          "summary": "TraceMethod: `trace_method`, or the one implied by the dimension.",
+          "extended": "Exact where exact is affordable and Hutchinson where it is not, so\nthat the default reproduces the paper at the paper's scale without\nmaking the same choice unusable at image scale.",
+          "parameters": [],
+          "returns": {
+            "annotation": "TraceMethod",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.neural_ode._config.NeuralODEConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', prior: FlowPrior = 'gaussian', hidden_dim: int = 64, num_blocks: int = 2, solver: str = 'dopri5', rtol: float = 1e-05, atol: float = 1e-05, use_adjoint: bool = True, trace_method: TraceMethod | None = None, trace_noise: TraceNoise = 'rademacher', exact_trace_max_dim: int = 32)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for every Neural ODE (CNF) variant.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "sample_size",
+          "annotation": "int or tuple of int",
+          "description": "Spatial resolution of a sample.  The flow itself is defined on the\nflattened vector, so this and `in_channels` only fix its width.",
+          "default": "32"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Channels per sample.",
+          "default": "3"
+        },
+        {
+          "name": "out_channels",
+          "annotation": "int",
+          "description": "Kept equal to `in_channels`: the flow is a bijection, so it\ncannot change the dimension it acts on.",
+          "default": "3"
+        },
+        {
+          "name": "act_fn",
+          "annotation": "(silu, swish, relu, gelu)",
+          "description": "Activation between the vector field's gated blocks.  A smooth one\nis worth preferring here for a reason that does not apply to a\ndiscrete flow: the solver estimates its own error from how\npolynomial the trajectory looks locally, so a kinked right-hand\nside costs steps.",
+          "default": "\"silu\""
+        },
+        {
+          "name": "prior",
+          "annotation": "(logistic, gaussian)",
+          "description": "Base distribution the latent is measured against.  Unlike the\ndiscrete flows, which use a logistic prior on dequantised pixels,\nthe continuous flow integrates to a standard normal.",
+          "default": "\"logistic\""
+        },
+        {
+          "name": "hidden_dim",
+          "annotation": "int",
+          "description": "Width $M$ of each function in the gated sum — the paper's CNF\nexperiments use `64`.",
+          "default": "64"
+        },
+        {
+          "name": "num_blocks",
+          "annotation": "int",
+          "description": "How many gated blocks the vector field stacks.",
+          "default": "2"
+        },
+        {
+          "name": "solver",
+          "annotation": "str",
+          "description": "Method name handed to `lucid.diffeq.odeint`.  Any adaptive\nmethod works; the fixed-step ones trade accuracy for a predictable\ncost per sample.",
+          "default": "\"dopri5\""
+        },
+        {
+          "name": "rtol",
+          "annotation": "float",
+          "description": "Solver tolerances.  Looser than the `lucid.diffeq` defaults on\npurpose: the flow is trained, so solving it to twelve digits buys\nnothing the gradient can use.",
+          "default": "1e-5, 1e-5"
+        },
+        {
+          "name": "atol",
+          "annotation": "float",
+          "description": "Solver tolerances.  Looser than the `lucid.diffeq` defaults on\npurpose: the flow is trained, so solving it to twelve digits buys\nnothing the gradient can use.",
+          "default": "1e-5, 1e-5"
+        },
+        {
+          "name": "use_adjoint",
+          "annotation": "bool",
+          "description": "Integrate the backward pass with `lucid.diffeq.odeint_adjoint`\nrather than differentiating through the solver's own steps.  This is\nthe paper's constant-memory result; turning it off costs memory\nproportional to the number of steps taken but gives gradients that\nare exact for the discretisation actually used.",
+          "default": "True"
+        },
+        {
+          "name": "trace_method",
+          "annotation": "(exact, hutchinson)",
+          "description": "How the divergence is obtained.  `None` picks by dimension —\nexact below `exact_trace_max_dim`, Hutchinson above it — so the\ndefault is the paper's method exactly where the paper's method is\naffordable.",
+          "default": "\"exact\""
+        },
+        {
+          "name": "trace_noise",
+          "annotation": "(rademacher, gaussian)",
+          "description": "Probe distribution for the Hutchinson estimate.",
+          "default": "\"rademacher\""
+        },
+        {
+          "name": "exact_trace_max_dim",
+          "annotation": "int",
+          "description": "Dimension below which `trace_method=None` resolves to `\"exact\"`.",
+          "default": "32"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.neural_ode import NeuralODEConfig\n>>> NeuralODEConfig().hidden_dim\n64\n>>> NeuralODEConfig(sample_size=(1, 2), in_channels=1,\n...                 out_channels=1).data_dim\n2"
+      ],
+      "notes": [
+        "`in_channels` and `out_channels` must agree: a flow is a bijection."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "NeuralODEForImageGeneration",
+      "path": "lucid.models.generative.neural_ode._model.NeuralODEForImageGeneration",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "NeuralODEForImageGeneration(config: NeuralODEConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L515",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEForImageGeneration.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: NeuralODEConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L564",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "nfe",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEForImageGeneration.nfe",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "nfe: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L571",
+          "summary": "int: Vector-field evaluations spent by the most recent solve.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEForImageGeneration.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L575",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "NormalizingFlowOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "generate",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEForImageGeneration.generate",
+          "kind": "function",
+          "labels": [],
+          "signature": "generate(n_samples: int = 1, temperature: float = 1.0, device: str = 'cpu')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L586",
+          "subcategory": "model",
+          "summary": "Sample by integrating a prior draw back to `t = 0`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "n_samples",
+              "annotation": "int",
+              "description": "Number of samples to draw.",
+              "default": "1"
+            },
+            {
+              "name": "temperature",
+              "annotation": "float",
+              "description": "Multiplies the prior sample before inversion.  Below `1` it\ntrades diversity for typicality — a standard trick for flows,\nnot part of the paper.",
+              "default": "1.0"
+            },
+            {
+              "name": "device",
+              "annotation": "str",
+              "description": "Where to allocate the prior sample.  Default `\"cpu\"`.",
+              "default": "'cpu'"
+            }
+          ],
+          "returns": {
+            "annotation": "GenerationOutput",
+            "description": "`samples` of shape `(n_samples, C, H, W)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Costs one solve, not one per step: the reverse direction carries no\ndensity term, so it is the cheaper of the two passes."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Neural ODE flow with a training loss and `.generate()`.",
+      "extended": "`forward(x)` returns a `NormalizingFlowOutput` whose `loss`\nis the mean negative log-likelihood in **bits per dimension**, the\nscale-free form that keeps the gradient magnitude independent of how\nwide the data is.  `generate(n_samples)` draws\n$z \\sim p_Z$ and integrates the field backwards to `t = 0`.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "NeuralODEConfig",
+          "description": "Architecture, solver and trace-estimator knobs.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.neural_ode import (\n...     NeuralODEConfig, NeuralODEForImageGeneration,\n... )\n>>> cfg = NeuralODEConfig(sample_size=2, in_channels=1, out_channels=1,\n...                       hidden_dim=8, num_blocks=1)\n>>> model = NeuralODEForImageGeneration(cfg).eval()\n>>> out = model(lucid.rand((2, 1, 2, 2)))\n>>> out.loss.shape                      # scalar bits/dim\n()\n>>> model.generate(n_samples=3).samples.shape\n(3, 1, 2, 2)"
+      ],
+      "notes": [
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)).\nThe paper's own continuous-flow experiments are two-dimensional\ndensity matching rather than images; sampling at image scale is what\nthe Hutchinson trace of Grathwohl et al. (ICLR 2019) makes affordable,\nand is what `trace_method` selects by default above\n`exact_trace_max_dim`."
+      ],
+      "attributes": [
+        {
+          "name": "neural_ode",
+          "annotation": "NeuralODEModel",
+          "description": "Underlying flow, exposing `encode` / `decode` / `log_prob` /\n`bits_per_dim`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "NeuralODEModel",
+      "path": "lucid.models.generative.neural_ode._model.NeuralODEModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "NeuralODEModel(config: NeuralODEConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L260",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: NeuralODEConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L328",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "input_dim",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.input_dim",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "input_dim: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L349",
+          "summary": "int: Flattened dimensionality `D` the flow acts on.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "prior",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.prior",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "prior: str",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L354",
+          "summary": "str: Name of the factorised latent prior.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "trace_method",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.trace_method",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "trace_method: str",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L359",
+          "summary": "str: Whether the divergence is summed exactly or estimated.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "nfe",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.nfe",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "nfe: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L364",
+          "summary": "int: Vector-field evaluations spent by the most recent solve.",
+          "extended": "A continuous flow has no layer count to report, so this is the\nclosest thing to one — and it grows as the field stiffens during\ntraining, which the paper documents.",
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L430",
+          "subcategory": "model",
+          "summary": "Map samples to the latent space, accumulating the log-determinant.",
+          "extended": "Integrates $(\\mathbf{z}, \\Delta)$ from `t = 0` to `t = 1`\nwith $\\Delta(0) = 0$, so that\n\n$$\n\\log p_X(x) = \\log p_Z(\\mathbf{z}(1)) + \\Delta(1).\n$$",
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Samples of shape `(B, C, H, W)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "tuple[Tensor, Tensor]",
+            "description": "`(z, log_det)` with `z` of shape `(B, D)` and `log_det`\nof shape `(B,)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "When `trace_method` resolves to `\"hutchinson\"` the returned\n`log_det` is an unbiased *estimate*, not the exact value; its\nexpectation is right, which is what a maximum-likelihood gradient\nneeds, but two calls on the same input will not agree."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "decode",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.decode",
+          "kind": "function",
+          "labels": [],
+          "signature": "decode(z: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L472",
+          "subcategory": "model",
+          "summary": "Invert the flow — latent `(B, D)` back to samples `(B, C, H, W)`.",
+          "extended": "The same vector field, integrated from `t = 1` to `t = 0`.  No\nseparate inverse exists to get wrong, so the round trip is exact up\nto the tolerances the solver was given; tighten `rtol` / `atol`\nand it tightens with them.",
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "log_prob",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.log_prob",
+          "kind": "function",
+          "labels": [],
+          "signature": "log_prob(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L490",
+          "subcategory": "model",
+          "summary": "Per-sample log-likelihood $\\log p_X(x)$ in nats.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "bits_per_dim",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.bits_per_dim",
+          "kind": "function",
+          "labels": [],
+          "signature": "bits_per_dim(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L495",
+          "subcategory": "model",
+          "summary": "Per-sample negative log-likelihood in bits per dimension.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.neural_ode._model.NeuralODEModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_model.py#L499",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "NormalizingFlowOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Continuous normalizing flow — the generative half of Chen et al., 2018.",
+      "extended": "`encode` integrates the augmented system forward and returns the\nlatent together with the flow's log-determinant; `decode` integrates\nthe same vector field with time reversed.  That symmetry is the point\nof the continuous formulation: a discrete flow has to be *built*\ninvertible, whereas this one is invertible because an ODE is, and the\ninverse is the solver run backwards.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "NeuralODEConfig",
+          "description": "Field width and depth, solver and tolerances, and how the trace is\nobtained.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.neural_ode import (\n...     NeuralODEConfig, NeuralODEModel,\n... )\n>>> cfg = NeuralODEConfig(sample_size=2, in_channels=1, out_channels=1,\n...                       hidden_dim=8, num_blocks=1)\n>>> model = NeuralODEModel(cfg).eval()\n>>> z, log_det = model.encode(lucid.rand((2, 1, 2, 2)))\n>>> z.shape, log_det.shape\n((2, 4), (2,))\n>>> model.decode(z).shape\n(2, 1, 2, 2)"
+      ],
+      "notes": [
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)),\n§4.  The Hutchinson trace option follows Grathwohl et al., *\"FFJORD\"*,\nICLR, 2019 ([arXiv:1810.01367](https://arxiv.org/abs/1810.01367)).\n\n**Where to run it.**  A solve is one small right-hand side evaluated\ntens of times, so which stream wins depends entirely on how much work\neach evaluation carries.  Measured on an M1 Pro, one training step\n(forward, loss, backward) of `neural_ode_gen`:\n\n==================  ===========  ===========\nsetup               `\"cpu\"`    `\"metal\"`\n==================  ===========  ===========\nB=8, D=192            16.8 ms      38.1 ms\nB=32, D=3072         175.0 ms      56.5 ms\nB=128, D=3072        587.5 ms      70.8 ms\n==================  ===========  ===========\n\nBelow a few hundred dimensions the tensors are too small to pay for a\nGPU dispatch and Accelerate wins; at anything resembling a real\ntraining batch the ratio reverses and keeps widening — `8.3x` at the\nbottom row, where the CPU cost grows with the batch and the GPU's\nbarely does.  Train on `\"metal\"`; keep the paper's two-dimensional\ndensity experiments on `\"cpu\"`."
+      ],
+      "attributes": [
+        {
+          "name": "dynamics",
+          "annotation": "_CNFDynamics",
+          "description": "The augmented right-hand side, holding the vector field and the\nevaluation counter."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "neural_ode",
+      "path": "lucid.models.generative.neural_ode._pretrained.neural_ode",
+      "kind": "function",
+      "labels": [],
+      "signature": "neural_ode(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_pretrained.py#L54",
+      "subcategory": "pretrained",
+      "summary": "Construct the Neural ODE continuous normalizing flow.",
+      "extended": "A single vector field integrated from `t = 0` to `t = 1`, with the\nlog-density carried alongside it by the instantaneous change of\nvariables.  Depth is not a hyper-parameter: `lucid.diffeq` spends\nas many evaluations as the requested tolerance needs, and `nfe`\nreports how many that was.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NeuralODEConfig` field overrides forwarded into\nthe underlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NeuralODEModel",
+        "description": "Bare flow configured with the paper's $M = 64$ field and any\noverrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.neural_ode import neural_ode\n>>> model = neural_ode(sample_size=(1, 2), in_channels=1,\n...                    out_channels=1).eval()\n>>> z, log_det = model.encode(lucid.rand((2, 1, 1, 2)))\n>>> z.shape, log_det.shape\n((2, 2), (2,))\n>>> model.trace_method            # two-dimensional, so exact\n'exact'"
+      ],
+      "notes": [
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)),\n§4.  The paper's own continuous-flow experiments are two-dimensional\ndensity matching, where the trace of the Jacobian is summed exactly;\nat the image shape this factory defaults to, the same flow switches to\nthe Hutchinson estimator of Grathwohl et al. (*FFJORD*, ICLR 2019),\nwhich is what makes the cost independent of the dimension."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NeuralODEModel",
+        "type": "NeuralODEModel",
+        "params": 410112,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "dynamics",
+            "type": "_CNFDynamics",
+            "params": 410112,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "field",
+                "type": "_VectorField",
+                "params": 410112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 410112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_GatedBlock",
+                        "params": 196864,
+                        "own_params": 192,
+                        "children": [
+                          {
+                            "name": "linear",
+                            "type": "Linear",
+                            "params": 196672,
+                            "own_params": 196672,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_GatedBlock",
+                        "params": 4352,
+                        "own_params": 192,
+                        "children": [
+                          {
+                            "name": "linear",
+                            "type": "Linear",
+                            "params": 4160,
+                            "own_params": 4160,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_GatedBlock",
+                        "params": 208896,
+                        "own_params": 9216,
+                        "children": [
+                          {
+                            "name": "linear",
+                            "type": "Linear",
+                            "params": 199680,
+                            "own_params": 199680,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "neural_ode_gen",
+      "path": "lucid.models.generative.neural_ode._pretrained.neural_ode_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "neural_ode_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/42e8b6a62/lucid/models/generative/neural_ode/_pretrained.py#L112",
+      "subcategory": "pretrained",
+      "summary": "Neural ODE flow with the bits/dim objective and a sampler.",
+      "extended": "Same field as `neural_ode`, wrapped so `forward` reports a\nloss and `generate` integrates a prior draw back to `t = 0`.  The\nreverse pass carries no density term, which makes sampling the cheaper\nof the two directions — the opposite of the usual situation for a\nflow, where the inverse is the awkward one to write.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future weight registration; currently a no-op.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `NeuralODEConfig` field overrides forwarded into\nthe underlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "NeuralODEForImageGeneration",
+        "description": "Generator configured with the paper's $M = 64$ field."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.neural_ode import neural_ode_gen\n>>> model = neural_ode_gen(sample_size=(1, 2), in_channels=1,\n...                        out_channels=1).eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 1, 1, 2)"
+      ],
+      "notes": [
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)).\nThe paper reports no bits/dim figure for the continuous flow — its\ndensity experiments are two-dimensional and reported as KL — so there\nis no published number for this configuration to be compared against."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "NeuralODEForImageGeneration",
+        "type": "NeuralODEForImageGeneration",
+        "params": 410112,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "neural_ode",
+            "type": "NeuralODEModel",
+            "params": 410112,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "dynamics",
+                "type": "_CNFDynamics",
+                "params": 410112,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "field",
+                    "type": "_VectorField",
+                    "params": 410112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 410112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_GatedBlock",
+                            "params": 196864,
+                            "own_params": 192,
+                            "children": [
+                              {
+                                "name": "linear",
+                                "type": "Linear",
+                                "params": 196672,
+                                "own_params": 196672,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "1",
+                            "type": "_GatedBlock",
+                            "params": 4352,
+                            "own_params": 192,
+                            "children": [
+                              {
+                                "name": "linear",
+                                "type": "Linear",
+                                "params": 4160,
+                                "own_params": 4160,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "2",
+                            "type": "_GatedBlock",
+                            "params": 208896,
+                            "own_params": 9216,
+                            "children": [
+                              {
+                                "name": "linear",
+                                "type": "Linear",
+                                "params": 199680,
+                                "own_params": 199680,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "Neural ODE family — Chen et al., 2018 (continuous normalizing flow).",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "Neural ODE",
+  "citation": "Chen, Ricky T. Q., et al. \"Neural Ordinary Differential Equations.\" Advances in Neural Information Processing Systems, vol. 31, 2018, pp. 6571–6583.",
+  "theory": "A residual network updates its state in discrete jumps,\n$h_{t+1} = h_t + f(h_t, \\theta_t)$.  Shrink the jump and add a\nstep size and that recurrence is Euler's method; take the step to zero\nand the network stops being a sequence of layers and becomes a\n*differential equation*,\n\n\n\n$$\n\\frac{d\\mathbf{z}(t)}{dt} = f(\\mathbf{z}(t), t, \\theta),\n$$\n\nwhose solution at $t_1$ is whatever an ODE solver says it is.\nDepth is no longer a hyper-parameter but an accuracy request handed to\nthe solver, and the memory the backward pass needs stops growing with\nit — the adjoint method reconstructs what it needs by integrating\nbackwards rather than storing every intermediate state.\n\nWhat that buys a generative model is **Theorem 1**, the instantaneous\nchange of variables.  A discrete flow pays for every bijection with the\nlog-determinant of its Jacobian, which is why NICE and RealNVP go to\nsuch lengths to keep that Jacobian triangular.  A continuous flow pays\nwith a trace instead:\n\n\n\n$$\n\\frac{\\partial \\log p(\\mathbf{z}(t))}{\\partial t}\n    = -\\operatorname{tr}\\!\\left(\n        \\frac{\\partial f}{\\partial \\mathbf{z}(t)}\\right).\n$$\n\nA determinant constrains the *architecture*; a trace does not.  The\nvector field can be any network at all — no masking, no ordering of the\ndimensions, no triangular structure — and the density still comes out\nexactly, by integrating the state and its log-density together as one\naugmented system.\n\nThe paper's vector field is a sum of $M$ functions with learned\ntime-dependent gates, $d\\mathbf{z}/dt = \\sum_n \\sigma_n(t) f_n(\\mathbf{z})$ with $\\sigma_n(t) \\in (0, 1)$ — a hypernetwork,\nso that the dynamics themselves change as the flow proceeds rather than\nbeing one fixed map applied for longer.\n\nComputing the trace exactly costs one vector-Jacobian product per\ndimension, which is why the paper's experiments are two-dimensional\ndensity matching.  Replacing it with the Hutchinson estimator,\n\n\n\n$$\n\\operatorname{tr}(A) = \\mathbb{E}_{p(\\boldsymbol{\\epsilon})}\n    \\left[\\boldsymbol{\\epsilon}^{\\mathsf{T}} A\n          \\boldsymbol{\\epsilon}\\right],\n\\qquad\n\\mathbb{E}[\\boldsymbol{\\epsilon}] = \\mathbf{0},\\;\n\\operatorname{Cov}(\\boldsymbol{\\epsilon}) = I,\n$$\n\nturns that per-dimension cost into a single product for an unbiased\nestimate, and is what lets the same flow run on images — the step\nGrathwohl et al. take in FFJORD (*\"FFJORD: Free-Form Continuous\nDynamics for Scalable Reversible Generative Models\"*, ICLR 2019).  Both\nare available here; `trace_method` chooses, and the default follows\nthe dimension.",
+  "tasks": [
+    "image-generation"
+  ]
+}
