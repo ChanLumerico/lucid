@@ -66,6 +66,10 @@ class Optimizer:
     --------
     ``Optimizer`` is not used directly.  Use a concrete subclass:
 
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
     >>> optimizer.zero_grad()

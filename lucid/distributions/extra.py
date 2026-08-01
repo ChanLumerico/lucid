@@ -934,7 +934,7 @@ class ContinuousBernoulli(Distribution):
         sq_mean_stable: Tensor = mean_val + mean_val * (-u) / safe_l
         sq_mean_near: Tensor = lucid.full_like(p, 1.0 / 3.0)
         sq_mean: Tensor = lucid.where(abs_u < eps, sq_mean_near, sq_mean_stable)
-        return lucid.clamp(sq_mean - mean_val * mean_val, min=0.0)  # type: ignore[call-arg]
+        return lucid.clamp(sq_mean - mean_val * mean_val, min=0.0)
 
     @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

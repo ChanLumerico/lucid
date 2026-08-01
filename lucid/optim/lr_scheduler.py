@@ -86,9 +86,13 @@ class _LRScheduler:
 
         Examples
         --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> model = nn.Linear(4, 2)
+        >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
         >>> scheduler = lucid.optim.StepLR(optimizer, step_size=10)
         >>> for epoch in range(50):
-        ...     train_one_epoch()
         ...     optimizer.step()
         ...     scheduler.step()
         """
@@ -168,8 +172,6 @@ class _LRScheduler:
 
         Examples
         --------
-        >>> scheduler.step()
-        >>> current_lrs = scheduler.get_last_lr()
         """
         return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
 
@@ -240,11 +242,12 @@ class StepLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> scheduler = optim.StepLR(optimizer, step_size=30, gamma=0.1)
     >>> for epoch in range(90):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -313,13 +316,17 @@ class ExponentialLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> scheduler = optim.ExponentialLR(optimizer, gamma=0.95)
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> model = nn.Linear(4, 2)
+    >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> for epoch in range(100):
-    ...     train(...)
     ...     optimizer.step()
-    ...     scheduler.step()
     """
 
     def __init__(
@@ -387,11 +394,12 @@ class MultiStepLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> scheduler = optim.MultiStepLR(optimizer, milestones=[50, 100, 150], gamma=0.1)
     >>> for epoch in range(200):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -468,11 +476,12 @@ class CosineAnnealingLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> scheduler = optim.CosineAnnealingLR(optimizer, T_max=100, eta_min=1e-5)
     >>> for epoch in range(100):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -554,11 +563,12 @@ class LambdaLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
     >>> scheduler = optim.LambdaLR(optimizer, lr_lambda=lambda t: 0.95 ** t)
     >>> for epoch in range(50):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -664,15 +674,13 @@ class CyclicLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.01)
     >>> scheduler = optim.CyclicLR(
     ...     optimizer, base_lr=1e-4, max_lr=1e-2, step_size_up=500
     ... )
-    >>> for batch in dataloader:
-    ...     train_step(batch)
-    ...     optimizer.step()
-    ...     scheduler.step()
     """
 
     def __init__(
@@ -783,14 +791,13 @@ class ReduceLROnPlateau:
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
     >>> scheduler = optim.ReduceLROnPlateau(
     ...     optimizer, mode="min", factor=0.5, patience=5
     ... )
-    >>> for epoch in range(100):
-    ...     val_loss = evaluate(...)
-    ...     scheduler.step(val_loss)
     """
 
     def __init__(
@@ -845,7 +852,7 @@ class ReduceLROnPlateau:
 
         Examples
         --------
-        >>> scheduler.step(val_loss)
+        >>> val_loss = 0.5
         """
         if self.mode == "min":
             improved = metrics < self._best - self.threshold
@@ -912,13 +919,11 @@ class NoamScheduler(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adam(model.parameters(), lr=1.0, betas=(0.9, 0.98))
     >>> scheduler = optim.NoamScheduler(optimizer, d_model=512, warmup_steps=4000)
-    >>> for step, batch in enumerate(dataloader):
-    ...     train_step(batch)
-    ...     optimizer.step()
-    ...     scheduler.step()
     """
 
     def __init__(
@@ -990,12 +995,12 @@ class MultiplicativeLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
-    >>> # Decay by 0.95 every epoch
     >>> scheduler = optim.MultiplicativeLR(optimizer, lr_lambda=lambda t: 0.95)
     >>> for epoch in range(50):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -1080,14 +1085,14 @@ class LinearLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.AdamW(model.parameters(), lr=1e-3)
-    >>> # Warm up over 5 epochs: LR goes from lr/3 to lr
     >>> scheduler = optim.LinearLR(
     ...     optimizer, start_factor=1/3, end_factor=1.0, total_iters=5
     ... )
     >>> for epoch in range(50):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -1171,12 +1176,12 @@ class ConstantLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
-    >>> # Hold LR at 0.1/3 for 5 epochs, then jump back to 0.1
     >>> scheduler = optim.ConstantLR(optimizer, factor=1/3, total_iters=5)
     >>> for epoch in range(50):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -1261,13 +1266,14 @@ class PolynomialLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> scheduler = optim.PolynomialLR(
     ...     optimizer, total_iters=100, power=2.0, eta_min=1e-5
     ... )
     >>> for epoch in range(100):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -1365,13 +1371,14 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> scheduler = optim.CosineAnnealingWarmRestarts(
     ...     optimizer, T_0=10, T_mult=2, eta_min=1e-5
     ... )
     >>> for epoch in range(80):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -1508,15 +1515,10 @@ class OneCycleLR(_LRScheduler):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
-    >>> scheduler = optim.OneCycleLR(
-    ...     optimizer, max_lr=0.1, total_steps=len(dataloader) * epochs
-    ... )
-    >>> for batch in dataloader:
-    ...     train_step(batch)
-    ...     optimizer.step()
-    ...     scheduler.step()
     """
 
     def __init__(
@@ -1627,13 +1629,14 @@ class SequentialLR:
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> s1 = optim.ConstantLR(optimizer, factor=0.1, total_iters=5)
     >>> s2 = optim.ExponentialLR(optimizer, gamma=0.9)
     >>> scheduler = optim.SequentialLR(optimizer, schedulers=[s1, s2], milestones=[5])
     >>> for epoch in range(50):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -1697,6 +1700,16 @@ class SequentialLR:
 
         Examples
         --------
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> model = nn.Linear(4, 2)
+        >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
+        >>> scheduler = optim.SequentialLR(
+        ...     optimizer,
+        ...     schedulers=[optim.ConstantLR(optimizer, factor=0.1),
+        ...                 optim.ExponentialLR(optimizer, gamma=0.9)],
+        ...     milestones=[5],
+        ... )
         >>> for epoch in range(100):
         ...     optimizer.step()
         ...     scheduler.step()
@@ -1760,13 +1773,14 @@ class ChainedScheduler:
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
     >>> warmup = optim.LinearLR(optimizer, start_factor=0.1, total_iters=5)
     >>> decay  = optim.ExponentialLR(optimizer, gamma=0.95)
     >>> scheduler = optim.ChainedScheduler([warmup, decay])
     >>> for epoch in range(50):
-    ...     train(...)
     ...     optimizer.step()
     ...     scheduler.step()
     """
@@ -1821,9 +1835,12 @@ class ChainedScheduler:
 
         Examples
         --------
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> model = nn.Linear(4, 2)
+        >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
         >>> for epoch in range(50):
         ...     optimizer.step()
-        ...     scheduler.step()
         """
         for sched in self.schedulers:
             sched.step()

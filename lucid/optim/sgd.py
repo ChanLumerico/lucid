@@ -80,6 +80,10 @@ class SGD(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.SGD(
     ...     model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4

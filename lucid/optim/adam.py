@@ -69,13 +69,10 @@ class Adam(Optimizer):
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
     >>> import lucid.optim as optim
     >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    >>> for x, y in dataloader:
-    ...     optimizer.zero_grad()
-    ...     loss = loss_fn(model(x), y)
-    ...     loss.backward()
-    ...     optimizer.step()
     """
 
     def __init__(
@@ -136,8 +133,13 @@ class Adam(Optimizer):
 
         Examples
         --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> model = nn.Linear(4, 2)
+        >>> loss = model(lucid.randn(1, 4)).sum()
+        >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
         >>> optimizer.zero_grad()
-        >>> loss = model(inputs)
         >>> loss.backward()
         >>> optimizer.step()
         """
@@ -205,6 +207,10 @@ class AdamW(Optimizer):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2)
+    >>> loss = model(lucid.randn(1, 4)).sum()
     >>> import lucid.optim as optim
     >>> optimizer = optim.AdamW(
     ...     model.parameters(), lr=1e-4, weight_decay=1e-2
@@ -273,8 +279,13 @@ class AdamW(Optimizer):
 
         Examples
         --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> import lucid.optim as optim
+        >>> model = nn.Linear(4, 2)
+        >>> loss = model(lucid.randn(1, 4)).sum()
+        >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
         >>> optimizer.zero_grad()
-        >>> loss = model(inputs)
         >>> loss.backward()
         >>> optimizer.step()
         """
