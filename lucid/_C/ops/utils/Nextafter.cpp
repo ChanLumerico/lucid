@@ -23,6 +23,8 @@
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
+#include "Layout.h"                     // broadcast_to_op
 #include "_Detail.h"
 
 namespace lucid {
@@ -110,11 +112,24 @@ GpuStorage nextafter_gpu_f32(const GpuStorage& a, const GpuStorage& b) {
 
 }  // namespace
 
-TensorImplPtr nextafter_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    Validator::input(a, "nextafter.a").non_null();
-    Validator::input(b, "nextafter.b").non_null();
-    if (a->shape() != b->shape())
-        throw ShapeMismatch(a->shape(), b->shape(), "nextafter");
+TensorImplPtr nextafter_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
+    Validator::input(a_in, "nextafter.a").non_null();
+    Validator::input(b_in, "nextafter.b").non_null();
+
+    // Broadcast like every other elementwise op.  Only materialised when
+    // the shapes actually differ, so a same-shape call — which is every
+    // call that worked before — reaches the kernel untouched on either
+    // device and adds nothing to a compile trace.
+    TensorImplPtr a = a_in;
+    TensorImplPtr b = b_in;
+    if (a_in->shape() != b_in->shape()) {
+        const Shape out = detail::broadcast_shapes(a_in->shape(), b_in->shape());
+        if (a_in->shape() != out)
+            a = broadcast_to_op(a_in, out);
+        if (b_in->shape() != out)
+            b = broadcast_to_op(b_in, out);
+    }
+
     if (a->dtype() != b->dtype())
         throw DtypeMismatch(std::string(dtype_name(a->dtype())),
                             std::string(dtype_name(b->dtype())), "nextafter");

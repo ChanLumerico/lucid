@@ -247,12 +247,12 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["offset", "dim1", "dim2"]),
 
     # ── comparison ────────────────────────────────────────────────────────
-    OpEntry("equal",         _R.equal,         2, method_name=None, free_fn_name="equal"),
-    OpEntry("not_equal",     _R.not_equal,     2, method_name=None, free_fn_name="not_equal"),
-    OpEntry("greater",       _R.greater,       2, method_name=None, free_fn_name="greater"),
-    OpEntry("greater_equal", _R.greater_equal, 2, method_name=None, free_fn_name="greater_equal"),
-    OpEntry("less",          _R.less,          2, method_name=None, free_fn_name="less"),
-    OpEntry("less_equal",    _R.less_equal,    2, method_name=None, free_fn_name="less_equal"),
+    OpEntry("equal",         A._make_arith_adapter(_R.equal),         2, method_name=None, free_fn_name="equal"),
+    OpEntry("not_equal",     A._make_arith_adapter(_R.not_equal),     2, method_name=None, free_fn_name="not_equal"),
+    OpEntry("greater",       A._make_arith_adapter(_R.greater),       2, method_name=None, free_fn_name="greater"),
+    OpEntry("greater_equal", A._make_arith_adapter(_R.greater_equal), 2, method_name=None, free_fn_name="greater_equal"),
+    OpEntry("less",          A._make_arith_adapter(_R.less),          2, method_name=None, free_fn_name="less"),
+    OpEntry("less_equal",    A._make_arith_adapter(_R.less_equal),    2, method_name=None, free_fn_name="less_equal"),
 
     # ── masking ────────────────────────────────────────────────────────────
     # ``where`` and ``masked_fill`` auto-cast their condition/mask to bool to
@@ -335,12 +335,12 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("frac",  _R.frac,  1, method_name="frac",  free_fn_name="frac"),
 
     # ── elementwise math compositions (binary) ──────────────────────────────
-    OpEntry("atan2",     _R.atan2,     2, method_name="atan2",     free_fn_name="atan2"),
+    OpEntry("atan2",     A._make_arith_adapter(_R.atan2),     2, method_name="atan2",     free_fn_name="atan2"),
     OpEntry("fmod",      A._make_arith_adapter(_R.fmod),      2, method_name="fmod",      free_fn_name="fmod"),
     OpEntry("remainder", A._make_arith_adapter(_R.remainder), 2, method_name="remainder", free_fn_name="remainder"),
-    OpEntry("hypot",     _R.hypot,     2, method_name="hypot",     free_fn_name="hypot"),
-    OpEntry("logaddexp", _R.logaddexp, 2, method_name="logaddexp", free_fn_name="logaddexp"),
-    OpEntry("nextafter", _R.nextafter, 2, method_name="nextafter", free_fn_name="nextafter"),
+    OpEntry("hypot",     A._make_arith_adapter(_R.hypot),     2, method_name="hypot",     free_fn_name="hypot"),
+    OpEntry("logaddexp", A._make_arith_adapter(_R.logaddexp), 2, method_name="logaddexp", free_fn_name="logaddexp"),
+    OpEntry("nextafter", A._make_arith_adapter(_R.nextafter), 2, method_name="nextafter", free_fn_name="nextafter"),
 
     # ── reduction compositions ──────────────────────────────────────────────
     OpEntry("logsumexp", A._logsumexp_adapter, 1,
@@ -352,11 +352,11 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("kron", _R.kron, 2, method_name="kron", free_fn_name="kron"),
 
     # ── logical compositions ────────────────────────────────────────────────
-    OpEntry("logical_and", _R.logical_and, 2,
+    OpEntry("logical_and", A._make_arith_adapter(_R.logical_and), 2,
             method_name="logical_and", free_fn_name="logical_and"),
-    OpEntry("logical_or",  _R.logical_or, 2,
+    OpEntry("logical_or",  A._make_arith_adapter(_R.logical_or), 2,
             method_name="logical_or",  free_fn_name="logical_or"),
-    OpEntry("logical_xor", _R.logical_xor, 2,
+    OpEntry("logical_xor", A._make_arith_adapter(_R.logical_xor), 2,
             method_name="logical_xor", free_fn_name="logical_xor"),
     OpEntry("logical_not", _R.logical_not, 1,
             method_name="logical_not", free_fn_name="logical_not"),
@@ -461,7 +461,7 @@ _REGISTRY: list[OpEntry] = [
     # ``imag`` / ``conjugate``.  ``complex`` builds a C64 from two F32 inputs.
     OpEntry("real",    _R.real,    1, method_name=None, free_fn_name="real"),
     OpEntry("imag",    _R.imag,    1, method_name=None, free_fn_name="imag"),
-    OpEntry("complex", _R.complex, 2, method_name=None, free_fn_name="complex"),
+    OpEntry("complex", A._make_arith_adapter(_R.complex), 2, method_name=None, free_fn_name="complex"),
     OpEntry("conj",    _R.conj,    1, method_name=None, free_fn_name="conj"),
 ]
 # fmt: on

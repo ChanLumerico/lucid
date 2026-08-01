@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING, cast
 
 import lucid
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _wrap
+from lucid._dispatch import _unwrap, _unwrap_or_scalar, _wrap
 from lucid._ops.composite._shared import _is_tensor
-from lucid._types import Scalar
+from lucid._types import Scalar, TensorOrScalar
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -983,7 +983,22 @@ def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     return lucid.pow(cast(Tensor, x), cast(Tensor, y))
 
 
-def fmax(a: Tensor, b: Tensor) -> Tensor:
+def _promote_pair(a: TensorOrScalar, b: TensorOrScalar) -> tuple[Tensor, Tensor]:
+    """Make both operands tensors, promoting whichever one is a scalar.
+
+    Composites built on primitives that only take tensors — ``isnan``
+    here — cannot simply forward a Python scalar the way a wrapped
+    binary op does.  Routing through the same coercion the wrapped ops
+    use keeps ``f(x, 0.5)`` meaning exactly what ``f(x, full_like(x,
+    0.5))`` means, weak-scalar promotion included.
+    """
+    if _is_tensor(a) and _is_tensor(b):
+        return a, b
+    ref = _unwrap(a) if _is_tensor(a) else _unwrap(cast("Tensor", b))
+    return _wrap(_unwrap_or_scalar(a, ref)), _wrap(_unwrap_or_scalar(b, ref))
+
+
+def fmax(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
     r"""Element-wise NaN-quiet maximum.
 
     Like :func:`lucid.maximum`, but treats NaN as missing data: if exactly
@@ -1026,6 +1041,7 @@ def fmax(a: Tensor, b: Tensor) -> Tensor:
     >>> lucid.fmax(a, b)
     Tensor([2., 2., 3.])
     """
+    a, b = _promote_pair(a, b)
     a_is_nan = lucid.isnan(a)
     b_is_nan = lucid.isnan(b)
     m = lucid.maximum(a, b)
@@ -1034,7 +1050,7 @@ def fmax(a: Tensor, b: Tensor) -> Tensor:
     return m
 
 
-def fmin(a: Tensor, b: Tensor) -> Tensor:
+def fmin(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
     r"""Element-wise NaN-quiet minimum.
 
     Like :func:`lucid.minimum`, but treats NaN as missing data: if exactly
@@ -1077,6 +1093,7 @@ def fmin(a: Tensor, b: Tensor) -> Tensor:
     >>> lucid.fmin(a, b)
     Tensor([1., 2., 3.])
     """
+    a, b = _promote_pair(a, b)
     a_is_nan = lucid.isnan(a)
     b_is_nan = lucid.isnan(b)
     m = lucid.minimum(a, b)

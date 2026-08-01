@@ -907,6 +907,289 @@ def _inject_dunders(cls: type) -> None:
         """
         return _wrap(_C_engine.invert(self._impl))
 
+    def __mod__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Element-wise remainder: ``self % other``.
+
+        Follows Python's and the reference framework's convention rather
+        than C's: the result takes the **sign of the divisor**, so
+        ``-7 % 3`` is ``2``.  Use :func:`lucid.fmod` for the C behaviour,
+        where the sign follows the dividend.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Divisor; broadcast against ``self``.
+
+        Returns
+        -------
+        Tensor
+            Remainder with broadcast shape and promoted dtype.
+
+        Notes
+        -----
+        Math:
+
+        .. math::
+
+            \text{out}_i = \text{self}_i
+                - \text{other}_i \left\lfloor
+                    \frac{\text{self}_i}{\text{other}_i} \right\rfloor
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.tensor([-7.0, 7.0]) % 3
+        Tensor([2., 1.])
+        """
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.remainder(a, b))
+
+    def __rmod__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Reflected remainder: ``other % self``.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Dividend of the original expression.
+
+        Returns
+        -------
+        Tensor
+            Remainder with broadcast shape and promoted dtype.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> 7 % lucid.tensor([3.0, 4.0])
+        Tensor([1., 3.])
+        """
+        b, a = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.remainder(a, b))
+
+    def __divmod__(self: Tensor, other: TensorOrScalar) -> tuple[Tensor, Tensor]:
+        """Floor quotient and remainder together: ``divmod(self, other)``.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Divisor; broadcast against ``self``.
+
+        Returns
+        -------
+        tuple[Tensor, Tensor]
+            ``(self // other, self % other)``, the pair Python's builtin
+            promises.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> q, r = divmod(lucid.tensor([7.0]), 3)
+        >>> q, r
+        (Tensor([2.]), Tensor([1.]))
+        """
+        return self // other, self % other
+
+    def __rdivmod__(self: Tensor, other: TensorOrScalar) -> tuple[Tensor, Tensor]:
+        """Reflected pair: ``divmod(other, self)``.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Dividend of the original expression.
+
+        Returns
+        -------
+        tuple[Tensor, Tensor]
+            ``(other // self, other % self)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> divmod(7, lucid.tensor([3.0]))
+        (Tensor([2.]), Tensor([1.]))
+        """
+        return other // self, other % self
+
+    def __rand__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Reflected bitwise / logical AND: ``other & self``.
+
+        AND is commutative, so this exists to make the operator work when
+        the left operand is a scalar or a type that does not know about
+        tensors — not because the order changes the answer.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Left-hand operand of the original expression.
+
+        Returns
+        -------
+        Tensor
+            AND-combined tensor with broadcast shape.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> True & lucid.tensor([True, False])
+        Tensor([True, False])
+        """
+        return _wrap(
+            _C_engine.bitwise_and(_unwrap_or_scalar(other, self._impl), self._impl)
+        )
+
+    def __ror__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Reflected bitwise / logical OR: ``other | self``.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Left-hand operand of the original expression.
+
+        Returns
+        -------
+        Tensor
+            OR-combined tensor with broadcast shape.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> False | lucid.tensor([True, False])
+        Tensor([True, False])
+        """
+        return _wrap(
+            _C_engine.bitwise_or(_unwrap_or_scalar(other, self._impl), self._impl)
+        )
+
+    def __rxor__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Reflected bitwise / logical XOR: ``other ^ self``.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Left-hand operand of the original expression.
+
+        Returns
+        -------
+        Tensor
+            XOR-combined tensor with broadcast shape.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> True ^ lucid.tensor([True, False])
+        Tensor([False, True])
+        """
+        return _wrap(
+            _C_engine.bitwise_xor(_unwrap_or_scalar(other, self._impl), self._impl)
+        )
+
+    def __lshift__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Element-wise bitwise left shift: ``self << other``.
+
+        Integer dtypes only; each element is shifted by the matching
+        element of ``other``, which is a multiplication by
+        :math:`2^{\text{other}}`.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Shift amount; broadcast against ``self``.
+
+        Returns
+        -------
+        Tensor
+            Shifted tensor with broadcast shape.  Not differentiable.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.tensor([1, 2, 3]) << 2
+        Tensor([4, 8, 12])
+        """
+        return _wrap(
+            _C_engine.bitwise_left_shift(
+                self._impl, _unwrap_or_scalar(other, self._impl)
+            )
+        )
+
+    def __rlshift__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Reflected left shift: ``other << self``.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Value being shifted.
+
+        Returns
+        -------
+        Tensor
+            Shifted tensor with broadcast shape.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> 1 << lucid.tensor([1, 2, 3])
+        Tensor([2, 4, 8])
+        """
+        return _wrap(
+            _C_engine.bitwise_left_shift(
+                _unwrap_or_scalar(other, self._impl), self._impl
+            )
+        )
+
+    def __rshift__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Element-wise bitwise right shift: ``self >> other``.
+
+        Integer dtypes only; a floor division by
+        :math:`2^{\text{other}}`.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Shift amount; broadcast against ``self``.
+
+        Returns
+        -------
+        Tensor
+            Shifted tensor with broadcast shape.  Not differentiable.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.tensor([4, 8, 12]) >> 2
+        Tensor([1, 2, 3])
+        """
+        return _wrap(
+            _C_engine.bitwise_right_shift(
+                self._impl, _unwrap_or_scalar(other, self._impl)
+            )
+        )
+
+    def __rrshift__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        r"""Reflected right shift: ``other >> self``.
+
+        Parameters
+        ----------
+        other : Tensor or scalar
+            Value being shifted.
+
+        Returns
+        -------
+        Tensor
+            Shifted tensor with broadcast shape.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> 16 >> lucid.tensor([1, 2, 3])
+        Tensor([8, 4, 2])
+        """
+        return _wrap(
+            _C_engine.bitwise_right_shift(
+                _unwrap_or_scalar(other, self._impl), self._impl
+            )
+        )
+
     def __and__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise bitwise / logical AND: ``self & other``.
 
@@ -1363,8 +1646,19 @@ def _inject_dunders(cls: type) -> None:
         ("__abs__", __abs__),
         ("__invert__", __invert__),
         ("__and__", __and__),
+        ("__rand__", __rand__),
         ("__or__", __or__),
+        ("__ror__", __ror__),
         ("__xor__", __xor__),
+        ("__rxor__", __rxor__),
+        ("__mod__", __mod__),
+        ("__rmod__", __rmod__),
+        ("__divmod__", __divmod__),
+        ("__rdivmod__", __rdivmod__),
+        ("__lshift__", __lshift__),
+        ("__rlshift__", __rlshift__),
+        ("__rshift__", __rshift__),
+        ("__rrshift__", __rrshift__),
         ("__eq__", __eq__),
         ("__ne__", __ne__),
         ("__lt__", __lt__),

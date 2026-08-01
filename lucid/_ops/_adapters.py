@@ -25,6 +25,7 @@ from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _unwrap_or_scalar
+from lucid._types import Scalar, TensorOrScalar
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -576,12 +577,27 @@ def _meshgrid_adapter(*tensors: Tensor, indexing: str = "ij") -> list[_Impl]:
     return _C_engine.meshgrid(impls, indexing == "xy")
 
 
-def _where_adapter(cond: Tensor, x: Tensor, y: Tensor) -> _Impl:
-    """where(cond, x, y) — auto-cast cond to bool to match reference behaviour."""
+def _where_adapter(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> _Impl:
+    """where(cond, x, y) — bool-cast the condition, promote scalar branches.
+
+    Either branch may be a Python scalar, which is the common spelling for
+    a masked constant: ``where(x > 0, 1.0, -1.0)``.  Each is promoted
+    against whichever operand is already a tensor, so the pair keeps the
+    dtype it would have had written the long way.
+    """
     c = _unwrap(cond)
     if c.dtype != _C_engine.Bool:
         c = _C_engine.astype(c, _C_engine.Bool)
-    return _C_engine.where(c, _unwrap(x), _unwrap(y))
+    # Tensor is a TYPE_CHECKING-only name here, so the test is for
+    # scalar-ness rather than for the wrapper type.
+    ref_impl = c
+    for branch in (x, y):
+        if not isinstance(branch, (bool, int, float, complex)):
+            ref_impl = _unwrap(branch)
+            break
+    return _C_engine.where(
+        c, _unwrap_or_scalar(x, ref_impl), _unwrap_or_scalar(y, ref_impl)
+    )
 
 
 def _masked_fill_adapter(x_impl: _Impl, mask: Tensor, value: float) -> _Impl:
@@ -658,13 +674,20 @@ def _bucketize_adapter(
 
 
 def _isclose_adapter(
-    a_impl: _Impl,
-    b_impl: _Impl,
+    a_impl: _Impl | Scalar,
+    b_impl: _Impl | Scalar,
     rtol: float = 1e-5,
     atol: float = 1e-8,
     equal_nan: bool = False,
 ) -> _Impl:
-    """isclose(a, b, rtol, atol, equal_nan) — equal_nan branch handled here."""
+    """isclose(a, b, rtol, atol, equal_nan) — equal_nan branch handled here.
+
+    Either operand may be a Python scalar; comparing a tensor against a
+    literal tolerance target is the ordinary use.
+    """
+    ref = a_impl if isinstance(a_impl, _C_engine.TensorImpl) else None
+    b_impl = _unwrap_or_scalar(b_impl, ref)
+    a_impl = _unwrap_or_scalar(a_impl, b_impl)
     if equal_nan:
         # ``isclose ∨ (isnan(a) ∧ isnan(b))`` — we lift to bitwise on bool
         # tensors so the result stays a single bool tensor.

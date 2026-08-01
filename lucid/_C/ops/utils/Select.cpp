@@ -46,8 +46,10 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "Layout.h"  // broadcast_to_op
 #include "_Detail.h"
 
 namespace lucid {
@@ -348,25 +350,51 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
                              std::string(device_name(y->device())), "where");
     const Dtype dt = x->dtype();
     const Device device = x->device();
-    OpScopeFull scope{"where", device, dt, x->shape()};
-    // CPU backend requires identical shapes; GPU backend handles broadcasting internally.
-    if (device == Device::CPU && cond->shape() != x->shape())
-        throw ShapeMismatch(x->shape(), y->shape(), "where (CPU same-shape)");
+
+    // All three operands broadcast against each other, as they do for every
+    // other elementwise op.  The CPU kernels index their operands linearly
+    // and cannot broadcast, so the expansion is materialised there; MLX does
+    // it natively, so the GPU operands pass through untouched and no node is
+    // added to a trace.  Routing the backward through the broadcast tensors
+    // is what makes the gradient correct — broadcast_to's own backward sums
+    // over the axes it expanded.
+    //
+    // The guard this replaces compared cond against x but never x against y,
+    // so a mismatched y was read past its end by the CPU kernel instead of
+    // being rejected.
+    Shape out_shape = x->shape();
+    if (!(cond->shape() == x->shape() && x->shape() == y->shape())) {
+        out_shape = detail::broadcast_shapes(detail::broadcast_shapes(cond->shape(), x->shape()),
+                                             y->shape());
+    }
+    TensorImplPtr cond_b = cond;
+    TensorImplPtr x_b = x;
+    TensorImplPtr y_b = y;
+    if (device == Device::CPU) {
+        if (cond->shape() != out_shape)
+            cond_b = broadcast_to_op(cond, out_shape);
+        if (x->shape() != out_shape)
+            x_b = broadcast_to_op(x, out_shape);
+        if (y->shape() != out_shape)
+            y_b = broadcast_to_op(y, out_shape);
+    }
+
+    OpScopeFull scope{"where", device, dt, out_shape};
     auto out_storage = backend::Dispatcher::for_device(device).where_op(
-        cond->storage(), x->storage(), y->storage(), x->shape(), dt);
-    Shape out_shape;
+        cond_b->storage(), x_b->storage(), y_b->storage(), x_b->shape(), dt);
+    Shape result_shape;
     if (device == Device::GPU) {
         // Read the actual output shape from the MLX array (may have been broadcast).
         const auto& gs = storage_gpu(out_storage);
-        out_shape = mlx_shape_to_lucid(gs.arr->shape());
+        result_shape = mlx_shape_to_lucid(gs.arr->shape());
     } else {
-        out_shape = x->shape();
+        result_shape = out_shape;
     }
-    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    auto result = fresh(std::move(out_storage), std::move(result_shape), dt, device);
     if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({cond, x, y}, result);
+        trc->on_op_io({cond_b, x_b, y_b}, result);
     }
-    return attach_where_grad(cond, x, y, std::move(result));
+    return attach_where_grad(cond_b, x_b, y_b, std::move(result));
 }
 
 // Replace positions of `a` where `mask` is true with scalar `value`.  Both

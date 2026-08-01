@@ -17,6 +17,8 @@ the interleaved C64 storage, GPU dispatches to ``mlx::core::real`` /
 from typing import TYPE_CHECKING
 
 import lucid
+from lucid._ops.composite.elementwise import _promote_pair
+from lucid._types import TensorOrScalar
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -62,7 +64,7 @@ def angle(input: Tensor) -> Tensor:
     return lucid.atan2(lucid.imag(input), lucid.real(input))
 
 
-def polar(abs: Tensor, angle: Tensor) -> Tensor:
+def polar(abs: TensorOrScalar, angle: TensorOrScalar) -> Tensor:
     r"""Build a complex tensor from polar coordinates (magnitude, phase).
 
     Constructs each complex output entry as
@@ -107,6 +109,7 @@ def polar(abs: Tensor, angle: Tensor) -> Tensor:
     >>> lucid.polar(r, th)
     Tensor([1.+0.j, 0.+2.j])
     """
+    abs, angle = _promote_pair(abs, angle)
     return lucid.complex(abs * lucid.cos(angle), abs * lucid.sin(angle))
 
 
