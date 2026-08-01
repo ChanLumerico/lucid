@@ -135,6 +135,27 @@ public:
     //     Three-element vector ``{dx, dW, db}`` matching the saved-input
     //     ordering (``x``, ``W``, ``b``).
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Same three gradients, built from ops instead of one fused backend
+    // call, so that each stays differentiable.
+    //
+    // What :meth:`apply` returns are Storages, which carry no autograd
+    // history — enough for one backward pass and nothing beyond it.  Any
+    // second derivative through a dense layer goes through here instead:
+    // a gradient penalty, a meta-learning inner step, a Hessian-vector
+    // product, or the divergence of a continuous flow's vector field.
+    //
+    // Parameters
+    // ----------
+    // grad_out : const TensorImplPtr&
+    //     Incoming gradient of shape $(\ast, N)$, itself possibly carrying
+    //     a ``grad_fn``.
+    //
+    // Returns
+    // -------
+    // std::vector<TensorImplPtr>
+    //     Three-element vector ``{dx, dW, db}`` in saved-input order.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public free-function entry point for the linear op.

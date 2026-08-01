@@ -154,6 +154,13 @@ public:
     // Eager-mode backward: dispatches to ``IBackend::silu_backward`` with the
     // saved input and the upstream gradient.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops so
+    // the gradient itself stays differentiable.  The fused backend kernel
+    // returns a Storage, which carries no graph — a second derivative has to
+    // come from the expression, not the kernel.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Autograd node for the tanh-approximation GeLU
@@ -193,6 +200,11 @@ public:
     // Eager-mode backward: dispatches to ``IBackend::gelu_backward`` with
     // the saved input and the upstream gradient.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the analytic derivative of the tanh
+    // approximation, composed from ops so it can be differentiated again.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Autograd node for the exact (Gaussian-CDF) GeLU
@@ -227,6 +239,11 @@ public:
 
     // Eager-mode backward: dispatches to ``IBackend::gelu_exact_backward``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: :math:`\Phi(x) + x\,\phi(x)` built from ``erf``
+    // and ``exp``, both of which carry their own graph-mode formulas.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Autograd node for Leaky ReLU $y = x$ if $x > 0$ else $\text{slope} \cdot x$.

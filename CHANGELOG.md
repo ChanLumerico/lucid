@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fuse the implicit solver's per-iteration host reads into one engine op
 
+- double-backward formulas for linear, silu and gelu
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

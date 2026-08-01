@@ -25,8 +25,13 @@
 #include "../core/Validate.h"
 #include "../kernel/BinaryKernel.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Matmul.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/ufunc/Reductions.h"
+#include "../ops/ufunc/Transpose.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -130,6 +135,42 @@ std::vector<Storage> LinearBackward::apply(Storage grad_out) {
     return backend::Dispatcher::for_device(device_).linear_backward(
         grad_out, saved_inputs_[0], saved_inputs_[1], input_shapes_[0], input_shapes_[1],
         input_shapes_[2], dtype_);
+}
+
+std::vector<TensorImplPtr> LinearBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // The eager path hands the whole job to one fused backend call, which
+    // returns Storages and therefore no graph.  A second derivative has to
+    // come from the three GEMMs written out, where each factor keeps its
+    // own backward node.
+    const auto& x = saved_impl_inputs_[0];
+    const auto& W = saved_impl_inputs_[1];
+    const auto& b = saved_impl_inputs_[2];
+    if (!x || !W || !grad_out)
+        ErrorBuilder("linear").fail("graph-mode backward is missing a saved input");
+
+    const FlatX flat = flatten_x(input_shapes_[0]);
+    const auto M = static_cast<std::int64_t>(flat.M);
+    const auto K = static_cast<std::int64_t>(flat.K);
+    const std::int64_t N = W->shape()[0];
+
+    // Collapse the leading batch dims so all three products are plain 2-D
+    // GEMMs, exactly as the fused kernel does internally.
+    auto g_flat = reshape_op(grad_out, {M, N});
+    auto x_flat = reshape_op(x, {M, K});
+
+    // dx = g W, back to x's original shape.
+    std::vector<std::int64_t> x_shape(input_shapes_[0].begin(), input_shapes_[0].end());
+    auto dx = reshape_op(matmul_op(g_flat, W), x_shape);
+    // dW = g^T x.
+    auto dW = matmul_op(transpose_op(g_flat), x_flat);
+    // db = the gradient summed over every row.  A caller that passed an
+    // empty bias (the C++ unbiased form) gets a matching empty gradient
+    // rather than a length-N one it has no slot for.
+    TensorImplPtr db = shape_numel(input_shapes_[2]) == 0
+                           ? zeros_like_op(b)
+                           : sum_op(g_flat, std::vector<int>{0}, /*keepdims=*/false);
+
+    return {dx, dW, db};
 }
 
 TensorImplPtr linear_op(const TensorImplPtr& x, const TensorImplPtr& W, const TensorImplPtr& b) {

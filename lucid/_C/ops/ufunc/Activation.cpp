@@ -27,6 +27,8 @@
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
 #include "Arith.h"
+#include "Exponential.h"
+#include "Hyperbolic.h"
 
 namespace lucid {
 
@@ -101,6 +103,17 @@ Storage SiluBackward::grad_formula(const Storage& g) {
                                                                   dtype_);
 }
 
+TensorImplPtr SiluBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    // dx = σ(x) * (1 + x*(1 - σ(x))) * g — the same expression the fused
+    // kernel evaluates, written in ops so it keeps a graph of its own.
+    auto s = sigmoid_op(x);
+    auto one = ones_like_op(s);
+    auto inner = add_op(one, mul_op(x, sub_op(one, s)));
+    return mul_op(g, mul_op(s, inner));
+}
+
 TensorImplPtr silu_op(const TensorImplPtr& a) {
     return SiluBackward::forward(a);
 }
@@ -117,6 +130,27 @@ Storage GeluBackward::grad_formula(const Storage& g) {
                                                                   dtype_);
 }
 
+TensorImplPtr GeluBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    // y = 0.5x(1 + tanh(u)) with u = c(x + a x^3), c = sqrt(2/pi).
+    // dy/dx = 0.5(1 + tanh u) + 0.5x (1 - tanh^2 u) u',  u' = c(1 + 3a x^2).
+    constexpr double kC = 0.7978845608028654;  // sqrt(2 / pi)
+    constexpr double kA = 0.044715;
+
+    auto x_sq = square_op(x);
+    auto one = ones_like_op(x);
+    auto u = mul_op(full_like_op(x, kC), add_op(x, mul_op(full_like_op(x, kA), mul_op(x_sq, x))));
+    auto th = tanh_op(u);
+    auto sech_sq = sub_op(ones_like_op(th), square_op(th));
+    auto du = mul_op(full_like_op(x, kC), add_op(one, mul_op(full_like_op(x, 3.0 * kA), x_sq)));
+
+    auto half = full_like_op(x, 0.5);
+    auto derivative = add_op(mul_op(half, add_op(ones_like_op(th), th)),
+                             mul_op(mul_op(half, x), mul_op(sech_sq, du)));
+    return mul_op(g, derivative);
+}
+
 TensorImplPtr gelu_op(const TensorImplPtr& a) {
     return GeluBackward::forward(a);
 }
@@ -129,6 +163,22 @@ const OpSchema GeluExactBackward::schema_v1{"gelu_exact", 1, AmpPolicy::ForceFP3
 Storage GeluExactBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).gelu_exact_backward(saved_inputs_[0], g,
                                                                         out_shape_, dtype_);
+}
+
+TensorImplPtr GeluExactBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                   const TensorImplPtr& x,
+                                                   const TensorImplPtr&) {
+    // dy/dx = Phi(x) + x * phi(x), with Phi the Gaussian CDF and phi its
+    // density — both reachable from erf and exp, which carry graph-mode
+    // formulas of their own.
+    constexpr double kInvSqrt2 = 0.7071067811865476;
+    constexpr double kInvSqrt2Pi = 0.3989422804014327;
+
+    auto cdf = mul_op(full_like_op(x, 0.5),
+                      add_op(ones_like_op(x), erf_op(mul_op(x, full_like_op(x, kInvSqrt2)))));
+    auto pdf =
+        mul_op(full_like_op(x, kInvSqrt2Pi), exp_op(mul_op(full_like_op(x, -0.5), square_op(x))));
+    return mul_op(g, add_op(cdf, mul_op(x, pdf)));
 }
 
 TensorImplPtr gelu_exact_op(const TensorImplPtr& a) {
