@@ -17,6 +17,7 @@
 #include "../bfunc/Mul.h"
 #include "../complex/Imag.h"
 #include "../complex/Real.h"
+#include "../gfunc/Gfunc.h"
 #include "Exponential.h"
 #include "ScalarParam.h"
 
@@ -91,6 +92,14 @@ TensorImplPtr abs_op(const TensorImplPtr& a) {
     }
     return AbsBackward::forward(a);
 }
+TensorImplPtr AbsBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr& x,
+                                             const TensorImplPtr&) {
+    // |x|' = sign(x), which is 0 at the kink — the same
+    // subgradient the eager path takes.
+    return mul_op(g, sign_op(x));
+}
+
 LUCID_REGISTER_OP(AbsBackward)
 
 // sign — AmpPolicy::KeepInput preserves the input dtype (sign is valid on
@@ -108,6 +117,13 @@ Storage SignBackward::grad_formula(const Storage& g) {
 TensorImplPtr sign_op(const TensorImplPtr& a) {
     return SignBackward::forward(a);
 }
+TensorImplPtr SignBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr&,
+                                              const TensorImplPtr&) {
+    // A step function is flat wherever it is differentiable.
+    return zeros_like_op(g);
+}
+
 LUCID_REGISTER_OP(SignBackward)
 
 // reciprocal — saves input to compute x^2 in the backward pass.

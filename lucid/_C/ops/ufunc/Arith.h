@@ -92,6 +92,11 @@ public:
     }
     // Backward — $\partial y/\partial x = \mathrm{sign}(x)$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Autograd node for the element-wise sign function
@@ -134,6 +139,11 @@ public:
     // Backward — $\partial y/\partial x = 0$ almost everywhere; returns an
     // empty zero-sentinel since no autograd edge is wired.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
 };
 
 // Autograd node for the element-wise reciprocal $y = 1/x$.

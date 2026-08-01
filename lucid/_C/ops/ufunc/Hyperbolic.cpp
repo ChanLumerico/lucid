@@ -30,6 +30,12 @@ Storage SinhBackward::grad_formula(const Storage& g) {
 TensorImplPtr sinh_op(const TensorImplPtr& a) {
     return SinhBackward::forward(a);
 }
+TensorImplPtr SinhBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    return mul_op(g, cosh_op(x));
+}
+
 LUCID_REGISTER_OP(SinhBackward)
 
 const OpSchema CoshBackward::schema_v1{"cosh", 1, AmpPolicy::Promote, true};
@@ -44,6 +50,12 @@ Storage CoshBackward::grad_formula(const Storage& g) {
 TensorImplPtr cosh_op(const TensorImplPtr& a) {
     return CoshBackward::forward(a);
 }
+TensorImplPtr CoshBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    return mul_op(g, sinh_op(x));
+}
+
 LUCID_REGISTER_OP(CoshBackward)
 
 const OpSchema TanhBackward::schema_v1{"tanh", 1, AmpPolicy::Promote, true};

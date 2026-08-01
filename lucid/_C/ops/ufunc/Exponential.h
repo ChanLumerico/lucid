@@ -132,6 +132,11 @@ public:
     }
     // Backward — $\partial y/\partial x = 1/(x \ln 2)$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Autograd node for the element-wise square root $y = \sqrt{x}$.
@@ -217,6 +222,11 @@ public:
     }
     // Backward — $\partial y/\partial x = -\tfrac{1}{2}\,y^3$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
 // Autograd node for the element-wise error function

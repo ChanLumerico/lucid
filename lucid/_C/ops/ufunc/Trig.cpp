@@ -7,6 +7,13 @@
 #include "Trig.h"
 
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Add.h"
+#include "../bfunc/Div.h"
+#include "../bfunc/Mul.h"
+#include "../bfunc/Sub.h"
+#include "../gfunc/Gfunc.h"
+#include "Arith.h"
+#include "Exponential.h"
 
 namespace lucid {
 
@@ -22,6 +29,13 @@ Storage SinBackward::grad_formula(const Storage& g) {
 TensorImplPtr sin_op(const TensorImplPtr& a) {
     return SinBackward::forward(a);
 }
+TensorImplPtr SinBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr& x,
+                                             const TensorImplPtr&) {
+    auto c = cos_op(x);
+    return mul_op(g, c);
+}
+
 LUCID_REGISTER_OP(SinBackward)
 
 const OpSchema CosBackward::schema_v1{"cos", 1, AmpPolicy::Promote, true};
@@ -37,6 +51,13 @@ Storage CosBackward::grad_formula(const Storage& g) {
 TensorImplPtr cos_op(const TensorImplPtr& a) {
     return CosBackward::forward(a);
 }
+TensorImplPtr CosBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr& x,
+                                             const TensorImplPtr&) {
+    auto s = sin_op(x);
+    return mul_op(g, neg_op(s));
+}
+
 LUCID_REGISTER_OP(CosBackward)
 
 const OpSchema TanBackward::schema_v1{"tan", 1, AmpPolicy::Promote, true};
@@ -53,6 +74,14 @@ Storage TanBackward::grad_formula(const Storage& g) {
 TensorImplPtr tan_op(const TensorImplPtr& a) {
     return TanBackward::forward(a);
 }
+TensorImplPtr TanBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr& x,
+                                             const TensorImplPtr&) {
+    // 1 + tan^2(x) = sec^2(x)
+    auto t = tan_op(x);
+    return mul_op(g, add_op(ones_like_op(t), square_op(t)));
+}
+
 LUCID_REGISTER_OP(TanBackward)
 
 const OpSchema AsinBackward::schema_v1{"arcsin", 1, AmpPolicy::Promote, true};
@@ -73,6 +102,14 @@ Storage AsinBackward::grad_formula(const Storage& g) {
 TensorImplPtr arcsin_op(const TensorImplPtr& a) {
     return AsinBackward::forward(a);
 }
+TensorImplPtr AsinBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    // 1 / sqrt(1 - x^2)
+    auto d = sqrt_op(sub_op(ones_like_op(x), square_op(x)));
+    return div_op(g, d);
+}
+
 LUCID_REGISTER_OP(AsinBackward)
 
 const OpSchema AcosBackward::schema_v1{"arccos", 1, AmpPolicy::Promote, true};
@@ -92,6 +129,14 @@ Storage AcosBackward::grad_formula(const Storage& g) {
 TensorImplPtr arccos_op(const TensorImplPtr& a) {
     return AcosBackward::forward(a);
 }
+TensorImplPtr AcosBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    // -1 / sqrt(1 - x^2)
+    auto d = sqrt_op(sub_op(ones_like_op(x), square_op(x)));
+    return neg_op(div_op(g, d));
+}
+
 LUCID_REGISTER_OP(AcosBackward)
 
 const OpSchema AtanBackward::schema_v1{"arctan", 1, AmpPolicy::Promote, true};
@@ -108,6 +153,13 @@ Storage AtanBackward::grad_formula(const Storage& g) {
 TensorImplPtr arctan_op(const TensorImplPtr& a) {
     return AtanBackward::forward(a);
 }
+TensorImplPtr AtanBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    // 1 / (1 + x^2)
+    return div_op(g, add_op(ones_like_op(x), square_op(x)));
+}
+
 LUCID_REGISTER_OP(AtanBackward)
 
 }  // namespace lucid

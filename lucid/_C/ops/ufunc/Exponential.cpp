@@ -78,6 +78,14 @@ Storage Log2Backward::grad_formula(const Storage& g) {
 TensorImplPtr log2_op(const TensorImplPtr& a) {
     return Log2Backward::forward(a);
 }
+TensorImplPtr Log2Backward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    // 1 / (x ln 2)
+    constexpr double kLn2 = 0.6931471805599453;
+    return div_op(g, mul_op(x, full_like_op(x, kLn2)));
+}
+
 LUCID_REGISTER_OP(Log2Backward)
 
 // sqrt — AmpPolicy::Promote (not ForceFP32) so that float64 inputs remain f64.
@@ -122,6 +130,14 @@ Storage RsqrtBackward::grad_formula(const Storage& g) {
 TensorImplPtr rsqrt_op(const TensorImplPtr& a) {
     return RsqrtBackward::forward(a);
 }
+TensorImplPtr RsqrtBackward::grad_formula_impl(const TensorImplPtr& g,
+                                               const TensorImplPtr&,
+                                               const TensorImplPtr& out) {
+    // d/dx x^(-1/2) = -1/2 x^(-3/2) = -1/2 * out^3
+    auto cubed = mul_op(out, mul_op(out, out));
+    return mul_op(g, mul_op(full_like_op(out, -0.5), cubed));
+}
+
 LUCID_REGISTER_OP(RsqrtBackward)
 
 // erf — AmpPolicy::Promote so float64 inputs remain float64.

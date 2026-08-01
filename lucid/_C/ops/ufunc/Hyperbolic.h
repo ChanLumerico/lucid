@@ -48,6 +48,11 @@ public:
     }
     // Backward — $\partial y/\partial x = \cosh x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Autograd node for element-wise hyperbolic cosine $y = \cosh(x)$.
@@ -81,6 +86,11 @@ public:
     }
     // Backward — $\partial y/\partial x = \sinh x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Autograd node for element-wise hyperbolic tangent $y = \tanh(x)$.

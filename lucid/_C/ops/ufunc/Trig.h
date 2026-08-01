@@ -46,6 +46,11 @@ public:
     }
     // Backward — $\partial y/\partial x = \cos x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Compute $y = \sin(x)$ element-wise.  Allocates a fresh output of the
@@ -96,6 +101,11 @@ public:
     }
     // Backward — $\partial y/\partial x = -\sin x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Compute $y = \cos(x)$ element-wise.  Allocates a fresh output of the
@@ -148,6 +158,11 @@ public:
     }
     // Backward — $\partial y/\partial x = \sec^2 x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Compute $y = \tan(x)$ element-wise.  Allocates a fresh output of the
@@ -201,6 +216,11 @@ public:
     }
     // Backward — $\partial y/\partial x = 1/\sqrt{1 - x^2}$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Compute $y = \arcsin(x)$ element-wise.  Allocates a fresh output of the
@@ -254,6 +274,11 @@ public:
     }
     // Backward — $\partial y/\partial x = -1/\sqrt{1 - x^2}$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Compute $y = \arccos(x)$ element-wise.  Allocates a fresh output of the
@@ -306,6 +331,11 @@ public:
     }
     // Backward — $\partial y/\partial x = 1/(1 + x^2)$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward: the same derivative built from composable ops,
+    // so the gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Compute $y = \arctan(x)$ element-wise.  Allocates a fresh output of the
