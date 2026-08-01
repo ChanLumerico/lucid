@@ -342,6 +342,54 @@ std::size_t capture_slot(const Node* node, const CaptureTargets& targets) {
     return it == targets.by_node.end() ? kNoSlot : it->second;
 }
 
+// The nodes from which some requested input is still reachable.
+//
+// backward() has to walk the whole graph — every leaf is a destination.
+// grad() does not: only the paths between the root and the requested
+// inputs carry a gradient anybody asked for, so anything off them is work
+// with no result to show for it.  Pruning it is not merely an
+// optimisation.  Asking for the gradient with respect to an interior
+// tensor is how a vector-Jacobian product is taken mid-graph — the
+// divergence of a continuous flow's vector field, a gradient penalty, a
+// Hessian-vector product — and continuing past that tensor drags the
+// traversal into whatever produced it, which under create_graph must then
+// supply a double-backward formula it was never asked to have.
+//
+// One reverse sweep suffices: ``order`` is topological, so a node's
+// successors have already been decided by the time it is examined.
+std::unordered_set<const Node*> reaching_nodes(const std::vector<std::shared_ptr<Node>>& order,
+                                               const CaptureTargets& targets) {
+    std::unordered_set<const Node*> reaching;
+    for (auto it = order.rbegin(); it != order.rend(); ++it) {
+        const Node* node = it->get();
+        bool hit = targets.by_node.find(node) != targets.by_node.end();
+        if (!hit) {
+            for (const auto& edge : node->next_edges()) {
+                if (edge.node && reaching.find(edge.node.get()) != reaching.end()) {
+                    hit = true;
+                    break;
+                }
+            }
+        }
+        if (hit)
+            reaching.insert(node);
+    }
+    return reaching;
+}
+
+// Whether this node's gradient has anywhere left to go.
+//
+// Distinct from membership in ``reaching``: a requested input reaches
+// itself, but its gradient is captured rather than propagated unless a
+// *further* request sits upstream of it.
+bool propagates(const Node* node, const std::unordered_set<const Node*>& reaching) {
+    for (const auto& edge : node->next_edges()) {
+        if (edge.node && reaching.find(edge.node.get()) != reaching.end())
+            return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
@@ -372,6 +420,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         auto seed_impl = std::make_shared<TensorImpl>(std::move(seed), root->shape(), root->dtype(),
                                                       root->device(), false);
         auto order = topo_order(root->grad_fn());
+        const auto reaching = reaching_nodes(order, targets);
         std::unordered_map<Node*, TensorImplPtr> pending;
         pending.emplace(root->grad_fn().get(), std::move(seed_impl));
 
@@ -388,6 +437,8 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             // Executing an AccumulateGrad is precisely what writes a leaf's
             // .grad, so this path never does — captured or not, stop here.
             if (dynamic_cast<const AccumulateGrad*>(node.get()) != nullptr)
+                continue;
+            if (!propagates(node.get(), reaching))
                 continue;
 
             node->validate_versions();
@@ -412,6 +463,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
 
     run_fusion_pass(root->grad_fn().get());
     auto order = topo_order(root->grad_fn());
+    const auto reaching = reaching_nodes(order, targets);
 
     std::unordered_map<Node*, Storage> pending;
     if (root->grad_fn()->is_barrier()) {
@@ -437,6 +489,8 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         // Executing an AccumulateGrad is precisely what writes a leaf's
         // .grad, so this path never does — captured or not, stop here.
         if (dynamic_cast<const AccumulateGrad*>(node.get()) != nullptr)
+            continue;
+        if (!propagates(node.get(), reaching))
             continue;
 
         node->validate_versions();

@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fail loudly, honour seminorm, and say what the interpolant is
 
+- stop grad() at the tensors it was asked about
+
 ### Changed
 
 - give the engine ops one shared operand check
