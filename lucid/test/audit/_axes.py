@@ -575,9 +575,18 @@ class NonFiniteAxis(Axis):
     name = "nonfinite"
     summary = "NaN propagation through elementwise ops"
 
-    #: Ops whose whole job is to consume or classify a NaN.
+    #: Ops whose whole job is to consume or classify a NaN, plus the ones
+    #: whose *definition* is to ignore it.  ``fmax`` and ``fmin`` are the
+    #: IEEE maximumNumber / minimumNumber operations — returning the
+    #: non-NaN operand is what distinguishes them from ``maximum`` and
+    #: ``minimum``, which do propagate — and ``sign(nan)`` is 0 in the
+    #: reference.  Verified against it rather than assumed.
     _CONSUMERS = frozenset(
         {
+            "fmax",
+            "fmin",
+            "sign",
+            "sign_",
             "isnan",
             "isinf",
             "isfinite",
@@ -645,13 +654,47 @@ class NonFiniteAxis(Axis):
         except Exception:  # noqa: BLE001
             return self._finding(symbol, Status.SKIP, "primary argument has no shape")
 
-        probe = np.resize(_probe.NON_FINITE, shape).copy()
-        probe.reshape(-1)[0] = np.nan
+        # Every element, not just the first.  A single NaN at index 0 asks
+        # a weaker question than it looks: a crop, a ``take``, a pooling
+        # window or a ``masked_select`` can legitimately not include that
+        # element, and reported a defect for reading somewhere else.  If
+        # the whole input is NaN then any op that reads *any* of it has to
+        # say so.
+        probe = np.full(shape, np.nan, dtype=np.float64)
         try:
             out = _probe.to_numpy(fn(*call.with_primary(probe).args, **call.kwargs))
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
+            )
+
+        # An op that ignores its input cannot propagate anything through it.
+        # ``eye``, ``ones_``, ``new_zeros``, ``dirac`` and the rest of the
+        # factories take a tensor only for its shape or its device, and
+        # demanding a NaN out of them was demanding they corrupt their own
+        # output.  Detected rather than listed: feed a second, different
+        # input and see whether the answer moves.
+        try:
+            other = _probe.to_numpy(
+                fn(
+                    *call.with_primary(np.full(shape, 0.5, dtype=np.float64)).args,
+                    **call.kwargs,
+                )
+            )
+        except Exception:  # noqa: BLE001
+            other = None
+        if (
+            other is not None
+            and out is not None
+            and np.array_equal(
+                np.nan_to_num(np.asarray(out, dtype=np.float64), nan=0.0),
+                np.nan_to_num(np.asarray(other, dtype=np.float64), nan=0.0),
+            )
+        ):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "output does not depend on the input's values",
             )
         if out is None or out.size == 0:
             return self._finding(symbol, Status.SKIP, "no comparable output")
@@ -706,13 +749,9 @@ class BroadcastAxis(Axis):
             with_b = _probe.to_numpy(fn(a0, b0))
             with_c = _probe.to_numpy(fn(a0, c0))
         except Exception:  # noqa: BLE001
-            return self._finding(
-                symbol, Status.NOT_APPLICABLE, "not a two-tensor op"
-            )
+            return self._finding(symbol, Status.NOT_APPLICABLE, "not a two-tensor op")
         if with_b is None or with_c is None:
-            return self._finding(
-                symbol, Status.NOT_APPLICABLE, "not a two-tensor op"
-            )
+            return self._finding(symbol, Status.NOT_APPLICABLE, "not a two-tensor op")
         if np.array_equal(with_b, with_c, equal_nan=True):
             return self._finding(
                 symbol, Status.SKIP, "second argument does not affect the result"

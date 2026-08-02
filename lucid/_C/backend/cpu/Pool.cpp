@@ -16,6 +16,7 @@
 #include "Pool.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace lucid::backend::cpu {
@@ -24,6 +25,12 @@ namespace {
 
 // 2-D max pooling forward typed implementation.
 template <typename T>
+// NaN wins the pooling window, exactly as it does in ``max``.
+//
+// ``best`` starts at -infinity and every comparison against a NaN is
+// false, so a window that was entirely NaN pooled to *-inf* — not merely
+// a wrong answer but an impossible one, since no input element was -inf.
+// The reference pools it to nan.  Three sites: 1-D, 2-D and 3-D.
 void max_pool2d_forward_typed(const T* x,
                               T* y,
                               std::int32_t* argmax,
@@ -59,7 +66,7 @@ void max_pool2d_forward_typed(const T* x,
                                 continue;
                             const int idx = ih * W + iw;
                             const T v = xb[idx];
-                            if (v > best) {
+                            if (std::isnan(v) || v > best) {
                                 best = v;
                                 best_idx = idx;
                             }
@@ -188,7 +195,7 @@ void max_pool1d_forward_typed(
                     if (il < 0 || il >= L)
                         continue;
                     const T v = xb[il];
-                    if (v > best) {
+                    if (std::isnan(v) || v > best) {
                         best = v;
                         best_idx = il;
                     }
@@ -308,7 +315,7 @@ void max_pool3d_forward_typed(const T* x,
                                         continue;
                                     const int idx = (id * H + ih) * W + iw;
                                     const T v = xb[idx];
-                                    if (v > best) {
+                                    if (std::isnan(v) || v > best) {
                                         best = v;
                                         best_idx = idx;
                                     }

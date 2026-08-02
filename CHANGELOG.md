@@ -108,6 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - NaN through max, min, sort and the arg-reduces
 
+- NaN through pooling, and stop demanding it where it cannot go
+
 ### Changed
 
 - give the engine ops one shared operand check
