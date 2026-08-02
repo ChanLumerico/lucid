@@ -1,15 +1,19 @@
 """``python -m lucid.test.audit`` — the exhaustive sweep.
 
+Installed as ``lucid-audit``; ``python -m lucid.test.audit`` is the same
+program and works without reinstalling.
+
 Examples
 --------
 ::
 
-    python -m lucid.test.audit                       # everything
-    python -m lucid.test.audit --quick               # fewer domains, smaller probes
-    python -m lucid.test.audit --axis grad,nonfinite
-    python -m lucid.test.audit --subsystem nn.functional --select 'conv|pool'
-    python -m lucid.test.audit --json audit.json --known lucid/test/audit/known.json
-    python -m lucid.test.audit --list-uncovered      # what the harness cannot reach
+    lucid-audit                          # everything
+    lucid-audit --coverage               # reach and depth, running nothing
+    lucid-audit --quick                  # fewer domains, smaller probes
+    lucid-audit --axis grad,nonfinite
+    lucid-audit --subsystem nn.functional --select 'conv|pool'
+    lucid-audit --json audit.json --known lucid/test/audit/known.json
+    lucid-audit --list-uncovered         # what the harness cannot reach
 
 Exit status is ``0`` when no defect survived, ``1`` when one did, ``2``
 when the harness itself broke.  ``--list-uncovered`` is not decoration:
