@@ -43,7 +43,7 @@ def _inject_methods(tensor_cls: type) -> None:
                     if isinstance(result, (list, tuple)):
                         return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
                     return _wrap(result)
-                return cast(Tensor, result)
+                return cast("Tensor", result)
 
             method_list.__name__ = e.method_name or e.name
             return method_list
@@ -75,7 +75,7 @@ def _inject_methods(tensor_cls: type) -> None:
                         if isinstance(result, (list, tuple)):
                             return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
                         return _wrap(result)
-                    return cast(Tensor, result)
+                    return cast("Tensor", result)
 
             method.__name__ = e.method_name or e.name
             return method

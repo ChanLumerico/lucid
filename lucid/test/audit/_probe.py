@@ -118,18 +118,31 @@ def sample(domain: str, shape: "Sequence[int]" = SHAPE) -> np.ndarray:
 
 
 def to_numpy(value: Any) -> np.ndarray | None:
-    """Flatten whatever an op returned into an array, or ``None``."""
-    if isinstance(value, tuple | list):
-        for item in value:
-            got = to_numpy(item)
-            if got is not None:
-                return got
+    """Whatever an op returned, as an array, or ``None``.
+
+    Not only tensors.  ``x.ndim``, ``lucid.is_floating_point(x)`` and
+    ``x.size()`` answer with a plain int, bool or tuple, and a survey that
+    only recognises tensors reports every predicate and every shape
+    accessor as uncallable — 30-odd symbols marked as gaps that were
+    working perfectly.
+    """
+    if value is None:
         return None
     if hasattr(value, "numpy"):
         try:
             return np.asarray(value.numpy())
         except Exception:  # noqa: BLE001 - surveying, not asserting
             return None
+    if isinstance(value, bool | int | float | complex):
+        return np.asarray(value)
+    if isinstance(value, tuple | list):
+        if value and all(isinstance(v, bool | int | float) for v in value):
+            return np.asarray(value)
+        for item in value:
+            got = to_numpy(item)
+            if got is not None:
+                return got
+        return None
     return None
 
 

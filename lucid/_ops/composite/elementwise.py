@@ -980,7 +980,11 @@ def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
         x = lucid.tensor(float(cast(float, x)), dtype=lucid.float64, device=y.device)
     if not _is_tensor(y) and _is_tensor(x):
         y = lucid.tensor(float(cast(float, y)), dtype=lucid.float64, device=x.device)
-    return lucid.pow(cast(Tensor, x), cast(Tensor, y))
+    # ``cast`` evaluates its first argument at run time, and ``Tensor``
+    # is imported here only under ``TYPE_CHECKING`` — so the bare name
+    # raised ``NameError`` on **every** call and float_power had never
+    # worked.  The string form is what the rest of the codebase uses.
+    return lucid.pow(cast("Tensor", x), cast("Tensor", y))
 
 
 def _promote_pair(a: TensorOrScalar, b: TensorOrScalar) -> tuple[Tensor, Tensor]:

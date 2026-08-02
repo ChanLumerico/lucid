@@ -527,6 +527,12 @@ class SerializationAxis(Axis):
     summary = "save / load round trip preserves values, dtype and shape"
     kinds = frozenset({"serialize"})
 
+    def applies(self, symbol: "Symbol") -> bool:
+        # ``save`` and ``load`` touch the filesystem, so they are flagged
+        # stateful and the base class would refuse them.  This axis calls
+        # them on purpose, inside a temporary directory it owns.
+        return symbol.kind == "serialize" and symbol.short in ("save", "load")
+
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         if symbol.short not in ("save", "load"):
             return self._finding(symbol, Status.SKIP, "not the save/load pair")

@@ -93,7 +93,7 @@ class Axis:
         """
         last = "no candidate invocation ran"
         for domain in ctx.domains:
-            for call in _specs.invocations(symbol.short, domain):
+            for call in _specs.invocations(symbol.short, domain, symbol.qualname):
                 try:
                     out = fn(*call.args, **call.kwargs)
                 except Exception as exc:  # noqa: BLE001 - surveying, not asserting
@@ -394,7 +394,7 @@ class EntryPointAxis(Axis):
         results: dict[str, Any] = {}
         errors: dict[str, str] = {}
         for domain in ctx.domains:
-            for call in _specs.invocations(symbol.short, domain):
+            for call in _specs.invocations(symbol.short, domain, symbol.qualname):
                 results.clear()
                 errors.clear()
                 for label, fn in routes:

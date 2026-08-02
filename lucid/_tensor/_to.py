@@ -95,7 +95,10 @@ def _inject_to(cls: type) -> None:
 
         for a in args:
             if isinstance(a, cls):
-                t = cast(Tensor, a)
+                # See the note in composite/elementwise.float_power:
+                # ``Tensor`` is TYPE_CHECKING-only here, so the bare name
+                # made ``x.to(other_tensor)`` raise NameError.
+                t = cast("Tensor", a)
                 target_device = t._impl.device
                 target_dtype = t._impl.dtype
             elif isinstance(a, _C_engine.Device):

@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stop the CPU relu turning NaN into zero
 
+- float_power and x.to(tensor) raised NameError on every call
+
 ### Changed
 
 - give the engine ops one shared operand check

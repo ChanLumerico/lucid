@@ -22,6 +22,9 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+import lucid
+import lucid.fft
+import lucid.linalg
 from lucid.test.audit import _probe
 
 if TYPE_CHECKING:
@@ -331,6 +334,440 @@ def _unary(name: str, domain: str) -> "Iterator[Call]":
     yield Call([_f(_probe.SHAPE, domain)], {}, 0, "unary(x)")
 
 
+# ── the groups a first depth probe could not call ────────────────────────────
+# 189 of 716 symbols had no invocation the harness could build.  They were
+# not scattered: every one belonged to a family with a shape convention,
+# and each block below closes a whole family.  The numeric axes ride on
+# this, so a symbol that cannot be called here is a symbol whose gradient
+# is never checked.
+
+
+def _ternary(name: str, domain: str) -> "Iterator[Call]":
+    """``add*`` fused forms: an accumulator plus two operands."""
+    v = _f((_COUT,), domain)
+    m = _f((_COUT, _CIN), domain)
+    n = _f((_CIN, _COUT), domain)
+    batch_a = _f((_N, _COUT, _CIN), domain)
+    batch_b = _f((_N, _CIN, _COUT), domain)
+    square = _f((_COUT, _COUT), domain)
+    same = _f(_probe.SHAPE, domain)
+    if name in ("addbmm",):
+        yield Call([square, batch_a, batch_b], {}, 0, "addbmm(bias, batch1, batch2)")
+    if name in ("baddbmm",):
+        yield Call([_f((_N, _COUT, _COUT), domain), batch_a, batch_b], {}, 0, "baddbmm")
+    if name in ("addmm",):
+        yield Call([square, m, n], {}, 0, "addmm(bias, mat1, mat2)")
+    if name in ("addmv",):
+        yield Call([v, m, _f((_CIN,), domain)], {}, 0, "addmv(bias, mat, vec)")
+    if name in ("addr",):
+        yield Call([m, v, _f((_CIN,), domain)], {}, 0, "addr(mat, vec1, vec2)")
+    if name in ("addcmul", "addcdiv"):
+        yield Call(
+            [same, same, _f(_probe.SHAPE, "positive")],
+            {"value": 0.5},
+            0,
+            "addc*(t, a, b)",
+        )
+        yield Call([same, same, _f(_probe.SHAPE, "positive")], {}, 0, "addc*(t, a, b)")
+    if name == "lerp":
+        yield Call([same, _f(_probe.SHAPE, domain), 0.3], {}, 0, "lerp(a, b, weight)")
+
+
+def _bitwise(name: str, domain: str) -> "Iterator[Call]":
+    """Integer-only ops.  A float probe is rejected before the op is reached."""
+    a = _probe.as_int(_probe.rng(1).integers(1, 30, _probe.SHAPE))
+    b = _probe.as_int(_probe.rng(2).integers(1, 6, _probe.SHAPE))
+    if "not" in name or "invert" in name:
+        yield Call([a], {}, 0, "bitwise_not(int)")
+        return
+    yield Call([a, b], {}, 0, "bitwise(int, int)")
+    yield Call([a, 2], {}, 0, "bitwise(int, scalar)")
+
+
+def _factory(name: str, domain: str) -> "Iterator[Call]":
+    """Constructors take a shape or a range, never an input tensor.
+
+    ``primary`` still points at argument zero, so the numeric axes will
+    report SKIP — correctly, since there is no input to differentiate.
+    """
+    shape = (2, 3)
+    if name in ("arange",):
+        yield Call([0.0, 6.0, 1.0], {}, 0, "arange(start, stop, step)")
+        yield Call([6], {}, 0, "arange(n)")
+    elif name in ("linspace", "logspace"):
+        yield Call([0.0, 1.0, 5], {}, 0, "linspace(start, stop, num)")
+    elif name in ("eye",):
+        yield Call([3], {}, 0, "eye(n)")
+        yield Call([3, 4], {}, 0, "eye(n, m)")
+    elif name in ("full", "new_full"):
+        yield Call([shape, 0.5], {}, 0, "full(shape, value)")
+    elif name in ("randint",):
+        yield Call([0, 6, shape], {}, 0, "randint(low, high, shape)")
+    elif name in ("randperm",):
+        yield Call([6], {}, 0, "randperm(n)")
+    elif name in ("meshgrid",):
+        yield Call([_f((3,), domain), _f((4,), domain)], {}, 0, "meshgrid(a, b)")
+    elif name in ("bernoulli",):
+        probs = _probe.as_f32(_probe.rng(9).uniform(0.2, 0.8, _probe.SHAPE))
+        yield Call([probs], {}, 0, "bernoulli(probs)")
+        yield Call([_probe.SHAPE, 0.5], {}, 0, "bernoulli(shape, p)")
+        yield Call([0.5], {"size": _probe.SHAPE}, 0, "bernoulli(p, size=)")
+    elif name in ("normal",):
+        yield Call([0.0, 1.0, shape], {}, 0, "normal(mean, std, shape)")
+        yield Call(
+            [_f(_probe.SHAPE, domain), _f(_probe.SHAPE, "positive")],
+            {},
+            0,
+            "normal(mu, sigma)",
+        )
+    elif name in ("cartesian_prod",):
+        yield Call(
+            [_f((3,), domain), _f((2,), domain)], {}, 0, "cartesian_prod(1-D, 1-D)"
+        )
+    elif name in ("vander",):
+        yield Call([_f((4,), "positive")], {}, 0, "vander(1-D)")
+    else:
+        yield Call([shape], {}, 0, "factory(shape)")
+        yield Call([2, 3], {}, 0, "factory(*shape)")
+
+
+def _indexing(name: str, domain: str) -> "Iterator[Call]":
+    """Gather / scatter shapes, which need an index tensor of the right rank."""
+    x = _f((4, 5), domain)
+    idx_full = _probe.as_int(_probe.rng(3).integers(0, 5, (4, 5)))
+    idx_row = _probe.as_int(_probe.rng(3).integers(0, 4, (3,)))
+    src = _f((4, 5), domain)
+    if name in ("gather", "take_along_dim", "take_along_axis"):
+        yield Call([x, 1, idx_full], {}, 0, "gather(x, dim, index)")
+        yield Call([x, idx_full], {"dim": 1}, 0, "gather(x, index, dim=)")
+    elif name in ("scatter", "scatter_add", "scatter_reduce"):
+        yield Call([x, 1, idx_full, src], {}, 0, "scatter(x, dim, index, src)")
+    elif name in ("index_select",):
+        yield Call([x, 0, idx_row], {}, 0, "index_select(x, dim, index)")
+    elif name in ("take",):
+        yield Call(
+            [x, _probe.as_int(_probe.rng(3).integers(0, 20, (5,)))],
+            {},
+            0,
+            "take(x, flat idx)",
+        )
+    elif name in ("masked_fill", "masked_fill_"):
+        mask = lucid.tensor((_probe.rng(4).random((4, 5)) > 0.5))
+        yield Call([x, mask, 0.0], {}, 0, "masked_fill(x, mask, value)")
+    elif name in ("searchsorted", "bucketize"):
+        sorted_1d = _probe.as_f64(np.linspace(0.0, 1.0, 6))
+        values = _probe.as_f64(_probe.rng(5).uniform(0.0, 1.0, (4,)))
+        yield Call([sorted_1d, values], {}, 0, "searchsorted(sorted, values)")
+        yield Call([values, sorted_1d], {}, 0, "bucketize(values, boundaries)")
+    elif name in ("narrow",):
+        yield Call([x, 1, 1, 2], {}, 0, "narrow(x, dim, start, length)")
+    elif name in ("where",):
+        cond = lucid.tensor((_probe.rng(6).random((4, 5)) > 0.5))
+        yield Call([cond, x, src], {}, 1, "where(cond, a, b)")
+
+
+def _shape_with_args(name: str, domain: str) -> "Iterator[Call]":
+    """Reshapes and permutations whose target has to be spelled out."""
+    x = _f((2, 3, 4), domain)
+    flat = _f((2, 3), domain)
+    if name in ("broadcast_to",):
+        yield Call([_f((1, 3), domain), (2, 3)], {}, 0, "broadcast_to(x, shape)")
+    elif name in ("expand",):
+        yield Call([_f((1, 3), domain), (2, 3)], {}, 0, "expand(x, shape)")
+        yield Call([_f((1, 3), domain), 2, 3], {}, 0, "expand(x, *shape)")
+    elif name in ("permute",):
+        yield Call([x, (2, 0, 1)], {}, 0, "permute(x, dims)")
+        yield Call([x, 2, 0, 1], {}, 0, "permute(x, *dims)")
+    elif name in ("moveaxis", "movedim", "swapaxes", "swapdims", "transpose"):
+        yield Call([x, 0, 2], {}, 0, "moveaxis(x, src, dst)")
+    elif name in ("tile", "repeat"):
+        yield Call([flat, (2, 2)], {}, 0, "tile(x, reps)")
+        yield Call([flat, 2, 2], {}, 0, "tile(x, *reps)")
+    elif name in ("roll",):
+        # The binding takes sequences, not bare ints.
+        yield Call([flat, (1,), (0,)], {}, 0, "roll(x, shifts, dims)")
+        yield Call([flat, (1, 1), (0, 1)], {}, 0, "roll(x, shifts, dims)")
+        yield Call([flat, 1], {}, 0, "roll(x, shift)")
+    elif name in ("unflatten",):
+        yield Call([_f((2, 6), domain), 1, (2, 3)], {}, 0, "unflatten(x, dim, sizes)")
+    elif name in ("unfold",):
+        yield Call([x, 1, 2, 1], {}, 0, "unfold(x, dim, size, step)")
+    elif name in ("dsplit", "hsplit", "vsplit", "split", "chunk", "tensor_split"):
+        yield Call([_f((2, 3, 4), domain), 2], {}, 0, "split(x, n)")
+    elif name in ("narrow",):
+        yield Call([flat, 1, 0, 2], {}, 0, "narrow(x, dim, start, length)")
+    elif name in ("view", "reshape"):
+        yield Call([flat, (3, 2)], {}, 0, "reshape(x, shape)")
+    elif name in ("flatten", "ravel"):
+        yield Call([x], {}, 0, "flatten(x)")
+
+
+def _matmul(name: str, domain: str) -> "Iterator[Call]":
+    """Products, each with its own rank convention."""
+    vec = _f((4,), domain)
+    mat = _f((3, 4), domain)
+    other = _f((4, 3), domain)
+    batch_a = _f((2, 3, 4), domain)
+    batch_b = _f((2, 4, 3), domain)
+    if name in ("bmm", "baddbmm"):
+        yield Call([batch_a, batch_b], {}, 0, "bmm(batched, batched)")
+    elif name in ("mm",):
+        yield Call([mat, other], {}, 0, "mm(a, b)")
+    elif name in ("dot", "vdot", "inner"):
+        yield Call([vec, _f((4,), domain)], {}, 0, "dot(1-D, 1-D)")
+    elif name in ("outer", "ger"):
+        yield Call([vec, _f((3,), domain)], {}, 0, "outer(1-D, 1-D)")
+    elif name in ("multi_dot",):
+        yield Call([[mat, other, mat]], {}, 0, "multi_dot([a, b, c])")
+    elif name in ("einsum",):
+        yield Call(["ij,jk->ik", mat, other], {}, 1, "einsum(subscripts, a, b)")
+    elif name in ("float_power",):
+        yield Call([_f(_probe.SHAPE, "positive"), 2.0], {}, 0, "float_power(x, p)")
+    else:
+        yield Call([mat, other], {}, 0, "matmul(a, b)")
+
+
+def _linalg_extra(name: str, domain: str) -> "Iterator[Call]":
+    """Decompositions, each with the matrix property it requires."""
+    n = 4
+    gen = _probe.rng(_probe.SEED_X)
+    square = gen.standard_normal((n, n)) * 0.35 + np.eye(n) * 2.5
+    psd = square @ square.T + np.eye(n) * 0.75
+    sym = (square + square.T) / 2.0
+    rhs = gen.standard_normal((n, 2))
+    upper = np.triu(square)
+    if name in ("cholesky", "cholesky_ex"):
+        yield Call([_probe.as_f64(psd)], {}, 0, "cholesky(PSD)")
+    elif name in ("eigh", "eigvalsh"):
+        yield Call([_probe.as_f64(sym)], {}, 0, "eigh(symmetric)")
+    elif name in ("eig", "eigvals"):
+        yield Call([_probe.as_f64(square)], {}, 0, "eig(square)")
+    elif name in (
+        "inv",
+        "det",
+        "slogdet",
+        "matrix_exp",
+        "lu",
+        "lu_factor",
+        "ldl_factor",
+    ):
+        yield Call([_probe.as_f64(square)], {}, 0, "linalg(well-conditioned square)")
+    elif name in ("matrix_power",):
+        yield Call([_probe.as_f64(square), 2], {}, 0, "matrix_power(A, 2)")
+    elif name in ("solve", "lstsq"):
+        yield Call([_probe.as_f64(square), _probe.as_f64(rhs)], {}, 0, "solve(A, B)")
+    elif name in ("solve_triangular",):
+        yield Call(
+            [_probe.as_f64(upper), _probe.as_f64(rhs)],
+            {"upper": True},
+            0,
+            "solve_triangular",
+        )
+    elif name in ("lu_solve", "ldl_solve"):
+        yield Call(
+            [_probe.as_f64(square), _probe.as_f64(rhs)], {}, 0, "lu_solve(LU, B)"
+        )
+    elif name in ("vander",):
+        yield Call([_probe.as_f64(gen.uniform(0.5, 1.5, (4,)))], {}, 0, "vander(1-D)")
+
+
+def _fft_full(name: str, domain: str) -> "Iterator[Call]":
+    """Every transform in the family, at the precision the engine accepts.
+
+    The transforms reject float64 outright (``fftn requires F16/F32/C64``),
+    which is why a float64 probe reported all twenty of them as
+    uncallable.  The inverse and Hermitian forms want a *spectrum*, so
+    they are fed one produced by their own forward partner rather than
+    raw samples.
+    """
+    real_1d = _probe.as_f32(_probe.sample(domain, (8,)))
+    real_2d = _probe.as_f32(_probe.sample(domain, (4, 8)))
+    if name in ("fftfreq", "rfftfreq"):
+        yield Call([8], {}, 0, "fftfreq(n)")
+        yield Call([8, 0.5], {}, 0, "fftfreq(n, d)")
+        return
+    if name in ("fftshift", "ifftshift"):
+        yield Call([real_1d], {}, 0, "fftshift(x)")
+        return
+
+    rank = 2 if name.endswith("2") else (3 if name.endswith("n") else 1)
+    source = real_2d if rank >= 2 else real_1d
+    spectrum = None
+    forward_name = {1: "fft", 2: "fft2", 3: "fftn"}[rank]
+    forward = getattr(lucid.fft, forward_name, None)
+    if callable(forward):
+        try:
+            spectrum = forward(source)
+        except Exception:  # noqa: BLE001
+            spectrum = None
+
+    # hfft / ihfft and the inverse transforms consume a complex spectrum.
+    if spectrum is not None and (name.startswith("i") or "hfft" in name):
+        yield Call([spectrum], {}, 0, f"{name}(spectrum)")
+    yield Call([source], {}, 0, f"{name}(real)")
+    if spectrum is not None:
+        yield Call([spectrum], {}, 0, f"{name}(spectrum)")
+    if rank == 1:
+        yield Call([source], {"n": 8}, 0, f"{name}(x, n=8)")
+
+
+def _complex(name: str, domain: str) -> "Iterator[Call]":
+    """Ops that only mean anything on a complex tensor."""
+    real = _probe.as_f64(_probe.sample(domain, (2, 4)))
+    pair = _probe.as_f64(_probe.sample(domain, (2, 4)))
+    built = None
+    maker = getattr(lucid, "complex", None)
+    if callable(maker):
+        try:
+            built = maker(real, pair)
+        except Exception:  # noqa: BLE001
+            built = None
+    if name == "view_as_complex":
+        yield Call(
+            [_probe.as_f64(_probe.sample(domain, (2, 4, 2)))],
+            {},
+            0,
+            "view_as_complex(...,2)",
+        )
+        return
+    if built is not None:
+        yield Call([built], {}, 0, f"{name}(complex)")
+    yield Call([real], {}, 0, f"{name}(real)")
+
+
+def _dtype_util(name: str, domain: str) -> "Iterator[Call]":
+    """Type-system helpers: they take dtypes, not tensors."""
+    if name in ("can_cast", "promote_types"):
+        yield Call([lucid.float32, lucid.float64], {}, 0, f"{name}(dtype, dtype)")
+    elif name in ("result_type",):
+        yield Call(
+            [_f(_probe.SHAPE, domain), _f(_probe.SHAPE, domain)],
+            {},
+            0,
+            "result_type(a, b)",
+        )
+    elif name in ("type", "astype"):
+        # ``Tensor.type`` takes the *name*, not the dtype object.
+        yield Call([_f(_probe.SHAPE, domain), "float32"], {}, 0, "type(x, 'float32')")
+        yield Call([_f(_probe.SHAPE, domain), lucid.float32], {}, 0, "astype(x, dtype)")
+
+
+def _nn_leftover(name: str, domain: str) -> "Iterator[Call]":
+    """The functional entries with signatures no other family covers."""
+    if name in ("lp_pool1d", "lp_pool2d", "lp_pool3d"):
+        rank = _rank_of(name)
+        yield Call(
+            [_f((_N, _CIN, *_spatial(rank)), "positive"), 2.0, 2],
+            {},
+            0,
+            "lp_pool(x, p, k)",
+        )
+    elif name in ("max_unpool1d", "max_unpool2d", "max_unpool3d"):
+        rank = _rank_of(name)
+        spatial = _spatial(rank)
+        pooled = tuple(v // 2 for v in spatial)
+        x = _f((_N, _CIN, *pooled), domain)
+        idx = _probe.as_int(
+            _probe.rng(7).integers(0, int(np.prod(spatial)), (_N, _CIN, *pooled))
+        )
+        yield Call(
+            [x, idx, 2], {"output_size": spatial}, 0, "max_unpool(x, indices, k)"
+        )
+        yield Call([x, idx, 2], {}, 0, "max_unpool(x, indices, k)")
+    elif name in ("gaussian_nll_loss",):
+        yield Call(
+            [_f((_N, 4), domain), _f((_N, 4), domain), _f((_N, 4), "positive")],
+            {},
+            0,
+            "gaussian_nll(input, target, var)",
+        )
+    elif name in ("multilabel_margin_loss",):
+        yield Call(
+            [
+                _f((_N, 4), domain),
+                _probe.as_int(np.array([[0, -1, -1, -1], [1, -1, -1, -1]])),
+            ],
+            {},
+            0,
+            "multilabel_margin(input, target)",
+        )
+    elif name in ("ctc_loss",):
+        t, n, c = 6, 2, 4
+        log_probs = _f((t, n, c), domain)
+        targets = _probe.as_int(_probe.rng(8).integers(1, c, (n, 3)))
+        yield Call(
+            [
+                log_probs,
+                targets,
+                _probe.as_int(np.array([t, t])),
+                _probe.as_int(np.array([3, 3])),
+            ],
+            {},
+            0,
+            "ctc_loss(log_probs, targets, input_lengths, target_lengths)",
+        )
+    elif name in ("threshold", "threshold_"):
+        yield Call(
+            [_f(_probe.SHAPE, domain), 0.0, 0.0],
+            {},
+            0,
+            "threshold(x, threshold, value)",
+        )
+    elif name in ("fused_linear_relu", "fused_linear_gelu"):
+        w, b = _f((_COUT, _CIN), domain), _f((_COUT,), domain)
+        yield Call(
+            [_f((_N, _CIN), domain), w, b], {}, 0, "fused_linear(x, weight, bias)"
+        )
+        yield Call(
+            [_f((_N, _CIN), domain)],
+            {"weight": w, "bias": b},
+            0,
+            "fused_linear(x, weight=, bias=)",
+        )
+    elif name in ("sinusoidal_embedding",):
+        yield Call(
+            [_probe.as_f64(np.arange(4.0)), 8], {}, 0, "sinusoidal_embedding(pos, dim)"
+        )
+    elif name in ("sinusoidal_embedding_2d",):
+        yield Call([8, 4, 4], {}, 0, "sinusoidal_embedding_2d(dim, h, w)")
+    elif name in ("multi_head_attention_forward",):
+        seq, batch, embed = 4, 2, 8
+        q = _f((seq, batch, embed), domain)
+        yield Call(
+            [
+                q,
+                q,
+                q,
+                embed,
+                2,
+                _f((3 * embed, embed), domain),
+                _f((3 * embed,), domain),
+            ],
+            {},
+            0,
+            "mha_forward(q, k, v, embed, heads, in_proj_w, in_proj_b)",
+        )
+    elif name in ("polygamma",):
+        yield Call([1, _f(_probe.SHAPE, "positive")], {}, 1, "polygamma(n, x)")
+    elif name in ("one_hot",):
+        yield Call([_int((_N,), 4), 4], {}, 0, "one_hot(idx, n)")
+
+
+def _accessor(name: str, domain: str) -> "Iterator[Call]":
+    """Shape, dtype and residency predicates — they answer with a scalar."""
+    if name in ("grad", "grad_fn"):
+        # Both are ``None`` on a fresh tensor, so the probe has to make a
+        # gradient exist before asking for one.
+        leaf = _f((2, 3), domain)
+        leaf.requires_grad_(True)
+        (leaf * leaf).sum().backward()
+        yield Call([leaf], {}, 0, f"{name} after a backward")
+    x = _f((2, 3), domain)
+    yield Call([x], {}, 0, "accessor(x)")
+    yield Call([x, 0], {}, 0, "accessor(x, dim)")
+    yield Call([x, x], {}, 0, "accessor(x, other)")
+
+
 # ── resolution ───────────────────────────────────────────────────────────────
 # Ordered: the first predicate that matches wins.  Patterns are matched
 # against the short name, so ``F.conv2d`` and ``lucid.conv2d`` share a
@@ -338,6 +775,54 @@ def _unary(name: str, domain: str) -> "Iterator[Call]":
 
 _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
     (r"^conv(_transpose)?[123]d$", _conv),
+    (r"^max_unpool[123]d$|^lp_pool[123]d$", _nn_leftover),
+    (
+        r"^(ctc_loss|gaussian_nll_loss|multilabel_margin_loss|threshold_?|"
+        r"fused_linear_(relu|gelu)|sinusoidal_embedding(_2d)?|"
+        r"multi_head_attention_forward|polygamma|one_hot)$",
+        _nn_leftover,
+    ),
+    (r"^(addbmm|baddbmm|addmm|addmv|addr|addcmul|addcdiv|lerp)$", _ternary),
+    (r"^bitwise_|^invert$", _bitwise),
+    (
+        r"^(arange|linspace|logspace|eye|full|new_full|empty|zeros|ones|rand|randn|"
+        r"randint|randperm|normal|bernoulli|meshgrid|cartesian_prod|vander|"
+        r"empty_like|full_like)$",
+        _factory,
+    ),
+    (
+        r"^(gather|scatter|scatter_add|scatter_reduce|index_select|take|"
+        r"take_along_dim|take_along_axis|masked_fill_?|searchsorted|bucketize|"
+        r"narrow|where)$",
+        _indexing,
+    ),
+    (
+        r"^(broadcast_to|expand|permute|moveaxis|movedim|swapaxes|swapdims|tile|"
+        r"repeat|roll|unflatten|unfold|dsplit|hsplit|vsplit|tensor_split|view)$",
+        _shape_with_args,
+    ),
+    (
+        r"^(bmm|mm|dot|vdot|inner|outer|ger|multi_dot|einsum|float_power|matmul)$",
+        _matmul,
+    ),
+    (
+        r"^(cholesky(_ex)?|eig|eigh|eigvals|eigvalsh|inv|det|slogdet|matrix_exp|"
+        r"matrix_power|lu|lu_factor|lu_solve|ldl_factor|ldl_solve|solve|"
+        r"solve_triangular|lstsq)$",
+        _linalg_extra,
+    ),
+    (
+        r"^i?(rfft|hfft|fft)[2n]?$|^ifft[2n]?$|^irfft[2n]?$|^ihfft[2n]?$|"
+        r"^r?fftfreq$|^i?fftshift$",
+        _fft_full,
+    ),
+    (r"^(angle|imag|real|view_as_complex|view_as_real|conj|resolve_conj)$", _complex),
+    (r"^(can_cast|promote_types|result_type|type|astype)$", _dtype_util),
+    (
+        r"^(dim|ndim|shape|size|numel|nbytes|element_size|stride|is_[a-z_]+|"
+        r"grad|grad_fn|impl|untyped_storage)$",
+        _accessor,
+    ),
     (r"^(fractional_max_pool)[23]d$", _fractional_pool),
     (r"^adaptive_(avg|max)_pool[123]d$", _adaptive_pool),
     (r"^(avg|max|lp)_pool[123]d$", _pool),
@@ -353,7 +838,6 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
         r"channel_shuffle|unfold|fold|pad)$",
         _resample,
     ),
-    (r"^(fft|ifft|rfft|irfft|hfft|ihfft).*|.*fftshift$|^fftfreq$", _fft),
     (r"^(rearrange|reduce|repeat|pack|unpack|einsum)$", _einops),
     (
         r"^(sum|mean|prod|max|min|var|std|median|nanmean|nansum|nanmedian|"
@@ -412,7 +896,103 @@ _EXACT: dict[str, "Callable[[str, str], Iterator[Call]]"] = {
 }
 
 
-def invocations(name: str, domain: str) -> "Iterator[Call]":
+#: Keyed by the *qualified* name, because a short name is not unique:
+#: ``einops.repeat`` takes a pattern string while ``lucid.repeat`` takes
+#: a repeat count, and ``Tensor.unfold`` slides a window while
+#: ``F.unfold`` extracts image patches.  Matching on the short name alone
+#: sent four of these to the wrong builder.
+_QUALIFIED: dict[str, "Callable[[str], Iterator[Call]]"] = {
+    "lucid.einops.repeat": lambda d: iter(
+        [
+            Call(
+                [_f((2, 3), d), "a b -> a b r"],
+                {"r": 2},
+                0,
+                "einops.repeat(x, pattern, **axes)",
+            )
+        ]
+    ),
+    "lucid.einops.rearrange": lambda d: iter(
+        [Call([_f((2, 3, 4), d), "a b c -> a c b"], {}, 0, "einops.rearrange")]
+    ),
+    "lucid.einops.reduce": lambda d: iter(
+        [Call([_f((2, 3, 4), d), "a b c -> a b", "mean"], {}, 0, "einops.reduce")]
+    ),
+    "Tensor.where": lambda d: iter(
+        [
+            Call(
+                [
+                    _f((3, 4), d),
+                    lucid.tensor(_probe.rng(6).random((3, 4)) > 0.5),
+                    _f((3, 4), d),
+                ],
+                {},
+                0,
+                "x.where(cond, other)",
+            )
+        ]
+    ),
+    "Tensor.unfold": lambda d: iter(
+        [Call([_f((2, 3, 8), d), 2, 3, 1], {}, 0, "x.unfold(dim, size, step)")]
+    ),
+    "F.unfold": lambda d: iter(
+        [Call([_f((2, 3, 6, 6), d), 3], {"padding": 1}, 0, "F.unfold(x, kernel_size)")]
+    ),
+    "Tensor.new_full": lambda d: iter(
+        [Call([_f((2, 3), d), (2, 2), 0.5], {}, 0, "x.new_full(shape, value)")]
+    ),
+    "lucid.linalg.vander": lambda d: iter(
+        [
+            Call(
+                [_probe.as_f64(_probe.rng(3).uniform(0.5, 1.5, (4,)))],
+                {},
+                0,
+                "vander(1-D)",
+            )
+        ]
+    ),
+    "lucid.normal": lambda d: iter(
+        [Call([0.0, 1.0], {"size": (2, 3)}, 0, "normal(mean, std, size=)")]
+    ),
+    "lucid.initial_seed": lambda d: iter([Call([], {}, 0, "initial_seed()")]),
+    "lucid.is_grad_enabled": lambda d: iter([Call([], {}, 0, "is_grad_enabled()")]),
+    "lucid.is_nonzero": lambda d: iter(
+        [Call([_probe.as_f64(np.array([1.0]))], {}, 0, "is_nonzero(single element)")]
+    ),
+    "F.multilabel_margin_loss": lambda d: iter(
+        [
+            Call(
+                [
+                    _f((2, 4), d),
+                    # int32, not the int64 a plain ``lucid.tensor`` of ints
+                    # produces — the loss rejects int64, reported separately.
+                    lucid.tensor(
+                        np.array([[3, 0, -1, -1], [2, -1, -1, -1]]), dtype=lucid.int32
+                    ),
+                ],
+                {},
+                0,
+                "multilabel_margin_loss(input, target)",
+            )
+        ]
+    ),
+    "F.sinusoidal_embedding": lambda d: iter(
+        [
+            Call(
+                [_probe.as_f64(np.arange(4.0)), 8],
+                {},
+                0,
+                "sinusoidal_embedding(t, dim)",
+            ),
+            Call([4, 8], {}, 0, "sinusoidal_embedding(n, dim)"),
+        ]
+    ),
+}
+
+
+def invocations(
+    name: str, domain: str, qualname: str | None = None
+) -> "Iterator[Call]":
     """Every candidate call for ``name``, best guess first.
 
     Parameters
@@ -428,6 +1008,8 @@ def invocations(name: str, domain: str) -> "Iterator[Call]":
         Tried in order until one runs.  The generic unary and binary
         forms come last so a symbol with no spec still gets a chance.
     """
+    if qualname is not None and qualname in _QUALIFIED:
+        yield from _QUALIFIED[qualname](domain)
     if name in _EXACT:
         yield from _EXACT[name](name, domain)
     for pattern, build in _FAMILIES:
