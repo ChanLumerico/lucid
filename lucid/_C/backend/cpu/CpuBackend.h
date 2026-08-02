@@ -182,6 +182,79 @@ inline bool is_narrow_int(Dtype dt) {
     return dt == Dtype::I32 || dt == Dtype::I16 || dt == Dtype::I8 || dt == Dtype::Bool;
 }
 
+//: Every integer dtype, including I64 and bool.
+inline bool is_int_like(Dtype dt) {
+    return dt == Dtype::I64 || is_narrow_int(dt);
+}
+
+// Apply an elementwise function at the caller's integer width.
+//
+// These ops — relu6, clip, masked_fill — are comparisons and selections,
+// not arithmetic, so there is nothing to be gained by widening and a
+// dtype to be lost by it.  ``fn`` is a generic lambda instantiated once
+// per width; bool is handled as uint8 so a mask stays a mask.
+template <typename Fn>
+void for_each_int(Dtype dt, const std::byte* in, std::byte* out, std::size_t n, Fn fn) {
+    auto run = [&](auto tag) {
+        using T = decltype(tag);
+        const T* ip = reinterpret_cast<const T*>(in);
+        T* op = reinterpret_cast<T*>(out);
+        for (std::size_t i = 0; i < n; ++i)
+            op[i] = fn(ip[i]);
+    };
+    switch (dt) {
+    case Dtype::I64:
+        run(std::int64_t{});
+        break;
+    case Dtype::I32:
+        run(std::int32_t{});
+        break;
+    case Dtype::I16:
+        run(std::int16_t{});
+        break;
+    case Dtype::I8:
+        run(std::int8_t{});
+        break;
+    default:  // Bool
+        run(std::uint8_t{});
+        break;
+    }
+}
+
+// ``out[i] = mask[i] ? fill : in[i]`` at the caller's integer width.
+inline void for_each_int_masked(Dtype dt,
+                                const std::byte* in,
+                                const std::uint8_t* mask,
+                                std::byte* out,
+                                std::size_t n,
+                                std::int64_t fill) {
+    auto run = [&](auto tag) {
+        using T = decltype(tag);
+        const T* ip = reinterpret_cast<const T*>(in);
+        T* op = reinterpret_cast<T*>(out);
+        const T f = static_cast<T>(fill);
+        for (std::size_t i = 0; i < n; ++i)
+            op[i] = mask[i] ? f : ip[i];
+    };
+    switch (dt) {
+    case Dtype::I64:
+        run(std::int64_t{});
+        break;
+    case Dtype::I32:
+        run(std::int32_t{});
+        break;
+    case Dtype::I16:
+        run(std::int16_t{});
+        break;
+    case Dtype::I8:
+        run(std::int8_t{});
+        break;
+    default:  // Bool
+        run(std::uint8_t{});
+        break;
+    }
+}
+
 // Widen a storage to int64 iff it is a narrow integer; pass anything
 // else through.  The integer twin of as_f32, and dtype-driven for the
 // same reason: a call site hands it every operand and the floats, masks
@@ -1850,6 +1923,14 @@ public:
             double* q = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i)
                 q[i] = std::min(std::max(p[i], 0.0), 6.0);
+        } else if (detail::is_int_like(dt)) {
+            // Clamping to [0, 6] is a pair of comparisons, so each integer
+            // width does it in itself.  The reference framework answers
+            // relu6 on integers and keeps the dtype.
+            detail::for_each_int(dt, cs.ptr.get(), ptr.get(), n, [](auto v) {
+                using T = decltype(v);
+                return v < T{} ? T{} : (v > T{6} ? T{6} : v);
+            });
         } else {
             ErrorBuilder("cpu_backend::relu6").not_implemented("dtype not supported");
         }
@@ -2802,6 +2883,12 @@ public:
             auto* dst = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i)
                 dst[i] = mp[i] ? value : src[i];
+        } else if (detail::is_int_like(dt)) {
+            // Structural, not arithmetic: it selects between an element and
+            // a constant.  Integers keep their dtype in the reference
+            // framework and on Metal.
+            const std::int64_t fill = static_cast<std::int64_t>(value);
+            detail::for_each_int_masked(dt, as.ptr.get(), mp, ptr.get(), n, fill);
         } else {
             ErrorBuilder("cpu_backend::masked_fill").not_implemented("dtype not supported");
         }
@@ -6083,6 +6170,19 @@ public:
             break;
         }
         default:
+            if (detail::is_int_like(dt)) {
+                // Clamping keeps the dtype for integers.  The bounds arrive
+                // as doubles; they are compared in int64 so a bound outside
+                // the caller's width still clamps rather than wrapping.
+                const std::int64_t lo = static_cast<std::int64_t>(min_v);
+                const std::int64_t hi = static_cast<std::int64_t>(max_v);
+                detail::for_each_int(dt, cs.ptr.get(), ptr.get(), numel, [lo, hi](auto v) {
+                    using T = decltype(v);
+                    const std::int64_t w = static_cast<std::int64_t>(v);
+                    return static_cast<T>(w < lo ? lo : (w > hi ? hi : w));
+                });
+                break;
+            }
             ErrorBuilder("cpu_backend::clip").not_implemented("dtype not supported");
         }
         return Storage{CpuStorage{ptr, nb, dt}};

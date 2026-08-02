@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - relu takes integers on the CPU
 
+- relu6, clip and masked_fill take integers on the CPU
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
