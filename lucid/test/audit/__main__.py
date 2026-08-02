@@ -22,13 +22,14 @@ the work queue for extending :mod:`~lucid.test.audit._specs`.
 """
 
 import argparse
+import contextlib
 import re
 import sys
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from lucid.test.audit import _axes, _probe, _surface
+from lucid.test.audit import _axes, _console_rich, _probe, _surface
 from lucid.test.audit._console import Console, Suppress, Timer, fmt_duration
 from lucid.test.audit._result import STATUS_STYLE, Baseline, Finding, Report, Status
 
@@ -344,84 +345,108 @@ def run(args: argparse.Namespace, console: Console) -> Report:
     tick = 0
     stop = False
 
-    for axis in axes:
-        applicable = [s for s in symbols if axis.applies(s)]
-        if not applicable:
-            continue
-        console.rule(f"{axis.name}  —  {axis.summary}", "cyan")
-        counts: dict[Status, int] = dict.fromkeys(Status, 0)
-        axis_timer = Timer()
+    # One bar per subsystem when ``rich`` is installed, one bar per axis
+    # otherwise.  ``rich`` is an optional extra, so both paths stay live.
+    reporter = _console_rich.build(console, axes, symbols)
+    with contextlib.ExitStack() as stack:
+        if reporter is not None:
+            stack.enter_context(reporter)
 
-        for index, symbol in enumerate(applicable, start=1):
-            with Suppress(not console.quiet):
-                try:
-                    finding = axis.run(symbol, ctx)
-                except KeyboardInterrupt:
-                    raise
-                except (
-                    Exception
-                ) as exc:  # noqa: BLE001 - the harness must survive the survey
-                    finding = Finding(
-                        axis.name,
-                        symbol.qualname,
-                        Status.ERROR,
-                        f"probe raised {type(exc).__name__}: {str(exc)[:90]}",
-                    )
-            finding = baseline.apply(finding)
-            report.add(finding)
-            counts[finding.status] += 1
-            done_total += 1
-            tick += 1
+        for axis in axes:
+            applicable = [s for s in symbols if axis.applies(s)]
+            if not applicable:
+                continue
+            if reporter is None:
+                console.rule(f"{axis.name}  —  {axis.summary}", "cyan")
+            counts: dict[Status, int] = dict.fromkeys(Status, 0)
+            axis_timer = Timer()
 
-            if finding.status is Status.FAIL and not console.live:
-                label, colour = STATUS_STYLE[Status.FAIL]
-                console.always(
-                    "  "
-                    + console.paint(label, colour)
-                    + f"  {symbol.qualname}  {finding.detail}"
-                )
-
-            if console.live and (tick % 3 == 0 or index == len(applicable)):
-                console.live_block(
-                    [
-                        "  "
-                        + console.paint(console.spinner(tick), "cyan")
-                        + "  "
-                        + console.paint(axis.name.ljust(12), "bold")
-                        + console.paint(console.bar(index, len(applicable)), "cyan")
-                        + f"  {index:>5}/{len(applicable)}"
-                        + console.paint(
-                            f"  {100 * index // max(len(applicable), 1):>3}%", "grey"
+            for index, symbol in enumerate(applicable, start=1):
+                with Suppress(not console.quiet):
+                    try:
+                        finding = axis.run(symbol, ctx)
+                    except KeyboardInterrupt:
+                        raise
+                    except (
+                        Exception
+                    ) as exc:  # noqa: BLE001 - the harness must survive the survey
+                        finding = Finding(
+                            axis.name,
+                            symbol.qualname,
+                            Status.ERROR,
+                            f"probe raised {type(exc).__name__}: {str(exc)[:90]}",
                         )
-                        + console.paint(
-                            f"   {axis_timer}  eta {axis_timer.eta(index, len(applicable))}",
-                            "grey",
-                        ),
-                        "     "
-                        + console.paint(symbol.qualname[: console.width - 8], "grey"),
-                        "     " + _tally(counts, console),
-                    ]
+                finding = baseline.apply(finding)
+                report.add(finding)
+                counts[finding.status] += 1
+                done_total += 1
+                tick += 1
+
+                if reporter is not None:
+                    reporter.record(symbol, axis.name, finding)
+                    if finding.status is Status.FAIL:
+                        label, _ = STATUS_STYLE[Status.FAIL]
+                        reporter.defect(label, symbol.qualname, finding.detail)
+                elif finding.status is Status.FAIL and not console.live:
+                    label, colour = STATUS_STYLE[Status.FAIL]
+                    console.always(
+                        "  "
+                        + console.paint(label, colour)
+                        + f"  {symbol.qualname}  {finding.detail}"
+                    )
+
+                if (
+                    reporter is None
+                    and console.live
+                    and (tick % 3 == 0 or index == len(applicable))
+                ):
+                    console.live_block(
+                        [
+                            "  "
+                            + console.paint(console.spinner(tick), "cyan")
+                            + "  "
+                            + console.paint(axis.name.ljust(12), "bold")
+                            + console.paint(console.bar(index, len(applicable)), "cyan")
+                            + f"  {index:>5}/{len(applicable)}"
+                            + console.paint(
+                                f"  {100 * index // max(len(applicable), 1):>3}%",
+                                "grey",
+                            )
+                            + console.paint(
+                                f"   {axis_timer}  "
+                                f"eta {axis_timer.eta(index, len(applicable))}",
+                                "grey",
+                            ),
+                            "     "
+                            + console.paint(
+                                symbol.qualname[: console.width - 8], "grey"
+                            ),
+                            "     " + _tally(counts, console),
+                        ]
+                    )
+
+                if args.fail_fast and finding.status.is_defect:
+                    stop = True
+                    break
+
+            if reporter is None:
+                if console.live:
+                    console.live_done()
+                console.write(
+                    "  "
+                    + console.paint(axis.name.ljust(12), "bold")
+                    + console.paint(f"{len(applicable):>5} symbols  ", "grey")
+                    + _tally(counts, console)
+                    + console.paint(f"   [{axis_timer}]", "grey")
                 )
-
-            if args.fail_fast and finding.status.is_defect:
-                stop = True
+            if stop:
+                console.write()
+                console.always(
+                    console.paint(
+                        "  stopped at the first defect (--fail-fast)", "yellow"
+                    )
+                )
                 break
-
-        if console.live:
-            console.live_done()
-        console.write(
-            "  "
-            + console.paint(axis.name.ljust(12), "bold")
-            + console.paint(f"{len(applicable):>5} symbols  ", "grey")
-            + _tally(counts, console)
-            + console.paint(f"   [{axis_timer}]", "grey")
-        )
-        if stop:
-            console.write()
-            console.always(
-                console.paint("  stopped at the first defect (--fail-fast)", "yellow")
-            )
-            break
 
     report.duration = overall.elapsed
     return report

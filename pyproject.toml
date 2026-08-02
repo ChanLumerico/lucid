@@ -101,6 +101,10 @@ test = [
     # parity tests use a lazy import and skip cleanly when missing.
     # Install it separately when running parity / perf comparisons.
 ]
+# The audit's live per-subsystem display.  Optional on purpose: the sweep
+# runs and reports identically without it, on a stdlib ANSI console, so a
+# correctness tool never fails to start over a presentation dependency.
+audit = ["rich>=13"]
 docs = [
     # Sphinx 9.x has a circular-import regression with Python 3.14.
     # Pin to 8.x until the upstream fix lands.
