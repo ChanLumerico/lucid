@@ -60,7 +60,32 @@ bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& out) {
 template <typename Fn>
 TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
-    auto out = fwd_fn(a);
+    // The op runs against a *snapshot*, not against ``a`` itself.
+    //
+    // A node that saves its input keeps a handle on the tensor it was
+    // given, and graph-mode backward re-reads it — so once ``a``'s storage
+    // slot has been overwritten below, ``sin_`` differentiated through
+    // ``grad(create_graph=True)`` computed ``cos(sin(x))`` instead of
+    // ``cos(x)``.  Eager ``backward()`` did not notice, because it saves a
+    // Storage by value at forward time, which is why the two routes
+    // disagreed and only in graph mode.
+    //
+    // The snapshot shares the buffer rather than copying it, and the
+    // assignment below replaces ``a``'s slot rather than the buffer, so
+    // the original values stay alive and unmutated for as long as the node
+    // needs them — and nothing is allocated when no graph is built.
+    auto source = a;
+    if (a->requires_grad()) {
+        source = std::make_shared<TensorImpl>(a->storage(), a->shape(), a->dtype(),
+                                              a->device(), true);
+        // The snapshot stands in for ``a`` in the graph, so it has to
+        // inherit where ``a`` was — otherwise the new node's parent is a
+        // fresh leaf, the chain to ``x`` is cut, and every gradient comes
+        // back 1.0 again by a different route than before.
+        source->set_grad_fn(a->grad_fn());
+        source->set_grad_output_nr(a->grad_output_nr());
+    }
+    auto out = fwd_fn(source);
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
@@ -170,7 +195,32 @@ TensorImplPtr relu_inplace_op(const TensorImplPtr& a) {
 // making it incompatible with the function-pointer-based inplace_unary template.
 TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     Validator::input(a, "clip_.a").non_null();
-    auto out = clip_op(a, lo, hi);
+    // The op runs against a *snapshot*, not against ``a`` itself.
+    //
+    // A node that saves its input keeps a handle on the tensor it was
+    // given, and graph-mode backward re-reads it — so once ``a``'s storage
+    // slot has been overwritten below, ``sin_`` differentiated through
+    // ``grad(create_graph=True)`` computed ``cos(sin(x))`` instead of
+    // ``cos(x)``.  Eager ``backward()`` did not notice, because it saves a
+    // Storage by value at forward time, which is why the two routes
+    // disagreed and only in graph mode.
+    //
+    // The snapshot shares the buffer rather than copying it, and the
+    // assignment below replaces ``a``'s slot rather than the buffer, so
+    // the original values stay alive and unmutated for as long as the node
+    // needs them — and nothing is allocated when no graph is built.
+    auto source = a;
+    if (a->requires_grad()) {
+        source = std::make_shared<TensorImpl>(a->storage(), a->shape(), a->dtype(),
+                                              a->device(), true);
+        // The snapshot stands in for ``a`` in the graph, so it has to
+        // inherit where ``a`` was — otherwise the new node's parent is a
+        // fresh leaf, the chain to ``x`` is cut, and every gradient comes
+        // back 1.0 again by a different route than before.
+        source->set_grad_fn(a->grad_fn());
+        source->set_grad_output_nr(a->grad_output_nr());
+    }
+    auto out = clip_op(source, lo, hi);
     a->mutable_storage() = std::move(out->mutable_storage());
     a->set_dtype(out->dtype());
     a->set_device(out->device());

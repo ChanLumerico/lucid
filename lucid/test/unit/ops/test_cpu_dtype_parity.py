@@ -547,3 +547,32 @@ def test_cross_entropy_does_not_gather_at_the_ignore_index() -> None:
     target = lucid.tensor(np.array([[0, 1, -100], [2, -100, -100]]), dtype=lucid.int64)
     loss = F.cross_entropy(logits, target, ignore_index=-100)
     assert np.isfinite(float(loss))
+
+
+@pytest.mark.parametrize("name", ["exp_", "sin_", "cos_", "tanh_", "sigmoid_", "log_"])
+def test_inplace_second_route_matches_the_first(name: str) -> None:
+    """``backward()`` and ``grad(create_graph=True)`` must agree.
+
+    They did not, and only in graph mode.  A node that saves its input
+    keeps a handle on the tensor it was handed; eager backward saves a
+    Storage by value at forward time and never notices the later write,
+    while graph-mode backward re-reads the handle — so after ``y.sin_()``
+    overwrote it, the second route computed ``cos(sin(x))``.
+
+    The op now runs against a snapshot that shares the buffer and inherits
+    ``y``'s position in the graph, so the saved input stays put.
+    """
+    values = np.array([[0.5, 0.3], [1.2, 0.8]], dtype=np.float64)
+
+    x = lucid.tensor(values, dtype=lucid.float64, requires_grad=True)
+    y = x * 1.0
+    getattr(y, name)()
+    y.sum().backward()
+    eager = x.grad.numpy()
+
+    x2 = lucid.tensor(values, dtype=lucid.float64, requires_grad=True)
+    y2 = x2 * 1.0
+    getattr(y2, name)()
+    (graph,) = lucid.autograd.grad(y2.sum(), [x2], create_graph=True)
+
+    assert np.allclose(eager, graph.numpy(), rtol=1e-10), name

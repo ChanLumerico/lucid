@@ -112,6 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - in-place ops discarded their own derivative
 
+- in-place ops kept a handle on the input they overwrote
+
 ### Changed
 
 - give the engine ops one shared operand check
