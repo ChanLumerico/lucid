@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - float_power and x.to(tensor) raised NameError on every call
 
+- close the CPU dtype gaps the audit found
+
 ### Changed
 
 - give the engine ops one shared operand check

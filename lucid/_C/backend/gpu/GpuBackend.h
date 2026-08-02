@@ -5360,7 +5360,17 @@ private:
     template <class Fn>
     Storage mlx_unary(const Storage& a, const Shape&, Dtype dt, Fn fn) {
         const auto& gs = std::get<GpuStorage>(a);
-        return Storage{gpu::wrap_mlx_array(fn(*gs.arr), dt)};
+        // MLX promotes an integer input to float for a transcendental, so
+        // the result comes back as F32 while the caller is still expecting
+        // ``dt``.  Labelling it ``dt`` without converting reinterprets the
+        // float bits: ``exp(int32([2, 3]))`` answered ``[1089237798,
+        // 1101049647]`` — the bit patterns of 7.389 and 20.086 — instead
+        // of ``[7, 20]``.  Cast, do not relabel.
+        auto out = fn(*gs.arr);
+        const auto want = gpu::to_mlx_dtype(dt);
+        if (out.dtype() != want)
+            out = ::mlx::core::astype(out, want);
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
     // Variant of mlx_unary that forces C-contiguous output.  Use only for ops
@@ -5368,7 +5378,12 @@ private:
     template <class Fn>
     Storage mlx_unary_contiguous(const Storage& a, const Shape&, Dtype dt, Fn fn) {
         const auto& gs = std::get<GpuStorage>(a);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(fn(*gs.arr)), dt)};
+        // Same conversion rule as ``mlx_unary`` — see the note there.
+        auto out = ::mlx::core::contiguous(fn(*gs.arr));
+        const auto want = gpu::to_mlx_dtype(dt);
+        if (out.dtype() != want)
+            out = ::mlx::core::astype(out, want);
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
     // Fuse a multi-op element-wise UNARY composite into a single Metal kernel

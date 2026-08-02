@@ -24,6 +24,7 @@
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/Half.h"
 #include "../../core/OpRegistry.h"
 #include "../bfunc/Compare.h"
 #include "../bfunc/Div.h"
@@ -96,8 +97,85 @@ AxisResult reduce_one_axis(const CpuStorage& in,
         k64(reinterpret_cast<const double*>(in.ptr.get()),
             reinterpret_cast<double*>(r.data.ptr.get()), oir.outer, oir.reduce_dim, oir.inner);
         break;
+    case Dtype::F16: {
+        // No half accumulator on the host: widen, reduce in float, round
+        // once on the way back.  Metal reduced F16 and the CPU raised, so
+        // the same call worked on one device and not the other.
+        const std::size_t in_numel = shape_numel(in_shape);
+        std::vector<float> wide_in(in_numel), wide_out(out_numel);
+        const auto* src = reinterpret_cast<const std::uint16_t*>(in.ptr.get());
+        for (std::size_t i = 0; i < in_numel; ++i)
+            wide_in[i] = backend::detail::half_bits_to_float(src[i]);
+        k32(wide_in.data(), wide_out.data(), oir.outer, oir.reduce_dim, oir.inner);
+        auto* dst = reinterpret_cast<std::uint16_t*>(r.data.ptr.get());
+        for (std::size_t i = 0; i < out_numel; ++i)
+            dst[i] = backend::detail::float_to_half_bits(wide_out[i]);
+        break;
+    }
+    case Dtype::Bool:
+    case Dtype::I8:
+    case Dtype::I16:
+    case Dtype::I32:
+    case Dtype::I64: {
+        // Integers reduce through double, which holds every I32 exactly
+        // and every I64 up to 2^53 — the same headroom the promotion to
+        // I64 was introduced for.
+        const std::size_t in_numel = shape_numel(in_shape);
+        std::vector<double> wide_in(in_numel), wide_out(out_numel);
+        const auto load = [&](auto tag) {
+            using T = decltype(tag);
+            const auto* p = reinterpret_cast<const T*>(in.ptr.get());
+            for (std::size_t i = 0; i < in_numel; ++i)
+                wide_in[i] = static_cast<double>(p[i]);
+        };
+        const auto store = [&](auto tag) {
+            using T = decltype(tag);
+            auto* p = reinterpret_cast<T*>(r.data.ptr.get());
+            for (std::size_t i = 0; i < out_numel; ++i)
+                p[i] = static_cast<T>(wide_out[i]);
+        };
+        switch (dt) {
+        case Dtype::Bool:
+            load(std::uint8_t{});
+            break;
+        case Dtype::I8:
+            load(std::int8_t{});
+            break;
+        case Dtype::I16:
+            load(std::int16_t{});
+            break;
+        case Dtype::I32:
+            load(std::int32_t{});
+            break;
+        default:
+            load(std::int64_t{});
+            break;
+        }
+        k64(wide_in.data(), wide_out.data(), oir.outer, oir.reduce_dim, oir.inner);
+        switch (dt) {
+        case Dtype::Bool: {
+            auto* p = reinterpret_cast<std::uint8_t*>(r.data.ptr.get());
+            for (std::size_t i = 0; i < out_numel; ++i)
+                p[i] = wide_out[i] != 0.0 ? 1 : 0;
+            break;
+        }
+        case Dtype::I8:
+            store(std::int8_t{});
+            break;
+        case Dtype::I16:
+            store(std::int16_t{});
+            break;
+        case Dtype::I32:
+            store(std::int32_t{});
+            break;
+        default:
+            store(std::int64_t{});
+            break;
+        }
+        break;
+    }
     default:
-        ErrorBuilder(op_name).not_implemented("dtype not supported (F32/F64 only)");
+        ErrorBuilder(op_name).not_implemented("dtype not supported");
     }
     return r;
 }

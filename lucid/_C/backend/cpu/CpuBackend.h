@@ -68,6 +68,7 @@
 
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/Half.h"
 #include "../../core/Shape.h"
 #include "../Dispatcher.h"
 #include "../IBackend.h"
@@ -88,75 +89,7 @@
 namespace lucid {
 namespace backend {
 
-namespace detail {
-
-// IEEE-754 binary16 <-> float, done by hand so this header does not depend on
-// ``__fp16`` / ``_Float16`` availability.  Used only by ``CpuBackend::astype``:
-// F16 has no ``static_cast``-able host scalar, so it cannot ride the generic
-// cast table.
-inline float half_bits_to_float(std::uint16_t bits) {
-    const std::uint32_t sign = static_cast<std::uint32_t>(bits >> 15) & 0x1u;
-    const std::uint32_t exp = static_cast<std::uint32_t>(bits >> 10) & 0x1fu;
-    const std::uint32_t mant = static_cast<std::uint32_t>(bits) & 0x3ffu;
-    std::uint32_t f;
-    if (exp == 0) {
-        if (mant == 0) {
-            f = sign << 31;  // +/- zero
-        } else {
-            // Subnormal half: renormalise into a float's exponent range.
-            std::uint32_t e = 1;
-            std::uint32_t m = mant;
-            while ((m & 0x400u) == 0) {
-                m <<= 1;
-                --e;
-            }
-            m &= 0x3ffu;
-            f = (sign << 31) | ((e + 112u) << 23) | (m << 13);
-        }
-    } else if (exp == 31) {
-        f = (sign << 31) | (0xffu << 23) | (mant << 13);  // inf / NaN
-    } else {
-        f = (sign << 31) | ((exp + 112u) << 23) | (mant << 13);
-    }
-    float out;
-    std::memcpy(&out, &f, sizeof(out));
-    return out;
-}
-
-// Round-to-nearest-even, with overflow to inf and graceful subnormal handling.
-inline std::uint16_t float_to_half_bits(float value) {
-    std::uint32_t f;
-    std::memcpy(&f, &value, sizeof(f));
-    const std::uint32_t sign = (f >> 16) & 0x8000u;
-    std::int32_t exp = static_cast<std::int32_t>((f >> 23) & 0xffu) - 127 + 15;
-    std::uint32_t mant = f & 0x7fffffu;
-
-    if (((f >> 23) & 0xffu) == 0xffu)  // inf / NaN
-        return static_cast<std::uint16_t>(sign | 0x7c00u | (mant ? 0x200u : 0u));
-    if (exp >= 0x1f)  // overflow -> inf
-        return static_cast<std::uint16_t>(sign | 0x7c00u);
-    if (exp <= 0) {
-        if (exp < -10)  // underflow -> signed zero
-            return static_cast<std::uint16_t>(sign);
-        mant |= 0x800000u;  // restore the implicit bit, then shift into place
-        const std::uint32_t shift = static_cast<std::uint32_t>(14 - exp);
-        const std::uint32_t half = 1u << (shift - 1);
-        const std::uint32_t rounded = (mant + half - 1u + ((mant >> shift) & 1u)) >> shift;
-        return static_cast<std::uint16_t>(sign | rounded);
-    }
-    const std::uint32_t half = 0x1000u;
-    const std::uint32_t rounded = mant + half - 1u + ((mant >> 13) & 1u);
-    if (rounded & 0x800000u) {  // rounding carried into the exponent
-        ++exp;
-        if (exp >= 0x1f)
-            return static_cast<std::uint16_t>(sign | 0x7c00u);
-        return static_cast<std::uint16_t>(sign | (static_cast<std::uint32_t>(exp) << 10));
-    }
-    return static_cast<std::uint16_t>(sign | (static_cast<std::uint32_t>(exp) << 10) |
-                                      (rounded >> 13));
-}
-
-}  // namespace detail
+// Half conversion lives in ``core/Half.h`` — see the note there.
 
 // CPU (Apple Accelerate-backed) concrete :class:`IBackend`.
 //
@@ -3288,16 +3221,40 @@ public:
             static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dim)]);
         const std::size_t idx_dim =
             static_cast<std::size_t>(idx_shape[static_cast<std::size_t>(dim)]);
-        const auto* ip = reinterpret_cast<const std::int32_t*>(ci.ptr.get());
+        // The index buffer used to be read as ``int32`` whatever its actual
+        // dtype.  An int16 index tensor therefore had two of its values
+        // read as one, giving a silently wrong result; an int8 one had
+        // four read as one, producing an index far outside the base and an
+        // out-of-bounds write — a bus error reachable from Python.
+        const auto load_index = [&](std::size_t at) -> std::int64_t {
+            switch (ci.dtype) {
+            case Dtype::I8:
+                return reinterpret_cast<const std::int8_t*>(ci.ptr.get())[at];
+            case Dtype::I16:
+                return reinterpret_cast<const std::int16_t*>(ci.ptr.get())[at];
+            case Dtype::I64:
+                return reinterpret_cast<const std::int64_t*>(ci.ptr.get())[at];
+            case Dtype::Bool:
+                return reinterpret_cast<const std::uint8_t*>(ci.ptr.get())[at] ? 1 : 0;
+            default:
+                return reinterpret_cast<const std::int32_t*>(ci.ptr.get())[at];
+            }
+        };
 
         auto run = [&](auto* dst, const auto* sp) {
             for (std::size_t o = 0; o < outer; ++o) {
                 for (std::size_t j = 0; j < inner; ++j) {
                     for (std::size_t k = 0; k < idx_dim; ++k) {
                         const std::size_t src_flat = (o * idx_dim + k) * inner + j;
-                        std::int32_t tgt = ip[src_flat];
+                        std::int64_t tgt = load_index(src_flat);
                         if (tgt < 0)
-                            tgt += static_cast<std::int32_t>(base_dim);
+                            tgt += static_cast<std::int64_t>(base_dim);
+                        // Refuse rather than write outside the buffer.  An
+                        // index this loop cannot satisfy is a caller error,
+                        // and the previous behaviour was to corrupt memory.
+                        if (tgt < 0 || static_cast<std::size_t>(tgt) >= base_dim)
+                            ErrorBuilder("cpu_backend::scatter_add")
+                                .fail("index out of range for the scattered axis");
                         const std::size_t dst_flat =
                             (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
                         dst[dst_flat] += sp[src_flat];
@@ -6579,8 +6536,46 @@ public:
                             const int* K,
                             const int* O,
                             const IBackend::ConvNdOpts& opts,
-                            const Shape&,
+                            const Shape& out_shape,
                             Dtype dt) override {
+        // Half is not threaded through im2col and GEMM — there is no
+        // half BLAS to call — so it widens at the door and rounds once on
+        // the way out.  Metal accepted F16 convolutions and the CPU did
+        // not, which made the same model run on one device and raise on
+        // the other.
+        if (dt == Dtype::F16) {
+            const auto widen = [&](const Storage& s, std::size_t count) {
+                const auto& c = std::get<CpuStorage>(s);
+                auto p = allocate_aligned_bytes(count * sizeof(float), Device::CPU);
+                const auto* src = reinterpret_cast<const std::uint16_t*>(c.ptr.get());
+                auto* dst = reinterpret_cast<float*>(p.get());
+                for (std::size_t i = 0; i < count; ++i)
+                    dst[i] = detail::half_bits_to_float(src[i]);
+                return Storage{CpuStorage{p, count * sizeof(float), Dtype::F32}};
+            };
+            std::size_t x_n = static_cast<std::size_t>(B) * Cin;
+            std::size_t w_n = static_cast<std::size_t>(Cout) * Cin_g;
+            for (int i = 0; i < opts.N; ++i) {
+                x_n *= static_cast<std::size_t>(S[i]);
+                w_n *= static_cast<std::size_t>(K[i]);
+            }
+            const auto& b_in = std::get<CpuStorage>(b);
+            const bool has_bias = b_in.ptr != nullptr && b_in.nbytes > 0;
+            Storage wide =
+                conv_nd_forward(widen(x, x_n), widen(W, w_n),
+                                has_bias ? widen(b, static_cast<std::size_t>(Cout)) : b, B, Cin,
+                                Cout, Cin_g, Cout_g, S, K, O, opts, out_shape, Dtype::F32);
+
+            const auto& wc = std::get<CpuStorage>(wide);
+            const std::size_t out_n = wc.nbytes / sizeof(float);
+            auto narrow = allocate_aligned_bytes(out_n * sizeof(std::uint16_t), Device::CPU);
+            const auto* src = reinterpret_cast<const float*>(wc.ptr.get());
+            auto* dst = reinterpret_cast<std::uint16_t*>(narrow.get());
+            for (std::size_t i = 0; i < out_n; ++i)
+                dst[i] = detail::float_to_half_bits(src[i]);
+            return Storage{CpuStorage{narrow, out_n * sizeof(std::uint16_t), Dtype::F16}};
+        }
+
         const int N = opts.N;
         int O_total = 1, K_total = 1, S_total = 1;
         for (int i = 0; i < N; ++i) {
@@ -10049,10 +10044,80 @@ private:
             fni32(reinterpret_cast<const std::int32_t*>(cs.ptr.get()),
                   reinterpret_cast<std::int32_t*>(ptr.get()), n);
         else if (dt == Dtype::I64) {
+            // This branch used to read
+            //     op[i] = (std::int64_t)(double)(double)ip[i];
+            // which is an identity: the function was never applied, so
+            // every unary op on I64 returned its own input.  I64 is the
+            // default integer dtype, so ``exp(tensor([2, 3]))`` answered
+            // ``[2, 3]`` instead of ``[7, 20]`` — silently, on the CPU
+            // only, while Metal was correct.
             const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
             std::int64_t* op = reinterpret_cast<std::int64_t*>(ptr.get());
+            std::vector<double> wi(n), wo(n);
             for (std::size_t i = 0; i < n; ++i)
-                op[i] = static_cast<std::int64_t>(static_cast<double>(static_cast<double>(ip[i])));
+                wi[i] = static_cast<double>(ip[i]);
+            fn64(wi.data(), wo.data(), n);
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = static_cast<std::int64_t>(wo[i]);
+        } else if (dt == Dtype::Bool) {
+            // Bool goes through *float*, not through the integer kernel.
+            // Truncating first makes ``tanh(True)`` land on 0 and read back
+            // as False, while a float-to-bool cast is "non-zero" and gives
+            // True — which is what Metal and the reference both do.
+            const auto* p = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
+            std::vector<float> wi(n), wo(n);
+            for (std::size_t i = 0; i < n; ++i)
+                wi[i] = p[i] ? 1.0f : 0.0f;
+            fn32(wi.data(), wo.data(), n);
+            auto* o = reinterpret_cast<std::uint8_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                o[i] = wo[i] != 0.0f ? 1 : 0;
+        } else if (dt == Dtype::I8 || dt == Dtype::I16) {
+            // Accelerate has no vector maths below 32 bits, so these widen,
+            // reuse the I32 kernel and narrow back — the same shape as
+            // ``binary_op``.  Metal supported all three and the CPU did
+            // not, so the same call worked on one device and raised on the
+            // other.
+            std::vector<std::int32_t> wi(n), wo(n);
+            if (dt == Dtype::I16) {
+                const auto* p = reinterpret_cast<const std::int16_t*>(cs.ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    wi[i] = p[i];
+            } else if (dt == Dtype::I8) {
+                const auto* p = reinterpret_cast<const std::int8_t*>(cs.ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    wi[i] = p[i];
+            } else {
+                const auto* p = reinterpret_cast<const std::int8_t*>(cs.ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    wi[i] = p[i];
+            }
+            fni32(wi.data(), wo.data(), n);
+            if (dt == Dtype::I16) {
+                auto* o = reinterpret_cast<std::int16_t*>(ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    o[i] = static_cast<std::int16_t>(wo[i]);
+            } else if (dt == Dtype::I8) {
+                auto* o = reinterpret_cast<std::int8_t*>(ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    o[i] = static_cast<std::int8_t>(wo[i]);
+            } else {
+                auto* o = reinterpret_cast<std::int8_t*>(ptr.get());
+                for (std::size_t i = 0; i < n; ++i)
+                    o[i] = static_cast<std::int8_t>(wo[i]);
+            }
+        } else if (dt == Dtype::F16) {
+            // Half has no host scalar to compute in; widen through float
+            // and round once on the way back, which is what the astype
+            // path does.
+            const auto* p = reinterpret_cast<const std::uint16_t*>(cs.ptr.get());
+            std::vector<float> wi(n), wo(n);
+            for (std::size_t i = 0; i < n; ++i)
+                wi[i] = detail::half_bits_to_float(p[i]);
+            fn32(wi.data(), wo.data(), n);
+            auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                o[i] = detail::float_to_half_bits(wo[i]);
         } else {
             ErrorBuilder("cpu_backend::unary").not_implemented("dtype not supported");
         }
