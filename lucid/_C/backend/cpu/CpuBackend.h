@@ -119,6 +119,64 @@ inline Storage narrow_half(const Storage& wide, std::size_t n) {
     return Storage{CpuStorage{p, n * sizeof(std::uint16_t), Dtype::F16}};
 }
 
+// Widen a narrow integer storage to int64, exactly.
+//
+// The integer counterpart of widen_half, and exact rather than merely
+// close: every value of int8 / int16 / int32 / bool fits in an int64, so
+// a comparison or a sum computed wide is the same one the narrow type
+// would have produced had a kernel existed for it.
+inline CpuStorage widen_int(const CpuStorage& in, std::size_t n, Dtype from) {
+    auto p = allocate_aligned_bytes(n * sizeof(std::int64_t), Device::CPU);
+    auto* dst = reinterpret_cast<std::int64_t*>(p.get());
+    const auto* raw = in.ptr.get();
+    for (std::size_t i = 0; i < n; ++i) {
+        switch (from) {
+        case Dtype::I32:
+            dst[i] = reinterpret_cast<const std::int32_t*>(raw)[i];
+            break;
+        case Dtype::I16:
+            dst[i] = reinterpret_cast<const std::int16_t*>(raw)[i];
+            break;
+        case Dtype::I8:
+            dst[i] = reinterpret_cast<const std::int8_t*>(raw)[i];
+            break;
+        default:  // Bool
+            dst[i] = reinterpret_cast<const std::uint8_t*>(raw)[i] ? 1 : 0;
+            break;
+        }
+    }
+    return CpuStorage{p, n * sizeof(std::int64_t), Dtype::I64};
+}
+
+// The inverse.  Truncates on overflow, which cannot happen for the
+// reductions that use it: max and min of narrow values stay in range, and
+// a sum that overflows the caller's dtype would have overflowed it in a
+// native kernel too.
+inline Storage narrow_int(const Storage& wide, std::size_t n, Dtype to) {
+    const auto& w = std::get<CpuStorage>(wide);
+    const std::size_t width = dtype_size(to);
+    auto p = allocate_aligned_bytes(n * width, Device::CPU);
+    const auto* src = reinterpret_cast<const std::int64_t*>(w.ptr.get());
+    auto* raw = p.get();
+    for (std::size_t i = 0; i < n; ++i) {
+        switch (to) {
+        case Dtype::I32:
+            reinterpret_cast<std::int32_t*>(raw)[i] = static_cast<std::int32_t>(src[i]);
+            break;
+        case Dtype::I16:
+            reinterpret_cast<std::int16_t*>(raw)[i] = static_cast<std::int16_t>(src[i]);
+            break;
+        case Dtype::I8:
+            reinterpret_cast<std::int8_t*>(raw)[i] = static_cast<std::int8_t>(src[i]);
+            break;
+        default:  // Bool
+            reinterpret_cast<std::uint8_t*>(raw)[i] = src[i] ? 1 : 0;
+            break;
+        }
+    }
+    return Storage{CpuStorage{p, n * width, to}};
+}
+
 // Widen a storage to float iff it is half; pass anything else through
 // untouched.  Dtype-driven rather than position-driven, so a call site can
 // hand it every operand it has and the index / mask / condition tensors
@@ -10807,6 +10865,22 @@ private:
             const std::size_t out_n = std::get<CpuStorage>(wide).nbytes / sizeof(float);
             return detail::narrow_half(wide, out_n);
         }
+        // The same shape for the narrow integers.  Only I64 was
+        // implemented, so ``max`` and ``min`` refused int8/16/32 and bool
+        // while Metal answered them — and taking the maximum of an integer
+        // tensor is an ordinary thing to want.  Widening to I64 is exact
+        // for every one of these (comparison and summation of a narrower
+        // integer cannot overflow int64), so the answer is the same one
+        // the wide path would give, narrowed back to the caller's dtype.
+        if (!in_shape.empty()
+            && (dt == Dtype::I32 || dt == Dtype::I16 || dt == Dtype::I8 || dt == Dtype::Bool)) {
+            const std::size_t in_n = shape_numel(in_shape);
+            const Storage wide = reduce_axes(
+                Storage{detail::widen_int(std::get<CpuStorage>(a), in_n, dt)}, in_shape, opts,
+                Dtype::I64, op);
+            const std::size_t out_n = std::get<CpuStorage>(wide).nbytes / sizeof(std::int64_t);
+            return detail::narrow_int(wide, out_n, dt);
+        }
         // 0-d (scalar) input is already its own reduction. Returning early
         // avoids an infinite recursion in the empty-axes branch below, where
         // expanding `axes` to all dims would yield another empty list.
@@ -11661,12 +11735,6 @@ private:
     }
 
     Storage tri(const Storage& input, const Shape& shape, Dtype dt, int k, bool upper) override {
-        // Accelerate has no half kernel here; widen at the door and round
-        // once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(tri(Storage{detail::widen_half(std::get<CpuStorage>(input), half_n)}, shape, Dtype::F32, k, upper), half_n);
-        }
         const auto& ca = std::get<CpuStorage>(input);
         if (shape.size() < 2)
             ErrorBuilder("cpu_backend::tri").fail("input must have ndim >= 2");
@@ -11690,12 +11758,39 @@ private:
                         dst[f] = (upper ? (j - i >= k) : (j - i <= k)) ? src[f] : T{};
                     }
         };
-        if (dt == Dtype::F32)
+        // Every dtype the framework has, because ``tri`` is masking rather
+        // than arithmetic: it copies an element or writes a zero, so the
+        // only thing that matters is how wide the element is.  This was
+        // F32/F64 only, with half routed through a widen-and-round —
+        // pointless for a memcpy, and lossy in principle — while integers
+        // were refused outright even though ``tril`` on an integer matrix
+        // is an ordinary thing to want and Metal did it.
+        switch (dt) {
+        case Dtype::F32:
             run(float{});
-        else if (dt == Dtype::F64)
+            break;
+        case Dtype::F64:
             run(double{});
-        else
+            break;
+        case Dtype::F16:
+            run(std::uint16_t{});  // bit pattern; zero is zero in IEEE half
+            break;
+        case Dtype::I64:
+            run(std::int64_t{});
+            break;
+        case Dtype::I32:
+            run(std::int32_t{});
+            break;
+        case Dtype::I16:
+            run(std::int16_t{});
+            break;
+        case Dtype::I8:
+        case Dtype::Bool:
+            run(std::uint8_t{});
+            break;
+        default:
             ErrorBuilder("cpu_backend::tri").not_implemented("dtype not supported");
+        }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 

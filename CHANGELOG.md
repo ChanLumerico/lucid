@@ -54,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - show one progress bar per subsystem while the sweep runs
 
+- take integers in tri, max and min on the CPU
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
