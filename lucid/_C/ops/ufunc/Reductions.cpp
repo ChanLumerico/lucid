@@ -25,8 +25,11 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Compare.h"
 #include "../bfunc/Div.h"
+#include "../bfunc/Mul.h"
 #include "../gfunc/Gfunc.h"
+#include "../utils/Layout.h"
 #include "Astype.h"
 #include "Exponential.h"
 #include "Var.h"
@@ -244,6 +247,19 @@ Storage ProdBackward::grad_formula(const Storage& grad_out) {
     return multiply_storages(g_bcast, ratio, in_numel, this->dtype_, this->device_);
 }
 
+// Graph-mode prod backward: dL/dx_i = g_i * (y / x_i).
+//
+// Mirrors ``grad_formula`` exactly.  The output is *recomputed* from the
+// saved input impl rather than read from ``saved_output_``: the storage
+// carries no graph, and a second derivative taken through it would be
+// silently wrong even while the first stayed right.
+TensorImplPtr ProdBackward::scale_graph_grad(const TensorImplPtr& g) {
+    const auto& x = this->saved_impl_inputs_[0];
+    auto out = prod_op(x, this->reduce_axes_, /*keepdims=*/true);
+    auto out_b = broadcast_to_op(out, this->full_input_shape_);
+    return mul_op(g, div_op(out_b, x));
+}
+
 TensorImplPtr prod_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
     return ProdBackward::forward(promote_int_for_reduce(a), axes, keepdims);
 }
@@ -277,6 +293,17 @@ Storage MaxBackward::grad_formula(const Storage& grad_out) {
     return multiply_storages(g_bcast, mask_eq, in_numel, this->dtype_, this->device_);
 }
 
+// Graph-mode max backward: route the gradient to every position holding
+// the maximum, matching ``grad_formula``'s ``(x >= y) * (y >= x)`` mask.
+// Ties therefore each receive the full gradient, in both modes.
+TensorImplPtr MaxBackward::scale_graph_grad(const TensorImplPtr& g) {
+    const auto& x = this->saved_impl_inputs_[0];
+    auto out = max_op(x, this->reduce_axes_, /*keepdims=*/true);
+    auto out_b = broadcast_to_op(out, this->full_input_shape_);
+    auto mask = astype_op(equal_op(x, out_b), this->dtype_);
+    return mul_op(g, mask);
+}
+
 TensorImplPtr max_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
     return MaxBackward::forward(a, axes, keepdims);
 }
@@ -303,6 +330,15 @@ Storage MinBackward::grad_formula(const Storage& grad_out) {
         broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
                                   this->reduce_axes_, this->keepdims_, this->dtype_, this->device_);
     return multiply_storages(g_bcast, mask_eq, in_numel, this->dtype_, this->device_);
+}
+
+// Graph-mode min backward — the mirror of :meth:`MaxBackward::scale_graph_grad`.
+TensorImplPtr MinBackward::scale_graph_grad(const TensorImplPtr& g) {
+    const auto& x = this->saved_impl_inputs_[0];
+    auto out = min_op(x, this->reduce_axes_, /*keepdims=*/true);
+    auto out_b = broadcast_to_op(out, this->full_input_shape_);
+    auto mask = astype_op(equal_op(x, out_b), this->dtype_);
+    return mul_op(g, mask);
 }
 
 TensorImplPtr min_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {

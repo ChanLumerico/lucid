@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stop the in-place activations dropping their own derivative
 
+- give prod / max / min their own graph-mode rule
+
 ### Changed
 
 - give the engine ops one shared operand check

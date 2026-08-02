@@ -203,6 +203,12 @@ public:
     // Backward — $\partial L/\partial x_i = (y / x_i) \cdot \mathrm{grad\_out}$
     // (product of all other elements), formed from the saved input and output.
     Storage grad_formula(const Storage& grad_out);
+
+    // Graph-mode scaling.  Without this the base class returns the
+    // broadcast gradient unchanged — the *sum* rule — so
+    // ``create_graph=True`` silently produced the incoming seed at
+    // every position while eager backward was correct.
+    TensorImplPtr scale_graph_grad(const TensorImplPtr& g);
 };
 
 // Autograd node for the multi-axis reduction maximum
@@ -255,6 +261,12 @@ public:
     // Backward — argmax-indicator gradient: routes ``grad_out`` only to
     // positions where $x_i$ equals the reduced max (ties share equally).
     Storage grad_formula(const Storage& grad_out);
+
+    // Graph-mode scaling.  Without this the base class returns the
+    // broadcast gradient unchanged — the *sum* rule — so
+    // ``create_graph=True`` silently produced the incoming seed at
+    // every position while eager backward was correct.
+    TensorImplPtr scale_graph_grad(const TensorImplPtr& g);
 };
 
 // Autograd node for the multi-axis reduction minimum
@@ -297,6 +309,12 @@ public:
     // Backward — argmin-indicator gradient: routes ``grad_out`` only to
     // positions where $x_i$ equals the reduced min (ties share equally).
     Storage grad_formula(const Storage& grad_out);
+
+    // Graph-mode scaling.  Without this the base class returns the
+    // broadcast gradient unchanged — the *sum* rule — so
+    // ``create_graph=True`` silently produced the incoming seed at
+    // every position while eager backward was correct.
+    TensorImplPtr scale_graph_grad(const TensorImplPtr& g);
 };
 
 // Reduce ``a`` by addition along ``axes``.
