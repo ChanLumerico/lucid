@@ -439,6 +439,17 @@ TensorImplPtr ctc_loss_op(const TensorImplPtr& log_probs,
     const auto& lp_shape = log_probs->shape();
     if (lp_shape.size() != 3)
         ErrorBuilder("ctc_loss").fail("log_probs must be 3-D (T, N, C)");
+    // Rank was checked; extents were not.  The forward-backward recursion
+    // indexes the first time step before it loops, so a zero-length T read
+    // a lattice that was never allocated — SIGSEGV on an empty (0, N, C)
+    // input.  A zero alphabet has no blank to emit, and a zero batch has
+    // nothing to reduce over.
+    if (lp_shape[0] <= 0)
+        ErrorBuilder("ctc_loss").fail("log_probs has no time steps (T = 0)");
+    if (lp_shape[1] <= 0)
+        ErrorBuilder("ctc_loss").fail("log_probs has an empty batch (N = 0)");
+    if (lp_shape[2] <= 0)
+        ErrorBuilder("ctc_loss").fail("log_probs has an empty alphabet (C = 0)");
 
     const int N = static_cast<int>(lp_shape[1]);
     Shape out_shape{static_cast<std::int64_t>(N)};

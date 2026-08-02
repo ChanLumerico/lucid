@@ -90,6 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - check the shape contract in gather, and the cut points in split
 
+- three more crashes on degenerate inputs
+
 ### Changed
 
 - give the engine ops one shared operand check

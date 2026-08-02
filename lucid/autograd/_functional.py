@@ -2,7 +2,7 @@
 Higher-order autograd utilities: jacobian, hessian, vjp, jvp.
 """
 
-from typing import Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -403,7 +403,31 @@ def vjp(
         allow_unused=True,
     )
 
+    # ``retain_graph`` follows ``create_graph``, so by default the graph
+    # behind ``outputs`` has just been freed — while ``outputs`` itself
+    # still advertises ``requires_grad=True``.  Handing that back invites
+    # a second backward through storages that no longer exist, and it does
+    # not raise: ``MulBackward`` multiplied a live gradient by a released
+    # operand and read off the end of it.  ``(out * out).sum().backward()``
+    # after a plain ``vjp`` was a segfault in four lines.
+    #
+    # Detached only when the graph was not kept.  Under ``create_graph``
+    # the graph is alive and differentiating the output again is exactly
+    # what the flag is for.
+    if not create_graph:
+        outputs = _detach_outputs(outputs)
     return outputs, grads
+
+
+def _detach_outputs(outputs: Any) -> Any:
+    """Detach ``outputs``, preserving whether it was a single tensor.
+
+    ``vjp`` and its callers accept one tensor or a tuple of them, and the
+    return type has to keep that distinction.
+    """
+    if isinstance(outputs, (list, tuple)):
+        return type(outputs)(o.detach() if hasattr(o, "detach") else o for o in outputs)
+    return outputs.detach() if hasattr(outputs, "detach") else outputs
 
 
 def jvp(

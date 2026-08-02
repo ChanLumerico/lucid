@@ -51,8 +51,16 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
     const int C = static_cast<int>(input->shape()[1]);
     const int H_in = static_cast<int>(input->shape()[2]);
     const int W_in = static_cast<int>(input->shape()[3]);
-    (void)H_in;
-    (void)W_in;
+    // The source extents were read and then explicitly discarded.  They
+    // are not decoration: bilinear sampling reads the four neighbours of
+    // each output coordinate, so a source with no rows or no columns has
+    // nothing to read and segfaulted.  ``resized_crop`` on a degenerate
+    // image reached here through ``resize``.
+    if (H_in <= 0 || W_in <= 0)
+        ErrorBuilder("interpolate_bilinear")
+            .fail("cannot interpolate from an image with a zero spatial extent");
+    if (H_out <= 0 || W_out <= 0)
+        ErrorBuilder("interpolate_bilinear").fail("output extent must be positive");
     Shape out_shape{N, C, H_out, W_out};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
     scope.set_attr("H_out", static_cast<std::int64_t>(H_out));
