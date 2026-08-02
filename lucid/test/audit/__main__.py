@@ -226,6 +226,7 @@ def run(args: argparse.Namespace, console: Console) -> Report:
     )
 
     total_work = sum(sum(1 for s in symbols if a.applies(s)) for a in axes)
+    report.applicable_cells = total_work
     overall = Timer()
     done_total = 0
     tick = 0
@@ -311,7 +312,6 @@ def run(args: argparse.Namespace, console: Console) -> Report:
             break
 
     report.duration = overall.elapsed
-    _ = total_work
     return report
 
 
@@ -358,10 +358,10 @@ def summarise(report: Report, console: Console, show: "Sequence[str]") -> None:
     )
     console.always(
         "  "
-        + console.paint("symbol x axis".ljust(22), "grey")
-        + console.paint(f"{filled}/{cells} cells filled ", "white")
+        + console.paint("applicable cells".ljust(22), "grey")
+        + console.paint(f"{filled}/{cells} produced a verdict ", "white")
         + console.paint(f"({100 * cell_frac:.1f}%)", "cyan")
-        + console.paint("   — the measure that does not flatter", "grey")
+        + console.paint("   — skips and refusals do not count", "grey")
     )
     console.always(
         "  "

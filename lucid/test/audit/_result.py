@@ -114,6 +114,11 @@ class Report:
     started: float = dataclasses.field(default_factory=time.time)
     duration: float = 0.0
     surface_total: int = 0
+    #: (symbol, axis) pairs where the axis is *meaningful* for the symbol.
+    #: The denominator for depth.  Using ``symbols x axes`` instead would
+    #: punish adding a subsystem-specific axis, since it dilutes every
+    #: symbol the new axis cannot express — which is backwards.
+    applicable_cells: int = 0
     axes_run: list[str] = dataclasses.field(default_factory=list)
     config: dict[str, Any] = dataclasses.field(default_factory=dict)
 
@@ -160,9 +165,16 @@ class Report:
         return reached, total, (reached / total if total else 0.0)
 
     def cell_coverage(self) -> tuple[int, int, float]:
-        """The symbol x axis matrix — the measure that does not flatter."""
+        """Applicable (symbol, axis) pairs that produced a real verdict.
+
+        The measure that does not flatter: a SKIP or an UNSUPPORTED does
+        not count, so a run that reaches every symbol but only smoke-tests
+        them still reports a low number.
+        """
         filled = sum(1 for f in self.findings if f.status.is_coverage)
-        total = self.surface_total * max(len(self.axes_run), 1)
+        total = self.applicable_cells or (
+            self.surface_total * max(len(self.axes_run), 1)
+        )
         return filled, total, (filled / total if total else 0.0)
 
     # ── serialisation ────────────────────────────────────────────────────────

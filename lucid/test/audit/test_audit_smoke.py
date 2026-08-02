@@ -236,3 +236,51 @@ def test_bar_and_strip_agree_on_width() -> None:
 def test_table_renders_without_a_terminal() -> None:
     console = Console(colour=False, width=80)
     console.table(["a", "bb"], [["1", "2"]])
+
+
+# ── reach ────────────────────────────────────────────────────────────────────
+
+
+def test_every_symbol_has_at_least_one_axis() -> None:
+    """The property the tool is for.
+
+    Reach went 57.3% -> 92.2% -> 100% as ``Tensor.*`` was resolved
+    properly, the subsystems with no axis got one, and the smoke floor
+    was widened to every callable.  If this regresses, some part of the
+    framework has silently left the audit.
+    """
+    symbols = _surface.enumerate_surface()
+    stranded = [
+        s.qualname for s in symbols if not any(a.applies(s) for a in _axes.ALL_AXES)
+    ]
+    assert not stranded, f"{len(stranded)} symbols no axis reaches: {stranded[:10]}"
+
+
+def test_tensor_methods_resolve_to_something_callable() -> None:
+    """253 symbols had no axis until properties and functions were told apart."""
+    methods = [s for s in _surface.enumerate_surface(["tensor"]) if s.inert]
+    assert len(methods) > 200
+    unresolved = [s.qualname for s in methods if _surface.resolve(s) is None]
+    assert not unresolved, unresolved[:10]
+
+
+def test_no_namespace_is_counted_as_a_symbol() -> None:
+    """``nn.functional`` is a subsystem, not a member of ``nn``."""
+    import types as _types
+
+    symbols = _surface.enumerate_surface()
+    namespaces = [s.qualname for s in symbols if isinstance(s.obj, _types.ModuleType)]
+    assert not namespaces, namespaces
+
+
+def test_subsystem_kinds_reach_their_dedicated_axis() -> None:
+    by_name = {a.name: a for a in _axes.ALL_AXES}
+    for subsystem, axis_name in (
+        ("distributions", "distribution"),
+        ("diffeq", "diffeq"),
+        ("optim", "optim"),
+        ("serialization", "serialize"),
+    ):
+        symbols = _surface.enumerate_surface([subsystem])
+        assert symbols, subsystem
+        assert any(by_name[axis_name].applies(s) for s in symbols), subsystem

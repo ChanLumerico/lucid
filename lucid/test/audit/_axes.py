@@ -60,7 +60,10 @@ class Axis:
 
     name: str = ""
     summary: str = ""
-    kinds: frozenset[str] = frozenset({"op"})
+    #: Which :attr:`Symbol.kind` values this axis can express.  ``method``
+    #: is in the default because ``Tensor.*`` is 253 symbols and leaving
+    #: it out put every one of them outside the audit.
+    kinds: frozenset[str] = frozenset({"op", "method"})
 
     def applies(self, symbol: "Symbol") -> bool:
         if symbol.kind not in self.kinds:
@@ -1014,9 +1017,8 @@ def _try_forward(module: Any) -> "tuple[Any, str]":
     return None, last
 
 
-#: Every axis, in the order a full run executes them — cheapest first, so
-#: a ``--fail-fast`` run surfaces the loud problems before the slow ones.
-ALL_AXES: tuple[Axis, ...] = (
+#: The core numeric axes, cheapest first.
+CORE_AXES: tuple[Axis, ...] = (
     EntryPointAxis(),
     BroadcastAxis(),
     NonFiniteAxis(),
@@ -1030,6 +1032,22 @@ ALL_AXES: tuple[Axis, ...] = (
     OptimAxis(),
 )
 
+# Imported at the bottom: the stability and subsystem axes subclass Axis
+# and are registered here, so a single ``ALL_AXES`` stays the one place a
+# run is defined.  Everything they need from this module is already bound
+# by the time the import executes.
+from lucid.test.audit._axes_stability import STABILITY_AXES  # noqa: E402
+from lucid.test.audit._axes_subsystem import SUBSYSTEM_AXES  # noqa: E402
+
+#: Every axis, in the order a full run executes them — cheapest first, so
+#: a ``--fail-fast`` run surfaces the loud problems before the slow ones.
+ALL_AXES: tuple[Axis, ...] = (
+    *CORE_AXES[:6],
+    *STABILITY_AXES,
+    *CORE_AXES[6:],
+    *SUBSYSTEM_AXES,
+)
+
 
 def axis_by_name(name: str) -> Axis | None:
     return next((a for a in ALL_AXES if a.name == name), None)
@@ -1041,6 +1059,7 @@ def axis_names() -> list[str]:
 
 __all__ = [
     "ALL_AXES",
+    "CORE_AXES",
     "Axis",
     "Context",
     "axis_by_name",

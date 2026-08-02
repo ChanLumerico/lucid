@@ -14,6 +14,7 @@ it failed — 278 of them.  ``STATEFUL`` is that lesson.
 
 import importlib
 import inspect
+import types
 from typing import TYPE_CHECKING, Any
 
 import lucid
@@ -38,22 +39,27 @@ SUBSYSTEMS: dict[str, tuple[str, str]] = {
     "special": ("lucid.special", "op"),
     "einops": ("lucid.einops", "op"),
     "signal": ("lucid.signal", "op"),
-    "distributions": ("lucid.distributions", "other"),
+    "distributions": ("lucid.distributions", "distribution"),
     "optim": ("lucid.optim", "optim"),
-    "diffeq": ("lucid.diffeq", "other"),
-    "serialization": ("lucid.serialization", "other"),
-    "amp": ("lucid.amp", "other"),
-    "quantization": ("lucid.quantization", "other"),
-    "compile": ("lucid.compile", "other"),
-    "profiler": ("lucid.profiler", "other"),
-    "metal": ("lucid.metal", "other"),
-    "utils": ("lucid.utils", "other"),
+    "diffeq": ("lucid.diffeq", "diffeq"),
+    "serialization": ("lucid.serialization", "serialize"),
+    "amp": ("lucid.amp", "util"),
+    "quantization": ("lucid.quantization", "quant"),
+    "compile": ("lucid.compile", "compiled"),
+    "profiler": ("lucid.profiler", "util"),
+    "metal": ("lucid.metal", "util"),
+    "utils": ("lucid.utils", "util"),
 }
 
 #: Excluded from the whole audit, by design.  Stated here rather than
 #: silently omitted so the coverage figure means what it says.
 EXCLUDED: dict[str, str] = {
     "lucid.models": "the model zoo — 593 symbols with their own contract and device suites",
+    "<sub-modules>": (
+        "namespaces re-exported as attributes (nn.functional, utils.data, "
+        "signal.windows) — each is audited as its own subsystem, so counting "
+        "the attribute too would double-count it"
+    ),
 }
 
 #: Calling these mutates process-wide state, opens files, spawns work or
@@ -221,20 +227,28 @@ def enumerate_surface(subsystems: "list[str] | None" = None) -> list[Symbol]:
             obj = getattr(module, name, None)
             if obj is None:
                 continue
-            if isinstance(obj, type):
-                resolved = (
-                    "module"
-                    if _is_nn_module(obj)
-                    else ("optim" if kind == "optim" else "class")
-                )
-                out.append(Symbol(prefix + name, key, resolved, obj))
-            elif callable(obj):
-                out.append(
-                    Symbol(prefix + name, key, "op" if kind == "op" else kind, obj)
-                )
-            else:
-                out.append(Symbol(prefix + name, key, "value", obj))
+            if isinstance(obj, types.ModuleType):
+                continue  # a namespace, audited under its own key
+            out.append(Symbol(prefix + name, key, _classify(obj, kind), obj))
     return out
+
+
+def _classify(obj: Any, subsystem_kind: str) -> str:
+    """What kind of thing this is, for axis dispatch.
+
+    An ``nn.Module`` subclass is a module wherever it lives — the
+    quantized layers are in ``lucid.quantization`` and still want the
+    module lifecycle run over them.
+    """
+    if isinstance(obj, type):
+        if _is_nn_module(obj):
+            return "module"
+        return subsystem_kind if subsystem_kind not in ("op",) else "class"
+    if callable(obj):
+        # ``nn`` is a subsystem of classes, but ``register_module_forward_hook``
+        # is a function and wants the function axes, not the module lifecycle.
+        return "op" if subsystem_kind in ("op", "module") else subsystem_kind
+    return "value"
 
 
 def _is_nn_module(obj: type) -> bool:
@@ -245,10 +259,28 @@ def _is_nn_module(obj: type) -> bool:
 
 
 def resolve(symbol: Symbol) -> Any:
-    """The callable to invoke for ``symbol``, or ``None``."""
-    if symbol.kind == "method":
-        return getattr(lucid, symbol.short, None) or symbol.obj
-    return symbol.obj
+    """The callable to invoke for ``symbol``, or ``None``.
+
+    ``Tensor`` methods are the reason this is not just ``symbol.obj``.
+    They were enumerated with :func:`inspect.getattr_static`, so a plain
+    method comes back as the underlying function — callable as
+    ``fn(tensor, ...)`` — while a property comes back as the descriptor
+    and has to be unwrapped.  253 symbols had no axis at all until this
+    distinguished the two.
+    """
+    if symbol.kind != "method":
+        return symbol.obj
+    obj = symbol.obj
+    if isinstance(obj, property):
+        getter = obj.fget
+        if getter is None:
+            return None
+        return lambda tensor, *args, **kwargs: getter(tensor)
+    if isinstance(obj, (staticmethod, classmethod)):
+        return obj.__func__
+    if callable(obj):
+        return obj
+    return None
 
 
 def counterparts(symbol: Symbol) -> "Iterator[tuple[str, Any]]":
