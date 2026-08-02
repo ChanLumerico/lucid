@@ -248,6 +248,13 @@ broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_sh
     case Dtype::Bool:
         run(std::uint8_t{});
         break;
+    case Dtype::F16:
+        // Broadcasting replicates elements without reading them, so half
+        // rides the 16-bit path.  This gate sits above the backend and so
+        // blocked 41 ops on its own, none of which had anything to do with
+        // arithmetic on half.
+        run(std::uint16_t{});
+        break;
     default:
         ErrorBuilder("broadcast").not_implemented("dtype not supported");
     }

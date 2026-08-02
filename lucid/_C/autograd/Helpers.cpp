@@ -23,6 +23,7 @@
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/Generator.h"
+#include "../core/Half.h"
 #include "../core/TensorImpl.h"
 
 namespace lucid {
@@ -44,6 +45,20 @@ void add_typed(std::byte* dst, const std::byte* src, std::size_t numel) {
     const auto* ts = reinterpret_cast<const T*>(src);
     for (std::size_t i = 0; i < numel; ++i)
         td[i] = td[i] + ts[i];
+}
+
+// dst[i] += src[i] for half, accumulated in float.
+//
+// Not add_typed<std::uint16_t> — that would add the *bit patterns*.  Widening
+// each pair, adding, and rounding once is also what IEEE says a single half
+// addition means, so the result matches the GPU rather than merely running.
+void add_half_inplace(std::byte* dst, const std::byte* src, std::size_t numel) {
+    auto* td = reinterpret_cast<std::uint16_t*>(dst);
+    const auto* ts = reinterpret_cast<const std::uint16_t*>(src);
+    for (std::size_t i = 0; i < numel; ++i)
+        td[i] = backend::detail::float_to_half_bits(
+            backend::detail::half_bits_to_float(td[i]) +
+            backend::detail::half_bits_to_float(ts[i]));
 }
 
 // Perform dst += src for two CpuStorage buffers.
@@ -69,6 +84,9 @@ void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
         break;
     case Dtype::I64:
         add_typed<std::int64_t>(dst.ptr.get(), src.ptr.get(), n);
+        break;
+    case Dtype::F16:
+        add_half_inplace(dst.ptr.get(), src.ptr.get(), n);
         break;
     default:
         ErrorBuilder("accumulate_into").not_implemented("dtype not yet supported in Phase 2");

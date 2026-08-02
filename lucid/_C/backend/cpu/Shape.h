@@ -109,6 +109,19 @@ LUCID_INTERNAL void permute_copy_i32(const std::int32_t* in,
                                      const std::vector<std::int64_t>& in_shape,
                                      const std::vector<int>& perm);
 
+// Two-byte counterpart to :cpp:func:`permute_copy_f32`, shared by ``int16``
+// and ``float16`` — permutation moves bytes, so the width is what matters.
+LUCID_INTERNAL void permute_copy_i16(const std::int16_t* in,
+                                     std::int16_t* out,
+                                     const std::vector<std::int64_t>& in_shape,
+                                     const std::vector<int>& perm);
+
+// One-byte counterpart, shared by ``int8`` and ``bool``.
+LUCID_INTERNAL void permute_copy_i8(const std::int8_t* in,
+                                    std::int8_t* out,
+                                    const std::vector<std::int64_t>& in_shape,
+                                    const std::vector<int>& perm);
+
 // Int64 counterpart to :cpp:func:`permute_copy_f32`.
 //
 // Parameters

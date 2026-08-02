@@ -108,4 +108,23 @@ void permute_copy_i64(const std::int64_t* in,
     permute_typed<std::int64_t>(in, out, in_shape, perm);
 }
 
+// Two- and one-byte widths.  Permutation moves bytes and never reads a
+// value, so ``float16`` rides the 16-bit copy and ``bool`` the 8-bit one —
+// which is why these are named by width rather than by meaning.  Their
+// absence made every transpose, permute and shuffle refuse those dtypes on
+// the CPU while Metal ran them.
+void permute_copy_i16(const std::int16_t* in,
+                      std::int16_t* out,
+                      const std::vector<std::int64_t>& in_shape,
+                      const std::vector<int>& perm) {
+    permute_typed<std::int16_t>(in, out, in_shape, perm);
+}
+
+void permute_copy_i8(const std::int8_t* in,
+                     std::int8_t* out,
+                     const std::vector<std::int64_t>& in_shape,
+                     const std::vector<int>& perm) {
+    permute_typed<std::int8_t>(in, out, in_shape, perm);
+}
+
 }  // namespace lucid::backend::cpu
