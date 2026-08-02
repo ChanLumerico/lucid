@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stop grad() at the tensors it was asked about
 
+- stop the in-place activations dropping their own derivative
+
 ### Changed
 
 - give the engine ops one shared operand check

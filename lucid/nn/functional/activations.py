@@ -1624,8 +1624,26 @@ def rrelu(
 
 
 # ── Inplace variants ──────────────────────────────────────────────────────────
-# For ops whose engine already has a native inplace kernel, call it directly.
-# For the rest, apply the out-of-place version and copy the result back.
+# Every one of these used to end in ``x.copy_(f(x))``, and ``Tensor.copy_``
+# documents that it does **not** extend the autograd graph.  The values were
+# right and the gradients were not: the returned tensor kept whatever
+# ``grad_fn`` ``x`` already carried, so the activation's own derivative was
+# dropped and the backward pass behaved as if no activation had been applied.
+# ``F.elu_`` on ``[-1, 0.5, 2]`` returned a gradient of ``[1, 1, 1]`` where
+# ELU's derivative is ``[0.368, 1, 1]``.  Nothing inside Lucid calls these —
+# ``nn.ReLU(inplace=True)`` forwards to the out-of-place ``relu`` — so the
+# reach was user code, silently.
+#
+# Indexed assignment does extend the graph, so ``x[...] = f(x)`` gives both
+# the mutation and the derivative.  It is not free: the temporary is still
+# allocated, so what "in-place" buys here is the aliasing contract (the
+# caller's tensor holds the result) rather than a saving in memory.
+
+
+def _write_back(x: Tensor, result: Tensor) -> Tensor:
+    """Store ``result`` into ``x``, keeping the autograd graph, and return ``x``."""
+    x[...] = result
+    return x
 
 
 def relu_(x: Tensor, inplace: bool = True) -> Tensor:
@@ -1648,7 +1666,15 @@ def relu_(x: Tensor, inplace: bool = True) -> Tensor:
     Tensor
         The same ``x`` tensor, now holding ``max(0, x)``.
     """
-    return _wrap(_C_engine.relu_(_unwrap(x)))
+    if x.requires_grad and _l.is_grad_enabled():
+        return _write_back(x, relu(x))
+    # No graph to extend, so the engine's fused kernel is exactly
+    # equivalent and allocates nothing.  Measured on 64x3x128x128:
+    # 0.44 ms here against 1.51 ms through the graph-preserving path —
+    # worth a branch on the one function that has a native kernel, since
+    # avoiding the temporary is the whole reason to call this at all.
+    _C_engine.relu_(_unwrap(x))
+    return x
 
 
 def elu_(x: Tensor, alpha: float = 1.0, inplace: bool = True) -> Tensor:
@@ -1671,7 +1697,7 @@ def elu_(x: Tensor, alpha: float = 1.0, inplace: bool = True) -> Tensor:
     Tensor
         The same ``x`` tensor, now holding ``elu(x, alpha)``.
     """
-    return x.copy_(elu(x, alpha))
+    return _write_back(x, elu(x, alpha))
 
 
 def selu_(x: Tensor, inplace: bool = True) -> Tensor:
@@ -1694,7 +1720,7 @@ def selu_(x: Tensor, inplace: bool = True) -> Tensor:
     Tensor
         The same ``x`` tensor, now holding ``selu(x)``.
     """
-    return x.copy_(selu(x))
+    return _write_back(x, selu(x))
 
 
 def leaky_relu_(
@@ -1720,7 +1746,7 @@ def leaky_relu_(
     Tensor
         The same ``x`` tensor, now holding ``leaky_relu(x, negative_slope)``.
     """
-    return x.copy_(leaky_relu(x, negative_slope))
+    return _write_back(x, leaky_relu(x, negative_slope))
 
 
 def hardtanh_(
@@ -1750,7 +1776,7 @@ def hardtanh_(
     Tensor
         The same ``x`` tensor, now clamped.
     """
-    return x.copy_(hardtanh(x, min_val, max_val))
+    return _write_back(x, hardtanh(x, min_val, max_val))
 
 
 def threshold_(
@@ -1778,7 +1804,7 @@ def threshold_(
         The same ``x`` tensor, with sub-threshold positions set to
         ``value`` and the rest unchanged.
     """
-    return x.copy_(threshold(x, threshold_val, value))
+    return _write_back(x, threshold(x, threshold_val, value))
 
 
 def rrelu_(
@@ -1813,4 +1839,4 @@ def rrelu_(
     Tensor
         The same ``x`` tensor, now holding ``rrelu(x, lower, upper, training)``.
     """
-    return x.copy_(rrelu(x, lower, upper, training))
+    return _write_back(x, rrelu(x, lower, upper, training))
