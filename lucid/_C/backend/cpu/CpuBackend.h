@@ -2580,13 +2580,38 @@ public:
                 out_p[k] = sum;
             }
         };
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
+        // Integers included: the reference framework sums the diagonal of
+        // an integer matrix and keeps its dtype, and so does Metal.  Each
+        // width accumulates in itself, which is what the reference does —
+        // an overflowing trace overflows there too.
+        switch (dt) {
+        case Dtype::F32:
+            run(reinterpret_cast<float*>(ptr.get()),
+                reinterpret_cast<const float*>(cs.ptr.get()));
+            break;
+        case Dtype::F64:
             run(reinterpret_cast<double*>(ptr.get()),
                 reinterpret_cast<const double*>(cs.ptr.get()));
-        else
+            break;
+        case Dtype::I64:
+            run(reinterpret_cast<std::int64_t*>(ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
+            break;
+        case Dtype::I32:
+            run(reinterpret_cast<std::int32_t*>(ptr.get()),
+                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
+            break;
+        case Dtype::I16:
+            run(reinterpret_cast<std::int16_t*>(ptr.get()),
+                reinterpret_cast<const std::int16_t*>(cs.ptr.get()));
+            break;
+        case Dtype::I8:
+            run(reinterpret_cast<std::int8_t*>(ptr.get()),
+                reinterpret_cast<const std::int8_t*>(cs.ptr.get()));
+            break;
+        default:
             ErrorBuilder("cpu_backend::trace").not_implemented("dtype not supported");
+        }
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 

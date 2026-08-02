@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - take integers in tri, max and min on the CPU
 
+- take integers in trace, and record the dtype contract
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
