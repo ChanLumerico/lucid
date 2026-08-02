@@ -363,7 +363,21 @@ def cross_entropy(
 
     # Build a per-sample NLL by gathering along the class axis.
     target_long: Tensor = target.to(dtype=_lucid.int32)
-    target_unsq: Tensor = target_long.unsqueeze(1)
+    # Clamped before the gather, not masked after it.
+    #
+    # ``ignore_index`` defaults to -100, and those sentinels used to be
+    # handed straight to ``gather``, which read that far outside the
+    # logits and returned whatever was in memory.  The result was then
+    # multiplied by the keep-mask, so the garbage was zeroed and the loss
+    # came out right — while every masked token in every masked-language
+    # -model step read past the end of the allocation.  It surfaced only
+    # when ``gather`` learned to bounds-check itself.
+    #
+    # The gathered value at a clamped position is discarded by the mask
+    # below, so which valid index is used does not matter; that it is
+    # valid does.
+    safe_target: Tensor = _lucid.clip(target_long, 0, num_classes - 1)
+    target_unsq: Tensor = safe_target.unsqueeze(1)
     gathered: Tensor = _lucid.gather(log_p, target_unsq, 1).squeeze(1)
     nll: Tensor = -gathered  # (N, ...)
 

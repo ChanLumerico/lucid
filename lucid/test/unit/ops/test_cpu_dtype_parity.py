@@ -491,3 +491,59 @@ def test_the_nan_free_answer_is_unchanged(name: str) -> None:
     clean = np.array([1.0, 5.0, 3.0, -1.0], dtype=np.float32)
     cpu, metal = _both_devices(name, clean)
     assert np.array_equal(cpu, metal), name
+
+
+# ── in-place ops and the graph ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "name", ["relu_", "exp_", "sin_", "cos_", "tanh_", "sigmoid_", "square_", "log_"]
+)
+def test_inplace_ops_extend_the_graph(name: str) -> None:
+    """They computed the right value and the wrong derivative.
+
+    ``inplace_unary`` ran the differentiable out-of-place op and then took
+    only its storage, discarding the autograd node — so the tensor kept
+    the new numbers while still sitting at its old position in the graph,
+    and backward reported the gradient of whatever produced it:
+
+        y = x * 1.0; y.exp_(); y.sum().backward()   ->  dx = 1
+
+    Twenty-four ops, silent, and exactly the kind a training run would
+    never notice.
+    """
+    # A negative entry is in here on purpose.  ``relu_`` has derivative
+    # exactly 1 wherever its input is positive, so an all-positive probe
+    # cannot tell the fixed op from the broken one — the first version of
+    # this test asserted "not all ones" and failed on relu_ for that
+    # reason rather than because anything was wrong.
+    values = np.array([[0.5, -0.3], [1.2, 0.8]], dtype=np.float64)
+    x = lucid.tensor(values, dtype=lucid.float64, requires_grad=True)
+    y = x * 1.0
+    getattr(y, name)()
+    y.sum().backward()
+    assert x.grad is not None
+    got = x.grad.numpy()
+    assert not np.allclose(got, 1.0), f"{name} did not extend the graph"
+
+
+def test_inplace_still_writes_in_place() -> None:
+    """Guard the instrument: the graph fix must not have made it a copy."""
+    x = lucid.tensor(np.array([-1.0, 2.0]), dtype=lucid.float64)
+    same = x
+    x.relu_()
+    assert np.allclose(same.numpy(), [0.0, 2.0])
+
+
+def test_cross_entropy_does_not_gather_at_the_ignore_index() -> None:
+    """It gathered at -100 and masked the garbage afterwards.
+
+    The loss came out right because the out-of-range read was multiplied
+    by the keep-mask, so nothing pointed at the fact that every ignored
+    token in every masked-LM step read past the end of the logits.
+    """
+    rng = np.random.default_rng(0)
+    logits = lucid.tensor(rng.random((2, 5, 3)).astype(np.float32), dtype=lucid.float32)
+    target = lucid.tensor(np.array([[0, 1, -100], [2, -100, -100]]), dtype=lucid.int64)
+    loss = F.cross_entropy(logits, target, ignore_index=-100)
+    assert np.isfinite(float(loss))

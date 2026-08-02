@@ -110,6 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - NaN through pooling, and stop demanding it where it cannot go
 
+- in-place ops discarded their own derivative
+
 ### Changed
 
 - give the engine ops one shared operand check

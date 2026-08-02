@@ -120,6 +120,16 @@ class GradientAxis(Axis):
     name = "grad"
     summary = "d/dx vs central finite differences (float64)"
 
+    def applies(self, symbol: "Symbol") -> bool:
+        # A central difference needs f(x+h) and f(x-h) to be the *same*
+        # function evaluated twice.  A stochastic op draws a fresh mask
+        # each call, so the quotient measures the draw rather than the
+        # derivative — dropout and its family reported a relative error
+        # of 1.0 for working exactly as designed.
+        if "stochastic" in symbol.flags:
+            return False
+        return super().applies(symbol)
+
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
@@ -174,6 +184,19 @@ class GradientAxis(Axis):
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.SKIP, f"fd failed: {type(exc).__name__}"
+            )
+
+        # A non-finite difference quotient is the probe leaving the op's
+        # domain, not a wrong derivative.  ``log`` and ``sqrt`` are only
+        # defined on part of the line, and perturbing the probe by h walks
+        # off it — the analytic gradient was finite and checked, the
+        # numerical one came back nan, and the comparison reported a
+        # defect in nineteen ops that were computing correctly.
+        if not np.isfinite(coarse).all():
+            return self._finding(
+                symbol,
+                Status.SKIP,
+                f"{domain}: the finite difference left the op's domain",
             )
 
         rel = _probe.relative(analytic, coarse.reshape(analytic.shape))

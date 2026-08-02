@@ -33,6 +33,28 @@ namespace lucid {
 
 namespace {
 
+// Move ``out``'s place in the autograd graph onto ``a``.
+//
+// ``fwd_fn(a)`` builds a differentiable ``out`` whose grad_fn knows how to
+// undo this op.  Taking only its storage kept the new numbers and threw
+// the derivative away, so ``a`` still sat where it was before the call and
+// reported the gradient of whatever produced it:
+//
+//     y = x * 1.0; y.exp_(); y.sum().backward()  ->  dx = 1
+//                                     reference  ->  dx = exp(x)
+//
+// Twenty-four in-place ops, and silent: the value was right and only the
+// derivative was not, so a model using one trained on a wrong gradient
+// with nothing to show for it.
+bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& out) {
+    if (!out->requires_grad() && !out->grad_fn())
+        return false;
+    a->set_requires_grad(true);
+    a->set_grad_fn(out->grad_fn());
+    a->set_grad_output_nr(out->grad_output_nr());
+    return true;
+}
+
 // Run fwd_fn(a), verify the shape did not change, then write the result back
 // into `a` and bump its version counter.  Returns `a` (same pointer).
 template <typename Fn>
@@ -45,7 +67,16 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
     a->mutable_storage() = std::move(out->mutable_storage());
     a->set_dtype(out->dtype());
     a->set_device(out->device());
-    a->bump_version();
+    const bool adopted = adopt_graph_position(a, out);
+    // The version bump is what tells autograd "a saved tensor was mutated
+    // behind your back".  Once ``a`` *is* the output of this op that is no
+    // longer the relationship: the op saved the pre-op state, which lives
+    // on in its own storage because the assignment above only replaced
+    // ``a``'s slot, and bumping here reported the legitimate write as
+    // tampering — VersionMismatch on every differentiable in-place call.
+    // Outside the graph the counter still does its job.
+    if (!adopted)
+        a->bump_version();
     return a;
 }
 
@@ -143,7 +174,16 @@ TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     a->mutable_storage() = std::move(out->mutable_storage());
     a->set_dtype(out->dtype());
     a->set_device(out->device());
-    a->bump_version();
+    const bool adopted = adopt_graph_position(a, out);
+    // The version bump is what tells autograd "a saved tensor was mutated
+    // behind your back".  Once ``a`` *is* the output of this op that is no
+    // longer the relationship: the op saved the pre-op state, which lives
+    // on in its own storage because the assignment above only replaced
+    // ``a``'s slot, and bumping here reported the legitimate write as
+    // tampering — VersionMismatch on every differentiable in-place call.
+    // Outside the graph the counter still does its job.
+    if (!adopted)
+        a->bump_version();
     return a;
 }
 
