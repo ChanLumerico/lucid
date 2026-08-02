@@ -1338,10 +1338,25 @@ public:
     }
 
     Storage arg_reduce_index(
-        const Storage& a, const Shape&, int axis, bool keepdims, Dtype, bool is_min) override {
+        const Storage& a, const Shape&, int axis, bool keepdims, Dtype dt, bool is_min) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto out = is_min ? ::mlx::core::argmin(*ga.arr, axis, keepdims)
                           : ::mlx::core::argmax(*ga.arr, axis, keepdims);
+        // MLX's argmax and argmin skip NaN, so they answer with the index
+        // of some ordinary element — while ``max`` on the same axis answers
+        // nan.  The pair then disagrees with itself, which is worse than
+        // either convention: ``x[argmax(x)]`` was not ``max(x)``.
+        //
+        // The reference framework returns the index of the first NaN, and
+        // MLX has no flag for it, so it is composed: ``argmax`` of the NaN
+        // mask is the first NaN's position, and ``any`` says whether to use
+        // it.  Only floats can carry one.
+        if (dt == Dtype::F32 || dt == Dtype::F64 || dt == Dtype::F16) {
+            auto nan_mask = ::mlx::core::isnan(*ga.arr);
+            auto has_nan = ::mlx::core::any(nan_mask, axis, keepdims);
+            auto first_nan = ::mlx::core::argmax(nan_mask, axis, keepdims);
+            out = ::mlx::core::where(has_nan, ::mlx::core::astype(first_nan, out.dtype()), out);
+        }
         out = ::mlx::core::astype(out, ::mlx::core::int64);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::I64)};
     }

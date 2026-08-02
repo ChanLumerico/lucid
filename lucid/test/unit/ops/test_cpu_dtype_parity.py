@@ -419,3 +419,75 @@ def test_lu_solve_still_solves() -> None:
     b = lucid.tensor(np.array([[9.0], [8.0]]), dtype=lucid.float64)
     lu, pivots = lucid.linalg.lu_factor(a)
     assert np.allclose(lucid.linalg.lu_solve(lu, pivots, b).numpy(), [[2.0], [3.0]])
+
+
+# ── NaN through the order-based ops ──────────────────────────────────────────
+# Found 2026-08-03 once the device axis stopped refusing to compare over
+# float64: cpu and metal disagreed on every one of these, and neither
+# matched the reference.
+
+_NAN_VECTOR = np.array([1.0, np.nan, 3.0, -1.0], dtype=np.float32)
+
+
+def _both_devices(name, values=_NAN_VECTOR):
+    out = []
+    for device in _DEVICES:
+        got = getattr(lucid, name)(
+            lucid.tensor(values, dtype=lucid.float32, device=device)
+        )
+        got = got[0] if isinstance(got, tuple) else got
+        out.append(np.asarray(got.numpy()).ravel())
+    return out
+
+
+@pytest.mark.parametrize("name", ["max", "min"])
+def test_max_and_min_propagate_nan(name: str) -> None:
+    """They answered with a plausible number instead.
+
+    ``a > b ? a : b`` drops a NaN, because every comparison against one is
+    false — so ``max`` of a poisoned batch came back 3.0 and looked
+    healthy, on the CPU only, while Metal said nan.
+    """
+    cpu, metal = _both_devices(name)
+    assert np.isnan(cpu).all(), f"{name} on the CPU swallowed the NaN"
+    assert np.isnan(metal).all()
+
+
+@pytest.mark.parametrize("name", ["argmax", "argmin"])
+def test_arg_reduce_points_at_the_nan(name: str) -> None:
+    """``x[argmax(x)]`` has to be ``max(x)``.
+
+    ``max`` reports nan and the arg-reduce reported the index of an
+    ordinary element, so the two disagreed with each other.  Neither
+    device did this correctly: the CPU comparison skipped the NaN and
+    MLX's own argmax does too.
+    """
+    cpu, metal = _both_devices(name)
+    assert cpu.tolist() == [1], f"{name} on the CPU missed the NaN at index 1"
+    assert metal.tolist() == [1], f"{name} on Metal missed the NaN at index 1"
+
+
+def test_sort_orders_nan_last() -> None:
+    """The comparator was not a strict weak ordering, which is UB.
+
+    ``lv < rv`` is false in both directions when either side is NaN, so
+    ``std::sort`` was free to do anything — and did: sorting
+    ``[1, nan, 3, -1]`` returned ``[1, nan, -1, 3]``, which is not sorted.
+    """
+    cpu, metal = _both_devices("sort")
+    assert np.allclose(cpu[:3], [-1.0, 1.0, 3.0]) and np.isnan(cpu[3])
+    assert np.allclose(metal[:3], [-1.0, 1.0, 3.0]) and np.isnan(metal[3])
+
+
+def test_argsort_agrees_with_sort() -> None:
+    cpu, metal = _both_devices("argsort")
+    assert cpu.tolist() == [3, 0, 2, 1]
+    assert metal.tolist() == [3, 0, 2, 1]
+
+
+@pytest.mark.parametrize("name", ["max", "min", "argmax", "argmin", "sort", "argsort"])
+def test_the_nan_free_answer_is_unchanged(name: str) -> None:
+    """Guard the instrument: NaN handling must not disturb ordinary data."""
+    clean = np.array([1.0, 5.0, 3.0, -1.0], dtype=np.float32)
+    cpu, metal = _both_devices(name, clean)
+    assert np.array_equal(cpu, metal), name

@@ -3804,8 +3804,29 @@ public:
                 for (std::size_t j = 0; j < inner; ++j) {
                     std::int64_t best = 0;
                     auto best_v = src[o * L * inner + j];
+                    using V = std::remove_cv_t<std::remove_reference_t<decltype(best_v)>>;
                     for (std::size_t k = 1; k < L; ++k) {
                         const auto v = src[(o * L + k) * inner + j];
+                        // NaN wins, for both argmax and argmin.
+                        //
+                        // The comparison alone cannot say so — every test
+                        // against a NaN is false, so the first NaN in the
+                        // axis was skipped and the index of some ordinary
+                        // element came back instead.  ``max`` reports nan
+                        // and ``argmax`` reported the position of a number
+                        // that is not the maximum, which is worse than
+                        // either answer alone: the pair disagreed with each
+                        // other.  The reference framework returns the NaN's
+                        // index; once one is seen it cannot be displaced.
+                        if constexpr (std::is_floating_point_v<V>) {
+                            if (std::isnan(best_v))
+                                continue;
+                            if (std::isnan(v)) {
+                                best_v = v;
+                                best = static_cast<std::int64_t>(k);
+                                continue;
+                            }
+                        }
                         if (is_min ? (v < best_v) : (v > best_v)) {
                             best_v = v;
                             best = static_cast<std::int64_t>(k);
@@ -10063,9 +10084,30 @@ private:
         for (std::size_t o = 0; o < outer; ++o) {
             for (std::size_t j = 0; j < inner; ++j) {
                 std::iota(order.begin(), order.end(), 0);
+                // NaN sorts as the largest value, so ascending puts it last
+                // and descending puts it first — the reference framework's
+                // convention.
+                //
+                // This is not only about where the NaN lands.  ``lv < rv``
+                // is false in *both* directions when either side is NaN,
+                // which means the comparator is not a strict weak ordering,
+                // which means ``std::sort`` has undefined behaviour: sorting
+                // ``[1, nan, 3, -1]`` returned ``[1, nan, -1, 3]``, not
+                // sorted at all, and a longer array can walk the pivot off
+                // the end of the buffer.  Ordering NaN definitely makes the
+                // comparator valid again.
                 auto cmp = [&](std::int32_t lhs, std::int32_t rhs) {
                     const T lv = src[(o * L + static_cast<std::size_t>(lhs)) * inner + j];
                     const T rv = src[(o * L + static_cast<std::size_t>(rhs)) * inner + j];
+                    if constexpr (std::is_floating_point_v<T>) {
+                        const bool ln = std::isnan(lv);
+                        const bool rn = std::isnan(rv);
+                        if (ln || rn) {
+                            if (ln && rn)
+                                return false;  // equivalent, so neither precedes
+                            return descending ? ln : rn;
+                        }
+                    }
                     return descending ? (lv > rv) : (lv < rv);
                 };
                 if (K == L) {

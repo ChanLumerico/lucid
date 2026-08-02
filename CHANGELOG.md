@@ -106,6 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stop counting questions that cannot be asked as ones that failed
 
+- NaN through max, min, sort and the arg-reduces
+
 ### Changed
 
 - give the engine ops one shared operand check
