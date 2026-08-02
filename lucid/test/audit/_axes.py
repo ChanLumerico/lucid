@@ -672,14 +672,24 @@ class BroadcastAxis(Axis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        # Only binaries: confirm the op takes two tensors at all.
+        # Accepting a second argument is not the same as *using* it.
+        # ``relu(x, inplace)`` takes two positionals and ignores the
+        # second, so a shape-only test called it a broadcast failure six
+        # ways.  The operand has to actually change the answer.
         a0 = _probe.as_f64(_probe.sample("positive", (3, 4)))
         b0 = _probe.as_f64(_probe.sample("positive", (3, 4)))
+        c0 = _probe.as_f64(_probe.sample("positive", (3, 4)) * 3.0 + 1.0)
         try:
-            if _probe.to_numpy(fn(a0, b0)) is None:
-                return self._finding(symbol, Status.SKIP, "not a two-tensor op")
+            with_b = _probe.to_numpy(fn(a0, b0))
+            with_c = _probe.to_numpy(fn(a0, c0))
         except Exception:  # noqa: BLE001
             return self._finding(symbol, Status.SKIP, "not a two-tensor op")
+        if with_b is None or with_c is None:
+            return self._finding(symbol, Status.SKIP, "not a two-tensor op")
+        if np.array_equal(with_b, with_c, equal_nan=True):
+            return self._finding(
+                symbol, Status.SKIP, "second argument does not affect the result"
+            )
 
         failures: list[str] = []
         for sa, sb in self._PAIRS:
@@ -739,8 +749,37 @@ class DtypeAxis(Axis):
                         dtype=dt,
                         device=device,
                     )
-                    args = list(call.args)
-                    args[call.primary] = tensor
+                    # Every *other* tensor argument has to follow, or a
+                    # convolution fails on Metal for the trivial reason
+                    # that its weights stayed on the CPU — which reads as
+                    # "metal supports no dtype at all".
+                    args = []
+                    for index, value in enumerate(call.args):
+                        if index == call.primary:
+                            args.append(tensor)
+                        elif hasattr(value, "to"):
+                            # Rebuilt, not moved.  A convolution whose
+                            # weights stayed float64 while its input became
+                            # float32 fails for a reason that has nothing
+                            # to do with dtype support — and ``.to`` cannot
+                            # carry float64 onto Metal at all, so moving
+                            # would raise and read as "metal supports
+                            # nothing".
+                            companion = _probe.to_numpy(value)
+                            if companion is None:
+                                args.append(value)
+                                continue
+                            args.append(
+                                lucid.tensor(
+                                    np.ascontiguousarray(
+                                        companion.astype(_numpy_of(name))
+                                    ),
+                                    dtype=dt,
+                                    device=device,
+                                )
+                            )
+                        else:
+                            args.append(value)
                     if _probe.to_numpy(fn(*args, **call.kwargs)) is not None:
                         support[device].add(name)
                 except Exception:  # noqa: BLE001
@@ -748,16 +787,20 @@ class DtypeAxis(Axis):
 
         if not any(support.values()):
             return self._finding(symbol, Status.SKIP, "no dtype accepted")
-        if len(devices) == 2 and support["cpu"] != support["metal"]:
-            only_cpu = sorted(support["cpu"] - support["metal"])
+        if len(devices) == 2:
+            # float64 does not exist on Metal and the engine documents the
+            # downcast, so holding it against an op would flag every one.
+            only_cpu = sorted(support["cpu"] - support["metal"] - {"float64"})
             only_metal = sorted(support["metal"] - support["cpu"])
-            return self._finding(
-                symbol,
-                Status.FAIL,
-                f"asymmetric dtype support — cpu only {only_cpu}, metal only {only_metal}",
-                cpu=sorted(support["cpu"]),
-                metal=sorted(support["metal"]),
-            )
+            if only_cpu or only_metal:
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"asymmetric dtype support — cpu only {only_cpu}, "
+                    f"metal only {only_metal}",
+                    cpu=sorted(support["cpu"]),
+                    metal=sorted(support["metal"]),
+                )
         return self._finding(
             symbol,
             Status.PASS,
