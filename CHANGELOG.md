@@ -88,6 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - gather read and wrote outside its buffer
 
+- check the shape contract in gather, and the cut points in split
+
 ### Changed
 
 - give the engine ops one shared operand check

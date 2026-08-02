@@ -2710,6 +2710,19 @@ public:
 
         const std::int64_t axis_extent =
             ndim > 0 ? static_cast<std::int64_t>(input_shape[static_cast<std::size_t>(axis)]) : 0;
+        // Checking the index alone is not enough.  Every *other* coordinate
+        // walks the output extent while indexing the input's stride, so an
+        // output wider than the input on any non-gathered axis reads past
+        // the end however valid the indices are.  Gathering a (4, 5) index
+        // along dim 1 of an *empty* (0, 5) operand has indices in [0, 5)
+        // throughout and still walks four rows that do not exist.
+        for (std::size_t d = 0; d < ndim; ++d) {
+            if (static_cast<int>(d) == axis)
+                continue;
+            if (output_shape[d] > input_shape[d])
+                ErrorBuilder("cpu_backend::gather")
+                    .fail("index is larger than the operand on a non-gathered axis");
+        }
         std::vector<std::int64_t> coord(ndim, 0);
         for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
             std::int64_t k = load_idx(out_flat);
@@ -2785,6 +2798,16 @@ public:
         // buffer rather than merely returning a wrong number.
         const std::int64_t axis_extent =
             ndim > 0 ? static_cast<std::int64_t>(input_shape[static_cast<std::size_t>(axis)]) : 0;
+        // See the forward pass: the non-gathered coordinates walk the
+        // output extent against the input's stride, so they need the same
+        // shape check the index does.
+        for (std::size_t d = 0; d < ndim; ++d) {
+            if (static_cast<int>(d) == axis)
+                continue;
+            if (output_shape[d] > input_shape[d])
+                ErrorBuilder("cpu_backend::gather_backward")
+                    .fail("index is larger than the operand on a non-gathered axis");
+        }
         std::vector<std::int64_t> coord(ndim, 0);
         if (dt == Dtype::F32) {
             const auto* gp = reinterpret_cast<const float*>(g.ptr.get());

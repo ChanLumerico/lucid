@@ -528,6 +528,22 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis)
     const Device device = a->device();
     OpScopeFull scope{"split_at", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    // ``split_op`` above validates its divisor; this overload validated
+    // nothing, and the cut points index the buffer directly.  Splitting an
+    // *empty* axis at 2 sliced a region that does not exist and took the
+    // process down with SIGSEGV — which is where the audit's ``edge`` axis
+    // arrives, since it substitutes an empty operand and keeps the
+    // sections.  Cut points must lie inside the axis and not go backwards.
+    const std::int64_t extent = a->shape()[ax];
+    std::int64_t previous = 0;
+    for (std::int64_t at : indices) {
+        if (at < 0 || at > extent)
+            ErrorBuilder("split_at")
+                .fail("cut point lies outside the axis being split");
+        if (at < previous)
+            ErrorBuilder("split_at").fail("cut points must be non-decreasing");
+        previous = at;
+    }
     // Carry axis + cut-point indices into the trace so the compile-path
     // emitter can rebuild the N piece slices via MPSGraph sliceTensor.
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
