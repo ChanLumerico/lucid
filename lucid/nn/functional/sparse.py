@@ -41,6 +41,17 @@ def check_embedding_indices(x: Tensor, weight: Tensor, op: str) -> None:
     IndexError
         If any index is negative or ``>= weight.shape[0]``.
     """
+    # Dtype first, and before the range check rather than after.  A float
+    # index tensor passes the range check trivially — its values sit in
+    # [0, 1) — and then the engine gather reads those float bits as
+    # integers, producing an offset that is nowhere near the table.
+    # ``F.embedding(float_tensor, weight)`` took the process down with a
+    # segmentation fault, which is how the audit's own sweep died.
+    if x.dtype not in (lucid.int8, lucid.int16, lucid.int32, lucid.int64, lucid.bool):
+        raise TypeError(
+            f"{op}: indices must be an integer tensor, got {x.dtype}; "
+            f"cast with .to(lucid.int64) first"
+        )
     if x.numel() == 0:
         return
     num_embeddings = int(weight.shape[0])

@@ -690,6 +690,19 @@ class BroadcastAxis(Axis):
             return self._finding(
                 symbol, Status.SKIP, "second argument does not affect the result"
             )
+        # ...and taking two operands is not the same as being elementwise.
+        # ``kron`` returns (3, 16), ``mv`` contracts, ``masked_select``
+        # returns a 1-D selection, ``binary_cross_entropy`` reduces to a
+        # scalar.  Demanding a broadcast shape from any of them reports a
+        # defect in an op that is behaving exactly as specified.  The
+        # discriminator is the equal-shape case: an elementwise op maps
+        # (3, 4) x (3, 4) to (3, 4).
+        if tuple(with_b.shape) != (3, 4):
+            return self._finding(
+                symbol,
+                Status.SKIP,
+                f"not elementwise — equal shapes give {tuple(with_b.shape)}, not (3, 4)",
+            )
 
         failures: list[str] = []
         for sa, sb in self._PAIRS:

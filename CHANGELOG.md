@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - close the CPU dtype gaps the audit found
 
+- embedding segfaulted on a float index tensor
+
 ### Changed
 
 - give the engine ops one shared operand check
