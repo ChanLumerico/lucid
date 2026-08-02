@@ -276,6 +276,68 @@ inline Storage back_to_int(const Storage& wide, Dtype to) {
     return narrow_int(wide, c->nbytes / sizeof(std::int64_t), to);
 }
 
+// Widen any integer storage to double; pass anything else through.
+// Used where the only kernel is a BLAS one — see matmul.
+inline Storage as_f64(const Storage& s) {
+    const auto* c = std::get_if<CpuStorage>(&s);
+    if (c == nullptr || !is_int_like(c->dtype))
+        return s;
+    const std::size_t n = c->nbytes / dtype_size(c->dtype);
+    auto p = allocate_aligned_bytes(n * sizeof(double), Device::CPU);
+    auto* dst = reinterpret_cast<double*>(p.get());
+    const auto* raw = c->ptr.get();
+    for (std::size_t i = 0; i < n; ++i) {
+        switch (c->dtype) {
+        case Dtype::I64:
+            dst[i] = static_cast<double>(reinterpret_cast<const std::int64_t*>(raw)[i]);
+            break;
+        case Dtype::I32:
+            dst[i] = reinterpret_cast<const std::int32_t*>(raw)[i];
+            break;
+        case Dtype::I16:
+            dst[i] = reinterpret_cast<const std::int16_t*>(raw)[i];
+            break;
+        case Dtype::I8:
+            dst[i] = reinterpret_cast<const std::int8_t*>(raw)[i];
+            break;
+        default:  // Bool
+            dst[i] = reinterpret_cast<const std::uint8_t*>(raw)[i] ? 1.0 : 0.0;
+            break;
+        }
+    }
+    return Storage{CpuStorage{p, n * sizeof(double), Dtype::F64}};
+}
+
+// Round a double result back to an integer dtype.
+inline Storage f64_to_int(const Storage& wide, std::size_t n, Dtype to) {
+    const auto& w = std::get<CpuStorage>(wide);
+    const std::size_t width = dtype_size(to);
+    auto p = allocate_aligned_bytes(n * width, Device::CPU);
+    const auto* src = reinterpret_cast<const double*>(w.ptr.get());
+    auto* raw = p.get();
+    for (std::size_t i = 0; i < n; ++i) {
+        const std::int64_t v = static_cast<std::int64_t>(std::llround(src[i]));
+        switch (to) {
+        case Dtype::I64:
+            reinterpret_cast<std::int64_t*>(raw)[i] = v;
+            break;
+        case Dtype::I32:
+            reinterpret_cast<std::int32_t*>(raw)[i] = static_cast<std::int32_t>(v);
+            break;
+        case Dtype::I16:
+            reinterpret_cast<std::int16_t*>(raw)[i] = static_cast<std::int16_t>(v);
+            break;
+        case Dtype::I8:
+            reinterpret_cast<std::int8_t*>(raw)[i] = static_cast<std::int8_t>(v);
+            break;
+        default:  // Bool
+            reinterpret_cast<std::uint8_t*>(raw)[i] = v ? 1 : 0;
+            break;
+        }
+    }
+    return Storage{CpuStorage{p, n * width, to}};
+}
+
 // Widen a storage to float iff it is half; pass anything else through
 // untouched.  Dtype-driven rather than position-driven, so a call site can
 // hand it every operand it has and the index / mask / condition tensors
@@ -4087,6 +4149,18 @@ public:
     }
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
+        // There is no integer BLAS either, and the product of two integer
+        // matrices is an integer matrix — the reference framework and Metal
+        // both answer it, and the CPU raised.  Taken in double and rounded
+        // back: exact as long as each dot product stays inside 2^53, which
+        // covers int32 and below at any realistic K.  int64 operands large
+        // enough to break that would already have overflowed their own
+        // type in a native integer GEMM.
+        if (detail::is_int_like(dt)) {
+            const std::size_t out_n = opts.batch * static_cast<std::size_t>(opts.M) * opts.N;
+            const Storage wide = matmul(detail::as_f64(a), detail::as_f64(b), opts, Dtype::F64);
+            return detail::f64_to_int(wide, out_n, dt);
+        }
         // No half BLAS to call, so the product is taken in single and
         // rounded once.  Accumulating in the wider type is what a half
         // GEMM would do internally anyway.
@@ -11240,7 +11314,70 @@ private:
             std::memcpy(dst, src, n * dtype_size(dst_dt));
             return;
         }
-        ErrorBuilder("cpu_backend::cast").not_implemented("unsupported dtype pair");
+
+        // The twelve pairs above are a hand-written list, and it was
+        // missing every pair involving int8, int16, bool or half — 40 of
+        // the 56 combinations.  Nothing noticed while the ops that would
+        // have used them refused those dtypes anyway; promoting integers
+        // for the real-valued ops made ``sqrt(int8)`` reach here and fail
+        // on the cast rather than the maths.
+        //
+        // Rather than extend the list, go through double: every dtype the
+        // framework has converts to and from it, so one pair of switches
+        // covers all of them.  int64 above 2^53 is the one lossy case, and
+        // it keeps its exact path in the table above.
+        auto load = [&](std::size_t i) -> double {
+            switch (src_dt) {
+            case Dtype::F64:
+                return reinterpret_cast<const double*>(src)[i];
+            case Dtype::F32:
+                return reinterpret_cast<const float*>(src)[i];
+            case Dtype::F16:
+                return detail::half_bits_to_float(
+                    reinterpret_cast<const std::uint16_t*>(src)[i]);
+            case Dtype::I64:
+                return static_cast<double>(reinterpret_cast<const std::int64_t*>(src)[i]);
+            case Dtype::I32:
+                return reinterpret_cast<const std::int32_t*>(src)[i];
+            case Dtype::I16:
+                return reinterpret_cast<const std::int16_t*>(src)[i];
+            case Dtype::I8:
+                return reinterpret_cast<const std::int8_t*>(src)[i];
+            default:  // Bool
+                return reinterpret_cast<const std::uint8_t*>(src)[i] ? 1.0 : 0.0;
+            }
+        };
+        auto store = [&](std::size_t i, double v) {
+            switch (dst_dt) {
+            case Dtype::F64:
+                reinterpret_cast<double*>(dst)[i] = v;
+                break;
+            case Dtype::F32:
+                reinterpret_cast<float*>(dst)[i] = static_cast<float>(v);
+                break;
+            case Dtype::F16:
+                reinterpret_cast<std::uint16_t*>(dst)[i] =
+                    detail::float_to_half_bits(static_cast<float>(v));
+                break;
+            case Dtype::I64:
+                reinterpret_cast<std::int64_t*>(dst)[i] = static_cast<std::int64_t>(v);
+                break;
+            case Dtype::I32:
+                reinterpret_cast<std::int32_t*>(dst)[i] = static_cast<std::int32_t>(v);
+                break;
+            case Dtype::I16:
+                reinterpret_cast<std::int16_t*>(dst)[i] = static_cast<std::int16_t>(v);
+                break;
+            case Dtype::I8:
+                reinterpret_cast<std::int8_t*>(dst)[i] = static_cast<std::int8_t>(v);
+                break;
+            default:  // Bool — anything non-zero is true
+                reinterpret_cast<std::uint8_t*>(dst)[i] = (v != 0.0) ? 1 : 0;
+                break;
+            }
+        };
+        for (std::size_t i = 0; i < n; ++i)
+            store(i, load(i));
     }
 
     static CpuStorage alloc_cpu(std::size_t numel, Dtype dt) {

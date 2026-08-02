@@ -65,7 +65,7 @@ TensorImplPtr relu_op(const TensorImplPtr& a) {
 LUCID_REGISTER_OP(ReluBackward)
 
 // sigmoid — AmpPolicy::Promote: output requires float for stability.
-const OpSchema SigmoidBackward::schema_v1{"sigmoid", 1, AmpPolicy::Promote, true};
+const OpSchema SigmoidBackward::schema_v1{"sigmoid", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = z*(1-z) * dL/dy  where z = saved_output_.
 // Building (1-z) via mul_scalar(-1) + add_scalar(1) avoids a dedicated

@@ -17,7 +17,7 @@
 
 namespace lucid {
 
-const OpSchema SinBackward::schema_v1{"sin", 1, AmpPolicy::Promote, true};
+const OpSchema SinBackward::schema_v1{"sin", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = cos(x) * dL/dy.
 Storage SinBackward::grad_formula(const Storage& g) {
@@ -38,7 +38,7 @@ TensorImplPtr SinBackward::grad_formula_impl(const TensorImplPtr& g,
 
 LUCID_REGISTER_OP(SinBackward)
 
-const OpSchema CosBackward::schema_v1{"cos", 1, AmpPolicy::Promote, true};
+const OpSchema CosBackward::schema_v1{"cos", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = -sin(x) * dL/dy.
 Storage CosBackward::grad_formula(const Storage& g) {
@@ -60,7 +60,7 @@ TensorImplPtr CosBackward::grad_formula_impl(const TensorImplPtr& g,
 
 LUCID_REGISTER_OP(CosBackward)
 
-const OpSchema TanBackward::schema_v1{"tan", 1, AmpPolicy::Promote, true};
+const OpSchema TanBackward::schema_v1{"tan", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = dL/dy / cos^2(x)  (equivalent to dL/dy * sec^2(x)).
 Storage TanBackward::grad_formula(const Storage& g) {

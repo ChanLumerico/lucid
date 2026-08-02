@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - relu6, clip and masked_fill take integers on the CPU
 
+- real-valued ops promote integers instead of truncating them
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

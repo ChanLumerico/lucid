@@ -49,6 +49,24 @@ _SHARED = [
     ("float32", np.float32),
 ]
 
+#: Ops whose answer is a real number whatever the input was, so an
+#: integer input is promoted rather than truncated.
+_REAL_VALUED = [
+    "exp",
+    "log",
+    "sqrt",
+    "tanh",
+    "sigmoid",
+    "reciprocal",
+    "rsqrt",
+    "sin",
+    "cos",
+    "tan",
+    "sinh",
+    "cosh",
+    "erf",
+]
+
 _UNARY = [
     ("exp", lucid.exp),
     ("tanh", lucid.tanh),
@@ -70,13 +88,64 @@ def _tensor(values, dtype_name, np_dtype, device="cpu"):
 
 
 def test_unary_on_int64_actually_applies_the_function() -> None:
-    """The defect: every unary op returned its own input on int64."""
+    """The defect: every unary op returned its own input on int64.
+
+    The assertion used to read ``exp([2, 3]) == [7, 20]`` — the function
+    was applied and then truncated back to int64.  That was enough to
+    catch the identity bug it was written for, and wrong about the answer:
+    the value of ``exp(2)`` is not an integer, and the reference framework
+    promotes an integer input to float32 rather than rounding it.  See
+    :func:`test_real_valued_ops_promote_integers`.
+    """
     x = lucid.tensor(np.array([2, 3]))  # int64 by default
     assert str(x.dtype).endswith("int64")
-    assert np.array_equal(
-        lucid.exp(x).numpy(), [7, 20]
-    ), "exp(int64) returned its input"
-    assert np.array_equal(lucid.tanh(x).numpy(), [0, 0])
+    got = lucid.exp(x).numpy()
+    assert not np.array_equal(got, [2, 3]), "exp(int64) returned its input"
+    assert np.allclose(got, [7.389056, 20.085537], rtol=1e-5)
+
+
+@pytest.mark.parametrize("name", _REAL_VALUED)
+@pytest.mark.parametrize("dtype_name", ["int8", "int16", "int32", "int64"])
+def test_real_valued_ops_promote_integers(name: str, dtype_name: str) -> None:
+    """``exp(1)`` is 2.718, not 2, and not an error.
+
+    Lucid had this split two ways: ``exp``/``log``/``sqrt``/``tanh``
+    computed in the integer type and truncated, while
+    ``sigmoid``/``reciprocal``/``rsqrt``/``erfinv`` raised
+    ``NotImplementedError`` for want of an integer kernel.  Neither
+    matches the reference, which promotes to float32 for all of them.
+
+    Carried by ``OpSchema::real_valued`` rather than by the AMP policy:
+    ``AmpPolicy::Promote`` is also worn by ``matmul``, whose integer
+    answer really is an integer.
+    """
+    x = lucid.tensor(np.array([[1, 2], [3, 4]]), dtype=getattr(lucid, dtype_name))
+    out = getattr(lucid, name)(x)
+    assert str(out.dtype).endswith("float32"), f"{name} did not promote"
+    assert np.isfinite(out.numpy()).all()
+
+
+@pytest.mark.parametrize("name", _REAL_VALUED)
+def test_promotion_agrees_with_the_float_answer(name: str) -> None:
+    """Guard the instrument: promoting has to compute, not just re-label."""
+    values = np.array([[1, 2], [3, 4]])
+    from_int = getattr(lucid, name)(lucid.tensor(values, dtype=lucid.int32)).numpy()
+    from_float = getattr(lucid, name)(
+        lucid.tensor(values.astype(np.float32), dtype=lucid.float32)
+    ).numpy()
+    assert np.allclose(from_int, from_float, rtol=1e-6), name
+
+
+def test_matmul_keeps_its_integers() -> None:
+    """The reason ``real_valued`` is not inferred from the AMP policy.
+
+    ``matmul`` is ``AmpPolicy::Promote`` too, and the product of two
+    integer matrices is an integer matrix.
+    """
+    a = lucid.tensor(np.array([[1, 2], [3, 4]]), dtype=lucid.int32)
+    out = lucid.matmul(a, a)
+    assert str(out.dtype).endswith("int32"), "matmul promoted when it should not"
+    assert np.array_equal(out.numpy(), [[7, 10], [15, 22]])
 
 
 @pytest.mark.parametrize("name,fn", _UNARY)
@@ -101,8 +170,18 @@ def test_int64_matches_int32(name: str, fn) -> None:
 def test_unary_accepts_every_shared_dtype_on_the_cpu(
     name: str, fn, dtype_name: str, np_dtype
 ) -> None:
+    """Accepted, but not necessarily in the dtype it was handed.
+
+    ``abs`` keeps an integer integer; ``exp`` does not, because its answer
+    is not one.  The assertion here is that every dtype is *accepted* —
+    which is what the CPU used to fail at — with the promotion rule
+    checked separately in :func:`test_real_valued_ops_promote_integers`.
+    """
     out = fn(_tensor(np.ones((2, 3)), dtype_name, np_dtype))
-    assert str(out.dtype).endswith(dtype_name), f"{name} changed dtype"
+    if name in _REAL_VALUED and dtype_name.startswith(("int", "bool")):
+        assert str(out.dtype).endswith("float32"), f"{name} did not promote"
+    else:
+        assert str(out.dtype).endswith(dtype_name), f"{name} changed dtype"
 
 
 @pytest.mark.parametrize("dtype_name,np_dtype", _SHARED)

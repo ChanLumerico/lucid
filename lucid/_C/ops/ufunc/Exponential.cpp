@@ -89,7 +89,7 @@ TensorImplPtr Log2Backward::grad_formula_impl(const TensorImplPtr& g,
 LUCID_REGISTER_OP(Log2Backward)
 
 // sqrt — AmpPolicy::Promote (not ForceFP32) so that float64 inputs remain f64.
-const OpSchema SqrtBackward::schema_v1{"sqrt", 1, AmpPolicy::Promote, true};
+const OpSchema SqrtBackward::schema_v1{"sqrt", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = 0.5 * dL/dy / y  (since d/dx sqrt(x) = 1 / (2*sqrt(x)) = 1/(2*y)).
 // Dividing by saved_output_ rather than recomputing sqrt(x) avoids a second
@@ -114,7 +114,7 @@ TensorImplPtr sqrt_op(const TensorImplPtr& a) {
 LUCID_REGISTER_OP(SqrtBackward)
 
 // rsqrt — AmpPolicy::Promote so float64 inputs stay float64.
-const OpSchema RsqrtBackward::schema_v1{"rsqrt", 1, AmpPolicy::Promote, true};
+const OpSchema RsqrtBackward::schema_v1{"rsqrt", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = dL/dy * (-0.5) * y^3  where y = rsqrt(x) = x^(-1/2).
 // Uses saved_output_ (y) to compute y^3 = y * y * y without re-running rsqrt.
@@ -141,7 +141,7 @@ TensorImplPtr RsqrtBackward::grad_formula_impl(const TensorImplPtr& g,
 LUCID_REGISTER_OP(RsqrtBackward)
 
 // erf — AmpPolicy::Promote so float64 inputs remain float64.
-const OpSchema ErfBackward::schema_v1{"erf", 1, AmpPolicy::Promote, true};
+const OpSchema ErfBackward::schema_v1{"erf", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = (2/√π) * exp(-x²) * dL/dy.
 // Saves the input x to compute exp(-x²) in the backward pass.
@@ -179,7 +179,7 @@ TensorImplPtr erf_op(const TensorImplPtr& a) {
 LUCID_REGISTER_OP(ErfBackward)
 
 // erfinv — AmpPolicy::Promote so float64 inputs remain float64.
-const OpSchema ErfinvBackward::schema_v1{"erfinv", 1, AmpPolicy::Promote, true};
+const OpSchema ErfinvBackward::schema_v1{"erfinv", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = (sqrt(π)/2) * exp(out²) * g   (out = erfinv(x) was saved as forward output).
 static constexpr double kSqrtPiOver2 = 0.8862269254527580;  // sqrt(pi)/2

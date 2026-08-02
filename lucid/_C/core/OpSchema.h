@@ -110,6 +110,19 @@ struct LUCID_API OpSchema {
     // When true, the op should not be exposed in the public Python API.
     bool internal = false;
 
+    // When true, this op's result is a real number whatever its input was,
+    // so an integer input is promoted to float rather than truncated or
+    // refused.  ``exp(1)`` is 2.718, not 2.
+    //
+    // Deliberately not inferred from ``amp_policy``.  The two say different
+    // things: the policy answers "*which* float under autocast", and
+    // ``AmpPolicy::Promote`` is worn by ``matmul``, whose integer answer is
+    // an integer.  Forcing these ops to ``ForceFP32`` instead would have
+    // been the smaller edit and the wrong one — it would drag ``tanh`` and
+    // ``sigmoid`` out of F16 inside an autocast scope, costing half-precision
+    // training memory and speed to fix an integer-input bug.
+    bool real_valued = false;
+
     // Minimal constructor for deterministic ops with default arity.
     //
     // Parameters
@@ -130,9 +143,18 @@ struct LUCID_API OpSchema {
     // Leaves ``input_arity = -1`` (variadic), ``output_arity = 1``,
     // ``stable_input_indices`` empty, and ``internal = false``.  Use the
     // full constructor below when these defaults are not appropriate.
-    constexpr OpSchema(
-        std::string_view n, int v, AmpPolicy ap, bool det = true, std::string_view note = "")
-        : name(n), version(v), amp_policy(ap), deterministic(det), determinism_note(note) {}
+    constexpr OpSchema(std::string_view n,
+                       int v,
+                       AmpPolicy ap,
+                       bool det = true,
+                       std::string_view note = "",
+                       bool real = false)
+        : name(n),
+          version(v),
+          amp_policy(ap),
+          deterministic(det),
+          determinism_note(note),
+          real_valued(real) {}
 
     // Full constructor for ops that need explicit arity, saved-input
     // tracking, or the ``internal`` flag set.
@@ -165,7 +187,8 @@ struct LUCID_API OpSchema {
              int in_arity,
              int out_arity,
              std::vector<int> stable_ins,
-             bool is_internal = false)
+             bool is_internal = false,
+             bool real = false)
         : name(n),
           version(v),
           amp_policy(ap),
@@ -174,7 +197,8 @@ struct LUCID_API OpSchema {
           input_arity(in_arity),
           output_arity(out_arity),
           stable_input_indices(std::move(stable_ins)),
-          internal(is_internal) {}
+          internal(is_internal),
+          real_valued(real) {}
 };
 
 // Computes a 64-bit FNV-1a fingerprint of an op's behavioural schema.

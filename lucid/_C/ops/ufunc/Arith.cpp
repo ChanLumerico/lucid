@@ -127,7 +127,7 @@ TensorImplPtr SignBackward::grad_formula_impl(const TensorImplPtr& g,
 LUCID_REGISTER_OP(SignBackward)
 
 // reciprocal — saves input to compute x^2 in the backward pass.
-const OpSchema ReciprocalBackward::schema_v1{"reciprocal", 1, AmpPolicy::Promote, true};
+const OpSchema ReciprocalBackward::schema_v1{"reciprocal", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = -dL/dy / x^2.
 Storage ReciprocalBackward::grad_formula(const Storage& g) {

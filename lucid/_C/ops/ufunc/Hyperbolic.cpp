@@ -18,7 +18,7 @@
 
 namespace lucid {
 
-const OpSchema SinhBackward::schema_v1{"sinh", 1, AmpPolicy::Promote, true};
+const OpSchema SinhBackward::schema_v1{"sinh", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = cosh(x) * dL/dy.
 Storage SinhBackward::grad_formula(const Storage& g) {
@@ -38,7 +38,7 @@ TensorImplPtr SinhBackward::grad_formula_impl(const TensorImplPtr& g,
 
 LUCID_REGISTER_OP(SinhBackward)
 
-const OpSchema CoshBackward::schema_v1{"cosh", 1, AmpPolicy::Promote, true};
+const OpSchema CoshBackward::schema_v1{"cosh", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = sinh(x) * dL/dy.
 Storage CoshBackward::grad_formula(const Storage& g) {
@@ -58,7 +58,7 @@ TensorImplPtr CoshBackward::grad_formula_impl(const TensorImplPtr& g,
 
 LUCID_REGISTER_OP(CoshBackward)
 
-const OpSchema TanhBackward::schema_v1{"tanh", 1, AmpPolicy::Promote, true};
+const OpSchema TanhBackward::schema_v1{"tanh", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = (1 - y^2) * dL/dy, computed as ((-y^2) + 1) * dL/dy.
 // Building (1 - y^2) via mul_scalar(-1) + add_scalar(1) avoids a subtraction
