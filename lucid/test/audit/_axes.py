@@ -794,8 +794,24 @@ class DtypeAxis(Axis):
                             # scatter_add reported float32 as unsupported on
                             # the CPU because its index had been turned into
                             # a float and the guard correctly refused it.
+                            #
+                            # It still has to follow the primary's *device*.
+                            # Keeping the dtype but leaving the tensor where
+                            # it was put every index, mask and condition on
+                            # the CPU while the operand moved to Metal, so
+                            # the call failed on a device mismatch and read
+                            # as "metal supports no dtype at all" —
+                            # gather, where, take, index_select, embedding,
+                            # masked_fill, scatter_add and the whole bitwise
+                            # family, 50 symbols of pure artefact.
                             if companion.dtype.kind not in "fc":
-                                args.append(value)
+                                args.append(
+                                    lucid.tensor(
+                                        np.ascontiguousarray(companion),
+                                        dtype=value.dtype,
+                                        device=device,
+                                    )
+                                )
                                 continue
                             args.append(
                                 lucid.tensor(

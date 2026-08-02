@@ -92,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - three more crashes on degenerate inputs
 
+- the sweep completes, and two of its own findings were artefacts
+
 ### Changed
 
 - give the engine ops one shared operand check

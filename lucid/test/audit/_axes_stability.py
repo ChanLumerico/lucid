@@ -58,6 +58,18 @@ class StabilityAxis(Axis):
             return self._finding(
                 symbol, Status.SKIP, "primary argument is not a tensor"
             )
+        # A scalar operand is not necessarily a *value*.  ``eye(n)`` takes
+        # a size, and multiplying it by 1e15 asks for a matrix of 1e30
+        # elements — the process was killed by the OOM killer, signal 9,
+        # and the sweep stopped there.  Scaling only means something for an
+        # operand that carries data, so a bare scalar is skipped rather
+        # than magnified.
+        if base.ndim == 0 or base.size == 1:
+            return self._finding(
+                symbol,
+                Status.SKIP,
+                "primary is a scalar — scaling it would change a size, not a value",
+            )
 
         broken: list[str] = []
         ran = 0
