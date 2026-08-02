@@ -70,7 +70,16 @@ class Call:
 
     @property
     def base(self) -> np.ndarray:
-        """The differentiated argument, as an array."""
+        """The differentiated argument, as an array.
+
+        Raises ``TypeError`` — never ``IndexError`` — when there is no
+        such argument.  A keyword-only op like ``affine_matrix(*, cx, cy)``
+        has an empty ``args``, and the numeric axes already read a
+        TypeError here as "nothing to differentiate, skip"; an IndexError
+        would escape as a harness ERROR instead.
+        """
+        if not 0 <= self.primary < len(self.args):
+            raise TypeError("no positional argument to differentiate")
         got = _probe.to_numpy(self.args[self.primary])
         if got is None:
             raise TypeError("primary argument is not a tensor")
@@ -991,9 +1000,27 @@ _QUALIFIED: dict[str, "Callable[[str], Iterator[Call]]"] = {
 
 
 def invocations(
-    name: str, domain: str, qualname: str | None = None
+    name: str,
+    domain: str,
+    qualname: str | None = None,
+    fn: Any = None,
 ) -> "Iterator[Call]":
     """Every candidate call for ``name``, best guess first.
+
+    Four tiers, narrowing from "someone wrote this down for this exact
+    symbol" to "guess":
+
+    ``_QUALIFIED`` / ``_EXACT``
+        Hand-written for one symbol, where the name is ambiguous across
+        subsystems or the op needs something no rule would infer.
+    ``_FAMILIES``
+        Hand-written for a group — every convolution, every pooling layer.
+    :mod:`~lucid.test.audit._autospec`
+        Derived from the signature.  Covers the long tail that used to
+        fall straight to the ladder and SKIP there.
+    the ladder
+        ``f(x)``, ``f(x, y)``, ``f(x, dim)`` — the original sweep's whole
+        vocabulary, kept as the floor rather than the ceiling.
 
     Parameters
     ----------
@@ -1001,12 +1028,18 @@ def invocations(
         Short symbol name — ``"conv2d"``, not ``"F.conv2d"``.
     domain : str
         Key into :data:`~lucid.test.audit._probe.DOMAINS`.
+    qualname : str, optional
+        Full spelling, used to disambiguate names that exist in more than
+        one subsystem.
+    fn : callable, optional
+        The resolved callable.  Without it the signature tier is skipped
+        — there is nothing to introspect — and the symbol falls to the
+        ladder as it did before.
 
     Yields
     ------
     Call
-        Tried in order until one runs.  The generic unary and binary
-        forms come last so a symbol with no spec still gets a chance.
+        Tried in order until one runs.
     """
     if qualname is not None and qualname in _QUALIFIED:
         yield from _QUALIFIED[qualname](domain)
@@ -1016,8 +1049,8 @@ def invocations(
         if re.search(pattern, name):
             yield from build(name, domain)
             break
-    # Generic ladder — the original sweep's entire vocabulary, kept as the
-    # floor rather than the ceiling.
+    if fn is not None:
+        yield from _autospec.invocations(fn, name, domain)
     yield from _unary(name, domain)
     yield from _binary(name, domain)
     x = _f(_probe.SHAPE, domain)
@@ -1026,11 +1059,19 @@ def invocations(
     yield Call([[x, x]], {}, 0, "op([x, x])")
 
 
-def has_spec(name: str) -> bool:
-    """Whether ``name`` is covered by a real spec rather than the ladder."""
+def has_spec(name: str, fn: Any = None) -> bool:
+    """Whether ``name`` gets a real invocation rather than the ladder.
+
+    ``fn`` opts in the signature tier: a symbol nobody wrote a spec for is
+    still specified if its own signature says enough.
+    """
     if name in _EXACT:
         return True
-    return any(re.search(p, name) for p, _ in _FAMILIES)
+    if any(re.search(p, name) for p, _ in _FAMILIES):
+        return True
+    if fn is None:
+        return False
+    return next(_autospec.invocations(fn, name, "moderate"), None) is not None
 
 
 def spec_families() -> list[str]:
@@ -1039,3 +1080,9 @@ def spec_families() -> list[str]:
 
 
 __all__ = ["Call", "has_spec", "invocations", "spec_families"]
+
+# Imported last, not at the top: ``_autospec`` needs :class:`Call` from
+# here, so the two import each other.  By this line ``Call`` is bound, and
+# the partially-initialised module it sees is complete enough.  Same
+# arrangement as ``_axes`` and its sub-axis modules.
+from lucid.test.audit import _autospec  # noqa: E402

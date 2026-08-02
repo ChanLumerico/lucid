@@ -366,7 +366,7 @@ class DeterminismAxis(Axis):
 
         first: np.ndarray | None = None
         for domain in ctx.domains:
-            for call in _specs.invocations(symbol.short, domain, symbol.qualname):
+            for call in _specs.invocations(symbol.short, domain, symbol.qualname, fn):
                 draws = []
                 for _ in range(2):
                     lucid.manual_seed(1234)

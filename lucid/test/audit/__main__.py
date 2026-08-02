@@ -96,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
     info.add_argument(
         "--list-uncovered", action="store_true", help="symbols no axis reached"
     )
+    info.add_argument(
+        "--coverage",
+        action="store_true",
+        help="measure reach and depth against an independent walk (runs nothing)",
+    )
     return p
 
 
@@ -140,6 +145,109 @@ def _list_subsystems(console: Console) -> int:
     console.always("")
     for name, why in _surface.EXCLUDED.items():
         console.always("  " + console.paint(f"excluded  {name}", "grey") + f"  — {why}")
+    return 0
+
+
+def _report_coverage(console: Console) -> int:
+    """What fraction of Lucid this tool can speak about, measured not claimed.
+
+    Two numbers, because they fail independently and only one of them is
+    usually quoted:
+
+    *Reach* is the surface against an **independent** recursive walk of
+    the package.  The enumeration used to name its modules in a literal
+    and the literal named nineteen; the walk finds a hundred and thirty,
+    and the difference was 26% of the framework — including all of
+    ``utils.transforms`` and ``nn.init`` — sitting silently outside the
+    denominator while the tool reported a coverage figure over the rest.
+    Deriving the check from a different traversal than the thing it
+    checks is the whole point; a self-consistent count would have agreed
+    with itself at 73.8% forever.
+
+    *Depth* is how many reached symbols get an axis that can actually
+    fail, rather than only the smoke axis.  Reaching a symbol and calling
+    it once is not verifying it, and the two must not be added together.
+    """
+    console.banner("Coverage", "measured against an independent walk of the package")
+
+    symbols = _surface.enumerate_surface()
+    walked = _surface.independent_walk()
+    reached = {id(s.obj) for s in symbols}
+    absent = {name for oid, name in walked.items() if oid not in reached}
+    reach = 100.0 * (len(walked) - len(absent)) / max(len(walked), 1)
+
+    per_symbol = {
+        s.qualname: [a.name for a in _axes.ALL_AXES if a.applies(s)] for s in symbols
+    }
+    cells = sum(len(v) for v in per_symbol.values())
+    shallow = [s for s in symbols if per_symbol[s.qualname] == ["smoke"]]
+    stateful_shallow = sum(1 for s in shallow if not s.inert)
+    depth = 100.0 * (len(symbols) - len(shallow)) / max(len(symbols), 1)
+
+    console.table(
+        ["measure", "value", "of", "%"],
+        [
+            [
+                "reach — objects the surface enumerates",
+                str(len(walked) - len(absent)),
+                str(len(walked)),
+                f"{reach:.1f}",
+            ],
+            [
+                "depth — symbols with an axis past smoke",
+                str(len(symbols) - len(shallow)),
+                str(len(symbols)),
+                f"{depth:.1f}",
+            ],
+            ["cells — symbol x applicable axis", str(cells), "", ""],
+        ],
+        ["l", "r", "r", "r"],
+        always=True,
+    )
+    console.always("")
+    if absent:
+        console.always(
+            console.paint(
+                f"  {len(absent)} object(s) the walk found and the surface did not:",
+                "red",
+            )
+        )
+        for name in sorted(absent)[:20]:
+            console.always(f"      {name}")
+    else:
+        console.always(
+            console.paint(
+                "  every public object the walk found is in the surface.", "green"
+            )
+        )
+    console.always(
+        f"  {len(shallow)} symbol(s) reach only the smoke axis, of which "
+        f"{stateful_shallow} mutate process state and are called under a guard "
+        "because no numeric axis can express them."
+    )
+    console.always("")
+
+    rows = []
+    for key in _surface.SUBSYSTEMS:
+        of_key = [s for s in symbols if s.subsystem == key]
+        if not of_key:
+            continue
+        thin = sum(1 for s in of_key if per_symbol[s.qualname] == ["smoke"])
+        rows.append(
+            [
+                key,
+                str(len(of_key)),
+                str(len(of_key) - thin),
+                f"{100.0 * (len(of_key) - thin) / len(of_key):.0f}",
+                str(sum(len(per_symbol[s.qualname]) for s in of_key)),
+            ]
+        )
+    console.table(
+        ["subsystem", "symbols", "with an axis", "%", "cells"],
+        rows,
+        ["l", "r", "r", "r", "r"],
+        always=True,
+    )
     return 0
 
 
@@ -404,15 +512,15 @@ def summarise(report: Report, console: Console, show: "Sequence[str]") -> None:
 
 def report_uncovered(console: Console, args: argparse.Namespace) -> int:
     """What the harness could not build inputs for — the work queue."""
-    from lucid.test.audit import _specs
+    from lucid.test.audit import _autospec, _specs
 
     symbols = _selected_symbols(args)
     ops = [s for s in symbols if s.kind in ("op", "method") and s.inert]
-    without = [s for s in ops if not _specs.has_spec(s.short)]
+    without = [s for s in ops if not _specs.has_spec(s.short, _surface.resolve(s))]
 
     console.banner(
-        "Symbols with no dedicated invocation spec",
-        "they fall back to the generic ladder — fine for elementwise, not for the rest",
+        "Symbols with no invocation, hand-written or derived",
+        "not even their own signature says enough to call them",
     )
     by_sub: dict[str, list[str]] = {}
     for s in without:
@@ -431,35 +539,53 @@ def report_uncovered(console: Console, args: argparse.Namespace) -> int:
     console.always("")
     console.always(
         console.paint(
-            f"  {len(without)} of {len(ops)} callable symbols rely on the generic ladder.",
-            "yellow",
+            f"  {len(without)} of {len(ops)} callable symbols fall through every tier.",
+            "yellow" if without else "green",
         )
     )
+    for symbol in without[:12]:
+        console.always(
+            "      "
+            + console.paint(symbol.qualname, "grey")
+            + f"  — {_autospec.explain(_surface.resolve(symbol), symbol.short)}"
+        )
+    console.always("")
     console.always(
         console.paint(
-            "  That is not the same as uncovered: the ladder handles a plain unary or",
+            "  Each reason names the parameter that stopped it.  A required argument",
             "grey",
         )
     )
     console.always(
         console.paint(
-            "  binary op perfectly well, and most of the list above is exactly that.",
+            "  the derivation has no value for is closed by one entry in _autospec's",
             "grey",
         )
     )
     console.always(
         console.paint(
-            "  The authoritative gap is the SKIP list of an actual run — start from",
+            "  name table, which then covers every other op that spells it the same",
             "grey",
         )
     )
     console.always(
         console.paint(
-            "  `--json report.json`, then add a family pattern to _specs.py to close",
+            "  way — writing a per-op spec is the last resort, not the first.",
             "grey",
         )
     )
-    console.always(console.paint("  a whole group at once.", "grey"))
+    console.always(
+        console.paint(
+            "  Reaching a symbol is still not verifying it: the authoritative gap is",
+            "grey",
+        )
+    )
+    console.always(
+        console.paint(
+            "  the SKIP list of an actual run, from `--json report.json`.",
+            "grey",
+        )
+    )
     return 0
 
 
@@ -476,6 +602,8 @@ def main(argv: "Sequence[str] | None" = None) -> int:
         return _list_axes(console)
     if args.list_subsystems:
         return _list_subsystems(console)
+    if args.coverage:
+        return _report_coverage(console)
     if args.list_uncovered:
         return report_uncovered(console, args)
 

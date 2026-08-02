@@ -30,16 +30,124 @@ def test_surface_enumerates_and_excludes_the_model_zoo() -> None:
     assert "lucid.models" in _surface.EXCLUDED
 
 
+def test_the_surface_reaches_every_public_object() -> None:
+    """The guard on the denominator, and the reason ``--coverage`` exists.
+
+    The enumeration used to name its modules in a literal.  The literal
+    named nineteen; the package has a hundred and thirty, so a quarter of
+    the framework — every augmentation in ``utils.transforms``, all of
+    ``nn.init``, ``optim.lr_scheduler``, ``utils.data`` — was outside the
+    denominator, and the tool reported a coverage percentage over what
+    was left as though that were the whole.  Nothing failed; the number
+    was simply of the wrong thing.
+
+    This compares the surface against a traversal that shares none of its
+    logic, so the two can only agree by both being right.
+    """
+    reached = {id(s.obj) for s in _surface.enumerate_surface()}
+    absent = sorted(
+        name for oid, name in _surface.independent_walk().items() if oid not in reached
+    )
+    assert not absent, f"public objects outside the audit surface: {absent[:20]}"
+
+
+def test_no_subsystem_is_declared_and_then_silently_empty() -> None:
+    """``lucid.signal`` was in the subsystem table and contributed nothing.
+
+    Everything it exports is a sub-module, the enumeration skipped those,
+    and the result was a subsystem that appeared in ``--list-subsystems``
+    with zero symbols under it — printed in the output for weeks without
+    being read as a bug.  Twelve window functions were outside the audit.
+
+    An empty key is only allowed when it is an ancestor of a populated
+    one: ``utils`` holds nothing directly but ``utils.data`` and
+    ``utils.transforms`` are underneath it, so it is a container, and
+    anything added to ``lucid.utils`` later files there rather than
+    drifting into the ``lucid`` catch-all.  An empty *leaf* is the
+    ``signal`` bug and fails here.
+    """
+    populated = {s.subsystem for s in _surface.enumerate_surface()}
+    orphans = []
+    for key in _surface.SUBSYSTEMS:
+        if key in populated:
+            continue
+        if any(other.startswith(key + ".") for other in populated):
+            continue  # a namespace container, not a lost subsystem
+        orphans.append(key)
+    assert not orphans, f"declared, empty, and not a container: {orphans}"
+
+
+def test_every_callable_symbol_gets_a_concrete_invocation() -> None:
+    """A spec nobody wrote is still a spec if the signature supplies it.
+
+    ``_specs`` is hand-written, and 446 of 827 callable symbols reached
+    only its generic ``f(x)`` / ``f(x, y)`` floor — the same
+    hand-maintained-list failure that held reach at 73.8%.  Reading the
+    signature closes it: what remains is symbols that take no arguments,
+    where calling with none is the whole of what can be checked.
+    """
+    from lucid.test.audit import _autospec
+
+    symbols = _surface.enumerate_surface()
+    ops = [s for s in symbols if s.kind in ("op", "method") and s.inert]
+    without = []
+    for symbol in ops:
+        fn = _surface.resolve(symbol)
+        if fn is None or _specs.has_spec(symbol.short):
+            continue
+        if next(_autospec.invocations(fn, symbol.short, "moderate"), None) is None:
+            without.append(symbol.qualname)
+    assert len(without) <= 4, f"{len(without)} symbols reach only the ladder: {without}"
+
+
+def test_a_keyword_only_op_does_not_crash_the_gradient_axes() -> None:
+    """``affine_matrix(*, cx, cy)`` has an empty ``args``.
+
+    ``Call.base`` used to index into it and raise ``IndexError``, which
+    escapes as a harness ERROR; the axes read ``TypeError`` as "nothing
+    to differentiate here" and skip, which is the truthful answer.
+    """
+    call = _specs.Call([], {"cx": 0.0, "cy": 0.0}, -1, "keyword-only")
+    with pytest.raises(TypeError):
+        _ = call.base
+
+
+def test_every_axis_has_something_to_ask() -> None:
+    """An axis that applies to nothing is a question no one is being asked."""
+    symbols = _surface.enumerate_surface()
+    idle = [a.name for a in _axes.ALL_AXES if not any(a.applies(s) for s in symbols)]
+    assert not idle, f"axes with no applicable symbol: {idle}"
+
+
+def test_kind_follows_the_defining_module_not_the_re_export() -> None:
+    """``lucid.save`` is written in ``lucid.serialization`` and re-exported.
+
+    Enumerating shallowest-first finds it under ``lucid``; keying its kind
+    on where it was *found* made it a plain op and took the serialization
+    axis to zero applicable symbols.
+    """
+    symbols = {s.qualname: s for s in _surface.enumerate_surface()}
+    saver = symbols.get("lucid.save")
+    assert saver is not None
+    assert saver.subsystem == "serialization"
+
+
 def test_stateful_symbols_are_marked_not_dropped() -> None:
     """They count towards the denominator; they are simply never called.
 
     A first sweep called ``set_grad_enabled`` with a tensor and poisoned
     every op after it alphabetically — 278 of them.
+
+    Looked up across the whole surface rather than under ``lucid``: the
+    qualname is the spelling a user writes, but a symbol is filed under
+    the subsystem that *defines* it, and this one is written in
+    ``lucid.autograd`` and re-exported.
     """
-    symbols = {s.qualname: s for s in _surface.enumerate_surface(["lucid"])}
+    symbols = {s.qualname: s for s in _surface.enumerate_surface()}
     poisonous = symbols.get("lucid.set_grad_enabled")
     assert poisonous is not None, "must still be counted"
     assert not poisonous.inert, "must never be invoked"
+    assert poisonous.subsystem == "autograd", "filed where it is defined"
 
 
 def test_every_subsystem_key_resolves() -> None:

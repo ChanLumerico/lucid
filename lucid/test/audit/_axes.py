@@ -93,7 +93,7 @@ class Axis:
         """
         last = "no candidate invocation ran"
         for domain in ctx.domains:
-            for call in _specs.invocations(symbol.short, domain, symbol.qualname):
+            for call in _specs.invocations(symbol.short, domain, symbol.qualname, fn):
                 try:
                     out = fn(*call.args, **call.kwargs)
                 except Exception as exc:  # noqa: BLE001 - surveying, not asserting
@@ -393,8 +393,13 @@ class EntryPointAxis(Axis):
 
         results: dict[str, Any] = {}
         errors: dict[str, str] = {}
+        # The first route's callable is what the signature tier reads.
+        # Every route is the same operation, so any of them describes it.
+        probe_fn = routes[0][1]
         for domain in ctx.domains:
-            for call in _specs.invocations(symbol.short, domain, symbol.qualname):
+            for call in _specs.invocations(
+                symbol.short, domain, symbol.qualname, probe_fn
+            ):
                 results.clear()
                 errors.clear()
                 for label, fn in routes:
@@ -1102,15 +1107,19 @@ CORE_AXES: tuple[Axis, ...] = (
 # and are registered here, so a single ``ALL_AXES`` stays the one place a
 # run is defined.  Everything they need from this module is already bound
 # by the time the import executes.
+from lucid.test.audit._axes_data import DATA_AXES  # noqa: E402
 from lucid.test.audit._axes_stability import STABILITY_AXES  # noqa: E402
 from lucid.test.audit._axes_subsystem import SUBSYSTEM_AXES  # noqa: E402
 
 #: Every axis, in the order a full run executes them — cheapest first, so
 #: a ``--fail-fast`` run surfaces the loud problems before the slow ones.
+#: ``SUBSYSTEM_AXES`` goes last because it ends with the smoke axis, which
+#: is the floor rather than a question.
 ALL_AXES: tuple[Axis, ...] = (
     *CORE_AXES[:6],
     *STABILITY_AXES,
     *CORE_AXES[6:],
+    *DATA_AXES,
     *SUBSYSTEM_AXES,
 )
 
