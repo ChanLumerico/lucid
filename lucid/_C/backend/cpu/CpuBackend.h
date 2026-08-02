@@ -2708,11 +2708,21 @@ public:
             ErrorBuilder("cpu_backend::gather").not_implemented("indices dtype must be I32 or I64");
         };
 
+        const std::int64_t axis_extent =
+            ndim > 0 ? static_cast<std::int64_t>(input_shape[static_cast<std::size_t>(axis)]) : 0;
         std::vector<std::int64_t> coord(ndim, 0);
         for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
             std::int64_t k = load_idx(out_flat);
             if (k < 0)
                 k += input_shape[static_cast<std::size_t>(axis)];
+            // Refuse rather than read outside the buffer.  This memcpy'd
+            // from wherever the index pointed: gathering along an axis of
+            // extent 0 segfaulted, and an index of 99 into a 2x3 quietly
+            // returned 0.0 read from past the allocation.  Same defect
+            // shape as scatter_add above, on the reading side.
+            if (k < 0 || k >= axis_extent)
+                ErrorBuilder("cpu_backend::gather")
+                    .fail("index out of range for the gathered axis");
             std::size_t a_flat = 0;
             for (std::size_t d = 0; d < ndim; ++d) {
                 std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
@@ -2770,6 +2780,11 @@ public:
         };
 
         const std::size_t total = shape_numel(output_shape);
+        // The forward pass reads at the index; this one *writes* at it, so
+        // an out-of-range entry corrupts whatever follows the gradient
+        // buffer rather than merely returning a wrong number.
+        const std::int64_t axis_extent =
+            ndim > 0 ? static_cast<std::int64_t>(input_shape[static_cast<std::size_t>(axis)]) : 0;
         std::vector<std::int64_t> coord(ndim, 0);
         if (dt == Dtype::F32) {
             const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
@@ -2778,6 +2793,9 @@ public:
                 std::int64_t k = load_idx(out_flat);
                 if (k < 0)
                     k += input_shape[static_cast<std::size_t>(axis)];
+                if (k < 0 || k >= axis_extent)
+                    ErrorBuilder("cpu_backend::gather_backward")
+                        .fail("index out of range for the gathered axis");
                 std::size_t input_flat = 0;
                 for (std::size_t d = 0; d < ndim; ++d) {
                     const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
@@ -2800,6 +2818,9 @@ public:
                 std::int64_t k = load_idx(out_flat);
                 if (k < 0)
                     k += input_shape[static_cast<std::size_t>(axis)];
+                if (k < 0 || k >= axis_extent)
+                    ErrorBuilder("cpu_backend::gather_backward")
+                        .fail("index out of range for the gathered axis");
                 std::size_t input_flat = 0;
                 for (std::size_t d = 0; d < ndim; ++d) {
                     const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];

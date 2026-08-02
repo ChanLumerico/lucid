@@ -86,6 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lu_solve read its pivot vector at the wrong width
 
+- gather read and wrote outside its buffer
+
 ### Changed
 
 - give the engine ops one shared operand check

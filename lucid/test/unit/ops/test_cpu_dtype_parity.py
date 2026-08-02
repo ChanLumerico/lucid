@@ -289,6 +289,51 @@ def test_lu_solve_refuses_an_out_of_range_pivot() -> None:
         lucid.linalg.lu_solve(a, bad, b)
 
 
+def test_gather_refuses_an_index_outside_the_axis() -> None:
+    """The read-side twin of the scatter_add defect.
+
+    ``gather`` computed a flat offset from the index and ``memcpy``'d from
+    it with nothing in between.  An index of 99 into a 2x3 returned
+    ``0.0`` read from past the allocation — a wrong number, silently —
+    and gathering along an axis of extent zero segfaulted.  The audit's
+    ``edge`` axis substitutes an empty tensor for the operand while
+    leaving the index alone, which is exactly that second case, and the
+    sweep died on ``edge-Tensor.gather`` every run.
+    """
+    base = lucid.tensor(np.ones((2, 3)), dtype=lucid.float64)
+    index = lucid.tensor(np.full((2, 3), 99), dtype=lucid.int64)
+    with pytest.raises(Exception, match="out of range"):
+        base.gather(index, dim=0)
+
+
+def test_gather_refuses_an_empty_axis() -> None:
+    """Gathering from nothing is not zero — there is no row to read."""
+    empty = lucid.tensor(np.zeros((0, 5)), dtype=lucid.float64)
+    index = lucid.tensor(np.zeros((4, 5), dtype=np.int64), dtype=lucid.int64)
+    with pytest.raises(Exception, match="out of range"):
+        empty.gather(index, dim=0)
+
+
+def test_gather_still_gathers() -> None:
+    """Guard the instrument: the bounds check must not have disabled the op."""
+    base = lucid.tensor(np.arange(6.0).reshape(2, 3), dtype=lucid.float64)
+    index = lucid.tensor(np.array([[1, 0, 1], [0, 1, 0]]), dtype=lucid.int64)
+    got = base.gather(index, dim=0).numpy()
+    assert np.allclose(got, [[3.0, 1.0, 5.0], [0.0, 4.0, 2.0]])
+
+
+def test_gather_backward_refuses_an_index_outside_the_axis() -> None:
+    """The backward pass *writes* at the index, so this one corrupts memory.
+
+    Reached through the graph rather than called directly: the check has
+    to hold on the path autograd actually takes.
+    """
+    base = lucid.tensor(np.ones((2, 3)), dtype=lucid.float64, requires_grad=True)
+    index = lucid.tensor(np.full((2, 3), 99), dtype=lucid.int64)
+    with pytest.raises(Exception, match="out of range"):
+        base.gather(index, dim=0).sum().backward()
+
+
 def test_lu_solve_still_solves() -> None:
     """Guard the instrument: the checks must not have disabled the op."""
     a = lucid.tensor(np.array([[3.0, 1.0], [1.0, 2.0]]), dtype=lucid.float64)
