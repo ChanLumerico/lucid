@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - give prod / max / min their own graph-mode rule
 
+- stop the CPU relu turning NaN into zero
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -424,10 +424,13 @@ vsma_f64(const double* a, double scalar, const double* b, double* out, std::size
 //
 // References
 // ----------
-// Accelerate.framework ``vDSP_vthres``.
+// Branchless ``(x < 0) ? 0 : x`` rather than ``vDSP_vthres``, which
+// returns the threshold for NaN and so swallowed NaN on the CPU while
+// Metal propagated it.  Also faster.
 LUCID_INTERNAL void vrelu_f32(const float* in, float* out, std::size_t n);
 
-// Double-precision ReLU clamp.  Uses ``vDSP_vthresD``.
+// Double-precision ReLU clamp.  Branchless, for the same reason as the
+// single-precision form: ``vDSP_vthresD`` does not propagate NaN.
 //
 // Parameters
 // ----------
@@ -440,7 +443,7 @@ LUCID_INTERNAL void vrelu_f32(const float* in, float* out, std::size_t n);
 //
 // References
 // ----------
-// Accelerate.framework ``vDSP_vthresD``.
+// IEEE: ``NaN < 0`` is false, so NaN passes through.
 LUCID_INTERNAL void vrelu_f64(const double* in, double* out, std::size_t n);
 
 // Single-precision elementwise maximum.
