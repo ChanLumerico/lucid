@@ -177,6 +177,32 @@ inline Storage narrow_int(const Storage& wide, std::size_t n, Dtype to) {
     return Storage{CpuStorage{p, n * width, to}};
 }
 
+//: The narrow integers, as a set — the ones with no native kernel.
+inline bool is_narrow_int(Dtype dt) {
+    return dt == Dtype::I32 || dt == Dtype::I16 || dt == Dtype::I8 || dt == Dtype::Bool;
+}
+
+// Widen a storage to int64 iff it is a narrow integer; pass anything
+// else through.  The integer twin of as_f32, and dtype-driven for the
+// same reason: a call site hands it every operand and the floats, masks
+// and indices travel through unchanged.
+inline Storage as_i64(const Storage& s) {
+    const auto* c = std::get_if<CpuStorage>(&s);
+    if (c == nullptr || !is_narrow_int(c->dtype))
+        return s;
+    return Storage{widen_int(*c, c->nbytes / dtype_size(c->dtype), c->dtype)};
+}
+
+// The inverse, back to a stated dtype.  Unlike back_to_f16 the target
+// cannot be inferred from the result — every narrow integer widens to
+// the same I64 — so the caller names it.
+inline Storage back_to_int(const Storage& wide, Dtype to) {
+    const auto* c = std::get_if<CpuStorage>(&wide);
+    if (c == nullptr || c->dtype != Dtype::I64 || !is_narrow_int(to))
+        return wide;
+    return narrow_int(wide, c->nbytes / sizeof(std::int64_t), to);
+}
+
 // Widen a storage to float iff it is half; pass anything else through
 // untouched.  Dtype-driven rather than position-driven, so a call site can
 // hand it every operand it has and the index / mask / condition tensors
@@ -833,14 +859,47 @@ public:
         std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         const auto& cs = std::get<CpuStorage>(a);
-        if (dt == Dtype::F32)
+        // ``max(0, x)`` needs no arithmetic beyond a comparison, so every
+        // integer width computes it in itself.  Written out rather than
+        // delegated to a wide path: there is no I64 kernel here to delegate
+        // *to*, which is what a first attempt at widening ran into.
+        // The reference framework answers relu on integers and keeps the
+        // dtype; Metal already did.
+        auto run_int = [&](auto tag) {
+            using T = decltype(tag);
+            const T* ip = reinterpret_cast<const T*>(cs.ptr.get());
+            T* op = reinterpret_cast<T*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ip[i] < T{} ? T{} : ip[i];
+        };
+        switch (dt) {
+        case Dtype::F32:
             cpu::vrelu_f32(reinterpret_cast<const float*>(cs.ptr.get()),
                            reinterpret_cast<float*>(ptr.get()), n);
-        else if (dt == Dtype::F64)
+            break;
+        case Dtype::F64:
             cpu::vrelu_f64(reinterpret_cast<const double*>(cs.ptr.get()),
                            reinterpret_cast<double*>(ptr.get()), n);
-        else
+            break;
+        case Dtype::I64:
+            run_int(std::int64_t{});
+            break;
+        case Dtype::I32:
+            run_int(std::int32_t{});
+            break;
+        case Dtype::I16:
+            run_int(std::int16_t{});
+            break;
+        case Dtype::I8:
+            run_int(std::int8_t{});
+            break;
+        case Dtype::Bool:
+            // Already non-negative; relu is the identity on a mask.
+            std::memcpy(ptr.get(), cs.ptr.get(), nb);
+            break;
+        default:
             ErrorBuilder("cpu_backend::relu").not_implemented("dtype not supported");
+        }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
@@ -5982,6 +6041,8 @@ public:
 
     Storage
     clip(const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) override {
+        // Clamping an integer tensor keeps its dtype in the reference
+        // framework, and Metal already did it.  Exact through int64.
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
