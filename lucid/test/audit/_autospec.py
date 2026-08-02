@@ -276,6 +276,15 @@ def _related_value(
         return True, _mask(shape)
     if name in ("index", "indices"):
         return True, _indices(shape, max(shape[-1], 1))
+    if name == "pivots":
+        # Annotated plainly as ``Tensor``, so nothing but the name says
+        # this is an index vector.  Filling it as a float tensor is what
+        # found the ``lu_solve`` bus error — and then killed the sweep at
+        # the same symbol every run, which is the reason it matters here
+        # rather than only in the framework.  LAPACK pivots are 1-based
+        # over the order of the factorization, and int32 wide.
+        order = max(shape[-2] if len(shape) >= 2 else shape[0], 1)
+        return True, _indices((order,), order).to(lucid.int32) + 1
     if name in ("running_mean", "running_var"):
         channels = shape[1] if len(shape) > 1 else shape[0]
         fill = 0.0 if name == "running_mean" else 1.0

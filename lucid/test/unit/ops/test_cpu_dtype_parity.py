@@ -33,6 +33,7 @@ import numpy as np
 import pytest
 
 import lucid
+import lucid.linalg
 import lucid.nn.functional as F
 
 _DEVICES = ["cpu", "metal"]
@@ -226,3 +227,71 @@ def test_scatter_add_still_scatters() -> None:
     source = lucid.tensor(np.array([[1.0, 2.0, 3.0]], np.float32))
     got = lucid.scatter_add(base, 1, index, source).numpy()
     assert np.allclose(got, [[0.0, 6.0, 0.0]])
+
+
+# ── lu_solve pivots ──────────────────────────────────────────────────────────
+# Found 2026-08-03: the full audit sweep did not finish, it died. Exit 138 is
+# SIGBUS, and the last symbol it printed was the one before this op.
+
+
+def _pivoting_system() -> "tuple[lucid.Tensor, lucid.Tensor]":
+    """A system whose factorization genuinely permutes rows.
+
+    A near-identity matrix pivots trivially, and every wrong pivot width
+    happened to give the right answer on one — which is how this looked
+    fine until the probe used a matrix with a tiny first row.
+    """
+    rng = np.random.default_rng(0)
+    values = rng.random((5, 5))
+    values[0] *= 1e-6
+    return (
+        lucid.tensor(values, dtype=lucid.float64),
+        lucid.tensor(rng.random((5, 1)), dtype=lucid.float64),
+    )
+
+
+@pytest.mark.parametrize("dtype_name", ["int8", "int16", "int32", "int64"])
+def test_lu_solve_agrees_with_solve_at_every_pivot_width(dtype_name: str) -> None:
+    """LAPACK reads ``ipiv`` as ``const int*``; nothing converted to it.
+
+    int8 and bool were read past the end of their own buffer and took the
+    process down with SIGBUS.  int16 and int64 were long enough to
+    survive the over-read and *returned*: int16 answered ``5.9e+133`` and
+    int64 answered a plausible vector that was not the solution.  Only
+    int32 — the width ``lu_factor`` happens to emit — was correct.
+    """
+    a, b = _pivoting_system()
+    reference = lucid.linalg.solve(a, b).numpy().ravel()
+    lu, pivots = lucid.linalg.lu_factor(a)
+    got = (
+        lucid.linalg.lu_solve(lu, pivots.to(getattr(lucid, dtype_name)), b)
+        .numpy()
+        .ravel()
+    )
+    assert np.allclose(got, reference, rtol=1e-9), dtype_name
+
+
+@pytest.mark.parametrize("dtype_name", ["float32", "float64", "bool"])
+def test_lu_solve_refuses_non_integer_pivots(dtype_name: str) -> None:
+    """A float pivot vector had its mantissa bits read as row indices."""
+    a, b = _pivoting_system()
+    lu, pivots = lucid.linalg.lu_factor(a)
+    with pytest.raises(TypeError, match="must be an integer tensor"):
+        lucid.linalg.lu_solve(lu, pivots.to(getattr(lucid, dtype_name)), b)
+
+
+def test_lu_solve_refuses_an_out_of_range_pivot() -> None:
+    """A pivot of 99 on a 4x4 was accepted, and answered."""
+    a = lucid.tensor(np.eye(4) + 0.1, dtype=lucid.float64)
+    b = lucid.tensor(np.ones((4, 1)), dtype=lucid.float64)
+    bad = lucid.tensor(np.array([99, 2, 3, 4]), dtype=lucid.int32)
+    with pytest.raises(IndexError, match="out of range"):
+        lucid.linalg.lu_solve(a, bad, b)
+
+
+def test_lu_solve_still_solves() -> None:
+    """Guard the instrument: the checks must not have disabled the op."""
+    a = lucid.tensor(np.array([[3.0, 1.0], [1.0, 2.0]]), dtype=lucid.float64)
+    b = lucid.tensor(np.array([[9.0], [8.0]]), dtype=lucid.float64)
+    lu, pivots = lucid.linalg.lu_factor(a)
+    assert np.allclose(lucid.linalg.lu_solve(lu, pivots, b).numpy(), [[2.0], [3.0]])

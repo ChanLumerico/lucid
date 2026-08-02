@@ -2235,7 +2235,11 @@ def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     >>> lu_solve(LU, piv, b)
     tensor([[2.], [3.]])
     """
-    return _wrap(_la.lu_solve(_unwrap(LU), _unwrap(pivots), _unwrap(B)))
+    return _wrap(
+        _la.lu_solve(
+            _unwrap(LU), _unwrap(_check_pivots(pivots, LU, "lu_solve")), _unwrap(B)
+        )
+    )
 
 
 def householder_product(H: Tensor, tau: Tensor) -> Tensor:
@@ -2626,6 +2630,80 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     # equals the *unpermuted* LU product.
     P = _build_permutation_matrix(pivots, n, A.dtype, A.device)
     return P, L, U
+
+
+def _check_pivots(pivots: Tensor, factor: Tensor, op: str) -> Tensor:
+    """Validate a LAPACK pivot vector and return it at the width LAPACK reads.
+
+    LAPACK's ``ipiv`` argument is ``const int*``, so the engine reads the
+    pivot buffer 32 bits at a time no matter what dtype it arrived as.
+    Nothing checked that, and all three ways of getting it wrong were
+    silent or fatal rather than an error:
+
+    * **int8 / bool** — the buffer is shorter than the read, so the last
+      entries come from past its own allocation.  ``lu_solve`` took the
+      process down with SIGBUS, which is how the audit's own sweep died.
+    * **float32 / float64** — the mantissa bits are read as indices,
+      landing far outside the matrix.  Also SIGBUS.
+    * **int16 / int64** — the buffer is long enough to survive the
+      over-read, so this one *returns*.  On a matrix that genuinely
+      pivots, int16 answered ``5.9e+133`` and int64 answered a plausible
+      vector that was simply not the solution.  A wrong number that looks
+      like a right one is the worst of the three.
+
+    Integer pivots are converted rather than rejected — ``lu_factor``
+    hands back int32, but an int64 pivot vector is a reasonable thing for
+    a caller to have built, and converting it is what makes it correct.
+
+    Parameters
+    ----------
+    pivots : Tensor
+        1-based pivot indices, as returned by :func:`lu_factor`.
+    factor : Tensor
+        The factorization the pivots belong to; supplies ``n`` for the
+        range check.
+    op : str
+        Calling op name, used as the prefix of the raised message.
+
+    Returns
+    -------
+    Tensor
+        ``pivots`` as int32.
+
+    Raises
+    ------
+    TypeError
+        If ``pivots`` is not an integer tensor.
+    IndexError
+        If any pivot falls outside ``[1, n]``.
+    """
+    if pivots.dtype not in (lucid.int8, lucid.int16, lucid.int32, lucid.int64):
+        raise TypeError(
+            f"{op}: pivots must be an integer tensor, got {pivots.dtype}; "
+            f"pass the vector returned by lu_factor, or cast with "
+            f".to(lucid.int32)"
+        )
+    normalised = pivots if pivots.dtype == lucid.int32 else pivots.to(lucid.int32)
+    if normalised.numel() == 0:
+        return normalised
+
+    # LAPACK pivots are 1-based: entry i names the row swapped with row i.
+    # An out-of-range entry indexes outside the matrix, and the engine did
+    # not notice — a pivot of 99 on a 4x4 was accepted and answered.
+    n = int(factor.shape[-2]) if len(factor.shape) >= 2 else int(factor.shape[0])
+    # Reduced in int64, not int32.  The CPU reduce kernels do not cover
+    # every integer width and int32 min/max raises — the same detour
+    # ``check_embedding_indices`` takes for the same reason.
+    wide = normalised.to(lucid.int64)
+    lo = int(wide.min().item())
+    hi = int(wide.max().item())
+    if lo < 1 or hi > n:
+        bad = lo if lo < 1 else hi
+        raise IndexError(
+            f"{op}: pivot {bad} is out of range for an order-{n} "
+            f"factorization (LAPACK pivots are 1-based, valid range [1, {n}])"
+        )
+    return normalised
 
 
 def _build_permutation_matrix(

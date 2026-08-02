@@ -84,6 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - embedding over-read its index buffer on int8 and bool
 
+- lu_solve read its pivot vector at the wrong width
+
 ### Changed
 
 - give the engine ops one shared operand check
