@@ -782,6 +782,16 @@ class DtypeAxis(Axis):
                             if companion is None:
                                 args.append(value)
                                 continue
+                            # Only *float* companions follow the primary's
+                            # dtype.  An integer companion is an index or a
+                            # size, and casting it to the dtype under test
+                            # makes the call invalid rather than testing it —
+                            # scatter_add reported float32 as unsupported on
+                            # the CPU because its index had been turned into
+                            # a float and the guard correctly refused it.
+                            if companion.dtype.kind not in "fc":
+                                args.append(value)
+                                continue
                             args.append(
                                 lucid.tensor(
                                     np.ascontiguousarray(

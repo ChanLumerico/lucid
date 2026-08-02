@@ -143,7 +143,14 @@ def embedding(
     """
     check_embedding_indices(x, weight, "embedding")
     pad = padding_idx if padding_idx is not None else -1
-    return _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(x), pad))
+    # Normalised, not passed through.  The engine gather reads the index
+    # buffer at a fixed width, so an int8 or bool index of more than a
+    # handful of entries is read past its own allocation — SIGBUS, the
+    # same shape as the scatter_add defect.  int16/int32/int64 happened to
+    # survive; relying on that is relying on an over-read staying inside
+    # the page.
+    idx = x if x.dtype == lucid.int64 else x.to(lucid.int64)
+    return _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(idx), pad))
 
 
 def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:

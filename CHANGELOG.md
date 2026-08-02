@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - embedding segfaulted on a float index tensor
 
+- embedding over-read its index buffer on int8 and bool
+
 ### Changed
 
 - give the engine ops one shared operand check
