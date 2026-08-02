@@ -351,6 +351,27 @@ def test_reflow_pairs_feed_straight_back_into_the_objective() -> None:
     assert loss.shape == ()
 
 
+def test_source_need_not_be_gaussian() -> None:
+    """The paper's other half: transporting between two domains.
+
+    Nothing in the objective, the sampler or the reflow loop assumes the
+    source is a prior — passing ``noise=`` is the whole mechanism, so
+    domain-to-domain transfer is the same three calls.  Pinned because
+    the class docstring claims it.
+    """
+    model = RectifiedFlowModel(_cfg(init_scale=1.0)).eval()
+    source = lucid.randn((4, 3, 8, 8)) * 0.3 - 2.0
+    target = lucid.randn((4, 3, 8, 8)) * 0.3 + 2.0
+
+    loss, _, chord = model.rectified_flow_loss(target, source)
+    assert loss.shape == ()
+    assert _worst(chord, target - source) == 0.0
+
+    z0, z1 = model.reflow_pairs(noise=source, steps=4)
+    assert _worst(z0, source) == 0.0
+    assert _worst(z1, model.sample(noise=source, steps=4)) == 0.0
+
+
 @pytest.mark.parametrize("bad", [{"n_samples": 0}, {"steps": 0}])
 def test_sample_rejects_bad_budgets(bad: dict[str, int]) -> None:
     model = RectifiedFlowModel(_cfg()).eval()

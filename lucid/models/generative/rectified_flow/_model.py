@@ -817,10 +817,37 @@ class RectifiedFlowModel(PretrainedModel):
     ``noise=`` supplies a *paired* ``x0`` instead and is what turns the
     same call into reflow — there is no separate objective.
 
+    **On transfer.**  Nothing here requires the source to be Gaussian.
+    The paper's other half — transporting between two image domains
+    rather than from noise — is the same objective with ``x0`` drawn from
+    the first domain instead of a prior, so it goes through
+    :meth:`rectified_flow_loss`, :meth:`sample` and :meth:`reflow_pairs`
+    unchanged by passing ``noise=``.  Only :meth:`log_prob` assumes a
+    standard normal at ``t = 0``, and a likelihood is not defined for a
+    domain-to-domain transport anyway.
+
     **Where to run it.**  Training is a plain convolutional forward and
     backward with no solve, so it belongs on ``"metal"``.  Generating
     reflow pairs is a solve per batch and is the expensive part of the
     method; the paper generates on the order of a million.
+
+    **Not implemented, and why.**  Two settings the reference exposes are
+    absent rather than overlooked:
+
+    * **A perceptual reflow loss.**  The reference offers ``lpips`` and
+      ``lpips+l2`` alongside ``l2`` for the distillation stage.  Both
+      score images through a pre-trained external network, which Lucid's
+      compute paths may not depend on, so only the squared error is
+      available here.  It is the reference's own default.
+    * **The stochastic sampler.**  The reference can add noise of
+      magnitude ``(1 - t) * sigma_variance`` to turn the probability-flow
+      ODE into an SDE.  Its default is ``0``, and the paper is stated and
+      evaluated as an ODE method, so sampling here is deterministic given
+      the starting point.
+
+    Weight averaging (the reference's ``ema_rate``) is a property of a
+    training loop rather than of a model, and is not part of any family
+    in this zoo.
 
     Examples
     --------
