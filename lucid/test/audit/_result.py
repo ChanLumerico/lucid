@@ -18,6 +18,15 @@ cannot say so trains its user to ignore it.
                  than no pass: it reads as coverage and is not
     UNSUPPORTED  the op refused, loudly and by design (no graph formula,
                  dtype not implemented).  A limitation, not a defect
+    NOT_APPLICABLE
+                 the question does not exist for this symbol — a broadcast
+                 check on a unary op, an entry-point comparison for a name
+                 with one spelling, float64 on a device that has no float64.
+                 Excluded from the coverage denominator, because counting a
+                 question that cannot be asked as one that went unanswered
+                 understates how much a run actually verified.  Distinct
+                 from SKIP, which is a real gap in the harness and stays in
+                 the denominator as one.
     SKIP         the harness could not build inputs.  **Counted and
                  listed**, because this is exactly where a census
                  quietly stops being one
@@ -47,6 +56,7 @@ class Status(enum.Enum):
     VACUOUS = "vacuous"
     UNSUPPORTED = "unsupported"
     SKIP = "skip"
+    NOT_APPLICABLE = "not_applicable"
     KNOWN = "known"
     ERROR = "error"
 
@@ -77,6 +87,7 @@ STATUS_STYLE: dict[Status, tuple[str, str]] = {
     Status.GAUGE: ("GAUG", "blue"),
     Status.UNSUPPORTED: ("UNSP", "grey"),
     Status.SKIP: ("SKIP", "grey"),
+    Status.NOT_APPLICABLE: ("N/A ", "grey"),
     Status.PASS: ("PASS", "green"),
 }
 
@@ -175,6 +186,11 @@ class Report:
         total = self.applicable_cells or (
             self.surface_total * max(len(self.axes_run), 1)
         )
+        # A question that cannot be asked is not one that went unanswered.
+        # 1,856 cells were being counted against the framework for asking a
+        # unary op how it broadcasts, a single-spelling name how its two
+        # entry points compare, and Metal for a float64 it does not have.
+        total -= sum(1 for f in self.findings if f.status is Status.NOT_APPLICABLE)
         return filled, total, (filled / total if total else 0.0)
 
     # ── serialisation ────────────────────────────────────────────────────────

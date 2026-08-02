@@ -104,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the sweep completes, and two of its own findings were artefacts
 
+- stop counting questions that cannot be asked as ones that failed
+
 ### Changed
 
 - give the engine ops one shared operand check

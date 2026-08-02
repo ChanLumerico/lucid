@@ -389,7 +389,9 @@ class EntryPointAxis(Axis):
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         routes = list(_surface.counterparts(symbol))
         if len(routes) < 2:
-            return self._finding(symbol, Status.SKIP, "only one entry point")
+            return self._finding(
+                symbol, Status.NOT_APPLICABLE, "only one entry point to compare"
+            )
 
         results: dict[str, Any] = {}
         errors: dict[str, str] = {}
@@ -484,9 +486,25 @@ class DeviceAxis(Axis):
                 if hasattr(a, "to"):
                     if override is not None and i == call.primary:
                         arr = np.resize(override, _probe.to_numpy(a).shape)  # type: ignore[arg-type]
-                        args.append(_probe.as_f64(arr, device=device))
+                        args.append(_probe.as_f32(arr, device=device))
                     else:
-                        args.append(a.to(device))
+                        # float32, not the probe's native float64.  This axis
+                        # asks whether the two devices agree, and Metal has
+                        # no float64 at all — so every float64 operand made
+                        # the comparison fail on the move rather than on the
+                        # answer.  649 cells, a tenth of the sweep, reported
+                        # "unsupported" for a platform fact rather than
+                        # comparing anything.  Both sides get the same
+                        # float32 input, which is what makes them comparable.
+                        # Narrowed *before* the move, not after: ``.to(metal)``
+                        # on a float64 tensor is the call that raises, so a
+                        # cast afterwards never runs.
+                        narrowed = (
+                            a.to(lucid.float32)
+                            if str(a.dtype).endswith("float64")
+                            else a
+                        )
+                        args.append(narrowed.to(device))
                 else:
                     args.append(a)
             return fn(*args, **call.kwargs)
@@ -688,9 +706,13 @@ class BroadcastAxis(Axis):
             with_b = _probe.to_numpy(fn(a0, b0))
             with_c = _probe.to_numpy(fn(a0, c0))
         except Exception:  # noqa: BLE001
-            return self._finding(symbol, Status.SKIP, "not a two-tensor op")
+            return self._finding(
+                symbol, Status.NOT_APPLICABLE, "not a two-tensor op"
+            )
         if with_b is None or with_c is None:
-            return self._finding(symbol, Status.SKIP, "not a two-tensor op")
+            return self._finding(
+                symbol, Status.NOT_APPLICABLE, "not a two-tensor op"
+            )
         if np.array_equal(with_b, with_c, equal_nan=True):
             return self._finding(
                 symbol, Status.SKIP, "second argument does not affect the result"
