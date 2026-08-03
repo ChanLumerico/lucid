@@ -111,6 +111,13 @@ py::dtype lucid_dtype_to_np(Dtype dt) {
         return py::dtype("int64");
     case Dtype::F16:
         return py::dtype("float16");
+    case Dtype::BF16:
+        // NumPy has no bfloat16, so the bridge widens.  float32 rather
+        // than float16 because the two 16-bit formats do not nest: a bf16
+        // value can be larger than float16's maximum, and narrowing to it
+        // would turn a perfectly good number into an infinity on the way
+        // out of the framework.
+        return py::dtype("float32");
     case Dtype::F32:
         return py::dtype("float32");
     case Dtype::F64:
@@ -139,6 +146,24 @@ py::object make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride
 
     std::vector<py::ssize_t> py_shape(shape.begin(), shape.end());
     std::vector<py::ssize_t> py_stride(stride.begin(), stride.end());
+
+    // bfloat16 cannot be a view.  Every other dtype hands NumPy the buffer
+    // as it stands, but NumPy has no bfloat16, so ``lucid_dtype_to_np``
+    // answers float32 — and a view would then describe a 2-byte buffer as
+    // 4-byte elements and read straight across the boundaries.  The first
+    // version of this did exactly that and returned values from the wrong
+    // positions: ``1e30`` came back as ``4e-41``.  Convert instead.
+    if (s.dtype == Dtype::BF16) {
+        const std::size_t n = static_cast<std::size_t>(s.nbytes / sizeof(std::uint16_t));
+        py::array_t<float> out(py_shape);
+        const auto* bits = reinterpret_cast<const std::uint16_t*>(s.ptr.get());
+        auto* dst = static_cast<float*>(out.request().ptr);
+        for (std::size_t i = 0; i < n; ++i) {
+            const std::uint32_t widened = static_cast<std::uint32_t>(bits[i]) << 16;
+            std::memcpy(&dst[i], &widened, sizeof(float));
+        }
+        return out;
+    }
 
     return py::array(lucid_dtype_to_np(s.dtype), py_shape, py_stride,
                      static_cast<const void*>(s.ptr.get()), owner);
@@ -375,6 +400,15 @@ void format_element(const std::byte* ptr, Dtype dt, int precision, std::ostrings
     case Dtype::I64:
         os << *reinterpret_cast<const std::int64_t*>(ptr);
         break;
+    case Dtype::BF16: {
+        // bfloat16 is the top half of a float32: shift it back up.
+        const std::uint16_t bits = *reinterpret_cast<const std::uint16_t*>(ptr);
+        const std::uint32_t widened = static_cast<std::uint32_t>(bits) << 16;
+        float value;
+        std::memcpy(&value, &widened, sizeof(value));
+        fmt_float(static_cast<double>(value));
+        break;
+    }
     case Dtype::F16: {
         // Half is stored as raw bits; cast through float for printing.  We
         // don't pull in __fp16 — manual IEEE-754 binary16 → float decode.
@@ -699,6 +733,15 @@ py::object TensorImpl::tolist() const {
             std::memcpy(&v, p, sizeof(v));
             return py::float_(v);
         });
+    case Dtype::BF16:
+        return walk([](const char* p) -> py::object {
+            std::uint16_t bits;
+            std::memcpy(&bits, p, sizeof(bits));
+            const std::uint32_t widened = static_cast<std::uint32_t>(bits) << 16;
+            float value;
+            std::memcpy(&value, &widened, sizeof(value));
+            return py::float_(static_cast<double>(value));
+        });
     case Dtype::F16:
         return walk([](const char* p) -> py::object {
             std::uint16_t bits;
@@ -763,6 +806,14 @@ static py::object decode_scalar(const char* raw, Dtype dt) {
         double v;
         std::memcpy(&v, raw, sizeof(v));
         return py::float_(v);
+    }
+    case Dtype::BF16: {
+        std::uint16_t bits;
+        std::memcpy(&bits, raw, sizeof(bits));
+        const std::uint32_t widened = static_cast<std::uint32_t>(bits) << 16;
+        float value;
+        std::memcpy(&value, &widened, sizeof(value));
+        return py::float_(static_cast<double>(value));
     }
     case Dtype::F16: {
         // IEEE-754 binary16 → float32 decode, kept inline so this stays a

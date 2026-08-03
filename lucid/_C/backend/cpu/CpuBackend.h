@@ -100,23 +100,32 @@ namespace detail {
 // code, different device" failure this project already treats as a bug.
 // Widening once at the door and rounding once on the way out is what the
 // astype path does anyway.
+//: The two 16-bit float formats.  Accelerate has kernels for neither, so
+//: both take the same widen-reuse-narrow route through float32 — they
+//: differ only in how the sixteen bits are read.
+inline bool is_half_like(Dtype dt) {
+    return dt == Dtype::F16 || dt == Dtype::BF16;
+}
+
 inline CpuStorage widen_half(const CpuStorage& in, std::size_t n) {
     auto p = allocate_aligned_bytes(n * sizeof(float), Device::CPU);
     const auto* src = reinterpret_cast<const std::uint16_t*>(in.ptr.get());
     auto* dst = reinterpret_cast<float*>(p.get());
+    const bool brain = in.dtype == Dtype::BF16;
     for (std::size_t i = 0; i < n; ++i)
-        dst[i] = half_bits_to_float(src[i]);
+        dst[i] = brain ? bfloat_bits_to_float(src[i]) : half_bits_to_float(src[i]);
     return CpuStorage{p, n * sizeof(float), Dtype::F32};
 }
 
-inline Storage narrow_half(const Storage& wide, std::size_t n) {
+inline Storage narrow_half(const Storage& wide, std::size_t n, Dtype to = Dtype::F16) {
     const auto& w = std::get<CpuStorage>(wide);
     auto p = allocate_aligned_bytes(n * sizeof(std::uint16_t), Device::CPU);
     const auto* src = reinterpret_cast<const float*>(w.ptr.get());
     auto* dst = reinterpret_cast<std::uint16_t*>(p.get());
+    const bool brain = to == Dtype::BF16;
     for (std::size_t i = 0; i < n; ++i)
-        dst[i] = float_to_half_bits(src[i]);
-    return Storage{CpuStorage{p, n * sizeof(std::uint16_t), Dtype::F16}};
+        dst[i] = brain ? float_to_bfloat_bits(src[i]) : float_to_half_bits(src[i]);
+    return Storage{CpuStorage{p, n * sizeof(std::uint16_t), to}};
 }
 
 // Widen a narrow integer storage to int64, exactly.
@@ -345,18 +354,34 @@ inline Storage f64_to_int(const Storage& wide, std::size_t n, Dtype to) {
 // float one" to get wrong.
 inline Storage as_f32(const Storage& s) {
     const auto* c = std::get_if<CpuStorage>(&s);
-    if (c == nullptr || c->dtype != Dtype::F16)
+    if (c == nullptr || !is_half_like(c->dtype))
         return s;
     return Storage{widen_half(*c, c->nbytes / sizeof(std::uint16_t))};
 }
 
 // The inverse, equally dtype-driven: a float result rounds back to half, and
 // a result that is a mask (bool) or an index (int64) is returned as it is.
-inline Storage back_to_f16(const Storage& s) {
+inline Storage back_to_f16(const Storage& s, Dtype to = Dtype::F16) {
     const auto* c = std::get_if<CpuStorage>(&s);
     if (c == nullptr || c->dtype != Dtype::F32)
         return s;
-    return narrow_half(s, c->nbytes / sizeof(float));
+    return narrow_half(s, c->nbytes / sizeof(float), to);
+}
+
+inline std::vector<Storage> back_to_f16(const std::vector<Storage>& v, Dtype to) {
+    std::vector<Storage> out;
+    out.reserve(v.size());
+    for (const auto& s : v)
+        out.push_back(back_to_f16(s, to));
+    return out;
+}
+
+inline std::pair<Storage, Storage> back_to_f16(const std::pair<Storage, Storage>& p, Dtype to) {
+    return {back_to_f16(p.first, to), back_to_f16(p.second, to)};
+}
+
+inline StoragePair back_to_f16(const StoragePair& p, Dtype to) {
+    return {back_to_f16(p.first, to), back_to_f16(p.second, to)};
 }
 
 inline std::vector<Storage> back_to_f16(const std::vector<Storage>& v) {
@@ -447,8 +472,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(ones(shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(ones(shape, Dtype::F32), dt);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -698,7 +723,7 @@ public:
         // Comparison answers in Bool but has to read the operands, and
         // Accelerate has no half compare.  Widen both and compare in
         // single — the result is exact, since half is a subset of float.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             return compare_binary(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)},
                                   Storage{detail::widen_half(std::get<CpuStorage>(b), half_n)},
@@ -828,8 +853,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(rsqrt(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(rsqrt(detail::as_f32(a), shape, Dtype::F32), dt);
         auto sq = sqrt(a, shape, dt);
         const auto& cs = std::get<CpuStorage>(sq);
         std::size_t n = shape_numel(shape);
@@ -871,9 +896,9 @@ public:
     Storage sign(const Storage& a, const Shape& shape, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and round
         // once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(sign(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, Dtype::F32), half_n);
+            return detail::narrow_half(sign(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, Dtype::F32), half_n, dt);
         }
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -956,10 +981,10 @@ public:
     Storage sigmoid(const Storage& a, const Shape& shape, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and
         // round once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             const Storage wide = Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)};
-            return detail::narrow_half(sigmoid(wide, shape, Dtype::F32), half_n);
+            return detail::narrow_half(sigmoid(wide, shape, Dtype::F32), half_n, dt);
         }
         auto neg_a = neg(a, shape, dt);
         auto exp_neg = exp(neg_a, shape, dt);
@@ -985,10 +1010,10 @@ public:
     Storage relu(const Storage& a, const Shape& shape, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and
         // round once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             const Storage wide = Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)};
-            return detail::narrow_half(relu(wide, shape, Dtype::F32), half_n);
+            return detail::narrow_half(relu(wide, shape, Dtype::F32), half_n, dt);
         }
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1061,8 +1086,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(erfinv(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(erfinv(detail::as_f32(a), shape, Dtype::F32), dt);
         // erfinv via Winitzki (2008) initial guess + 3 Newton steps.
         static constexpr double kTwoOverSqrtPi = 1.1283791670955126;
         static constexpr double kA = 0.147;  // Winitzki constant
@@ -1125,9 +1150,9 @@ public:
     Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and round
         // once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(reciprocal(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, Dtype::F32), half_n);
+            return detail::narrow_half(reciprocal(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, Dtype::F32), half_n, dt);
         }
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -1157,8 +1182,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(cube(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(cube(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1356,8 +1381,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(gelu(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(gelu(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1392,8 +1417,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(gelu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(gelu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
         constexpr double kC1 = 0.7978845608028654;
         constexpr double kC2 = 0.044715;
         const auto& cs = std::get<CpuStorage>(a);
@@ -1439,8 +1464,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(silu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(silu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
         std::size_t n = shape_numel(shape);
@@ -1477,8 +1502,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(gelu_exact(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(gelu_exact(detail::as_f32(a), shape, Dtype::F32), dt);
         // 0.5 * x * (1 + erf(x / sqrt(2))) — exact Gaussian-CDF GELU.
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -1514,8 +1539,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(gelu_exact_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(gelu_exact_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
         // dy/dx = 0.5 * (1 + erf(x/sqrt(2))) + x * exp(-x^2/2) / sqrt(2π)
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
@@ -1557,8 +1582,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(leaky_relu(detail::as_f32(a), shape, Dtype::F32, slope));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(leaky_relu(detail::as_f32(a), shape, Dtype::F32, slope), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1583,10 +1608,10 @@ public:
     Storage softplus(const Storage& a, const Shape& shape, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and
         // round once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             const Storage wide = Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)};
-            return detail::narrow_half(softplus(wide, shape, Dtype::F32), half_n);
+            return detail::narrow_half(softplus(wide, shape, Dtype::F32), half_n, dt);
         }
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -1617,8 +1642,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(elu(detail::as_f32(a), shape, Dtype::F32, alpha));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(elu(detail::as_f32(a), shape, Dtype::F32, alpha), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1653,8 +1678,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(elu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32, alpha));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(elu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32, alpha), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
         std::size_t n = shape_numel(shape);
@@ -1686,9 +1711,9 @@ public:
     Storage selu(const Storage& a, const Shape& shape, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and round
         // once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(selu(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, Dtype::F32), half_n);
+            return detail::narrow_half(selu(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, Dtype::F32), half_n, dt);
         }
         constexpr double kScale = 1.0507009873554805;
         constexpr double kAlpha = 1.6732632423543772;
@@ -1720,8 +1745,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(selu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(selu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
         constexpr double kScale = 1.0507009873554805;
         constexpr double kAlpha = 1.6732632423543772;
         const auto& cs = std::get<CpuStorage>(a);
@@ -1756,8 +1781,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(mish(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(mish(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1790,8 +1815,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(mish_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(mish_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
         std::size_t n = shape_numel(shape);
@@ -1830,8 +1855,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(hard_sigmoid(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(hard_sigmoid(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1860,8 +1885,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(hard_sigmoid_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(hard_sigmoid_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
         std::size_t n = shape_numel(shape);
@@ -1891,8 +1916,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(hard_swish(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(hard_swish(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1921,8 +1946,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(hard_swish_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(hard_swish_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
         std::size_t n = shape_numel(shape);
@@ -1969,8 +1994,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(relu6(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(relu6(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -2168,8 +2193,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(reduce_mean(detail::as_f32(a), in_shape, opts, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(reduce_mean(detail::as_f32(a), in_shape, opts, Dtype::F32), dt);
         return reduce_axes(a, in_shape, opts, dt, ReduceOp::Mean);
     }
 
@@ -2179,8 +2204,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(variance(detail::as_f32(a), in_shape, opts, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(variance(detail::as_f32(a), in_shape, opts, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         auto is_reduced_axis = [&](std::size_t d) {
             return std::find(opts.axes.begin(), opts.axes.end(), static_cast<int>(d)) !=
@@ -2303,8 +2328,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(cumsum(detail::as_f32(a), shape, axis, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(cumsum(detail::as_f32(a), shape, axis, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t nb = cs.nbytes;
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -2351,8 +2376,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(cumprod(detail::as_f32(a), shape, axis, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(cumprod(detail::as_f32(a), shape, axis, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t nb = cs.nbytes;
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -2399,8 +2424,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(cummax(detail::as_f32(a), shape, axis, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(cummax(detail::as_f32(a), shape, axis, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t nb = cs.nbytes;
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -2464,8 +2489,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(cummin(detail::as_f32(a), shape, axis, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(cummin(detail::as_f32(a), shape, axis, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t nb = cs.nbytes;
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -2527,9 +2552,9 @@ public:
     Storage softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and round
         // once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(softmax(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, axis, Dtype::F32), half_n);
+            return detail::narrow_half(softmax(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, axis, Dtype::F32), half_n, dt);
         }
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t nb = cs.nbytes;
@@ -2619,8 +2644,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(softmax_backward(detail::as_f32(z), detail::as_f32(grad_out), shape, axis, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(softmax_backward(detail::as_f32(z), detail::as_f32(grad_out), shape, axis, Dtype::F32), dt);
         const auto& z_cpu = std::get<CpuStorage>(z);
         const auto& g_cpu = std::get<CpuStorage>(grad_out);
         std::size_t nb = z_cpu.nbytes;
@@ -2672,8 +2697,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(log_softmax_backward(detail::as_f32(y), detail::as_f32(grad_out), shape, axis, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(log_softmax_backward(detail::as_f32(y), detail::as_f32(grad_out), shape, axis, Dtype::F32), dt);
         const auto& yc = std::get<CpuStorage>(y);
         const auto& gc = std::get<CpuStorage>(grad_out);
         std::size_t nb = gc.nbytes;
@@ -2718,9 +2743,9 @@ public:
     Storage log_softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
         // Accelerate has no half kernel here; widen at the door and round
         // once on the way out.  See detail::widen_half.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(log_softmax(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, axis, Dtype::F32), half_n);
+            return detail::narrow_half(log_softmax(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, axis, Dtype::F32), half_n, dt);
         }
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t nb = cs.nbytes;
@@ -2791,8 +2816,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(trace(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(trace(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const std::int64_t M = shape[0];
         const std::int64_t N = shape[1];
@@ -2852,8 +2877,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(trace_backward(detail::as_f32(grad_out), input_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(trace_backward(detail::as_f32(grad_out), input_shape, Dtype::F32), dt);
         const auto& cg = std::get<CpuStorage>(grad_out);
         const std::int64_t M = input_shape[0];
         const std::int64_t N = input_shape[1];
@@ -2920,8 +2945,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(where_branch(detail::as_f32(grad), detail::as_f32(cond), shape, Dtype::F32, true_branch));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(where_branch(detail::as_f32(grad), detail::as_f32(cond), shape, Dtype::F32, true_branch), dt);
         const auto& g = std::get<CpuStorage>(grad);
         const auto& c = std::get<CpuStorage>(cond);
         auto out = zeros(shape, dt);
@@ -2956,8 +2981,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(masked_fill(detail::as_f32(a), detail::as_f32(mask), shape, Dtype::F32, value));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(masked_fill(detail::as_f32(a), detail::as_f32(mask), shape, Dtype::F32, value), dt);
         const auto& as = std::get<CpuStorage>(a);
         const auto& ms = std::get<CpuStorage>(mask);
         std::size_t n = shape_numel(shape);
@@ -2998,8 +3023,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(gather(detail::as_f32(a), detail::as_f32(indices), input_shape, output_shape, axis, index_dtype, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(gather(detail::as_f32(a), detail::as_f32(indices), input_shape, output_shape, axis, index_dtype, Dtype::F32), dt);
         const auto& as = std::get<CpuStorage>(a);
         const auto& is = std::get<CpuStorage>(indices);
         std::size_t nb = shape_numel(output_shape) * dtype_size(dt);
@@ -3085,8 +3110,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(gather_backward(detail::as_f32(grad), detail::as_f32(indices), input_shape, output_shape, axis, index_dtype, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(gather_backward(detail::as_f32(grad), detail::as_f32(indices), input_shape, output_shape, axis, index_dtype, Dtype::F32), dt);
         const auto& g = std::get<CpuStorage>(grad);
         const auto& idx = std::get<CpuStorage>(indices);
         auto out = zeros(input_shape, dt);
@@ -3271,8 +3296,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(diagonal_backward(detail::as_f32(grad), input_shape, output_shape, offset, axis1, axis2, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(diagonal_backward(detail::as_f32(grad), input_shape, output_shape, offset, axis1, axis2, Dtype::F32), dt);
         const auto& g = std::get<CpuStorage>(grad);
         auto out = zeros(input_shape, dt);
         const std::size_t ndim = input_shape.size();
@@ -3582,8 +3607,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(repeat_backward(detail::as_f32(grad_out), input_shape, output_shape, axis, repeats, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(repeat_backward(detail::as_f32(grad_out), input_shape, output_shape, axis, repeats, Dtype::F32), dt);
         const auto& g = std::get<CpuStorage>(grad_out);
         std::size_t out_nbytes = shape_numel(input_shape) * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
@@ -3676,8 +3701,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(tile_backward(detail::as_f32(grad_out), input_shape, padded_shape, output_shape, p4_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(tile_backward(detail::as_f32(grad_out), input_shape, padded_shape, output_shape, p4_, Dtype::F32), dt);
         const auto& g = std::get<CpuStorage>(grad_out);
         std::size_t out_nbytes = shape_numel(input_shape) * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
@@ -3771,8 +3796,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(sort_select(detail::as_f32(a), input_shape, output_shape, axis, Dtype::F32, descending));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(sort_select(detail::as_f32(a), input_shape, output_shape, axis, Dtype::F32, descending), dt);
         const auto& ca = std::get<CpuStorage>(a);
         CpuStorage values;
         CpuStorage indices;
@@ -3809,8 +3834,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(arg_reduce_index(detail::as_f32(a), shape, axis, keepdims, Dtype::F32, is_min));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(arg_reduce_index(detail::as_f32(a), shape, axis, keepdims, Dtype::F32, is_min), dt);
         Shape out_shape = shape;
         if (keepdims)
             out_shape[static_cast<std::size_t>(axis)] = 1;
@@ -3891,8 +3916,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(scatter_add_axis(detail::as_f32(grad), detail::as_f32(indices), output_shape, grad_shape, axis, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(scatter_add_axis(detail::as_f32(grad), detail::as_f32(indices), output_shape, grad_shape, axis, Dtype::F32), dt);
         const auto& g = std::get<CpuStorage>(grad);
         const auto& idx_storage = std::get<CpuStorage>(indices);
         const std::size_t nbytes = shape_numel(output_shape) * dtype_size(dt);
@@ -3948,8 +3973,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(scatter_add(detail::as_f32(base), detail::as_f32(indices), detail::as_f32(src), base_shape, idx_shape, dim, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(scatter_add(detail::as_f32(base), detail::as_f32(indices), detail::as_f32(src), base_shape, idx_shape, dim, Dtype::F32), dt);
         const auto& cb = std::get<CpuStorage>(base);
         const auto& ci = std::get<CpuStorage>(indices);
         const auto& cs = std::get<CpuStorage>(src);
@@ -4215,14 +4240,14 @@ public:
         // No half BLAS to call, so the product is taken in single and
         // rounded once.  Accumulating in the wider type is what a half
         // GEMM would do internally anyway.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t a_n = opts.batch * static_cast<std::size_t>(opts.M) * opts.K;
             const std::size_t b_n = opts.batch * static_cast<std::size_t>(opts.K) * opts.N;
             const std::size_t out_n = opts.batch * static_cast<std::size_t>(opts.M) * opts.N;
             const Storage wide = matmul(Storage{detail::widen_half(std::get<CpuStorage>(a), a_n)},
                                         Storage{detail::widen_half(std::get<CpuStorage>(b), b_n)},
                                         opts, Dtype::F32);
-            return detail::narrow_half(wide, out_n);
+            return detail::narrow_half(wide, out_n, dt);
         }
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
@@ -4282,7 +4307,7 @@ public:
         // layer of almost everything, so `model.half()` ran on Metal and
         // raised on the CPU.  No half BLAS exists, so the product is taken
         // in single and rounded once — what a half GEMM does internally.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t x_n = shape_numel(x_shape);
             const std::size_t w_n = shape_numel(weight_shape);
             const auto& cb = std::get<CpuStorage>(bias);
@@ -4328,8 +4353,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(linear_backward(detail::as_f32(grad), detail::as_f32(x), detail::as_f32(weight), x_shape, weight_shape, bias_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(linear_backward(detail::as_f32(grad), detail::as_f32(x), detail::as_f32(weight), x_shape, weight_shape, bias_shape, Dtype::F32), dt);
         const auto [M, K] = flatten_linear_x(x_shape);
         const std::size_t N = static_cast<std::size_t>(weight_shape[0]);
         const std::size_t elem = dtype_size(dt);
@@ -4371,8 +4396,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(rms_norm_forward(detail::as_f32(x), detail::as_f32(gamma), outer, normalized_size, eps, p5_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(rms_norm_forward(detail::as_f32(x), detail::as_f32(gamma), outer, normalized_size, eps, p5_, Dtype::F32), dt);
         const std::size_t y_nbytes = outer * normalized_size * dtype_size(dt);
         const std::size_t rstd_nbytes = outer * dtype_size(dt);
         auto y_ptr = allocate_aligned_bytes(y_nbytes, Device::CPU);
@@ -4407,8 +4432,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(rms_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_rstd), detail::as_f32(grad), outer, normalized_size, p6_, p7_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(rms_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_rstd), detail::as_f32(grad), outer, normalized_size, p6_, p7_, Dtype::F32), dt);
         const std::size_t dx_nbytes = outer * normalized_size * dtype_size(dt);
         const std::size_t dgamma_nbytes = normalized_size * dtype_size(dt);
         auto dx_ptr = allocate_aligned_bytes(dx_nbytes, Device::CPU);
@@ -4454,8 +4479,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(layer_norm_forward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(beta), outer, normalized_size, eps, p6_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(layer_norm_forward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(beta), outer, normalized_size, eps, p6_, Dtype::F32), dt);
         const std::size_t y_nbytes = outer * normalized_size * dtype_size(dt);
         const std::size_t saved_nbytes = outer * dtype_size(dt);
         auto y_ptr = allocate_aligned_bytes(y_nbytes, Device::CPU);
@@ -4496,8 +4521,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(layer_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_mean), detail::as_f32(saved_rstd), detail::as_f32(grad), outer, normalized_size, p7_, p8_, p9_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(layer_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_mean), detail::as_f32(saved_rstd), detail::as_f32(grad), outer, normalized_size, p7_, p8_, p9_, Dtype::F32), dt);
         const std::size_t dx_nbytes = outer * normalized_size * dtype_size(dt);
         const std::size_t param_nbytes = normalized_size * dtype_size(dt);
         auto dx_ptr = allocate_aligned_bytes(dx_nbytes, Device::CPU);
@@ -4552,8 +4577,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(batch_norm_forward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(beta), batch, channels, spatial, p6_, eps, p8_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(batch_norm_forward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(beta), batch, channels, spatial, p6_, eps, p8_, Dtype::F32), dt);
         const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
         auto y_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
         auto mean_ptr = allocate_aligned_bytes(static_cast<std::size_t>(channels) * dtype_size(dt),
@@ -4598,8 +4623,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(batch_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_mean), detail::as_f32(saved_rstd), detail::as_f32(saved_xnorm), detail::as_f32(grad), batch, channels, spatial, p9_, p10_, Dtype::F32, eps_unused));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(batch_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_mean), detail::as_f32(saved_rstd), detail::as_f32(saved_xnorm), detail::as_f32(grad), batch, channels, spatial, p9_, p10_, Dtype::F32, eps_unused), dt);
         // CPU backward uses saved_rstd directly via the chain-rule formula;
         // no need for eps reconstruction.  The signature carries eps for
         // GPU backend symmetry.
@@ -4660,8 +4685,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(group_norm_forward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(beta), batch, channels, spatial, groups, p7_, eps, p9_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(group_norm_forward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(beta), batch, channels, spatial, groups, p7_, eps, p9_, Dtype::F32), dt);
         const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
         const std::size_t saved_numel = static_cast<std::size_t>(batch) * groups;
         auto y_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
@@ -4702,8 +4727,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(group_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_mean), detail::as_f32(saved_rstd), detail::as_f32(grad), batch, channels, spatial, groups, p9_, p10_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(group_norm_backward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(saved_mean), detail::as_f32(saved_rstd), detail::as_f32(grad), batch, channels, spatial, groups, p9_, p10_, Dtype::F32), dt);
         const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
         const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
         auto dx_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
@@ -5652,25 +5677,42 @@ public:
         // (``.half()``, ``.to(float16)``, and the way back) therefore SIGSEGV'd
         // in both directions and had never worked.  Recurse only on the
         // F16-free leg, which the main table does handle.
-        if (src_dt != dst_dt && (src_dt == Dtype::F16 || dst_dt == Dtype::F16)) {
-            if (src_dt == Dtype::F16) {
+        // Both 16-bit float formats take this route, and for the same
+        // reason: neither has a host scalar the Cartesian table below can
+        // ``static_cast`` through.  bfloat16 joined F16 here rather than
+        // getting its own branch because the shape is identical — decode to
+        // float32, recurse on the leg that has no 16-bit float in it, encode
+        // — and two copies of that would be two places to get the recursion
+        // wrong.
+        const bool src_half = detail::is_half_like(src_dt);
+        const bool dst_half = detail::is_half_like(dst_dt);
+        if (src_dt != dst_dt && (src_half || dst_half)) {
+            if (src_half) {
                 auto f32_ptr = allocate_aligned_bytes(n * sizeof(float), Device::CPU);
                 const auto* bits = reinterpret_cast<const std::uint16_t*>(ca.ptr.get());
                 auto* f32 = reinterpret_cast<float*>(f32_ptr.get());
+                const bool brain = src_dt == Dtype::BF16;
                 for (std::size_t i = 0; i < n; ++i)
-                    f32[i] = detail::half_bits_to_float(bits[i]);
+                    f32[i] = brain ? detail::bfloat_bits_to_float(bits[i])
+                                   : detail::half_bits_to_float(bits[i]);
                 Storage as_f32{CpuStorage{f32_ptr, n * sizeof(float), Dtype::F32}};
                 if (dst_dt == Dtype::F32)
                     return as_f32;
-                return astype(as_f32, shape, Dtype::F32, dst_dt);  // F16-free leg
+                // The recursion has to be on a leg with no 16-bit float on
+                // either side.  A previous version recursed with F16 still
+                // present, re-entered this branch every time and died of
+                // stack exhaustion — CPU half casts SIGSEGV'd in both
+                // directions and had never worked.
+                return astype(as_f32, shape, Dtype::F32, dst_dt);
             }
-            // dst is F16: bring the source to F32 first (F16-free leg), encode.
             Storage as_f32 = (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
             const auto& cf = std::get<CpuStorage>(as_f32);
             const auto* f32 = reinterpret_cast<const float*>(cf.ptr.get());
             auto* out16 = reinterpret_cast<std::uint16_t*>(out_ptr.get());
+            const bool brain = dst_dt == Dtype::BF16;
             for (std::size_t i = 0; i < n; ++i)
-                out16[i] = detail::float_to_half_bits(f32[i]);
+                out16[i] = brain ? detail::float_to_bfloat_bits(f32[i])
+                                 : detail::float_to_half_bits(f32[i]);
             return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
         }
 
@@ -6106,8 +6148,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(pad(detail::as_f32(a), shape, Dtype::F32, pad_width, constant));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(pad(detail::as_f32(a), shape, Dtype::F32, pad_width, constant), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const std::size_t ndim = shape.size();
         Shape out_shape(ndim);
@@ -6187,7 +6229,7 @@ public:
         // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
         // the door, reuse, round once.  Reached constantly from backward, where
         // chain-rule constants arrive as scalars.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             return detail::narrow_half(
                 pow_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)},
@@ -6221,7 +6263,7 @@ public:
         // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
         // the door, reuse, round once.  Reached constantly from backward, where
         // chain-rule constants arrive as scalars.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             return detail::narrow_half(
                 rpow_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)},
@@ -6259,8 +6301,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(clip(detail::as_f32(a), shape, Dtype::F32, min_v, max_v));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(clip(detail::as_f32(a), shape, Dtype::F32, min_v, max_v), dt);
         const auto& cs = std::get<CpuStorage>(a);
         const std::size_t numel = shape_numel(shape);
         std::size_t nb = numel * dtype_size(dt);
@@ -6331,8 +6373,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(mse_loss(detail::as_f32(input), detail::as_f32(target), shape, Dtype::F32, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(mse_loss(detail::as_f32(input), detail::as_f32(target), shape, Dtype::F32, reduction), dt);
         const std::size_t n = shape_numel(shape);
         if (reduction == 0) {
             const std::size_t nb = n * dtype_size(dt);
@@ -6368,8 +6410,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(mse_loss_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(grad), shape, Dtype::F32, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(mse_loss_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(grad), shape, Dtype::F32, reduction), dt);
         const std::size_t n = shape_numel(shape);
         const std::size_t nb = n * dtype_size(dt);
         auto dx = allocate_aligned_bytes(nb, Device::CPU);
@@ -6416,8 +6458,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(huber_loss(detail::as_f32(input), detail::as_f32(target), shape, Dtype::F32, delta, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(huber_loss(detail::as_f32(input), detail::as_f32(target), shape, Dtype::F32, delta, reduction), dt);
         const std::size_t n = shape_numel(shape);
         if (reduction == 0) {
             const std::size_t nb = n * dtype_size(dt);
@@ -6454,8 +6496,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(huber_loss_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(grad), shape, Dtype::F32, delta, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(huber_loss_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(grad), shape, Dtype::F32, delta, reduction), dt);
         const std::size_t n = shape_numel(shape);
         const std::size_t nb = n * dtype_size(dt);
         auto dx = allocate_aligned_bytes(nb, Device::CPU);
@@ -6509,8 +6551,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(bce_loss(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), shape, Dtype::F32, eps, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(bce_loss(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), shape, Dtype::F32, eps, reduction), dt);
         const std::size_t n = shape_numel(shape);
         if (reduction == 0) {
             const std::size_t nb = n * dtype_size(dt);
@@ -6548,8 +6590,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(bce_loss_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), detail::as_f32(grad), shape, Dtype::F32, eps, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(bce_loss_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), detail::as_f32(grad), shape, Dtype::F32, eps, reduction), dt);
         const std::size_t n = shape_numel(shape);
         const std::size_t nb = n * dtype_size(dt);
         auto dx = allocate_aligned_bytes(nb, Device::CPU);
@@ -6612,8 +6654,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(bce_with_logits_loss(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), detail::as_f32(pos_weight), shape, weight_shape, pos_weight_shape, Dtype::F32, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(bce_with_logits_loss(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), detail::as_f32(pos_weight), shape, weight_shape, pos_weight_shape, Dtype::F32, reduction), dt);
         const std::size_t n = shape_numel(shape);
         Storage weight_storage =
             weight_shape == shape ? weight : broadcast(weight, weight_shape, shape, dt);
@@ -6659,8 +6701,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(bce_with_logits_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), detail::as_f32(pos_weight), detail::as_f32(grad), shape, Dtype::F32, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(bce_with_logits_backward(detail::as_f32(input), detail::as_f32(target), detail::as_f32(weight), detail::as_f32(pos_weight), detail::as_f32(grad), shape, Dtype::F32, reduction), dt);
         const std::size_t n = shape_numel(shape);
         const std::size_t nb = n * dtype_size(dt);
         auto dx = allocate_aligned_bytes(nb, Device::CPU);
@@ -6799,8 +6841,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(cross_entropy_backward(detail::as_f32(saved_softmax), detail::as_f32(target), weight, detail::as_f32(valid_count), detail::as_f32(grad), input_shape, Dtype::F32, ignore_index, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(cross_entropy_backward(detail::as_f32(saved_softmax), detail::as_f32(target), weight, detail::as_f32(valid_count), detail::as_f32(grad), input_shape, Dtype::F32, ignore_index, reduction), dt);
         const int n_batch = static_cast<int>(input_shape[0]);
         const int channels = static_cast<int>(input_shape[1]);
         const int spatial = class_loss_spatial(input_shape);
@@ -6912,8 +6954,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(nll_loss_backward(detail::as_f32(target), weight, detail::as_f32(valid_count), detail::as_f32(grad), input_shape, Dtype::F32, ignore_index, reduction));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(nll_loss_backward(detail::as_f32(target), weight, detail::as_f32(valid_count), detail::as_f32(grad), input_shape, Dtype::F32, ignore_index, reduction), dt);
         const int n_batch = static_cast<int>(input_shape[0]);
         const int channels = static_cast<int>(input_shape[1]);
         const int spatial = class_loss_spatial(input_shape);
@@ -6974,8 +7016,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(sdpa_forward(detail::as_f32(q), detail::as_f32(k), detail::as_f32(v), attn_mask, q_shape, k_shape, v_shape, mask_dtype, mask_numel, scale, is_causal, need_weights, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(sdpa_forward(detail::as_f32(q), detail::as_f32(k), detail::as_f32(v), attn_mask, q_shape, k_shape, v_shape, mask_dtype, mask_numel, scale, is_causal, need_weights, Dtype::F32), dt);
         // The Accelerate reference always rolls the full softmax weight matrix
         // (its backward reuses it), so ``need_weights`` is a no-op here.
         (void)need_weights;
@@ -7138,8 +7180,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(sdpa_backward(detail::as_f32(grad_out), detail::as_f32(q), detail::as_f32(k), detail::as_f32(v), detail::as_f32(saved_weights), attn_mask, q_shape, k_shape, v_shape, mask_dtype, scale, is_causal, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(sdpa_backward(detail::as_f32(grad_out), detail::as_f32(q), detail::as_f32(k), detail::as_f32(v), detail::as_f32(saved_weights), attn_mask, q_shape, k_shape, v_shape, mask_dtype, scale, is_causal, Dtype::F32), dt);
         // The Accelerate forward saves the genuine (already masked/causal)
         // weight matrix W, so the backward is fully determined by ``saved_weights``
         // and needs no mask/causal replay — the extra args exist only to match
@@ -7282,8 +7324,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(conv_transpose_nd_forward(detail::as_f32(x), detail::as_f32(W), detail::as_f32(b), B, Cin, Cout, S, K, O, stride, pad, opad, N, out_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(conv_transpose_nd_forward(detail::as_f32(x), detail::as_f32(W), detail::as_f32(b), B, Cin, Cout, S, K, O, stride, pad, opad, N, out_shape, Dtype::F32), dt);
         int S_total = 1, K_total = 1, O_total = 1;
         for (int i = 0; i < N; ++i) {
             S_total *= S[i];
@@ -7365,8 +7407,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(conv_transpose_nd_backward(detail::as_f32(grad_out), detail::as_f32(x), detail::as_f32(W), B, Cin, Cout, S, K, O, stride, pad, N, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(conv_transpose_nd_backward(detail::as_f32(grad_out), detail::as_f32(x), detail::as_f32(W), B, Cin, Cout, S, K, O, stride, pad, N, Dtype::F32), dt);
         int S_total = 1, K_total = 1, O_total = 1;
         for (int i = 0; i < N; ++i) {
             S_total *= S[i];
@@ -7468,7 +7510,7 @@ public:
         // the way out.  Metal accepted F16 convolutions and the CPU did
         // not, which made the same model run on one device and raise on
         // the other.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const auto widen = [&](const Storage& s, std::size_t count) {
                 const auto& c = std::get<CpuStorage>(s);
                 auto p = allocate_aligned_bytes(count * sizeof(float), Device::CPU);
@@ -7601,8 +7643,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(conv_nd_backward(detail::as_f32(grad_out), detail::as_f32(x), detail::as_f32(W), B, Cin, Cout, Cin_g, Cout_g, S, K, O, opts, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(conv_nd_backward(detail::as_f32(grad_out), detail::as_f32(x), detail::as_f32(W), B, Cin, Cout, Cin_g, Cout_g, S, K, O, opts, Dtype::F32), dt);
         const int N = opts.N;
         const int G = opts.groups;
         int O_total = 1, K_total = 1, S_total = 1;
@@ -7720,8 +7762,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(unfold_forward(detail::as_f32(x), B, C, S, K, O, stride, pad, dilation, p9_, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(unfold_forward(detail::as_f32(x), B, C, S, K, O, stride, pad, dilation, p9_, Dtype::F32), dt);
         const int N = static_cast<int>(K.size());
         int K_total = 1, O_total = 1, S_total = 1;
         for (int i = 0; i < N; ++i) {
@@ -7769,8 +7811,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(unfold_backward(detail::as_f32(grad_out), B, C, S, K, O, stride, pad, dilation, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(unfold_backward(detail::as_f32(grad_out), B, C, S, K, O, stride, pad, dilation, Dtype::F32), dt);
         const int N = static_cast<int>(K.size());
         int K_total = 1, O_total = 1, S_total = 1;
         for (int i = 0; i < N; ++i) {
@@ -7815,8 +7857,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(expand_and_multiply(detail::as_f32(mask), detail::as_f32(x), mask_shape, x_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(expand_and_multiply(detail::as_f32(mask), detail::as_f32(x), mask_shape, x_shape, Dtype::F32), dt);
         const std::size_t B_sz = static_cast<std::size_t>(x_shape[0]);
 
         const bool is_channel_mask = (mask_shape.size() >= 2 && mask_shape[1] > 1);
@@ -7910,8 +7952,8 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(drop_block_mask(detail::as_f32(seed), drop_prob, block_size, x_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(drop_block_mask(detail::as_f32(seed), drop_prob, block_size, x_shape, Dtype::F32), dt);
         const std::size_t B = static_cast<std::size_t>(x_shape[0]);
         const std::size_t C = static_cast<std::size_t>(x_shape[1]);
         const std::size_t H = static_cast<std::size_t>(x_shape[2]);
@@ -11072,18 +11114,21 @@ private:
                 for (std::size_t i = 0; i < n; ++i)
                     o[i] = static_cast<std::int8_t>(wo[i]);
             }
-        } else if (dt == Dtype::F16) {
+        } else if (detail::is_half_like(dt)) {
             // Half has no host scalar to compute in; widen through float
             // and round once on the way back, which is what the astype
             // path does.
             const auto* p = reinterpret_cast<const std::uint16_t*>(cs.ptr.get());
+            const bool brain = dt == Dtype::BF16;
             std::vector<float> wi(n), wo(n);
             for (std::size_t i = 0; i < n; ++i)
-                wi[i] = detail::half_bits_to_float(p[i]);
+                wi[i] = brain ? detail::bfloat_bits_to_float(p[i])
+                              : detail::half_bits_to_float(p[i]);
             fn32(wi.data(), wo.data(), n);
             auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i)
-                o[i] = detail::float_to_half_bits(wo[i]);
+                o[i] = brain ? detail::float_to_bfloat_bits(wo[i])
+                             : detail::float_to_half_bits(wo[i]);
         } else {
             ErrorBuilder("cpu_backend::unary").not_implemented("dtype not supported");
         }
@@ -11158,20 +11203,24 @@ private:
                 for (std::size_t i = 0; i < n; ++i)
                     o[i] = wo[i] != 0 ? 1 : 0;
             }
-        } else if (dt == Dtype::F16) {
+        } else if (detail::is_half_like(dt)) {
             // Half has no host scalar to compute in; widen through float and
             // round once on the way back, which is what the astype path does.
             const auto* pa = reinterpret_cast<const std::uint16_t*>(ca.ptr.get());
             const auto* pb = reinterpret_cast<const std::uint16_t*>(cb.ptr.get());
+            const bool brain = dt == Dtype::BF16;
             std::vector<float> wa(n), wb(n), wo(n);
             for (std::size_t i = 0; i < n; ++i) {
-                wa[i] = detail::half_bits_to_float(pa[i]);
-                wb[i] = detail::half_bits_to_float(pb[i]);
+                wa[i] = brain ? detail::bfloat_bits_to_float(pa[i])
+                              : detail::half_bits_to_float(pa[i]);
+                wb[i] = brain ? detail::bfloat_bits_to_float(pb[i])
+                              : detail::half_bits_to_float(pb[i]);
             }
             fn32(wa.data(), wb.data(), wo.data(), n);
             auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i)
-                o[i] = detail::float_to_half_bits(wo[i]);
+                o[i] = brain ? detail::float_to_bfloat_bits(wo[i])
+                             : detail::float_to_half_bits(wo[i]);
         } else
             ErrorBuilder("cpu_backend::binary").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nb, dt}};
@@ -11189,13 +11238,13 @@ private:
         // Reductions accumulate, and there is no half accumulator on the
         // host.  Widening also removes the rounding-per-step error a true
         // half accumulation would carry.
-        if (dt == Dtype::F16 && !in_shape.empty()) {
+        if (detail::is_half_like(dt) && !in_shape.empty()) {
             const std::size_t in_n = shape_numel(in_shape);
             const Storage wide =
                 reduce_axes(Storage{detail::widen_half(std::get<CpuStorage>(a), in_n)}, in_shape,
                             opts, Dtype::F32, op);
             const std::size_t out_n = std::get<CpuStorage>(wide).nbytes / sizeof(float);
-            return detail::narrow_half(wide, out_n);
+            return detail::narrow_half(wide, out_n, dt);
         }
         // The same shape for the narrow integers.  Only I64 was
         // implemented, so ``max`` and ``min`` refused int8/16/32 and bool
@@ -11407,6 +11456,9 @@ private:
             case Dtype::F16:
                 return detail::half_bits_to_float(
                     reinterpret_cast<const std::uint16_t*>(src)[i]);
+            case Dtype::BF16:
+                return detail::bfloat_bits_to_float(
+                    reinterpret_cast<const std::uint16_t*>(src)[i]);
             case Dtype::I64:
                 return static_cast<double>(reinterpret_cast<const std::int64_t*>(src)[i]);
             case Dtype::I32:
@@ -11430,6 +11482,10 @@ private:
             case Dtype::F16:
                 reinterpret_cast<std::uint16_t*>(dst)[i] =
                     detail::float_to_half_bits(static_cast<float>(v));
+                break;
+            case Dtype::BF16:
+                reinterpret_cast<std::uint16_t*>(dst)[i] =
+                    detail::float_to_bfloat_bits(static_cast<float>(v));
                 break;
             case Dtype::I64:
                 reinterpret_cast<std::int64_t*>(dst)[i] = static_cast<std::int64_t>(v);
@@ -11538,8 +11594,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(ge_mask(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(ge_mask(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32), dt);
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
         std::size_t n = shape_numel(shape);
@@ -11569,8 +11625,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(lt_mask(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(lt_mask(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32), dt);
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
         std::size_t n = shape_numel(shape);
@@ -11599,7 +11655,7 @@ private:
         // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
         // the door, reuse, round once.  Reached constantly from backward, where
         // chain-rule constants arrive as scalars.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             return detail::narrow_half(
                 add_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)},
@@ -11625,7 +11681,7 @@ private:
         // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
         // the door, reuse, round once.  Reached constantly from backward, where
         // chain-rule constants arrive as scalars.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             return detail::narrow_half(
                 mul_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)},
@@ -11653,8 +11709,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(in_range_mask(detail::as_f32(a), shape, Dtype::F32, lo, hi));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(in_range_mask(detail::as_f32(a), shape, Dtype::F32, lo, hi), dt);
         const auto& ca = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -11681,8 +11737,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(leaky_mask(detail::as_f32(a), shape, Dtype::F32, slope));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(leaky_mask(detail::as_f32(a), shape, Dtype::F32, slope), dt);
         const auto& ca = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -11709,8 +11765,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(positive_mask(detail::as_f32(a), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(positive_mask(detail::as_f32(a), shape, Dtype::F32), dt);
         const auto& ca = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -11740,8 +11796,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(relu_backward(detail::as_f32(g), detail::as_f32(x), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(relu_backward(detail::as_f32(g), detail::as_f32(x), shape, Dtype::F32), dt);
         const auto& cg = std::get<CpuStorage>(g);
         const auto& cx = std::get<CpuStorage>(x);
         std::size_t n = shape_numel(shape);
@@ -11773,8 +11829,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(reduce_grad_to_shape(detail::as_f32(grad), grad_shape, target_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(reduce_grad_to_shape(detail::as_f32(grad), grad_shape, target_shape, Dtype::F32), dt);
         const std::size_t gn = grad_shape.size();
         const std::size_t tn = target_shape.size();
         if (grad_shape == target_shape) {
@@ -11853,7 +11909,7 @@ private:
         // Reached on the *backward* pass of any reduction, so a half model
         // could run forward and then fail at loss.backward().  Data
         // movement only, but it dispatches on dtype, so half needs saying.
-        if (dt == Dtype::F16) {
+        if (detail::is_half_like(dt)) {
             const Storage wide = broadcast_back_for_reduce(
                 Storage{detail::widen_half(std::get<CpuStorage>(grad), shape_numel(grad_shape))},
                 grad_shape, input_shape, axes, keepdims, Dtype::F32);
@@ -11999,8 +12055,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(eye(N, M, k, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(eye(N, M, k, Dtype::F32), dt);
         Shape shape{N, M};
         std::size_t nb = static_cast<std::size_t>(N * M) * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -12051,8 +12107,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(diag(detail::as_f32(v), v_shape, k, Dtype::F32, out_shape));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(diag(detail::as_f32(v), v_shape, k, Dtype::F32, out_shape), dt);
         const auto& cv = std::get<CpuStorage>(v);
         const std::size_t elem = dtype_size(dt);
         if (v_shape.size() == 1) {
@@ -12194,8 +12250,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(floordiv(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(floordiv(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32), dt);
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
         std::size_t n = shape_numel(shape);
@@ -12240,8 +12296,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(inner(detail::as_f32(a), detail::as_f32(b), a_shape, b_shape, out_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(inner(detail::as_f32(a), detail::as_f32(b), a_shape, b_shape, out_shape, Dtype::F32), dt);
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
         const std::int64_t K = a_shape.back();
@@ -12328,8 +12384,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(where_op(detail::as_f32(cond), detail::as_f32(x), detail::as_f32(y), shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(where_op(detail::as_f32(cond), detail::as_f32(x), detail::as_f32(y), shape, Dtype::F32), dt);
         const auto& cc = std::get<CpuStorage>(cond);
         const auto& cx = std::get<CpuStorage>(x);
         const auto& cy = std::get<CpuStorage>(y);
@@ -12381,8 +12437,8 @@ private:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (dt == Dtype::F16)
-            return detail::back_to_f16(reduce_broadcast(detail::as_f32(grad), input_shape, output_shape, Dtype::F32));
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(reduce_broadcast(detail::as_f32(grad), input_shape, output_shape, Dtype::F32), dt);
         const std::size_t nout = output_shape.size();
         const std::size_t nin = input_shape.size();
         Shape padded(nout, 1);

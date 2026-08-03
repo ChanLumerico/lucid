@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - real-valued ops promote integers instead of truncating them
 
+- bfloat16 is a real dtype, not an alias for float16
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

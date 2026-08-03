@@ -20,6 +20,33 @@ namespace detail {
 // ``__fp16`` / ``_Float16`` availability.  Used only by ``CpuBackend::astype``:
 // F16 has no ``static_cast``-able host scalar, so it cannot ride the generic
 // cast table.
+// bfloat16 <-> float.
+//
+// Far simpler than binary16: a bfloat16 *is* the top 16 bits of a float32,
+// same sign, same 8-bit exponent, mantissa truncated from 23 bits to 7.  So
+// widening is a shift and narrowing is a rounded shift — no exponent
+// rebasing, no subnormal handling, and the whole float32 range survives,
+// which is the reason to use the format at all.
+inline float bfloat_bits_to_float(std::uint16_t bits) {
+    const std::uint32_t widened = static_cast<std::uint32_t>(bits) << 16;
+    float out;
+    __builtin_memcpy(&out, &widened, sizeof(out));
+    return out;
+}
+
+inline std::uint16_t float_to_bfloat_bits(float value) {
+    std::uint32_t raw;
+    __builtin_memcpy(&raw, &value, sizeof(raw));
+    // NaN must stay NaN: rounding a quiet NaN's payload can carry into the
+    // exponent and turn it into an infinity.
+    if ((raw & 0x7f800000u) == 0x7f800000u && (raw & 0x007fffffu) != 0u)
+        return static_cast<std::uint16_t>((raw >> 16) | 0x0040u);
+    // Round to nearest, ties to even, on the bit that is about to be lost.
+    const std::uint32_t lsb = (raw >> 16) & 1u;
+    const std::uint32_t bias = 0x7fffu + lsb;
+    return static_cast<std::uint16_t>((raw + bias) >> 16);
+}
+
 inline float half_bits_to_float(std::uint16_t bits) {
     const std::uint32_t sign = static_cast<std::uint32_t>(bits >> 15) & 0x1u;
     const std::uint32_t exp = static_cast<std::uint32_t>(bits >> 10) & 0x1fu;

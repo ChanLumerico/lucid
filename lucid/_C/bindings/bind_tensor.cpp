@@ -58,6 +58,7 @@ void register_core(py::module_& m) {
         .value("F32", Dtype::F32)
         .value("F64", Dtype::F64)
         .value("C64", Dtype::C64)
+        .value("BF16", Dtype::BF16)
         .export_values();
     m.def("dtype_size", &dtype_size);
     // dtype_name returns a string_view; the lambda converts to std::string so

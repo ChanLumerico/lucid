@@ -672,3 +672,83 @@ def test_cumulative_scans_unchanged_without_a_nan(name: str, device: str) -> Non
     out = out[0] if isinstance(out, tuple) else out
     expected = [1.0, 5.0, 5.0, 5.0] if name == "cummax" else [1.0, 1.0, 1.0, -1.0]
     assert np.allclose(np.asarray(out.numpy()).ravel(), expected)
+
+
+# ── bfloat16 ─────────────────────────────────────────────────────────────────
+# It was an alias for float16 — `lucid.tensor(..., dtype=lucid.bfloat16).dtype`
+# answered `lucid.float16` — which the audit's `constant` axis reported.
+
+
+def test_bfloat16_is_its_own_dtype() -> None:
+    x = lucid.tensor(np.array([[1.0, 2.5]]), dtype=lucid.bfloat16)
+    assert str(x.dtype).endswith("bfloat16"), "bfloat16 is still aliased"
+
+
+def test_bfloat16_keeps_float32s_exponent_range() -> None:
+    """The entire reason to choose the format over float16.
+
+    Aliasing the two meant code that picked bfloat16 specifically to avoid
+    overflow got the format that overflows: 1e30 is representable in
+    bfloat16 and is an infinity in float16.
+    """
+    big = np.array([1e30])
+    as_bf = float(lucid.tensor(big, dtype=lucid.bfloat16).numpy()[0])
+    as_half = float(lucid.tensor(big, dtype=lucid.float16).numpy()[0])
+    assert np.isfinite(as_bf) and np.isclose(as_bf, 1e30, rtol=1e-2)
+    assert np.isinf(as_half), "float16 is expected to overflow here"
+
+    tiny = np.array([1e-30])
+    assert float(lucid.tensor(tiny, dtype=lucid.bfloat16).numpy()[0]) > 0.0
+    assert float(lucid.tensor(tiny, dtype=lucid.float16).numpy()[0]) == 0.0
+
+
+def test_bfloat16_numpy_export_converts_rather_than_relabels() -> None:
+    """NumPy has no bfloat16, so the bridge widens — it must not re-describe.
+
+    A view handed NumPy a 2-byte buffer as 4-byte elements and read across
+    the boundaries: 1e30 came back as 4e-41, from the wrong position.
+    """
+    values = np.array([[1.0, 2.0], [4.0, 8.0]])
+    got = lucid.tensor(values, dtype=lucid.bfloat16).numpy()
+    assert got.dtype == np.float32
+    assert np.allclose(got, values)
+
+
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("name", ["relu", "exp", "sum", "softmax", "matmul"])
+def test_bfloat16_computes_on_both_devices(name: str, device: str) -> None:
+    """Accelerate has no bf16 kernels, so the CPU widens through float.
+
+    Metal carries the format natively, so the two arriving at the same
+    answer is the check worth making.
+    """
+    values = np.array([[1.0, -2.0], [3.0, 4.0]])
+    x = lucid.tensor(values, dtype=lucid.bfloat16, device=device)
+    ops = {
+        "relu": lambda t: F.relu(t),
+        "exp": lambda t: lucid.exp(t),
+        "sum": lambda t: t.sum(),
+        "softmax": lambda t: F.softmax(t, dim=-1),
+        "matmul": lambda t: lucid.matmul(t, t),
+    }
+    out = ops[name](x)
+    assert str(out.dtype).endswith("bfloat16"), f"{name} changed dtype"
+    assert np.isfinite(np.asarray(out.numpy())).all()
+
+
+@pytest.mark.parametrize("name", ["relu", "exp", "softmax", "matmul"])
+def test_bfloat16_agrees_across_devices(name: str) -> None:
+    values = np.array([[1.0, -2.0], [3.0, 4.0]])
+    ops = {
+        "relu": lambda t: F.relu(t),
+        "exp": lambda t: lucid.exp(t),
+        "softmax": lambda t: F.softmax(t, dim=-1),
+        "matmul": lambda t: lucid.matmul(t, t),
+    }
+    outs = [
+        np.asarray(
+            ops[name](lucid.tensor(values, dtype=lucid.bfloat16, device=d)).numpy()
+        )
+        for d in _DEVICES
+    ]
+    assert np.allclose(outs[0], outs[1], rtol=2e-2), name

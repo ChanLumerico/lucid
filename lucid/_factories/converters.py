@@ -358,11 +358,22 @@ def _to_impl(
     arr = np.ascontiguousarray(arr)  # type: ignore[attr-defined]
     with np.errstate(invalid="ignore", over="ignore"):  # type: ignore[attr-defined]
         impl = _C_engine.TensorImpl(arr, _device_eng, _rg)
+    # bfloat16 has no NumPy counterpart, so the array above is float32 and
+    # the engine narrows afterwards.  Doing it this way round rather than
+    # picking the nearest NumPy dtype matters: float16 is *not* a
+    # substitute — a bfloat16 value can exceed float16's maximum, and
+    # routing through it would turn a representable number into infinity
+    # before the engine ever saw it.
+    if _dtype_eng == _C_engine.Dtype.BF16 and impl.dtype != _C_engine.Dtype.BF16:
+        impl = _C_engine.astype(impl, _C_engine.Dtype.BF16)
     return impl
 
 
 def _engine_dtype_to_np(d: _C_engine.Dtype) -> str:
     _MAP: dict[_C_engine.Dtype, str] = {
+        # bfloat16 is widened, not narrowed — see the note in
+        # ``_to_impl``: float16 cannot hold every bfloat16 value.
+        _C_engine.Dtype.BF16: "float32",
         _C_engine.Dtype.F16: "float16",
         _C_engine.Dtype.F32: "float32",
         _C_engine.Dtype.F64: "float64",

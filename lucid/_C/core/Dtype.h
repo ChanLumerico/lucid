@@ -60,9 +60,10 @@ namespace lucid {
 //
 // Notes
 // -----
-// BF16 is not currently in the enum.  Adding it would require updating
-// :func:`is_floating_point` and the promotion tables in
-// :file:`ops/ufunc/Astype.cpp`.
+// BF16 carries float32's exponent range in 16 bits, trading mantissa for
+// dynamic range — which is the whole reason to reach for it over F16, and
+// the reason aliasing the two is not an option: code that picks bfloat16
+// to avoid overflow would silently get the format that overflows.
 enum class Dtype : std::uint8_t {
     Bool,
     I8,
@@ -73,6 +74,10 @@ enum class Dtype : std::uint8_t {
     F32,
     F64,
     C64,
+    // Appended rather than slotted next to F16: the enum's numeric values
+    // are written into checkpoints and traces, and inserting in the middle
+    // would renumber everything after it.
+    BF16,
 };
 
 // Returns the size in bytes of a single element of the given dtype.
@@ -118,6 +123,8 @@ constexpr std::size_t dtype_size(Dtype dt) {
         return 8;
     case Dtype::C64:
         return 8;
+    case Dtype::BF16:
+        return 2;
     }
     throw std::logic_error("dtype_size: unknown Dtype");
 }
@@ -163,6 +170,8 @@ constexpr std::string_view dtype_name(Dtype dt) {
         return "float64";
     case Dtype::C64:
         return "complex64";
+    case Dtype::BF16:
+        return "bfloat16";
     }
     throw std::logic_error("dtype_name: unknown Dtype");
 }
@@ -189,7 +198,7 @@ constexpr std::string_view dtype_name(Dtype dt) {
 // Must be kept in sync with the :class:`Dtype` enum: if BF16 is added,
 // it should be included here.
 constexpr bool is_floating_point(Dtype dt) {
-    return dt == Dtype::F16 || dt == Dtype::F32 || dt == Dtype::F64;
+    return dt == Dtype::F16 || dt == Dtype::BF16 || dt == Dtype::F32 || dt == Dtype::F64;
 }
 
 // Predicate: is the dtype a signed integer type?

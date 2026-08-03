@@ -79,7 +79,13 @@ class dtype:
 float16: dtype = dtype("float16", _C_engine.Dtype.F16, 2)
 float32: dtype = dtype("float32", _C_engine.Dtype.F32, 4)
 float64: dtype = dtype("float64", _C_engine.Dtype.F64, 8)
-bfloat16: dtype = dtype("bfloat16", _C_engine.Dtype.F16, 2)
+# Its own engine dtype, not an alias for float16.  bfloat16 carries
+# float32's exponent range in sixteen bits — that range is the entire
+# reason to choose it — so pointing it at F16 meant code that picked
+# bfloat16 specifically to avoid overflow got the format that overflows,
+# and ``lucid.tensor(..., dtype=lucid.bfloat16).dtype`` answered
+# ``lucid.float16``.
+bfloat16: dtype = dtype("bfloat16", _C_engine.Dtype.BF16, 2)
 int8: dtype = dtype("int8", _C_engine.Dtype.I8, 1)
 int16: dtype = dtype("int16", _C_engine.Dtype.I16, 2)
 int32: dtype = dtype("int32", _C_engine.Dtype.I32, 4)
@@ -94,6 +100,7 @@ long: dtype = int64
 
 _ENGINE_TO_DTYPE: dict[_C_engine.Dtype, dtype] = {
     _C_engine.Dtype.F16: float16,
+    _C_engine.Dtype.BF16: bfloat16,
     _C_engine.Dtype.F32: float32,
     _C_engine.Dtype.F64: float64,
     _C_engine.Dtype.I8: int8,

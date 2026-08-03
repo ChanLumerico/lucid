@@ -69,6 +69,11 @@ namespace lucid::gpu {
                              "Cast to float32 first, or keep the tensor on CPU.");
     case Dtype::C64:
         return ::mlx::core::complex64;
+    case Dtype::BF16:
+        // MLX carries bfloat16 natively, so the GPU side needs no
+        // emulation — unlike the CPU, where Accelerate has no bf16 kernels
+        // and every gate widens to float.
+        return ::mlx::core::bfloat16;
     }
     ErrorBuilder("to_mlx_dtype").fail("unknown Dtype");
 }
@@ -88,6 +93,8 @@ Dtype from_mlx_dtype(::mlx::core::Dtype dt) {
         return Dtype::I64;
     case V::float16:
         return Dtype::F16;
+    case V::bfloat16:
+        return Dtype::BF16;
     case V::float32:
         return Dtype::F32;
     case V::float64:
