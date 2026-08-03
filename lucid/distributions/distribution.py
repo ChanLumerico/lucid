@@ -116,7 +116,14 @@ class Distribution:
     has_rsample: bool = False
     has_enumerate_support: bool = False
 
-    _validate_args: bool = False
+    # On by default, matching the reference framework.
+    #
+    # Off, ``Beta(0.0, 1.0)`` constructed happily and every ``log_prob``
+    # against it answered nan — a distribution whose concentration is
+    # outside its own declared ``arg_constraints``, reporting nothing.  The
+    # machinery to catch that was already here and simply was not armed.
+    # A caller who wants the cost back can pass ``validate_args=False``.
+    _validate_args: bool = True
 
     def __init__(
         self,

@@ -276,8 +276,19 @@ class Exponential(ExponentialFamily):
         --------
         >>> Exponential(rate=1.0).cdf(lucid.tensor(1.0))  # 1 - e^-1 ≈ 0.632
         Tensor(0.6321)
+        >>> Exponential(rate=1.0).cdf(lucid.tensor(-1.0))  # below the support
+        Tensor(0.)
+
+        Notes
+        -----
+        Clamped below the support.  ``1 - exp(-λx)`` is the formula *on*
+        :math:`[0, \infty)`; evaluated at a negative argument it grows
+        without bound and returned -1.718 for ``x = -1``, while the line
+        above this one promises a value in :math:`[0, 1]`.  A CDF is
+        defined on the whole line and is zero to the left of its support.
         """
-        return 1.0 - (-self.rate * value).exp()
+        below = value < 0.0
+        return lucid.where(below, lucid.zeros_like(value), 1.0 - (-self.rate * value).exp())
 
     @override
     def icdf(self, value: Tensor) -> Tensor:
@@ -551,7 +562,7 @@ class Laplace(Distribution):
 
         .. math::
 
-            F(x; \mu, b) = \frac{1}{2} - \frac{1}{2}
+            F(x; \mu, b) = \frac{1}{2} + \frac{1}{2}
             \operatorname{sgn}(x - \mu)
             \left(1 - e^{-|x-\mu|/b}\right)
 
@@ -564,9 +575,18 @@ class Laplace(Distribution):
         -------
         Tensor
             CDF values in :math:`[0, 1]`, shape ``batch_shape``.
+
+        Notes
+        -----
+        The sign in front of the second term is ``+``.  It was ``-`` in
+        both the formula above and the line below it, which makes the
+        function *decreasing*: ``cdf(-3)`` answered 0.975 and ``cdf(3)``
+        answered 0.025, exactly reversed.  It stayed in :math:`[0, 1]` and
+        was symmetric about ``0.5`` at the median, so nothing looked odd
+        until the audit checked that a CDF increases.
         """
         z = (value - self.loc) / self.scale
-        return 0.5 - 0.5 * z.sign() * (1.0 - (-z.abs()).exp())
+        return 0.5 + 0.5 * z.sign() * (1.0 - (-z.abs()).exp())
 
     @override
     def entropy(self) -> Tensor:
