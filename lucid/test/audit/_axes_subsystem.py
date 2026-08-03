@@ -626,7 +626,28 @@ class ClassContractAxis(Axis):
         return symbol.kind in self.kinds and isinstance(symbol.obj, type)
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
-        instance = _try_construct(symbol.obj)
+        # Signature-driven first, and only then the blind ladder.
+        #
+        # ``_try_construct`` tries a fixed list of argument tuples — ``(4,)``,
+        # ``(3, 4)`` and so on — which is fine for a class that takes sizes
+        # and wrong for one that does not.  ``MemoryStats(impl)`` accepted
+        # the int, and its ``repr`` then failed with "'int' object has no
+        # attribute 'current_bytes'", reported as a defect in a class nobody
+        # would call that way.  Reading the signature refuses instead.
+        from lucid.test.audit._axes_data import _construct
+
+        instance, why = _construct(symbol.obj)
+        if instance is None:
+            # Falling back to the ladder here would undo the point: it is
+            # the ladder's willingness to pass an int for anything that
+            # produced these reports.  The ladder is only for a class whose
+            # signature could not be read at all.
+            if "no signature" not in why:
+                return self._finding(symbol, Status.SKIP, f"construct: {why}")
+            probe = _try_construct(symbol.obj)
+            if probe is None:
+                return self._finding(symbol, Status.SKIP, f"construct: {why}")
+            instance = probe
         if instance is None:
             return self._finding(symbol, Status.SKIP, "no constructor signature worked")
         try:

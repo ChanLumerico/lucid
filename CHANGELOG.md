@@ -124,6 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - gelu had two meanings, and a calibrated observer could not be reloaded
 
+- two axes were asking questions their targets do not answer
+
 ### Changed
 
 - give the engine ops one shared operand check

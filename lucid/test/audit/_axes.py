@@ -1008,10 +1008,30 @@ class EdgeAxis(Axis):
             )
 
         notes: list[str] = []
+
+        # "Empty in, empty out" only holds for an op that keeps its shape.
+        # A reduction over an empty tensor is its identity element — the
+        # sum of nothing is 0, a scalar — and a selection returns however
+        # many elements matched.  The rule was applied to everything, so
+        # ``logsumexp``, ``masked_select`` and ``block_diag`` were reported
+        # for agreeing with the reference exactly.  Whether the op keeps
+        # its shape is asked rather than listed: run it once at full size
+        # and see.
+        reference_out = _probe.to_numpy(fn(*call.args, **call.kwargs))
+        shape_preserving = reference_out is not None and tuple(
+            reference_out.shape
+        ) == tuple(shape)
+
         empty = np.zeros((0, *shape[1:]), dtype=np.float64)
         try:
             out = _probe.to_numpy(fn(*call.with_primary(empty).args, **call.kwargs))
-            if out is not None and out.ndim > 0 and out.shape[0] != 0 and out.size != 0:
+            if (
+                shape_preserving
+                and out is not None
+                and out.ndim > 0
+                and out.shape[0] != 0
+                and out.size != 0
+            ):
                 return self._finding(
                     symbol, Status.FAIL, f"empty input produced shape {out.shape}"
                 )
