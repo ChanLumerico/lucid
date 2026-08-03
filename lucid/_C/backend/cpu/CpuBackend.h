@@ -2420,6 +2420,21 @@ public:
                     dst[(o * L) * inner + j] = running;
                     for (std::size_t k = 1; k < L; ++k) {
                         T v = src[(o * L + k) * inner + j];
+                        // NaN poisons the rest of the scan, as it does in
+                        // ``max``: once seen it is the running extreme and
+                        // every later element inherits it.  ``v > running``
+                        // is false against a NaN, so the scan skipped it and
+                        // carried on with a plausible running maximum —
+                        // Metal answered nan from that point and the CPU did
+                        // not, and neither matched the reference until now.
+                        if constexpr (std::is_floating_point_v<T>) {
+                            if (std::isnan(running)) {
+                                dst[(o * L + k) * inner + j] = running;
+                                continue;
+                            }
+                            if (std::isnan(v))
+                                running = v;
+                        }
                         if (v > running)
                             running = v;
                         dst[(o * L + k) * inner + j] = running;
@@ -2470,6 +2485,21 @@ public:
                     dst[(o * L) * inner + j] = running;
                     for (std::size_t k = 1; k < L; ++k) {
                         T v = src[(o * L + k) * inner + j];
+                        // NaN poisons the rest of the scan, as it does in
+                        // ``max``: once seen it is the running extreme and
+                        // every later element inherits it.  ``v > running``
+                        // is false against a NaN, so the scan skipped it and
+                        // carried on with a plausible running maximum —
+                        // Metal answered nan from that point and the CPU did
+                        // not, and neither matched the reference until now.
+                        if constexpr (std::is_floating_point_v<T>) {
+                            if (std::isnan(running)) {
+                                dst[(o * L + k) * inner + j] = running;
+                                continue;
+                            }
+                            if (std::isnan(v))
+                                running = v;
+                        }
                         if (v < running)
                             running = v;
                         dst[(o * L + k) * inner + j] = running;

@@ -8,6 +8,7 @@
 #include "Math.h"
 
 #include <cmath>
+#include <limits>
 
 #include "../../core/Dtype.h"
 #include "../../core/TensorImpl.h"
@@ -16,6 +17,7 @@
 #include "../bfunc/Div.h"
 #include "../bfunc/Floordiv.h"
 #include "../bfunc/Maximum.h"
+#include "../bfunc/Minimum.h"
 #include "../bfunc/Mul.h"
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
@@ -135,10 +137,29 @@ TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     return sub_op(a, mul_op(k, b));
 }
 
-// Pythagorean length.  Naive ``sqrt(a² + b²)`` — does not perform IEEE-754
-// overflow-safe scaling, matching the engine's ``square_op`` precision.
+// Pythagorean length, scaled so it cannot overflow on the way.
+//
+// The naive ``sqrt(a² + b²)`` squares first, so ``hypot(1e200, 1e200)``
+// overflowed to inf while the answer, 1.41e200, is an ordinary double.
+// Avoiding exactly that is what distinguishes ``hypot`` from writing the
+// formula out, and the previous comment here said so and left it.
+//
+// Factoring out the larger magnitude gives ``m · sqrt(1 + (n/m)²)`` where
+// the ratio is in [0, 1], so nothing squares above 2.  ``logaddexp``
+// immediately below already does the same trick for the same reason.
+//
+// ``m == 0`` means both operands are zero and the answer is zero; the
+// division would be 0/0, so the ratio is taken against a max with the
+// smallest normal and the result multiplied by ``m`` puts it back.
 TensorImplPtr hypot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    return sqrt_op(add_op(square_op(a), square_op(b)));
+    auto abs_a = abs_op(a);
+    auto abs_b = abs_op(b);
+    auto big = maximum_op(abs_a, abs_b);
+    auto small = minimum_op(abs_a, abs_b);
+    auto safe = maximum_op(big, full_like_op(big, std::numeric_limits<double>::min()));
+    auto ratio = div_op(small, safe);
+    auto one = full_like_op(ratio, 1.0);
+    return mul_op(big, sqrt_op(add_op(one, square_op(ratio))));
 }
 
 // Numerically-stable ``log(exp(a) + exp(b))``.  Factor out the per-pair max

@@ -116,6 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - casting to an integer dtype ends the graph
 
+- hypot overflowed, and the cumulative scans dropped NaN
+
 ### Changed
 
 - give the engine ops one shared operand check

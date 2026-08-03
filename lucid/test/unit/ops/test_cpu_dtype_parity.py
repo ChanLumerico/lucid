@@ -614,3 +614,61 @@ def test_casting_between_float_dtypes_stays_differentiable(name: str) -> None:
     out.sum().backward()
     assert x.grad is not None
     assert np.allclose(x.grad.numpy(), 1.0)
+
+
+# ── overflow-safe hypot, NaN through the cumulative scans ────────────────────
+
+
+def test_hypot_does_not_overflow_on_the_way() -> None:
+    """``hypot(1e200, 1e200)`` is 1.41e200, an ordinary double.
+
+    The naive ``sqrt(a² + b²)`` squares first and overflowed to inf.
+    Avoiding exactly that is what distinguishes ``hypot`` from writing the
+    formula out by hand.
+    """
+    big = lucid.tensor(np.array([1e200]), dtype=lucid.float64)
+    got = lucid.hypot(big, big).numpy()
+    assert np.isfinite(got).all(), "hypot overflowed"
+    assert np.allclose(got, np.hypot(1e200, 1e200), rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "pair", [(3.0, 4.0), (0.0, 0.0), (1e-200, 1e-200), (5.0, 0.0), (1e200, 1e200)]
+)
+def test_hypot_matches_across_magnitudes(pair) -> None:
+    """Guard the instrument: the scaling must not disturb ordinary values."""
+    a = lucid.tensor(np.array([pair[0]]), dtype=lucid.float64)
+    b = lucid.tensor(np.array([pair[1]]), dtype=lucid.float64)
+    assert np.allclose(lucid.hypot(a, b).numpy(), np.hypot(*pair), rtol=1e-12)
+
+
+@pytest.mark.parametrize("name", ["cummax", "cummin"])
+@pytest.mark.parametrize("device", _DEVICES)
+def test_cumulative_scans_poison_after_a_nan(name: str, device: str) -> None:
+    """Once a NaN is seen it is the running extreme for the rest of the scan.
+
+    ``v > running`` is false against a NaN, so the CPU skipped it and
+    carried a plausible running maximum; MLX's own cumulative scans skip
+    it too, so both devices were wrong and in different ways.
+    """
+    values = np.array([1.0, np.nan, 3.0, -1.0], dtype=np.float32)
+    out = getattr(lucid, name)(
+        lucid.tensor(values, dtype=lucid.float32, device=device), 0
+    )
+    out = out[0] if isinstance(out, tuple) else out
+    got = np.asarray(out.numpy()).ravel()
+    assert got[0] == 1.0
+    assert np.isnan(got[1:]).all(), f"{name} on {device} did not carry the NaN"
+
+
+@pytest.mark.parametrize("name", ["cummax", "cummin"])
+@pytest.mark.parametrize("device", _DEVICES)
+def test_cumulative_scans_unchanged_without_a_nan(name: str, device: str) -> None:
+    """Guard the instrument."""
+    values = np.array([1.0, 5.0, 3.0, -1.0], dtype=np.float32)
+    out = getattr(lucid, name)(
+        lucid.tensor(values, dtype=lucid.float32, device=device), 0
+    )
+    out = out[0] if isinstance(out, tuple) else out
+    expected = [1.0, 5.0, 5.0, 5.0] if name == "cummax" else [1.0, 1.0, 1.0, -1.0]
+    assert np.allclose(np.asarray(out.numpy()).ravel(), expected)

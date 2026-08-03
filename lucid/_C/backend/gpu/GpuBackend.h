@@ -926,14 +926,38 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::cumprod(*gs.arr, axis), dt)};
     }
 
+    // Once a NaN appears in the scan it is the running extreme, and every
+    // later element inherits it — the same rule ``max`` follows.  MLX's
+    // cumulative scans skip it instead, so the CPU (fixed to propagate) and
+    // Metal disagreed from the NaN onwards.
+    //
+    // MLX has no flag for it, so it is composed: a running max over the NaN
+    // mask says "a NaN has been seen at or before here", and those
+    // positions are overwritten.
+    static ::mlx::core::array poison_after_nan(const ::mlx::core::array& input,
+                                               const ::mlx::core::array& scanned,
+                                               int axis) {
+        if (!::mlx::core::issubdtype(input.dtype(), ::mlx::core::floating))
+            return scanned;
+        auto mask = ::mlx::core::astype(::mlx::core::isnan(input), ::mlx::core::int32);
+        auto seen = ::mlx::core::cummax(mask, axis);
+        auto nan_like = ::mlx::core::full(input.shape(),
+                                          std::numeric_limits<float>::quiet_NaN(),
+                                          scanned.dtype());
+        return ::mlx::core::where(
+            ::mlx::core::greater(seen, ::mlx::core::zeros_like(seen)), nan_like, scanned);
+    }
+
     Storage cummax(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::cummax(*gs.arr, axis), dt)};
+        auto out = ::mlx::core::cummax(*gs.arr, axis);
+        return Storage{gpu::wrap_mlx_array(poison_after_nan(*gs.arr, out, axis), dt)};
     }
 
     Storage cummin(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::cummin(*gs.arr, axis), dt)};
+        auto out = ::mlx::core::cummin(*gs.arr, axis);
+        return Storage{gpu::wrap_mlx_array(poison_after_nan(*gs.arr, out, axis), dt)};
     }
 
     // PERF: softmax + log_softmax produce contiguous output; their backwards
