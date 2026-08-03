@@ -109,7 +109,24 @@ class Axis:
 # ── numeric axes ─────────────────────────────────────────────────────────────
 
 
-class GradientAxis(Axis):
+class _DifferenceAxis(Axis):
+    """Shared by the axes that compare against a finite difference.
+
+    A central difference needs ``f(x+h)`` and ``f(x-h)`` to be the same
+    function evaluated twice.  A stochastic op draws a fresh mask each
+    call, so the quotient measures the draw rather than the derivative —
+    dropout and its family reported a relative error of 1.0 for working
+    exactly as designed, and ``gumbel_softmax`` did the same one axis
+    over.  Stated once so the two axes cannot drift apart on it.
+    """
+
+    def applies(self, symbol: "Symbol") -> bool:
+        if "stochastic" in symbol.flags:
+            return False
+        return super().applies(symbol)
+
+
+class GradientAxis(_DifferenceAxis):
     """Analytic gradient against central finite differences, in float64.
 
     Found: seven in-place activations returning the pre-activation
@@ -119,16 +136,6 @@ class GradientAxis(Axis):
 
     name = "grad"
     summary = "d/dx vs central finite differences (float64)"
-
-    def applies(self, symbol: "Symbol") -> bool:
-        # A central difference needs f(x+h) and f(x-h) to be the *same*
-        # function evaluated twice.  A stochastic op draws a fresh mask
-        # each call, so the quotient measures the draw rather than the
-        # derivative — dropout and its family reported a relative error
-        # of 1.0 for working exactly as designed.
-        if "stochastic" in symbol.flags:
-            return False
-        return super().applies(symbol)
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
@@ -230,7 +237,7 @@ class GradientAxis(Axis):
         )
 
 
-class SecondGradientAxis(Axis):
+class SecondGradientAxis(_DifferenceAxis):
     """Second derivative against finite differences of the first.
 
     Found: ``prod`` / ``max`` / ``min`` returning the incoming seed under
@@ -302,6 +309,21 @@ class SecondGradientAxis(Axis):
                 Status.PASS,
                 f"{domain}: second derivative is zero (op is linear)",
             )
+
+        # Same guard the first-derivative axis carries: differencing the
+        # gradient twice steps 2h away from the probe, and ``acos``,
+        # ``asin``, ``sqrt`` and ``erfinv`` are only defined on part of the
+        # line.  Both the analytic second derivative and the difference
+        # come back nan, which is agreement the comparison cannot express —
+        # ``nan != nan`` — and it was reported as a disagreement in
+        # nineteen ops that were computing correctly.
+        if not np.isfinite(fd).all() or not np.isfinite(analytic).all():
+            return self._finding(
+                symbol,
+                Status.SKIP,
+                f"{domain}: the second difference left the op's domain",
+            )
+
         rel = _probe.relative(analytic, fd.reshape(analytic.shape))
         if rel < 1e-4:
             return self._finding(
@@ -385,6 +407,30 @@ class CreateGraphAxis(Axis):
             return self._finding(
                 symbol, Status.UNSUPPORTED, f"grad(create_graph): {type(exc).__name__}"
             )
+
+        # Two routes that both produce NaN agree; the comparison does not
+        # know that, because ``nan != nan``.  ``acos``, ``asin``, ``sqrt``
+        # and ``erfinv`` are only defined on part of the line, and where
+        # the probe leaves it *both* backward() and grad(create_graph=True)
+        # answer nan — correctly and identically — and the relative error
+        # came out nan and was reported as a disagreement in 26 ops.
+        finite = np.isfinite(reference) & np.isfinite(candidate)
+        if not finite.any():
+            return self._finding(
+                symbol,
+                Status.SKIP,
+                f"{domain}: both routes are non-finite here — outside the op's domain",
+            )
+        if not finite.all():
+            if not np.array_equal(np.isfinite(reference), np.isfinite(candidate)):
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"{domain}: the two routes disagree about which entries are finite",
+                    backward=reference[:8].tolist(),
+                    create_graph=candidate[:8].tolist(),
+                )
+            reference, candidate = reference[finite], candidate[finite]
 
         rel = _probe.relative(reference, candidate)
         if rel < 1e-9:

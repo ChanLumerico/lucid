@@ -180,7 +180,21 @@ def _inject_to(cls: type) -> None:
             # grad_fn and break the backward chain — exactly the failure
             # that left ``logits.float()`` mid-graph dropping gradients
             # under AMP.
-            if impl.requires_grad != self._impl.requires_grad:
+            # …but not back onto a discrete dtype.  ``astype`` deliberately
+            # ends the graph at an integer or bool result — the derivative
+            # of rounding is zero almost everywhere — and restoring the
+            # flag here re-attached it, so ``x.long()`` came back with
+            # ``requires_grad=True`` and a backward that fell over inside
+            # the backend.  ``.int()`` and ``.bool()`` happened to escape
+            # only because their flags already agreed.
+            discrete = target_dtype in (
+                _C_engine.Dtype.I8,
+                _C_engine.Dtype.I16,
+                _C_engine.Dtype.I32,
+                _C_engine.Dtype.I64,
+                _C_engine.Dtype.Bool,
+            )
+            if not discrete and impl.requires_grad != self._impl.requires_grad:
                 impl = impl.clone_with_grad(self._impl.requires_grad)
         return _wrap(impl)
 

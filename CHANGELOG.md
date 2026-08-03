@@ -114,6 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - in-place ops kept a handle on the input they overwrote
 
+- casting to an integer dtype ends the graph
+
 ### Changed
 
 - give the engine ops one shared operand check

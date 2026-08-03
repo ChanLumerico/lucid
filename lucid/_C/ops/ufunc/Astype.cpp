@@ -71,7 +71,20 @@ TensorImplPtr astype_op(const TensorImplPtr& a, Dtype dst_dtype) {
     // path; for non-AMP callers (Reductions::argmin → astype to I64, etc.)
     // the input never has requires_grad so the wiring is skipped and the
     // cost stays identical to a raw be.astype().
-    if (GradMode::is_enabled() && a->requires_grad()) {
+    // A cast to an integer dtype ends the graph.
+    //
+    // The derivative of rounding to an integer is zero almost everywhere
+    // and undefined on the boundaries, so there is nothing meaningful to
+    // propagate — the reference framework refuses the backward outright.
+    // Lucid wired one up anyway, and ``x.int().sum().backward()`` did not
+    // produce a wrong gradient so much as fall over inside the backend:
+    // ``NotImplementedError: cpu_backend::broadcast_back_for_reduce``,
+    // several layers below anything the caller could act on.
+    //
+    // ``float()`` and ``half()`` are unaffected — they stay differentiable
+    // and agree with the reference.
+    const bool discrete = is_integral(dst_dtype) || dst_dtype == Dtype::Bool;
+    if (GradMode::is_enabled() && a->requires_grad() && !discrete) {
         auto bwd = std::make_shared<AstypeBackward>();
         bwd->src_dtype_ = a->dtype();
         bwd->dtype_ = dst_dtype;

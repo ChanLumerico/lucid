@@ -576,3 +576,41 @@ def test_inplace_second_route_matches_the_first(name: str) -> None:
     (graph,) = lucid.autograd.grad(y2.sum(), [x2], create_graph=True)
 
     assert np.allclose(eager, graph.numpy(), rtol=1e-10), name
+
+
+# ── casting and the graph ────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("name", ["bool", "int", "long"])
+def test_casting_to_a_discrete_dtype_ends_the_graph(name: str) -> None:
+    """The derivative of rounding is zero almost everywhere.
+
+    Lucid wired a backward through it anyway, and it did not produce a
+    wrong gradient so much as fall over: ``x.long().sum().backward()``
+    raised ``NotImplementedError: cpu_backend::broadcast_back_for_reduce``
+    from several layers below anything the caller could act on.  The
+    reference refuses the backward outright, which is the same statement
+    made legibly.
+    """
+    x = lucid.tensor(np.array([[0.5, 0.3], [1.2, 0.8]]), dtype=lucid.float64)
+    x.requires_grad_(True)
+    out = getattr(x, name)()
+    assert not out.requires_grad, f"{name}() stayed in the graph"
+    out.sum().backward()
+    assert x.grad is None
+
+
+@pytest.mark.parametrize("name", ["float", "half"])
+def test_casting_between_float_dtypes_stays_differentiable(name: str) -> None:
+    """Guard the instrument: only the *discrete* casts detach.
+
+    ``logits.float()`` mid-graph under autocast has to keep carrying
+    gradients, which is the case the surrounding code was written for.
+    """
+    x = lucid.tensor(np.array([[0.5, 0.3], [1.2, 0.8]]), dtype=lucid.float64)
+    x.requires_grad_(True)
+    out = getattr(x, name)()
+    assert out.requires_grad
+    out.sum().backward()
+    assert x.grad is not None
+    assert np.allclose(x.grad.numpy(), 1.0)
