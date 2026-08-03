@@ -134,6 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - NaN through minimum/maximum, and the gradient of ceil_
 
+- refuse in-place writes to a leaf that requires grad
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -18,8 +18,8 @@
 #include <utility>
 
 #include "../../core/Error.h"
-#include "../../core/GradMode.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/GradMode.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "Activation.h"
@@ -33,6 +33,27 @@
 namespace lucid {
 
 namespace {
+
+// Refuse to mutate a leaf that requires grad.
+//
+// A leaf is where gradient accumulates, and an in-place write moves it
+// without leaving anything behind that says so.  ``x.ceil_()`` on such a
+// tensor answered ``dx = 1`` — the identity — because ``ceil`` builds a
+// node whose gradient is empty, nothing was adopted, and a leaf has no
+// grad_fn to cut in its place.  The value was right and the derivative
+// was the one the tensor had before the call.
+//
+// There is no answer to give here rather than a wrong one: after the
+// write ``x`` *is* the result, so "the gradient with respect to x" names
+// two different tensors depending on when it is asked.  The reference
+// refuses the same setup for the same reason.  Callers that mean to
+// overwrite say so with ``no_grad``, which is what ``nn.init`` and every
+// optimiser step already do.
+void refuse_inplace_on_leaf(const TensorImplPtr& a, const char* name) {
+    if (GradMode::is_enabled() && a->requires_grad() && !a->grad_fn())
+        ErrorBuilder(name).fail("a leaf tensor that requires grad cannot be modified in place — "
+                                "wrap the call in no_grad, or use the out-of-place form");
+}
 
 // Move ``out``'s place in the autograd graph onto ``a``.
 //
@@ -61,6 +82,7 @@ bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& out) {
 template <typename Fn>
 TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
+    refuse_inplace_on_leaf(a, name);
     // The op runs against a *snapshot*, not against ``a`` itself.
     //
     // A node that saves its input keeps a handle on the tensor it was
@@ -77,8 +99,8 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
     // needs them — and nothing is allocated when no graph is built.
     auto source = a;
     if (a->requires_grad()) {
-        source = std::make_shared<TensorImpl>(a->storage(), a->shape(), a->dtype(),
-                                              a->device(), true);
+        source =
+            std::make_shared<TensorImpl>(a->storage(), a->shape(), a->dtype(), a->device(), true);
         // The snapshot stands in for ``a`` in the graph, so it has to
         // inherit where ``a`` was — otherwise the new node's parent is a
         // fresh leaf, the chain to ``x`` is cut, and every gradient comes
@@ -222,6 +244,7 @@ TensorImplPtr relu_inplace_op(const TensorImplPtr& a) {
 // making it incompatible with the function-pointer-based inplace_unary template.
 TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     Validator::input(a, "clip_.a").non_null();
+    refuse_inplace_on_leaf(a, "clip_");
     // The op runs against a *snapshot*, not against ``a`` itself.
     //
     // A node that saves its input keeps a handle on the tensor it was
@@ -238,8 +261,8 @@ TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     // needs them — and nothing is allocated when no graph is built.
     auto source = a;
     if (a->requires_grad()) {
-        source = std::make_shared<TensorImpl>(a->storage(), a->shape(), a->dtype(),
-                                              a->device(), true);
+        source =
+            std::make_shared<TensorImpl>(a->storage(), a->shape(), a->dtype(), a->device(), true);
         // The snapshot stands in for ``a`` in the graph, so it has to
         // inherit where ``a`` was — otherwise the new node's parent is a
         // fresh leaf, the chain to ``x`` is cut, and every gradient comes

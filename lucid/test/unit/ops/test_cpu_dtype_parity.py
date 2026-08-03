@@ -1211,8 +1211,25 @@ def test_inplace_under_no_grad_keeps_the_chain() -> None:
     assert y.requires_grad, "no_grad in-place cut a graph it should have left alone"
 
 
-def test_a_parameter_survives_a_non_differentiable_inplace_op() -> None:
-    """A leaf has no grad_fn to cut, so it keeps requiring grad."""
+def test_a_leaf_requiring_grad_refuses_inplace_mutation() -> None:
+    """The other half of the same defect, and the one with no answer.
+
+    A leaf is where gradient accumulates.  Writing to it in place moves
+    it and leaves nothing behind that says so, so ``x.ceil_()`` answered
+    ``dx = 1`` — a leaf has no grad_fn to cut, and ``ceil`` builds a node
+    whose gradient is empty, so nothing was adopted either.  After the
+    write ``x`` *is* the result, and "the gradient with respect to x"
+    names two different tensors depending on when it is asked.  The
+    reference refuses this setup; so does Lucid now.
+
+    ``no_grad`` is how a caller says they mean to overwrite — which is
+    what every optimiser step already does.
+    """
     p = lucid.nn.Parameter(lucid.tensor(np.array([1.3, 2.7])))
-    p.round_()
+    with pytest.raises(Exception, match="leaf tensor that requires grad"):
+        p.round_()
+
+    with lucid.no_grad():
+        p.round_()
     assert p.requires_grad
+    assert np.array_equal(np.asarray(p.numpy()).ravel(), [1.0, 3.0])
