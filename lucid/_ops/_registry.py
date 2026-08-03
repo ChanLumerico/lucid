@@ -96,7 +96,12 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("relu",      _R.relu,      1, method_name="relu",      free_fn_name="relu"),
     OpEntry("sigmoid",   _R.sigmoid,   1, method_name="sigmoid",   free_fn_name="sigmoid"),
     OpEntry("silu",      _R.silu,      1, method_name="silu",      free_fn_name="silu"),
-    OpEntry("gelu",      _R.gelu,      1, method_name="gelu",      free_fn_name="gelu"),
+    # ``_R.gelu_exact``, not ``_R.gelu``.  The engine's ``gelu`` is the tanh
+    # approximation, and ``F.gelu``'s default is the exact erf form — so
+    # ``x.gelu()`` and ``F.gelu(x)`` were two different functions wearing one
+    # name and disagreeing by 2e-4.  The approximation is still reachable,
+    # spelled out, as ``F.gelu(x, approximate="tanh")``.
+    OpEntry("gelu", _R.gelu_exact, 1, method_name="gelu", free_fn_name="gelu"),
     OpEntry("mish",      _R.mish,      1, method_name="mish",      free_fn_name="mish"),
     OpEntry("selu",      _R.selu,      1, method_name="selu",      free_fn_name="selu"),
     OpEntry("softplus",  _R.softplus,  1, method_name="softplus",  free_fn_name="softplus"),

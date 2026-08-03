@@ -1054,7 +1054,16 @@ class ModuleAxis(Axis):
             return self._finding(symbol, Status.SKIP, "no constructor signature worked")
 
         params = list(module.parameters())
-        buffers = list(module.buffers())
+        # Non-persistent buffers are excluded from ``state_dict`` on
+        # purpose — a positional-encoding table or a rotary cache is
+        # recomputed from the constructor arguments, so writing it into
+        # every checkpoint is waste, and the reference framework draws the
+        # same distinction.  Counting them made ``RotaryEmbedding`` and
+        # ``SinusoidalEmbedding`` look like they had lost their state.
+        non_persistent = getattr(module, "_non_persistent_buffers", set())
+        buffers = [
+            name for name, _ in module.named_buffers() if name not in non_persistent
+        ]
         state = module.state_dict()
         if len(state) != len(params) + len(buffers):
             return self._finding(

@@ -1,7 +1,10 @@
 {
-  "comment": "Findings accepted as decisions rather than defects. Each key is 'axis::symbol'; the value is why it is accepted. Delete an entry to make the audit report it again. Add entries with --update-known, but write a real reason afterwards — an unexplained entry is indistinguishable from a bug someone silenced.",
+  "comment": "Findings accepted as decisions rather than defects. Each key is 'axis::symbol'; the value is why it is accepted. Delete an entry to make the audit report it again. Add entries with --update-known, but write a real reason afterwards \u2014 an unexplained entry is indistinguishable from a bug someone silenced.",
   "accepted": {
     "nonfinite::lucid.sign": "sign(NaN) returns 0 rather than NaN. Consistent across cpu and metal, and the GPU path inherits MLX's own sign convention, so this is a convention Lucid has taken rather than an internal disagreement. Changing it would mean patching NaN on every GPU sign call and altering three internal consumers (L1 norm backward, abs backward, the relu mask). Reviewed 2026-08-02.",
-    "nonfinite::Tensor.sign": "Same decision as nonfinite::lucid.sign — one op, two spellings."
+    "nonfinite::Tensor.sign": "Same decision as nonfinite::lucid.sign \u2014 one op, two spellings.",
+    "entry::lucid.repeat": "``lucid.repeat`` and ``Tensor.repeat`` are deliberately different operations. The free function is NumPy's ``repeat`` \u2014 element-wise, so (2,2) with repeats=2 along dim 1 gives (2,4) \u2014 and the method is the reference framework's ``Tensor.repeat``, which tiles, giving (4,2). ``lucid/_ops/_registry.py`` states the choice explicitly at both entries. Each meaning is also available under an unambiguous name: ``repeat_interleave`` and ``tile``. Not silenced because it is harmless \u2014 sharing a name across two semantics is a real trap \u2014 but because changing it is an API decision rather than a defect fix. Reviewed 2026-08-03.",
+    "entry::Tensor.repeat": "Same decision as entry::lucid.repeat \u2014 the two spellings are the point.",
+    "entry::lucid.einops.repeat": "Same decision as entry::lucid.repeat; einops' repeat is a third convention again, named by its own package."
   }
 }

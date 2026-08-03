@@ -122,6 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - two wrong CDFs, and validation that was never armed
 
+- gelu had two meanings, and a calibrated observer could not be reloaded
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -191,6 +191,47 @@ class ObserverBase(nn.Module):
             if buf.device != ref.device:
                 self.register_buffer(name, buf.to(ref.device))
 
+    @override
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        """Adopt the saved buffers' shapes before the default loader checks them.
+
+        An observer's running buffers change shape as it calibrates: a
+        per-channel observer is seeded with scalar ``+inf`` / ``-inf``
+        because the channel count is unknown at construction, and grows to
+        ``(C,)`` on the first batch it sees.  A freshly constructed
+        observer is therefore scalar, and loading a calibrated checkpoint
+        into it failed on a size mismatch — which meant a quantized model's
+        calibration could be saved and never restored.
+
+        Re-registering is how these buffers are updated everywhere else in
+        this file (see :meth:`_align_running_buffers` and ``forward``), so
+        the load path uses it too rather than inventing a second mechanism.
+        """
+        for name, current in list(self.named_buffers(recurse=False)):
+            saved = state_dict.get(prefix + name)
+            if saved is None:
+                continue
+            if tuple(saved.shape) != tuple(current.shape):
+                self.register_buffer(name, saved.to(current.device))
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+
     def calculate_qparams(self) -> tuple[Tensor, Tensor]:
         """Return ``(scale, zero_point)`` from the accumulated statistics."""
         raise NotImplementedError
