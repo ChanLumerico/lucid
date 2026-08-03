@@ -40,11 +40,32 @@ TensorImplPtr log10_op(const TensorImplPtr& a) {
     return div_op(log_a, ln10);
 }
 
-// ``log1p(x) = log(1 + x)``.  No fused kernel exists, so this composes; the
-// numerical accuracy near x = 0 is therefore that of the underlying ``log``.
+// ``log1p(x) = log(1 + x)`` — but not by forming ``1 + x`` and taking the
+// log of that, which is where the information goes.  Below the machine
+// epsilon ``1 + x`` rounds to exactly 1 and the answer comes back 0 where
+// it should be x: ``log1p(1e-30)`` was 0.0 against the reference's 1e-30,
+// and everything under about 1e-8 had lost all of its digits.  That is
+// the entire reason ``log1p`` exists as a function of its own, and the
+// previous note here said the accuracy near zero was the log's and left
+// it at that.
+//
+// The standard repair takes the log at the rounded operand and rescales
+// by the increment the rounding actually applied:
+//
+//     u = 1 + x;   log1p(x) = (u - 1 == 0) ? x : log(u) · x / (u - 1)
+//
+// ``u - 1`` recovers exactly what the addition put in — it is not
+// algebraically ``x``, and that difference is the correction.  Where the
+// increment vanished entirely, ``x`` is already the answer to within one
+// ulp.  ``log1p(-1)`` still comes back -inf, by the same route.
 TensorImplPtr log1p_op(const TensorImplPtr& a) {
     auto ones = full_like_op(a, 1.0);
-    return log_op(add_op(a, ones));
+    auto u = add_op(a, ones);
+    auto increment = sub_op(u, ones);
+    auto vanished = equal_op(increment, full_like_op(increment, 0.0));
+    auto safe = where_op(vanished, ones, increment);
+    auto rescaled = div_op(mul_op(log_op(u), a), safe);
+    return where_op(vanished, a, rescaled);
 }
 
 // ``exp2(x) = exp(x · log(2))``.  Multiplying against a constant tensor keeps

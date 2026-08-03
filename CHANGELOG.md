@@ -136,6 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - refuse in-place writes to a leaf that requires grad
 
+- the scaled functions, log1p, and lgamma's left half
+
 ### Changed
 
 - give the engine ops one shared operand check

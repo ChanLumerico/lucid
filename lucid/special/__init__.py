@@ -109,7 +109,51 @@ def erfcx(x: Tensor) -> Tensor:
     >>> erfcx(lucid.tensor([0.0, 1.0, 5.0]))
     Tensor([1.0000, 0.4276, 0.1107])
     """
-    return lucid.exp(x * x) * lucid.erfc(x)
+    return _erfcx_stable(x)
+
+
+# Every scaled special function below had the same defect: it was written
+# as its own definition — the unscaled function times an exponential —
+# which is the one arrangement the scaling exists to avoid.
+#
+#     erfcx(100)  =  exp(10000) * erfc(100)  =  inf * 0    =  nan
+#     i0e(1e6)    =  exp(-1e6)  * i0(1e6)    =  0   * inf  =  nan
+#     k0e(1e6)    =  k0(1e6)    * exp(1e6)   =  0   * inf  =  nan
+#
+# Each answers a perfectly ordinary number — 0.00564, 0.000399, 0.00125 —
+# and each is *bounded*, which is the entire reason the scaled variant is
+# the one you reach for in a log-density.  The fix in every case is to
+# push the exponential inside, where it cancels against the branch's own
+# ``exp`` instead of meeting it as inf times zero.
+
+
+def _erfcx_stable(x: "Tensor") -> "Tensor":
+    """``exp(x²) erfc(x)``, without ever forming ``exp(x²)``.
+
+    For large positive x the product is evaluated through the continued
+    fraction
+
+        erfcx(x) = 1/√π · 1/(x + ½/(x + 1/(x + 3/2/(x + 2/(x + …)))))
+
+    which converges quickly past x ≈ 4 and never leaves the interval the
+    answer lives in.  Below that the direct form is both accurate and
+    safe, since ``exp(16)`` is an ordinary number.
+
+    Both branches are evaluated — ``where`` selects, it does not
+    short-circuit — so each is clamped onto its own domain first.  An inf
+    or a NaN in the branch that loses is still a NaN in the *gradient*,
+    which is how a where-guarded formula usually goes wrong.
+    """
+    cutoff = 4.0
+    small = lucid.exp(lucid.minimum(x, lucid.full_like(x, cutoff)) ** 2) * lucid.erfc(
+        lucid.minimum(x, lucid.full_like(x, cutoff))
+    )
+    big = lucid.maximum(x, lucid.full_like(x, cutoff))
+    frac = lucid.zeros_like(big)
+    for k in range(24, 0, -1):
+        frac = (0.5 * k) / (big + frac)
+    large = (1.0 / math.sqrt(math.pi)) / (big + frac)
+    return lucid.where(x < cutoff, small, large)
 
 
 # ── Modified Bessel I₀ / I₁ family ─────────────────────────────────────────
@@ -158,7 +202,22 @@ def i0e(x: Tensor) -> Tensor:
     >>> i0e(lucid.tensor([0.0, 1.0, 5.0, 20.0]))
     Tensor([1.0000, 0.4658, 0.1835, 0.0897])
     """
-    return lucid.exp(-lucid.abs(x)) * lucid.i0(x)
+    ax = lucid.abs(x)
+    # ``i0``'s own large branch is ``P(3.75/|x|) · exp(|x|) / √|x|``, so the
+    # scaled value is that polynomial over the square root and the
+    # exponential never appears.  Below the split the direct form is safe:
+    # ``exp(-|x|)`` is at most 1 and ``i0`` is at most ``i0(3.75)``.
+    small = lucid.exp(-lucid.minimum(ax, lucid.full_like(ax, 3.75))) * lucid.i0(
+        lucid.minimum(ax, lucid.full_like(ax, 3.75))
+    )
+    big = lucid.maximum(ax, lucid.full_like(ax, 3.75))
+    y = 3.75 / big
+    poly = lucid.full_like(x, _I0E_LARGE_COEFFS[0])
+    y_pow = lucid.ones_like(x)
+    for c in _I0E_LARGE_COEFFS[1:]:
+        y_pow = y_pow * y
+        poly = poly + c * y_pow
+    return lucid.where(ax <= 3.75, small, poly / lucid.sqrt(big))
 
 
 # Abramowitz & Stegun §9.8 — same polynomial form as ``lucid.i0`` but for I₁.
@@ -291,7 +350,18 @@ def i1e(x: Tensor) -> Tensor:
     >>> i1e(lucid.tensor([0.0, 1.0, 5.0]))
     Tensor([0.0000, 0.2079, 0.1640])
     """
-    return lucid.exp(-lucid.abs(x)) * i1(x)
+    ax = lucid.abs(x)
+    small = lucid.exp(-lucid.minimum(ax, lucid.full_like(ax, 3.75))) * i1(
+        lucid.where(ax <= 3.75, x, lucid.sign(x) * 3.75)
+    )
+    big = lucid.maximum(ax, lucid.full_like(ax, 3.75))
+    y = 3.75 / big
+    poly = lucid.full_like(x, _I1_LARGE_COEFFS[0])
+    y_pow = lucid.ones_like(x)
+    for c in _I1_LARGE_COEFFS[1:]:
+        y_pow = y_pow * y
+        poly = poly + c * y_pow
+    return lucid.where(ax <= 3.75, small, poly / lucid.sqrt(big) * lucid.sign(x))
 
 
 # ── Normal-distribution helpers ────────────────────────────────────────────
@@ -1459,6 +1529,50 @@ def laguerre_polynomial_l(x: Tensor, n: int) -> Tensor:
 # (mpmath / Boost.Math).
 
 
+# A&S 9.8.2 large-argument polynomial for I₀, shared with ``lucid.i0``.
+# Named here because the *scaled* form is this polynomial on its own — the
+# ``exp(|x|)`` that ``i0`` multiplies it by is exactly what ``i0e`` divides
+# out, so pairing them cancels an overflow against an underflow instead of
+# never forming either.
+_I0E_LARGE_COEFFS: list[float] = [
+    0.39894228,
+    0.01328592,
+    0.00225319,
+    -0.00157565,
+    0.00916281,
+    -0.02057706,
+    0.02635537,
+    -0.01647633,
+    0.00392377,
+]
+
+
+# A&S 9.8.6 — the same polynomials ``_modified_bessel_k{0,1}_large`` use,
+# without the ``exp(-x)/√x`` tail.
+def _K0E_LARGE(z: "Tensor") -> "Tensor":
+    return (
+        1.25331414
+        - 0.07832358 * z
+        + 0.02189568 * z**2
+        - 0.01062446 * z**3
+        + 0.00587872 * z**4
+        - 0.00251540 * z**5
+        + 0.00053208 * z**6
+    )
+
+
+def _K1E_LARGE(z: "Tensor") -> "Tensor":
+    return (
+        1.25331414
+        + 0.23498619 * z
+        - 0.03655620 * z**2
+        + 0.01504268 * z**3
+        - 0.00780353 * z**4
+        + 0.00325614 * z**5
+        - 0.00068245 * z**6
+    )
+
+
 def _split(
     x: Tensor,
     threshold: float,
@@ -1922,7 +2036,15 @@ def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
     >>> scaled_modified_bessel_k0(lucid.tensor([1.0, 5.0, 20.0]))
     Tensor([1.1445, 0.5478, 0.2745])
     """
-    return modified_bessel_k0(x) * lucid.exp(x)
+    # ``_modified_bessel_k0_large`` is ``poly(2/x) · exp(-x) / √x``, so the
+    # scaled value is the polynomial over the square root.  Under the
+    # split the direct product is safe — ``exp(2)`` is an ordinary number.
+    safe_small = lucid.minimum(x, lucid.full_like(x, 2.0))
+    small = _modified_bessel_k0_small(safe_small) * lucid.exp(safe_small)
+    big = lucid.maximum(x, lucid.full_like(x, 2.0))
+    z = 2.0 / big
+    poly = _K0E_LARGE(z)
+    return lucid.where(lucid.abs(x) <= 2.0, small, poly / lucid.sqrt(big))
 
 
 def _modified_bessel_k1_small(x: Tensor) -> Tensor:
@@ -2027,7 +2149,15 @@ def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
     >>> scaled_modified_bessel_k1(lucid.tensor([1.0, 5.0, 20.0]))
     Tensor([1.6362, 0.6001, 0.2820])
     """
-    return modified_bessel_k1(x) * lucid.exp(x)
+    # ``_modified_bessel_k1_large`` is ``poly(2/x) · exp(-x) / √x``, so the
+    # scaled value is the polynomial over the square root.  Under the
+    # split the direct product is safe — ``exp(2)`` is an ordinary number.
+    safe_small = lucid.minimum(x, lucid.full_like(x, 2.0))
+    small = _modified_bessel_k1_small(safe_small) * lucid.exp(safe_small)
+    big = lucid.maximum(x, lucid.full_like(x, 2.0))
+    z = 2.0 / big
+    poly = _K1E_LARGE(z)
+    return lucid.where(lucid.abs(x) <= 2.0, small, poly / lucid.sqrt(big))
 
 
 # ── Hurwitz zeta ───────────────────────────────────────────────────────────

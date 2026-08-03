@@ -18,6 +18,10 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+import functools
+import json
+import pathlib
+
 import lucid
 from lucid.test.audit import _probe, _specs, _surface
 from lucid.test.audit._axes import Axis, Context
@@ -25,6 +29,23 @@ from lucid.test.audit._result import Finding, Status
 
 if TYPE_CHECKING:
     from lucid.test.audit._surface import Symbol
+
+
+@functools.lru_cache(maxsize=1)
+def _stability_contract() -> "dict[str, list[str]]":
+    """Where the reference answers finitely, per symbol.
+
+    Checked in, so the audit reads it without the reference installed.
+    Regenerate with
+    ``python -m lucid.test.audit.tools.stability_contract``.
+    """
+    path = pathlib.Path(__file__).with_name("stability_contract.json")
+    try:
+        data = json.loads(path.read_text())
+    except OSError, ValueError:
+        return {}
+    table = data.get("finite_at")
+    return table if isinstance(table, dict) else {}
 
 
 class StabilityAxis(Axis):
@@ -71,11 +92,25 @@ class StabilityAxis(Axis):
                 "primary is a scalar — scaling it would change a size, not a value",
             )
 
+        # Where the reference is finite.  Absent means "not measured", and
+        # an unmeasured op is checked at every scale as before — the table
+        # narrows the claim, it does not gate it.
+        reference_finite = _stability_contract().get(symbol.qualname)
+
         broken: list[str] = []
+        domain: list[str] = []
         ran = 0
         for scale in self._SCALES:
             probe = base * scale
             if not np.isfinite(probe).all():
+                continue
+            # ``in-domain`` is the load-bearing word in this check, and the
+            # axis had no way to know where the domain was: it reported
+            # ``acos`` for answering NaN at 1e+6, where NaN is the only
+            # answer the function has.  A NaN the reference also produces
+            # is the domain speaking, not the implementation.
+            if reference_finite is not None and f"{scale:g}" not in reference_finite:
+                domain.append(f"1e{int(np.log10(scale)):+d}")
                 continue
             try:
                 out = _probe.to_numpy(fn(*call.with_primary(probe).args, **call.kwargs))
@@ -87,6 +122,15 @@ class StabilityAxis(Axis):
             if np.isnan(out).any():
                 broken.append(f"scale 1e{int(np.log10(scale)):+d} -> NaN")
         if not ran:
+            if domain:
+                # Every scale left the function's domain.  ``acosh`` on a
+                # probe below 1 is the whole check falling outside where
+                # the op is defined — nothing was asked, so nothing passed.
+                return self._finding(
+                    symbol,
+                    Status.NOT_APPLICABLE,
+                    "every scale is outside the domain: " + ", ".join(domain[:4]),
+                )
             return self._finding(
                 symbol, Status.SKIP, "no scale produced a float output"
             )
@@ -97,9 +141,10 @@ class StabilityAxis(Axis):
                 "finite positive input produced NaN: " + ", ".join(broken[:4]),
                 scales=broken,
             )
-        return self._finding(
-            symbol, Status.PASS, f"{ran}/{len(self._SCALES)} scales finite"
-        )
+        note = f"{ran}/{len(self._SCALES)} scales finite"
+        if domain:
+            note += f" ({len(domain)} outside the domain)"
+        return self._finding(symbol, Status.PASS, note)
 
 
 class ExtremeValueAxis(Axis):

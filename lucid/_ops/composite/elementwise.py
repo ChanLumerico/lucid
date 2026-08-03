@@ -1315,6 +1315,48 @@ def lgamma(x: Tensor) -> Tensor:
     --------
     digamma : derivative :math:`\psi(x) = \frac{d}{dx} \ln \Gamma(x)`.
     """
+    # The Lanczos series is only valid on the right half of the line, and
+    # nothing here said so: ``lgamma(-0.5)`` came back NaN against the
+    # reference's 1.2655, and ``lgamma(1e-30)`` came back inf against
+    # 69.0776.  Γ has poles at the non-positive integers and is perfectly
+    # finite everywhere between them, so the left half is not a domain
+    # error — it is the half this implementation never covered.
+    #
+    # Euler's reflection formula supplies it:
+    #
+    #     lgamma(x) = log(π) − log|sin(πx)| − lgamma(1 − x)
+    #
+    # Both branches are evaluated, because ``where`` selects rather than
+    # short-circuits, so each is given an argument clamped into its own
+    # half.  Without that the losing branch divides by zero at ``z + k``
+    # and the NaN reaches the *gradient* through the mask, which is the
+    # usual way a where-guarded formula goes wrong.
+    half = lucid.full_like(x, 0.5)
+    reflect = x < half
+
+    right = _lgamma_lanczos(lucid.maximum(x, half))
+    mirror = _lgamma_lanczos(lucid.maximum(1.0 - x, half))
+    # ``sin(πx)`` is zero at every integer, where Γ has its poles and the
+    # answer is +inf.  Only the reflected side may see it: elsewhere it is
+    # replaced by 1, so ``log`` never meets a zero it was not asked about.
+    sin_term = lucid.abs(lucid.sin(math.pi * x))
+    sin_safe = lucid.where(reflect, sin_term, lucid.ones_like(x))
+    left = math.log(math.pi) - lucid.log(sin_safe) - mirror
+    out = lucid.where(reflect, left, right)
+
+    # The poles have to be named rather than computed.  ``sin(πx)`` is
+    # zero at every integer in exact arithmetic and merely small in
+    # floating point — π is not representable, so ``sin(π · -1.0)`` came
+    # out 1.2e-16 and lgamma(-1) answered 37.78 instead of +inf.  A large
+    # finite number in place of a pole is the kind of wrong answer that
+    # propagates quietly, so the non-positive integers are substituted
+    # directly.
+    at_pole = (x <= lucid.zeros_like(x)) & (x == lucid.round(x))
+    return lucid.where(at_pole, lucid.full_like(x, float("inf")), out)
+
+
+def _lgamma_lanczos(x: Tensor) -> Tensor:
+    """The Lanczos series proper — correct for ``x >= 0.5``."""
     z = x - 1.0
     t = z + (_LANCZOS_G + 0.5)
     series = lucid.full_like(x, _LANCZOS_P[0])
