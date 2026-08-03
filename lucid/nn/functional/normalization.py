@@ -529,6 +529,22 @@ def local_response_norm(
     if len(xi.shape) < 2:
         return x
 
+    # The normaliser is a fractional power of a scaled sum, so the result
+    # is a real number whatever the input was — the same statement the
+    # engine's ``real_valued`` schemas make.  Computing it in an integer
+    # dtype does not approximate the answer, it erases it: ``alpha`` is
+    # 1e-4, which truncates to zero, so every scale collapses to ``k`` and
+    # the op becomes the identity.  Promote once, here, because this is a
+    # composite and there is no schema for the engine to read.
+    if xi.dtype in (
+        _C_engine.Dtype.Bool,
+        _C_engine.Dtype.I8,
+        _C_engine.Dtype.I16,
+        _C_engine.Dtype.I32,
+        _C_engine.Dtype.I64,
+    ):
+        xi = _C_engine.astype(xi, _C_engine.Dtype.F32)
+
     ndim = len(xi.shape)
     C = int(xi.shape[1])
     # Pad totals to ``size - 1`` so the post-pad unfold yields exactly C

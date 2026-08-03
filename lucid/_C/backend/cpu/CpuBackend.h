@@ -925,6 +925,16 @@ public:
     }
 
     Storage neg(const Storage& a, const Shape& shape, Dtype dt) override {
+        // A bool has no negation.  It went through the integer path as
+        // uint8, where ``-1`` wraps to 255 and 255 reads back as ``true``,
+        // so ``-tensor([True, False])`` answered ``[True, False]`` — the
+        // input, unchanged, with nothing raised.  Metal refuses this and
+        // says to use logical_not; so does the reference.  Refuse here too,
+        // and point at the same op, so the two devices agree on both the
+        // outcome and the reason.
+        if (dt == Dtype::Bool)
+            ErrorBuilder("cpu_backend::neg")
+                .not_implemented("negation is not defined for bool — use logical_not");
         return unary_op(
             a, shape, dt,
             [](const float* ip, float* op, std::size_t n) { cpu::vneg_f32(ip, op, n); },
@@ -945,6 +955,11 @@ public:
                      Dtype::F32),
                 half_n, dt);
         }
+        // Integers take the same road, through int64.  Selection, movement
+        // and addition are all exact there, so this is the answer a native
+        // kernel would have produced rather than an approximation of it.
+        if (detail::is_narrow_int(dt))
+            return detail::back_to_int(sign(detail::as_i64(a), shape, Dtype::I64), dt);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -4109,6 +4124,14 @@ public:
                                                    detail::as_f32(src), base_shape, idx_shape, dim,
                                                    Dtype::F32),
                                        dt);
+        // Integers take the same road, through int64.  Selection, movement
+        // and addition are all exact there, so this is the answer a native
+        // kernel would have produced rather than an approximation of it.
+        if (detail::is_narrow_int(dt))
+            return detail::back_to_int(scatter_add(detail::as_i64(base), indices,
+                                                   detail::as_i64(src), base_shape, idx_shape, dim,
+                                                   Dtype::I64),
+                                       dt);
         const auto& cb = std::get<CpuStorage>(base);
         const auto& ci = std::get<CpuStorage>(indices);
         const auto& cs = std::get<CpuStorage>(src);
@@ -4182,6 +4205,9 @@ public:
         else if (dt == Dtype::F64)
             run(reinterpret_cast<double*>(ptr.get()),
                 reinterpret_cast<const double*>(cs.ptr.get()));
+        else if (dt == Dtype::I64)
+            run(reinterpret_cast<std::int64_t*>(ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
         else
             ErrorBuilder("cpu_backend::scatter_add").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nbytes, dt}};
@@ -5721,6 +5747,13 @@ public:
             return detail::back_to_f16(nn_fold(detail::as_f32(x), x_shape, out_shape, kernel_size,
                                                stride, padding, dilation, Dtype::F32),
                                        dt);
+        // Integers take the same road, through int64.  Selection, movement
+        // and addition are all exact there, so this is the answer a native
+        // kernel would have produced rather than an approximation of it.
+        if (detail::is_narrow_int(dt))
+            return detail::back_to_int(nn_fold(detail::as_i64(x), x_shape, out_shape, kernel_size,
+                                               stride, padding, dilation, Dtype::I64),
+                                       dt);
         const auto& cx = std::get<CpuStorage>(x);
         const int N = static_cast<int>(x_shape[0]);
         const int CKK = static_cast<int>(x_shape[1]);
@@ -5777,6 +5810,9 @@ public:
         else if (dt == Dtype::F64)
             run(reinterpret_cast<double*>(out_ptr.get()),
                 reinterpret_cast<const double*>(cx.ptr.get()));
+        else if (dt == Dtype::I64)
+            run(reinterpret_cast<std::int64_t*>(out_ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cx.ptr.get()));
         else
             ErrorBuilder("nn_fold").not_implemented("only F32/F64");
         return Storage{CpuStorage{out_ptr, total_out * dtype_size(dt), dt}};
@@ -8080,6 +8116,14 @@ public:
             return detail::back_to_f16(unfold_forward(detail::as_f32(x), B, C, S, K, O, stride, pad,
                                                       dilation, p9_, Dtype::F32),
                                        dt);
+        // Integers ride the double path.  ``im2col`` is written out for
+        // float and double with no template behind it, and unfold only
+        // *copies* — so a double holds every value exactly, for every
+        // integer dtype except an int64 magnitude above 2^53.
+        if (detail::is_int_like(dt))
+            return detail::f64_back_to_int(unfold_forward(detail::as_f64(x), B, C, S, K, O, stride,
+                                                          pad, dilation, p9_, Dtype::F64),
+                                           dt);
         const int N = static_cast<int>(K.size());
         int K_total = 1, O_total = 1, S_total = 1;
         for (int i = 0; i < N; ++i) {

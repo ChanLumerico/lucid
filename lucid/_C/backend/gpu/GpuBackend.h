@@ -934,18 +934,16 @@ public:
     // MLX has no flag for it, so it is composed: a running max over the NaN
     // mask says "a NaN has been seen at or before here", and those
     // positions are overwritten.
-    static ::mlx::core::array poison_after_nan(const ::mlx::core::array& input,
-                                               const ::mlx::core::array& scanned,
-                                               int axis) {
+    static ::mlx::core::array
+    poison_after_nan(const ::mlx::core::array& input, const ::mlx::core::array& scanned, int axis) {
         if (!::mlx::core::issubdtype(input.dtype(), ::mlx::core::floating))
             return scanned;
         auto mask = ::mlx::core::astype(::mlx::core::isnan(input), ::mlx::core::int32);
         auto seen = ::mlx::core::cummax(mask, axis);
-        auto nan_like = ::mlx::core::full(input.shape(),
-                                          std::numeric_limits<float>::quiet_NaN(),
+        auto nan_like = ::mlx::core::full(input.shape(), std::numeric_limits<float>::quiet_NaN(),
                                           scanned.dtype());
-        return ::mlx::core::where(
-            ::mlx::core::greater(seen, ::mlx::core::zeros_like(seen)), nan_like, scanned);
+        return ::mlx::core::where(::mlx::core::greater(seen, ::mlx::core::zeros_like(seen)),
+                                  nan_like, scanned);
     }
 
     Storage cummax(const Storage& a, const Shape&, int axis, Dtype dt) override {
@@ -1027,6 +1025,13 @@ public:
     }
 
     Storage trace(const Storage& a, const Shape&, Dtype dt) override {
+        // A bool has no trace.  MLX summed the diagonal as bool, so a
+        // matrix with two `true`s on it traced to `true` — saturating
+        // rather than counting, and silently.  Both the reference and the
+        // CPU refuse; refuse here so the two devices agree.
+        if (dt == Dtype::Bool)
+            ErrorBuilder("gpu_backend::trace")
+                .not_implemented("trace is not defined for bool — cast to an integer dtype");
         const auto& gs = std::get<GpuStorage>(a);
         auto result = ::mlx::core::trace(*gs.arr, 0, 0, 1);
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
@@ -1363,6 +1368,13 @@ public:
 
     Storage arg_reduce_index(
         const Storage& a, const Shape&, int axis, bool keepdims, Dtype dt, bool is_min) override {
+        // The reference refuses bool here and so does the CPU, on the
+        // ground that "the largest of these booleans" is a question about
+        // ordering that bool does not answer.  Refuse for the same reason
+        // rather than let MLX pick one.
+        if (dt == Dtype::Bool)
+            ErrorBuilder("gpu_backend::arg_reduce_index")
+                .not_implemented("argmax / argmin do not accept bool — cast to an integer dtype");
         const auto& ga = std::get<GpuStorage>(a);
         auto out = is_min ? ::mlx::core::argmin(*ga.arr, axis, keepdims)
                           : ::mlx::core::argmax(*ga.arr, axis, keepdims);
@@ -1410,9 +1422,15 @@ public:
                         const Storage& indices,
                         const Storage& src,
                         const Shape& base_shape,
-                        const Shape& /*idx_shape*/,
+                        const Shape& idx_shape,
                         int dim,
                         Dtype dt) override {
+        if (dt == Dtype::I64)
+            return scatter_via_cpu(base, indices, src, base_shape, idx_shape,
+                                   [&](const Storage& b, const Storage& i, const Storage& v) {
+                                       return backend::Dispatcher::for_device(Device::CPU)
+                                           .scatter_add(b, i, v, base_shape, idx_shape, dim, dt);
+                                   });
         // Axis-scatter add — Lucid's flavour:
         //   out[..., idx[..., j, ...], ...] += src[..., j, ...]   along dim
         //
@@ -1448,9 +1466,15 @@ public:
                         const Storage& indices,
                         const Storage& src,
                         const Shape& base_shape,
-                        const Shape& /*idx_shape*/,
+                        const Shape& idx_shape,
                         int dim,
                         Dtype dt) override {
+        if (dt == Dtype::I64)
+            return scatter_via_cpu(base, indices, src, base_shape, idx_shape,
+                                   [&](const Storage& b, const Storage& i, const Storage& v) {
+                                       return backend::Dispatcher::for_device(Device::CPU)
+                                           .scatter_set(b, i, v, base_shape, idx_shape, dim, dt);
+                                   });
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& gs = std::get<GpuStorage>(src);
@@ -1464,6 +1488,36 @@ public:
             ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
         auto out = ::mlx::core::put_along_axis(*gb.arr, fixed, *gs.arr, d);
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
+    }
+
+    // MLX's Metal scatter has no int64 kernel.
+    //
+    // ``[ScatterAxis::eval_gpu] Does not support int64`` — the *values*,
+    // not the indices, which it takes at either width.  There is no exact
+    // way around it on-device: float32 loses everything above 2^24, and
+    // splitting the word into two int32 halves works for a set but not
+    // for an add, where the carry between halves is exactly what is lost.
+    //
+    // So int64 scatter runs on the CPU and comes back.  It is a real cost
+    // and it is stated here rather than hidden: the alternative was
+    // ``lucid.scatter`` and ``index_copy`` raising on Metal for a dtype
+    // the CPU handles, which is the device-dependent behaviour this
+    // backend pair exists to avoid.  Same shape as the LAPACK pivot
+    // round-trips further up this file.
+    template <typename Fn>
+    Storage scatter_via_cpu(const Storage& base,
+                            const Storage& indices,
+                            const Storage& src,
+                            const Shape& base_shape,
+                            const Shape& idx_shape,
+                            Fn&& run) {
+        auto& cpu = backend::Dispatcher::for_device(Device::CPU);
+        (void)cpu;
+        Storage base_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(base), base_shape)};
+        Storage idx_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(indices), idx_shape)};
+        Storage src_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(src), idx_shape)};
+        Storage out_cpu = run(base_cpu, idx_cpu, src_cpu);
+        return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(out_cpu), base_shape)};
     }
 
 private:
@@ -1709,15 +1763,15 @@ public:
         // both answer.  Widen to float32, multiply, round back: exact while
         // each dot product stays inside 2^24, which is the same bound the
         // CPU's own float path carries.
-        const bool discrete = dt != Dtype::F16 && dt != Dtype::BF16 && dt != Dtype::F32
-                              && dt != Dtype::F64 && dt != Dtype::C64;
+        const bool discrete = dt != Dtype::F16 && dt != Dtype::BF16 && dt != Dtype::F32 &&
+                              dt != Dtype::F64 && dt != Dtype::C64;
         if (discrete) {
             a_arr = ::mlx::core::astype(a_arr, ::mlx::core::float32);
             b_arr = ::mlx::core::astype(b_arr, ::mlx::core::float32);
             auto wide = ::mlx::core::matmul(a_arr, b_arr);
             auto rounded = ::mlx::core::round(wide);
-            return Storage{gpu::wrap_mlx_array(
-                ::mlx::core::astype(rounded, gpu::to_mlx_dtype(dt)), dt)};
+            return Storage{
+                gpu::wrap_mlx_array(::mlx::core::astype(rounded, gpu::to_mlx_dtype(dt)), dt)};
         }
         auto result = ::mlx::core::matmul(a_arr, b_arr);
         // PERF: matmul produces a fresh contiguous buffer; the defensive
@@ -7264,8 +7318,15 @@ private:
     }
 
     Storage eye(std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt) override {
+        // MLX builds `eye` with a scatter, and Metal's scatter has no
+        // int64 kernel.  Every entry is 0 or 1, so building at int32 and
+        // widening is exact — an int64 identity holds nothing an int32
+        // one does not.  ``wrap_mlx_array`` does the widening, because it
+        // converts whenever the array's dtype and the requested one
+        // differ.
+        const Dtype build = dt == Dtype::I64 ? Dtype::I32 : dt;
         auto out = ::mlx::core::eye(static_cast<int>(N), static_cast<int>(M), static_cast<int>(k),
-                                    gpu::to_mlx_dtype(dt));
+                                    gpu::to_mlx_dtype(build));
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 

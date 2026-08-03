@@ -994,3 +994,127 @@ def test_metal_storage_dtype_matches_its_bytes() -> None:
     assert (
         abs(int(np.asarray(got.numpy()).ravel()[0])) < 100
     ), "bytes were reinterpreted"
+
+
+def test_bool_has_no_negation_on_either_device() -> None:
+    """The CPU answered, and its answer was the input.
+
+    Bool went through the integer path as uint8, where ``-1`` wraps to
+    255 and 255 reads back as true — so ``-tensor([True, False])`` came
+    back ``[True, False]``, unchanged, with nothing raised.  Metal and
+    the reference both refuse.
+    """
+    values = np.array([[True, False], [False, True]])
+    for device in _DEVICES:
+        with pytest.raises(
+            Exception
+        ):  # noqa: B017 - the two backends raise differently
+            lucid.neg(lucid.tensor(values, dtype=lucid.bool, device=device))
+
+
+@pytest.mark.parametrize("name", ["argmax", "argmin", "trace"])
+def test_ordering_of_bools_is_refused_on_both_devices(name: str) -> None:
+    """Metal answered these and its answers were not useful.
+
+    ``trace`` summed a bool diagonal as bool, so a matrix with two trues
+    on it traced to ``true`` — saturating rather than counting.  The
+    reference refuses all three.
+    """
+    values = np.array([[True, False], [False, True]])
+    for device in _DEVICES:
+        with pytest.raises(
+            Exception
+        ):  # noqa: B017 - the two backends raise differently
+            getattr(lucid, name)(lucid.tensor(values, dtype=lucid.bool, device=device))
+
+
+@pytest.mark.parametrize("dtype_name", ["int8", "int16", "int32", "int64"])
+def test_scatter_add_and_movement_keep_integers(dtype_name: str) -> None:
+    """scatter_add, unfold and fold, at every integer width.
+
+    int64 needed its own kernel rather than a widening: `as_i64` passes
+    an int64 storage through untouched, so a widen-and-recurse guard that
+    matched int64 called itself forever and the process died on a stack
+    overflow.  int64 lands natively; the narrow widths widen onto it.
+    """
+    base = np.arange(4).reshape(2, 2).astype(dtype_name)
+    index = np.array([[0, 1], [1, 0]])
+    outs: dict[str, list] = {}
+    for device in _DEVICES:
+        x = lucid.tensor(
+            np.ascontiguousarray(base), dtype=getattr(lucid, dtype_name), device=device
+        )
+        idx = lucid.tensor(index, dtype=lucid.int64, device=device)
+        scattered = lucid.scatter_add(x, 0, idx, x)
+        unfolded = F.unfold(x.reshape(1, 1, 2, 2), 2)
+        assert str(scattered.dtype).endswith(dtype_name), device
+        assert str(unfolded.dtype).endswith(dtype_name), device
+        outs[device] = [
+            np.asarray(scattered.numpy()).tolist(),
+            np.asarray(unfolded.numpy()).tolist(),
+        ]
+    assert outs["cpu"] == outs["metal"]
+
+
+def test_int64_scatter_survives_metal_without_precision_loss() -> None:
+    """MLX's Metal scatter has no int64 kernel, so this one round-trips.
+
+    The values are chosen above 2^24 so a float32 detour — the tempting
+    on-device workaround — would be visible.
+    """
+    base = np.array([[2**40, 2**41], [2**42, 2**43]], dtype=np.int64)
+    index = np.array([[0, 1], [1, 0]])
+    outs = []
+    for device in _DEVICES:
+        x = lucid.tensor(np.ascontiguousarray(base), dtype=lucid.int64, device=device)
+        idx = lucid.tensor(index, dtype=lucid.int64, device=device)
+        got = lucid.scatter_add(x, 0, idx, x)
+        assert str(got.dtype).endswith("int64"), device
+        outs.append(np.asarray(got.numpy()).tolist())
+    assert outs[0] == outs[1]
+    assert 2**41 + 2**43 in [v for row in outs[0] for v in row]
+
+
+def test_eye_builds_an_int64_identity_on_both_devices() -> None:
+    """`mlx.core.eye` scatters, and Metal's scatter has no int64 kernel.
+
+    Its entries are 0 and 1, so it builds at int32 and widens.
+    """
+    for device in _DEVICES:
+        got = lucid.nn.init.eye(lucid.zeros((3, 3), dtype=lucid.int64, device=device))
+        assert str(got.dtype).endswith("int64"), device
+        assert np.array_equal(
+            np.asarray(got.numpy()), np.eye(3, dtype=np.int64)
+        ), device
+
+
+def test_local_response_norm_promotes_rather_than_degenerating() -> None:
+    """A composite has no schema, so its promotion has to be written down.
+
+    ``alpha`` is 1e-4.  In an integer dtype it truncates to zero, every
+    scale collapses to ``k`` and the whole op silently becomes the
+    identity — which is why this checks a value and not just a dtype.
+    """
+    values = np.arange(1, 5, dtype=np.int64).reshape(1, 4, 1, 1)
+    for device in _DEVICES:
+        x = lucid.tensor(np.ascontiguousarray(values), dtype=lucid.int64, device=device)
+        got = F.local_response_norm(x, 2)
+        assert lucid.is_floating_point(got), device
+        flat = np.asarray(got.numpy(), dtype=np.float64).ravel()
+        assert not np.array_equal(
+            flat, values.ravel()
+        ), f"{device}: became the identity"
+        # Against the float path rather than a literal — the numbers are
+        # the composition's, not mine, and writing them out by hand was
+        # how this assertion first failed.
+        as_float = F.local_response_norm(
+            lucid.tensor(
+                np.ascontiguousarray(values.astype(np.float32)),
+                dtype=lucid.float32,
+                device=device,
+            ),
+            2,
+        )
+        assert np.allclose(
+            flat, np.asarray(as_float.numpy(), dtype=np.float64).ravel(), atol=1e-5
+        ), device

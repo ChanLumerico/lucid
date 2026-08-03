@@ -42,6 +42,26 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
+def _real(x: "Tensor") -> "Tensor":
+    """A float view of a discrete operand.
+
+    Every function in this module is a real-valued special function, and
+    the engine says so for the ops it owns: a ``real_valued`` schema
+    promotes an integer input before the kernel sees it.  This module is
+    a composite layer, so there is no schema to read and the promotion
+    has to be asked for.
+
+    It matters where the composition negates before it reaches a
+    promoting op.  ``entr`` computes ``-x * log(x)``, and with a bool
+    operand the negation runs first — MLX refuses to negate a bool and
+    says to use logical_not, so the whole function failed on Metal while
+    the CPU answered.  Promoting at the door removes the question.
+    """
+    if lucid.is_floating_point(x):
+        return x
+    return x.to(lucid.float32)
+
+
 # ── Error-function family ──────────────────────────────────────────────────
 
 
@@ -368,6 +388,7 @@ def log_ndtr(x: Tensor) -> Tensor:
     >>> log_ndtr(lucid.tensor([-10.0, -1.0, 0.0, 1.0]))
     Tensor([-52.6651, -1.8410, -0.6931, -0.1727])
     """
+    x = _real(x)
     direct = lucid.log(ndtr(x))
     asymp = lucid.log(0.5 * lucid.erfc(-x * _INV_SQRT2))
     return lucid.where(x >= lucid.full_like(x, -1.0), direct, asymp)
@@ -611,6 +632,7 @@ def entr(x: Tensor) -> Tensor:
     >>> entr(lucid.tensor([0.0, 0.5, 1.0, 2.0]))
     Tensor([0.0000, 0.3466, 0.0000, -1.3863])
     """
+    x = _real(x)
     safe_x = lucid.where(x > lucid.zeros_like(x), x, lucid.full_like(x, 1.0))
     val = -safe_x * lucid.log(safe_x)
     val = lucid.where(x == lucid.zeros_like(x), lucid.full_like(val, 0.0), val)
@@ -2068,6 +2090,8 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
     >>> zeta(x, q)
     Tensor([1.6449, 1.2021])
     """
+    x, q = _real(x), _real(q)
+
     # Accumulate the explicit prefix Σ_{k=0..N-1} (k + q)^{-x}.
     N = 12
     s = lucid.zeros_like(q)

@@ -130,6 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - read the schema in the ops that build their own forward
 
+- close the remaining dtype gates on both devices
+
 ### Changed
 
 - give the engine ops one shared operand check

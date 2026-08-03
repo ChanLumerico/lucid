@@ -917,6 +917,17 @@ class DtypeAxis(Axis):
         if not any(support.values()):
             return self._finding(symbol, Status.SKIP, "no dtype accepted")
         if len(devices) == 2:
+            # An op whose *result* is float64 whatever it was handed cannot
+            # exist on Metal at all — `Tensor.double` and `float_power` say
+            # so in their names.  Every input dtype then reads as
+            # cpu-only, which is true and is not a defect: the question the
+            # axis asks does not apply to them.
+            if _produces_float64(fn, call):
+                return self._finding(
+                    symbol,
+                    Status.NOT_APPLICABLE,
+                    "result is float64 by definition, which Metal has no dtype for",
+                )
             # float64 does not exist on Metal and the engine documents the
             # downcast, so holding it against an op would flag every one.
             only_cpu = sorted(support["cpu"] - support["metal"] - {"float64"})
@@ -1150,6 +1161,29 @@ class OptimAxis(Axis):
 
 
 # ── construction helpers ─────────────────────────────────────────────────────
+
+
+def _produces_float64(fn: Any, call: "Call") -> bool:
+    """Whether the op answers in float64 from a float32 input.
+
+    The discriminator for "this op cannot exist on Metal".  Asked by
+    running it rather than by matching on the name, so a future
+    ``as_double`` is caught without being listed anywhere.
+    """
+
+    def build(array: np.ndarray, follow: bool) -> Any:
+        return lucid.tensor(
+            np.ascontiguousarray(array.astype(np.float32) if follow else array),
+            dtype=lucid.float32 if follow else None,
+            device="cpu",
+        )
+
+    try:
+        out = fn(*_probe.dtype_args(call, "float32", build), **call.kwargs)
+    except Exception:  # noqa: BLE001
+        return False
+    first = out[0] if isinstance(out, tuple | list) and out else out
+    return str(getattr(first, "dtype", "")).endswith("float64")
 
 
 @functools.lru_cache(maxsize=1)
