@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -56,9 +57,8 @@ void add_half_inplace(std::byte* dst, const std::byte* src, std::size_t numel) {
     auto* td = reinterpret_cast<std::uint16_t*>(dst);
     const auto* ts = reinterpret_cast<const std::uint16_t*>(src);
     for (std::size_t i = 0; i < numel; ++i)
-        td[i] = backend::detail::float_to_half_bits(
-            backend::detail::half_bits_to_float(td[i]) +
-            backend::detail::half_bits_to_float(ts[i]));
+        td[i] = backend::detail::float_to_half_bits(backend::detail::half_bits_to_float(td[i]) +
+                                                    backend::detail::half_bits_to_float(ts[i]));
 }
 
 // Perform dst += src for two CpuStorage buffers.
@@ -465,6 +465,16 @@ Storage bernoulli_mask_storage_shape(
         return backend::Dispatcher::for_device(device).bernoulli_mask(keep_prob, shape, dt,
                                                                       gpu_random_key_seed(gen));
     }
+    // Half draws wide and rounds, as the other CPU generators do — and a
+    // Bernoulli mask loses nothing at all on the way, since 0 and 1 are
+    // exact in every float format.  Without this, ``dropout`` and its
+    // three spatial variants refused float16 on the CPU while Metal ran
+    // them, which made ``model.half()`` a device-dependent proposition.
+    if (is_half_float(dt)) {
+        const Storage wide =
+            bernoulli_mask_storage_shape(keep_prob, shape, Dtype::F32, device, gen);
+        return backend::Dispatcher::for_device(device).astype(wide, shape, Dtype::F32, dt);
+    }
     std::size_t numel = 1;
     for (auto d : shape)
         numel *= static_cast<std::size_t>(d);
@@ -594,6 +604,26 @@ CpuStorage allocate_for_random(const Shape& shape, Dtype dt) {
     return s;
 }
 
+// The CPU draws at float32 and rounds, for the three float generators.
+//
+// There is nothing to widen here — a generator has no input, only an
+// output dtype — so the widen-reuse-narrow pattern used everywhere else
+// in the CPU backend reduces to its second half.  Rounding once at the
+// end is also the only approximation: every float16 and bfloat16 is
+// exactly representable in float32, so the draw itself is unaffected and
+// the result is the one the caller asked for by naming a 16-bit dtype.
+//
+// Without this, ``rand_like``, ``randn_like``, ``dropout`` and every
+// ``nn.init`` routine refused half on the CPU while Metal ran them —
+// sixteen public symbols, all behind these three switches.
+Storage random_half_via_f32(const Shape& shape,
+                            Dtype dt,
+                            Device device,
+                            const std::function<Storage(Dtype)>& draw) {
+    const Storage wide = draw(Dtype::F32);
+    return backend::Dispatcher::for_device(device).astype(wide, shape, Dtype::F32, dt);
+}
+
 }  // namespace
 
 Storage random_uniform_storage(
@@ -602,6 +632,10 @@ Storage random_uniform_storage(
         return backend::Dispatcher::for_device(device).random_uniform(shape, lo, hi, dt,
                                                                       gpu_random_key_seed(gen));
     }
+    if (is_half_float(dt))
+        return random_half_via_f32(shape, dt, device, [&](Dtype inner) {
+            return random_uniform_storage(shape, lo, hi, inner, device, gen);
+        });
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
@@ -623,6 +657,10 @@ Storage random_normal_storage(
         return backend::Dispatcher::for_device(device).random_normal(shape, mean, std, dt,
                                                                      gpu_random_key_seed(gen));
     }
+    if (is_half_float(dt))
+        return random_half_via_f32(shape, dt, device, [&](Dtype inner) {
+            return random_normal_storage(shape, mean, std, inner, device, gen);
+        });
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
@@ -646,6 +684,10 @@ random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, 
         return backend::Dispatcher::for_device(device).random_bernoulli(shape, p, dt,
                                                                         gpu_random_key_seed(gen));
     }
+    if (is_half_float(dt))
+        return random_half_via_f32(shape, dt, device, [&](Dtype inner) {
+            return random_bernoulli_storage(shape, p, inner, device, gen);
+        });
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {

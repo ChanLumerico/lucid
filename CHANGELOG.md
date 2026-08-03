@@ -128,6 +128,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - two axes were asking questions their targets do not answer
 
+- read the schema in the ops that build their own forward
+
 ### Changed
 
 - give the engine ops one shared operand check

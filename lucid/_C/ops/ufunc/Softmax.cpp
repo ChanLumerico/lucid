@@ -23,6 +23,7 @@
 #include "../bfunc/Mul.h"
 #include "../bfunc/Sub.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../utils/Promote.h"
 #include "Reductions.h"
 
 namespace lucid {
@@ -44,16 +45,23 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     if (wrapped < 0 || wrapped >= ndim)
         ErrorBuilder("softmax").index_error("axis out of range");
 
-    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    // Assembles its own forward, so it asks for the schema dtype the
+    // kernel templates would have applied.  Without it an integer input
+    // reached the backend untouched: Metal answered [0, 0, 0] for the
+    // softmax of [1, 2, 3] — probabilities truncated to integers — while
+    // the CPU raised.  See promote_for_schema.
+    const TensorImplPtr x = promote_for_schema(schema_v1, a);
+
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
     // 3.5 Phase 1.2: report axis so the compile-path Softmax emitter
     // can rebuild the same reduction inside MPSGraph.
     scope.set_attr("dim", static_cast<std::int64_t>(wrapped));
-    Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .softmax(a->storage(), a->shape(), wrapped, a->dtype());
+    Storage out_storage = backend::Dispatcher::for_device(x->device())
+                              .softmax(x->storage(), x->shape(), wrapped, x->dtype());
 
-    auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
-                                               a->device(), false);
-    scope.set_flops(static_cast<std::int64_t>(a->numel()) * 5);
+    auto result = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
+                                               x->device(), false);
+    scope.set_flops(static_cast<std::int64_t>(x->numel()) * 5);
 
     // wire_autograd is called unconditionally so the 3.5 compile-path
     // trace hook fires regardless of GradMode (matches NaryKernel /
@@ -62,7 +70,7 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     auto bwd = std::make_shared<SoftmaxBackward>();
     bwd->saved_output_ = result->storage();  // p = softmax(x)
     bwd->axis_ = wrapped;
-    kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
+    kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {x}, result, false);
     return result;
 }
 
@@ -101,21 +109,28 @@ TensorImplPtr LogSoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     if (wrapped < 0 || wrapped >= ndim)
         ErrorBuilder("log_softmax").index_error("axis out of range");
 
-    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    // Assembles its own forward, so it asks for the schema dtype the
+    // kernel templates would have applied.  Without it an integer input
+    // reached the backend untouched: Metal answered [0, 0, 0] for the
+    // softmax of [1, 2, 3] — probabilities truncated to integers — while
+    // the CPU raised.  See promote_for_schema.
+    const TensorImplPtr x = promote_for_schema(schema_v1, a);
+
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
     // 3.5 Phase 1.2: report axis for the compile-path LogSoftmax emitter.
     scope.set_attr("dim", static_cast<std::int64_t>(wrapped));
-    Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .log_softmax(a->storage(), a->shape(), wrapped, a->dtype());
+    Storage out_storage = backend::Dispatcher::for_device(x->device())
+                              .log_softmax(x->storage(), x->shape(), wrapped, x->dtype());
 
-    auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
-                                               a->device(), false);
+    auto result = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
+                                               x->device(), false);
 
     // Unconditional wire_autograd — see SoftmaxBackward::forward for the
     // rationale (trace-hook visibility under no-grad / no-requires-grad).
     auto bwd = std::make_shared<LogSoftmaxBackward>();
     bwd->saved_output_ = result->storage();  // y = log_softmax(x)
     bwd->axis_ = wrapped;
-    kernel::NaryKernel<LogSoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
+    kernel::NaryKernel<LogSoftmaxBackward, 1>::wire_autograd(std::move(bwd), {x}, result, false);
     return result;
 }
 

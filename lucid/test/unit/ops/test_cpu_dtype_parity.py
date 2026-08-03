@@ -823,3 +823,174 @@ def test_sort_narrow_integer_keeps_its_dtype() -> None:
         for d in _DEVICES
     }
     assert len(index_dtypes) == 1, f"index dtype differs across devices: {index_dtypes}"
+
+
+# ── half and integer coverage in the layer ops ───────────────────────────────
+
+
+_POOLING = {
+    "max_pool1d": (lambda t: F.max_pool1d(t, 2), (1, 2, 8)),
+    "max_pool2d": (lambda t: F.max_pool2d(t, 2), (1, 2, 8, 8)),
+    "avg_pool1d": (lambda t: F.avg_pool1d(t, 2), (1, 2, 8)),
+    "avg_pool2d": (lambda t: F.avg_pool2d(t, 2), (1, 2, 8, 8)),
+    "adaptive_avg_pool2d": (lambda t: F.adaptive_avg_pool2d(t, 2), (1, 2, 8, 8)),
+    "adaptive_max_pool2d": (lambda t: F.adaptive_max_pool2d(t, 2), (1, 2, 8, 8)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_POOLING))
+def test_pooling_takes_half_on_both_devices(name: str) -> None:
+    """Accelerate has no half kernel; the entry point widens and rounds.
+
+    Refusing half here made ``model.half()`` a device-dependent
+    proposition — the same network ran on Metal and raised on the CPU.
+    """
+    call, shape = _POOLING[name]
+    outs = []
+    for device in _DEVICES:
+        x = np.ascontiguousarray(
+            np.random.default_rng(0).random(shape).astype(np.float16)
+        )
+        got = call(lucid.tensor(x, dtype=lucid.float16, device=device))
+        got = got[0] if isinstance(got, tuple) else got
+        assert str(got.dtype).endswith("float16"), f"{name} on {device}"
+        outs.append(np.asarray(got.numpy(), dtype=np.float64))
+    assert np.allclose(outs[0], outs[1], atol=1e-3), f"{name} disagrees across devices"
+
+
+@pytest.mark.parametrize("name", sorted(_POOLING))
+@pytest.mark.parametrize("dtype_name", ["int8", "int16", "int32", "int64"])
+def test_pooling_takes_integers_on_both_devices(name: str, dtype_name: str) -> None:
+    """Pooling an integer image answers in that integer type.
+
+    ``max`` selects one of its inputs and ``avg`` casts a fractional mean,
+    so both are defined without a float kernel.  The mean truncates toward
+    zero, which is what the framework's own float-to-integer cast does —
+    rounding to nearest instead put the CPU one apart from Metal and from
+    the reference on every half-way window.
+    """
+    call, shape = _POOLING[name]
+    values = (np.random.default_rng(1).integers(-9, 10, shape)).astype(dtype_name)
+    outs = []
+    for device in _DEVICES:
+        got = call(
+            lucid.tensor(
+                np.ascontiguousarray(values),
+                dtype=getattr(lucid, dtype_name),
+                device=device,
+            )
+        )
+        got = got[0] if isinstance(got, tuple) else got
+        assert str(got.dtype).endswith(dtype_name), f"{name} on {device}"
+        outs.append(np.asarray(got.numpy()))
+    assert np.array_equal(outs[0], outs[1]), f"{name} disagrees across devices"
+
+
+def test_integer_avg_pool_truncates_toward_zero() -> None:
+    """The half-way case, pinned in both signs.
+
+    4.5 becomes 4 and -4.5 becomes -4.  Round-to-nearest would answer 5
+    and -5 (or -4, depending on the tie rule), and the disagreement is
+    invisible on any window whose mean is already an integer.
+    """
+    positive = np.array([[[[3, 1], [5, 9]]]], dtype=np.int32)  # mean 4.5
+    negative = -positive  # mean -4.5
+    for device in _DEVICES:
+        for values, expected in ((positive, 4), (negative, -4)):
+            got = F.avg_pool2d(
+                lucid.tensor(
+                    np.ascontiguousarray(values), dtype=lucid.int32, device=device
+                ),
+                2,
+            )
+            assert int(np.asarray(got.numpy()).ravel()[0]) == expected, device
+
+
+_PROMOTING_LAYER_OPS = {
+    "softmax": F.softmax,
+    "log_softmax": F.log_softmax,
+    "softmin": F.softmin,
+    "silu": F.silu,
+    "elu": F.elu,
+    "leaky_relu": F.leaky_relu,
+    "hardsigmoid": F.hardsigmoid,
+    "hardswish": F.hardswish,
+    "normalize": F.normalize,
+    "var": lucid.var,
+    "std": lucid.std,
+}
+
+
+@pytest.mark.parametrize("name", sorted(_PROMOTING_LAYER_OPS))
+def test_real_valued_layer_ops_promote_integers(name: str) -> None:
+    """An integer input gets a float answer, on both devices.
+
+    Each of these builds its own forward rather than going through a
+    kernel template, and so none of them consulted the schema that
+    already said the result was float.  Metal computed in the integer
+    type — ``softmax([1, 2, 3])`` came back ``[0, 0, 0]`` — while the CPU
+    raised NotImplementedError for the same call.
+    """
+    values = np.array([[1, 2, 3]], dtype=np.int32)
+    outs = []
+    for device in _DEVICES:
+        got = _PROMOTING_LAYER_OPS[name](
+            lucid.tensor(values, dtype=lucid.int32, device=device)
+        )
+        assert lucid.is_floating_point(got), f"{name} on {device} stayed integral"
+        outs.append(np.asarray(got.numpy(), dtype=np.float64))
+    assert np.allclose(outs[0], outs[1], atol=1e-5), f"{name} disagrees across devices"
+
+
+def test_softmax_of_integers_is_a_distribution() -> None:
+    """The values, not only the dtype.
+
+    Promoting could have been done by relabelling the output, which would
+    keep the dtype assertion above green while returning the same wrong
+    numbers.  These are the softmax of [1, 2, 3] and they sum to one.
+    """
+    for device in _DEVICES:
+        got = F.softmax(lucid.tensor([[1, 2, 3]], dtype=lucid.int32, device=device))
+        row = np.asarray(got.numpy(), dtype=np.float64).ravel()
+        assert abs(row.sum() - 1.0) < 1e-6, device
+        assert np.allclose(row, [0.09003057, 0.24472847, 0.66524096], atol=1e-6), device
+
+
+@pytest.mark.parametrize(
+    "name", ["rand_like", "randn_like", "dropout", "uniform", "normal"]
+)
+def test_random_generators_draw_half(name: str) -> None:
+    """No input to widen, so the draw is made wide and rounded.
+
+    Sixteen public symbols sat behind three switches in the CPU
+    generators — every ``nn.init`` routine, both ``*_like`` factories and
+    the whole dropout family refused float16 while Metal ran them.
+    """
+    x = np.ascontiguousarray(np.ones((4, 4), dtype=np.float16))
+    for device in _DEVICES:
+        t = lucid.tensor(x, dtype=lucid.float16, device=device)
+        if name in ("rand_like", "randn_like"):
+            got = getattr(lucid, name)(t)
+        elif name == "dropout":
+            got = F.dropout(t, p=0.5)
+        else:
+            got = getattr(lucid.nn.init, name)(t)
+        assert str(got.dtype).endswith("float16"), f"{name} on {device}"
+
+
+def test_metal_storage_dtype_matches_its_bytes() -> None:
+    """MLX promotes; the wrapper must convert rather than relabel.
+
+    ``mean`` of an int32 array comes back float32.  Recording the
+    caller's dtype next to the array's own byte count made the storage
+    claim int32 while holding float32 bits, and ``avg_pool2d`` answered
+    1083179008 — 0x40900000, the float 4.5 read as an integer — for a
+    window whose mean is 4.5.  Nothing raised.
+    """
+    values = np.array([[[[3, 1], [5, 9]]]], dtype=np.int32)
+    got = F.avg_pool2d(
+        lucid.tensor(np.ascontiguousarray(values), dtype=lucid.int32, device="metal"), 2
+    )
+    assert (
+        abs(int(np.asarray(got.numpy()).ravel()[0])) < 100
+    ), "bytes were reinterpreted"

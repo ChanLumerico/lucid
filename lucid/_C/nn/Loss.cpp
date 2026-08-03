@@ -33,6 +33,7 @@
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/utils/Promote.h"
 
 namespace lucid {
 
@@ -50,11 +51,17 @@ Shape reduced_shape(const Shape& in, Reduction red) {
 
 const OpSchema MseLossBackward::schema_v1{"mse_loss", 1, AmpPolicy::ForceFP32, true};
 
-TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
-                                       const TensorImplPtr& target,
+TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input0,
+                                       const TensorImplPtr& target0,
                                        Reduction reduction) {
-    if (!input || !target)
+    if (!input0 || !target0)
         ErrorBuilder("mse_loss").fail("null input");
+    // Both operands take the schema dtype the kernel templates would
+    // have applied — a loss of two integer tensors is not an integer.
+    // See promote_for_schema.
+    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
+    const TensorImplPtr target = promote_for_schema(schema_v1, target0);
+
     if (input->shape() != target->shape())
         throw ShapeMismatch(input->shape(), target->shape(),
                             "mse_loss: input/target shape mismatch");
@@ -372,12 +379,18 @@ LUCID_REGISTER_OP(NLLLossBackward)
 
 const OpSchema HuberLossBackward::schema_v1{"huber_loss", 1, AmpPolicy::ForceFP32, true};
 
-TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
-                                         const TensorImplPtr& target,
+TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input0,
+                                         const TensorImplPtr& target0,
                                          double delta,
                                          Reduction reduction) {
-    if (!input || !target)
+    if (!input0 || !target0)
         ErrorBuilder("huber_loss").fail("null input");
+    // Both operands take the schema dtype the kernel templates would
+    // have applied — a loss of two integer tensors is not an integer.
+    // See promote_for_schema.
+    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
+    const TensorImplPtr target = promote_for_schema(schema_v1, target0);
+
     if (input->shape() != target->shape())
         throw ShapeMismatch(input->shape(), target->shape(),
                             "huber_loss: input/target shape mismatch");

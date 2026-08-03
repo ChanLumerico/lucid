@@ -362,7 +362,7 @@ def run(args: argparse.Namespace, console: Console) -> Report:
             axis_timer = Timer()
 
             for index, symbol in enumerate(applicable, start=1):
-                with Suppress(not console.quiet):
+                with Suppress(not console.quiet), _probe.preserved_globals():
                     try:
                         finding = axis.run(symbol, ctx)
                     except KeyboardInterrupt:

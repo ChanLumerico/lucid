@@ -38,6 +38,7 @@
 #include "../bfunc/_BinaryOp.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Layout.h"
+#include "../utils/Promote.h"
 #include "../utils/View.h"
 #include "Reductions.h"
 #include "_Detail.h"
@@ -109,9 +110,11 @@ public:
     }
 };
 
-// KeepInput: variance is computed in the input's own dtype (the backend
-// internally promotes to float if needed).
-const OpSchema VarBackward::schema_v1{"var", 1, AmpPolicy::KeepInput, true};
+// KeepInput: variance is computed in the input's own dtype under an
+// autocast scope.  ``real_valued`` is separate and says the answer is
+// a real number whatever went in — the variance of integers is not an
+// integer, and computing it as one returned 0.
+const OpSchema VarBackward::schema_v1{"var", 1, AmpPolicy::KeepInput, true, "", true};
 
 }  // namespace
 
@@ -120,10 +123,15 @@ const OpSchema VarBackward::schema_v1{"var", 1, AmpPolicy::KeepInput, true};
 // IBackend::broadcast to expand it to the input shape in one call.
 TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, bool keepdims) {
     Validator::input(a, "var.a").non_null();
-    const Dtype dt = a->dtype();
-    const Device device = a->device();
-    const auto axes = normalize_axes(axes_user, static_cast<int>(a->shape().size()));
-    const Shape out_shape = reduce_output_shape(a->shape(), axes, keepdims);
+    // Builds its own forward, so it asks for the schema dtype the kernel
+    // templates would have applied.  See promote_for_schema: without it
+    // ``var`` of an integer tensor computed in that integer type and
+    // answered 0 on Metal while the CPU raised.
+    const TensorImplPtr x = promote_for_schema(VarBackward::schema_v1, a);
+    const Dtype dt = x->dtype();
+    const Device device = x->device();
+    const auto axes = normalize_axes(axes_user, static_cast<int>(x->shape().size()));
+    const Shape out_shape = reduce_output_shape(x->shape(), axes, keepdims);
     OpScopeFull scope{"var", device, dt, out_shape};
     {
         std::vector<std::int64_t> dims_attr(axes.begin(), axes.end());
@@ -134,38 +142,38 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
     backend::ReduceOpts reduce_opts{axes, keepdims};
     auto& be = backend::Dispatcher::for_device(device);
 
-    Storage out_storage = be.variance(a->storage(), a->shape(), reduce_opts, dt);
+    Storage out_storage = be.variance(x->storage(), x->shape(), reduce_opts, dt);
     TensorImplPtr out = fresh(std::move(out_storage), out_shape, dt, device);
     if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({a}, out);
+        trc->on_op_io({x}, out);
     }
 
     // Count the number of elements collapsed; clamp to 1 to avoid division by
     // zero for empty-axis edge cases.
     std::size_t reduced = 1;
     for (auto ax : axes)
-        reduced *= static_cast<std::size_t>(a->shape()[ax]);
+        reduced *= static_cast<std::size_t>(x->shape()[ax]);
     if (reduced == 0)
         reduced = 1;
 
-    if (GradMode::is_enabled() && a->requires_grad()) {
+    if (GradMode::is_enabled() && x->requires_grad()) {
         // Compute mean with keepdims=true, then broadcast to full input shape
         // so that VarBackward::apply can compute (x - mean) without a second
         // broadcast.
-        Shape mean_keepdims_shape = reduce_output_shape(a->shape(), axes, true);
+        Shape mean_keepdims_shape = reduce_output_shape(x->shape(), axes, true);
         Storage mean_keepdims =
-            be.reduce_mean(a->storage(), a->shape(), backend::ReduceOpts{axes, true}, dt);
-        Storage mean_storage = be.broadcast(mean_keepdims, mean_keepdims_shape, a->shape(), dt);
+            be.reduce_mean(x->storage(), x->shape(), backend::ReduceOpts{axes, true}, dt);
+        Storage mean_storage = be.broadcast(mean_keepdims, mean_keepdims_shape, x->shape(), dt);
 
         auto bwd = std::make_shared<VarBackward>();
-        bwd->input_shape_ = a->shape();
+        bwd->input_shape_ = x->shape();
         bwd->axes_ = axes;
         bwd->keepdims_ = keepdims;
         bwd->count_ = static_cast<std::int64_t>(reduced);
-        bwd->saved_input_ = a->storage();
+        bwd->saved_input_ = x->storage();
         bwd->saved_mean_ = std::move(mean_storage);
         // save_output=false: VarBackward saves the input and mean manually above.
-        kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
+        kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {x}, out, false);
     }
     return out;
 }

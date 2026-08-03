@@ -26,6 +26,7 @@
 #include "../bfunc/Mul.h"
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
+#include "../utils/Promote.h"
 #include "Arith.h"
 #include "Exponential.h"
 #include "Hyperbolic.h"
@@ -93,7 +94,7 @@ TensorImplPtr sigmoid_op(const TensorImplPtr& a) {
 LUCID_REGISTER_OP(SigmoidBackward)
 
 // silu — AmpPolicy::Promote; gradient derived analytically from y = x*σ(x).
-const OpSchema SiluBackward::schema_v1{"silu", 1, AmpPolicy::Promote, true};
+const OpSchema SiluBackward::schema_v1{"silu", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.  Delegates to the backend so
 // GPU can dispatch to a single fused kernel (MLX expression or MPSGraph)
@@ -187,7 +188,7 @@ TensorImplPtr gelu_exact_op(const TensorImplPtr& a) {
 LUCID_REGISTER_OP(GeluExactBackward)
 
 // leaky_relu — KeepInput (valid for integer slopes).
-const OpSchema LeakyReluBackward::schema_v1{"leaky_relu", 1, AmpPolicy::KeepInput, true};
+const OpSchema LeakyReluBackward::schema_v1{"leaky_relu", 1, AmpPolicy::KeepInput, true, "", true};
 
 // dL/dx = (x > 0 ? 1 : slope_) * dL/dy  (leaky mask).
 Storage LeakyReluBackward::grad_formula(const Storage& g) {
@@ -201,17 +202,21 @@ Storage LeakyReluBackward::grad_formula(const Storage& g) {
 TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
     Validator::input(a, "leaky_relu.a").non_null();
 
-    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    // Assembles its own forward, so it asks for the schema dtype the
+    // kernel templates would have applied.  See promote_for_schema.
+    const TensorImplPtr x = promote_for_schema(schema_v1, a);
+
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
     scope.set_attr("slope", slope);
-    Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .leaky_relu(a->storage(), a->shape(), a->dtype(), slope);
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
-                                            a->device(), false);
-    scope.set_flops(static_cast<std::int64_t>(a->numel()));
+    Storage out_storage = backend::Dispatcher::for_device(x->device())
+                              .leaky_relu(x->storage(), x->shape(), x->dtype(), slope);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
+                                            x->device(), false);
+    scope.set_flops(static_cast<std::int64_t>(x->numel()));
 
     auto bwd = std::make_shared<LeakyReluBackward>();
     bwd->slope_ = slope;
-    kernel::NaryKernel<LeakyReluBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
+    kernel::NaryKernel<LeakyReluBackward, 1>::wire_autograd(std::move(bwd), {x}, out);
     return out;
 }
 
@@ -250,17 +255,21 @@ Storage EluBackward::grad_formula(const Storage& g) {
 TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
     Validator::input(a, "elu.a").non_null();
 
-    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    // Assembles its own forward, so it asks for the schema dtype the
+    // kernel templates would have applied.  See promote_for_schema.
+    const TensorImplPtr x = promote_for_schema(schema_v1, a);
+
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
     scope.set_attr("alpha", alpha);
-    Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .elu(a->storage(), a->shape(), a->dtype(), alpha);
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
-                                            a->device(), false);
-    scope.set_flops(static_cast<std::int64_t>(a->numel()));
+    Storage out_storage = backend::Dispatcher::for_device(x->device())
+                              .elu(x->storage(), x->shape(), x->dtype(), alpha);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
+                                            x->device(), false);
+    scope.set_flops(static_cast<std::int64_t>(x->numel()));
 
     auto bwd = std::make_shared<EluBackward>();
     bwd->alpha_ = alpha;
-    kernel::NaryKernel<EluBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
+    kernel::NaryKernel<EluBackward, 1>::wire_autograd(std::move(bwd), {x}, out);
     return out;
 }
 
@@ -300,7 +309,8 @@ TensorImplPtr mish_op(const TensorImplPtr& a) {
 LUCID_REGISTER_OP(MishBackward)
 
 // hard_sigmoid — KeepInput; piecewise linear, valid for float inputs.
-const OpSchema HardSigmoidBackward::schema_v1{"hard_sigmoid", 1, AmpPolicy::KeepInput, true};
+const OpSchema HardSigmoidBackward::schema_v1{"hard_sigmoid", 1,  AmpPolicy::KeepInput,
+                                              true,           "", true};
 
 // Delegate; the backend returns 1/6 inside the active region, 0 outside.
 Storage HardSigmoidBackward::grad_formula(const Storage& g) {
@@ -314,7 +324,7 @@ TensorImplPtr hard_sigmoid_op(const TensorImplPtr& a) {
 LUCID_REGISTER_OP(HardSigmoidBackward)
 
 // hard_swish — KeepInput; piecewise linear backward.
-const OpSchema HardSwishBackward::schema_v1{"hard_swish", 1, AmpPolicy::KeepInput, true};
+const OpSchema HardSwishBackward::schema_v1{"hard_swish", 1, AmpPolicy::KeepInput, true, "", true};
 
 // Delegate; the backend handles the three-region piecewise formula.
 Storage HardSwishBackward::grad_formula(const Storage& g) {

@@ -91,7 +91,7 @@ TensorImplPtr affine_grid_op(const TensorImplPtr& theta, int N, int H, int W, bo
 }
 LUCID_REGISTER_OP(AffineGridBackward)
 
-const OpSchema GridSampleBackward::schema_v1{"grid_sample", 1, AmpPolicy::Promote, true};
+const OpSchema GridSampleBackward::schema_v1{"grid_sample", 1, AmpPolicy::Promote, true, "", true};
 
 TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
                                           const TensorImplPtr& grid,

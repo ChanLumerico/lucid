@@ -19,6 +19,9 @@ Three habits are built into the base rather than left to each axis:
 """
 
 import contextlib
+import functools
+import json
+import pathlib
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -883,6 +886,8 @@ class DtypeAxis(Axis):
                 symbol, Status.SKIP, "primary argument is not a tensor"
             )
 
+        del base  # only needed to prove there is one; `dtype_args` reads it
+
         devices = ["cpu", "metal"] if ctx.metal else ["cpu"]
         support: dict[str, set[str]] = {d: set() for d in devices}
         for name in _probe.DTYPES:
@@ -890,70 +895,20 @@ class DtypeAxis(Axis):
             if dt is None:
                 continue
             for device in devices:
-                try:
-                    arr = np.abs(base) + 1.0
-                    tensor = lucid.tensor(
-                        np.ascontiguousarray(arr.astype(_numpy_of(name))),
+
+                def build(array: Any, follow: bool, _d: str = device) -> Any:
+                    if not follow:
+                        return lucid.tensor(
+                            np.ascontiguousarray(array), dtype=None, device=_d
+                        )
+                    return lucid.tensor(
+                        np.ascontiguousarray(array.astype(_probe.numpy_of(name))),
                         dtype=dt,
-                        device=device,
+                        device=_d,
                     )
-                    # Every *other* tensor argument has to follow, or a
-                    # convolution fails on Metal for the trivial reason
-                    # that its weights stayed on the CPU — which reads as
-                    # "metal supports no dtype at all".
-                    args = []
-                    for index, value in enumerate(call.args):
-                        if index == call.primary:
-                            args.append(tensor)
-                        elif hasattr(value, "to"):
-                            # Rebuilt, not moved.  A convolution whose
-                            # weights stayed float64 while its input became
-                            # float32 fails for a reason that has nothing
-                            # to do with dtype support — and ``.to`` cannot
-                            # carry float64 onto Metal at all, so moving
-                            # would raise and read as "metal supports
-                            # nothing".
-                            companion = _probe.to_numpy(value)
-                            if companion is None:
-                                args.append(value)
-                                continue
-                            # Only *float* companions follow the primary's
-                            # dtype.  An integer companion is an index or a
-                            # size, and casting it to the dtype under test
-                            # makes the call invalid rather than testing it —
-                            # scatter_add reported float32 as unsupported on
-                            # the CPU because its index had been turned into
-                            # a float and the guard correctly refused it.
-                            #
-                            # It still has to follow the primary's *device*.
-                            # Keeping the dtype but leaving the tensor where
-                            # it was put every index, mask and condition on
-                            # the CPU while the operand moved to Metal, so
-                            # the call failed on a device mismatch and read
-                            # as "metal supports no dtype at all" —
-                            # gather, where, take, index_select, embedding,
-                            # masked_fill, scatter_add and the whole bitwise
-                            # family, 50 symbols of pure artefact.
-                            if companion.dtype.kind not in "fc":
-                                args.append(
-                                    lucid.tensor(
-                                        np.ascontiguousarray(companion),
-                                        dtype=value.dtype,
-                                        device=device,
-                                    )
-                                )
-                                continue
-                            args.append(
-                                lucid.tensor(
-                                    np.ascontiguousarray(
-                                        companion.astype(_numpy_of(name))
-                                    ),
-                                    dtype=dt,
-                                    device=device,
-                                )
-                            )
-                        else:
-                            args.append(value)
+
+                try:
+                    args = _probe.dtype_args(call, name, build)
                     if _probe.to_numpy(fn(*args, **call.kwargs)) is not None:
                         support[device].add(name)
                 except Exception:  # noqa: BLE001
@@ -971,7 +926,8 @@ class DtypeAxis(Axis):
                     symbol,
                     Status.FAIL,
                     f"asymmetric dtype support — cpu only {only_cpu}, "
-                    f"metal only {only_metal}",
+                    f"metal only {only_metal}"
+                    + _contract_verdict(symbol.qualname, only_cpu, only_metal),
                     cpu=sorted(support["cpu"]),
                     metal=sorted(support["metal"]),
                 )
@@ -1196,17 +1152,53 @@ class OptimAxis(Axis):
 # ── construction helpers ─────────────────────────────────────────────────────
 
 
-def _numpy_of(name: str) -> Any:
-    return {
-        "bool": np.bool_,
-        "int8": np.int8,
-        "int16": np.int16,
-        "int32": np.int32,
-        "int64": np.int64,
-        "float16": np.float16,
-        "float32": np.float32,
-        "float64": np.float64,
-    }[name]
+@functools.lru_cache(maxsize=1)
+def _contract() -> "dict[str, list[str]]":
+    """The measured reference dtype table, or empty when absent.
+
+    Checked in, so it is available without the reference framework
+    installed.  Regenerate with
+    ``python -m lucid.test.audit.tools.dtype_contract``.
+    """
+    path = pathlib.Path(__file__).with_name("dtype_contract.json")
+    try:
+        data = json.loads(path.read_text())
+    except OSError, ValueError:
+        return {}
+    symbols = data.get("symbols")
+    return symbols if isinstance(symbols, dict) else {}
+
+
+def _contract_verdict(
+    qualname: str, only_cpu: "list[str]", only_metal: "list[str]"
+) -> str:
+    """Which device is wrong, when the reference has an opinion.
+
+    A disagreement between the two devices says they differ, never which
+    one to change — and deciding that by eye was going badly: the
+    reference accepts int64 for ``avg_pool2d`` and rejects every integer
+    for ``softmax``, and neither is guessable from the name.  When the
+    op was measured, name the side that deviates so the finding is
+    actionable rather than merely true.
+    """
+    accepted = _contract().get(qualname)
+    if accepted is None:
+        return ""
+    reference = set(accepted)
+    # only_cpu: cpu takes it, metal does not.  only_metal: the reverse.
+    # Whichever side agrees with the reference is the one to keep.
+    parts = []
+    for device, mine, theirs in (
+        ("cpu", only_cpu, only_metal),
+        ("metal", only_metal, only_cpu),
+    ):
+        over = [d for d in mine if d not in reference]
+        under = [d for d in theirs if d in reference]
+        if over:
+            parts.append(f"{device} wrongly accepts {over}")
+        if under:
+            parts.append(f"{device} wrongly rejects {under}")
+    return f" — reference says: {'; '.join(parts)}" if parts else ""
 
 
 #: Constructor ladders, tried in order.  A module that needs an argument

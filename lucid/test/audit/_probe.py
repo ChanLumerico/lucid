@@ -15,6 +15,7 @@ zero, so a finite-difference check passes while testing nothing — the
 failure mode the VACUOUS status exists to name.
 """
 
+import contextlib
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -23,7 +24,7 @@ import numpy as np
 import lucid
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
 #: Default probe shape.  Small enough that a per-element finite-difference
 #: sweep is cheap, large enough to exercise broadcasting and reductions.
@@ -210,6 +211,85 @@ def metal_available() -> bool:
     return True
 
 
+@contextlib.contextmanager
+def preserved_globals() -> "Iterator[None]":
+    """Restore the process-wide switches around one probe.
+
+    The survey calls every public symbol, and three of them write state
+    the whole framework reads: ``set_default_dtype``,
+    ``set_default_device`` and ``set_grad_enabled``.  A successful call
+    to any of them re-tunes every check that runs afterwards — the
+    survey would still report, but on a framework configured differently
+    from the one it claims to be describing, and nothing in the output
+    would say so.  Grad is the worst of the three: left disabled, every
+    later gradient check finds no graph and reports the framework as
+    non-differentiable.
+    """
+    dtype_before = lucid.get_default_dtype()
+    device_before = lucid.get_default_device()
+    grad_before = lucid.is_grad_enabled()
+    try:
+        yield
+    finally:
+        if lucid.get_default_dtype() is not dtype_before:
+            lucid.set_default_dtype(dtype_before)
+        if lucid.get_default_device() != device_before:
+            lucid.set_default_device(device_before)
+        if lucid.is_grad_enabled() != grad_before:
+            lucid.set_grad_enabled(grad_before)
+
+
+def numpy_of(name: str) -> Any:
+    """The numpy scalar type behind one of :data:`DTYPES`."""
+    return {
+        "bool": np.bool_,
+        "int8": np.int8,
+        "int16": np.int16,
+        "int32": np.int32,
+        "int64": np.int64,
+        "float16": np.float16,
+        "float32": np.float32,
+        "float64": np.float64,
+    }[name]
+
+
+def dtype_args(call: Any, name: str, build: "Callable[..., Any]") -> list[Any]:
+    """One call's arguments, rebuilt at the dtype ``name``.
+
+    Shared by the dtype axis and by the contract generator so the two
+    ask the *same question*.  The axis compares cpu against metal, which
+    says the two disagree but never which is right; the generator answers
+    that by replaying this identical invocation against the reference
+    framework.  If they built their arguments differently the comparison
+    would be between two different calls, and the contract would be
+    evidence for nothing.
+
+    ``build(array, follow)`` makes one tensor: ``follow`` true means "at
+    the dtype under test", false means "keep the array's own dtype".
+
+    Two rules are load-bearing, both learned from mass false positives:
+
+    - every tensor argument is *rebuilt*, never moved, so a convolution
+      does not fail because its weights stayed behind;
+    - only *float* companions follow the primary's dtype.  An integer
+      companion is an index, a size or a mask, and casting it to the
+      dtype under test makes the call invalid rather than testing it.
+    """
+    args: list[Any] = []
+    for index, value in enumerate(call.args):
+        if index == call.primary:
+            args.append(build(np.abs(call.base) + 1.0, True))
+        elif hasattr(value, "to"):
+            companion = to_numpy(value)
+            if companion is None:
+                args.append(value)
+            else:
+                args.append(build(companion, companion.dtype.kind in "fc"))
+        else:
+            args.append(value)
+    return args
+
+
 __all__ = [
     "DOMAINS",
     "DTYPES",
@@ -220,9 +300,12 @@ __all__ = [
     "as_int",
     "contract",
     "covector",
+    "dtype_args",
     "dtype_of",
     "finite_difference",
     "metal_available",
+    "numpy_of",
+    "preserved_globals",
     "quadratic_shrink",
     "relative",
     "rng",

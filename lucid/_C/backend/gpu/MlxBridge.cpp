@@ -191,10 +191,27 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
 }
 
 GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
+    // Reconcile, never relabel.
+    //
+    // MLX promotes on its own: ``mean`` of an int32 array comes back
+    // float32, and this used to record the caller's dtype next to the
+    // array's own byte count.  Nothing failed — the storage simply
+    // claimed to be int32 while holding float32 bits, and every later
+    // reader reinterpreted them.  ``avg_pool2d`` on int32 answered
+    // 1083179008 for a window whose mean is 4.5, which is 0x40900000:
+    // the float read as an integer.  A wrong answer that raises nothing
+    // is worse than the refusal it replaced, and only a dtype sweep was
+    // ever in a position to see it.
+    //
+    // The array's dtype is the fact; the parameter is the request.  When
+    // they differ the values are converted, so the bytes match the label
+    // that goes with them.
+    const auto want = to_mlx_dtype(dtype);
+    ::mlx::core::array held = arr.dtype() == want ? std::move(arr) : ::mlx::core::astype(arr, want);
     GpuStorage out;
     out.dtype = dtype;
-    out.nbytes = arr.nbytes();
-    out.arr = make_tracked(new ::mlx::core::array(std::move(arr)), out.nbytes);
+    out.nbytes = held.nbytes();
+    out.arr = make_tracked(new ::mlx::core::array(std::move(held)), out.nbytes);
     return out;
 }
 

@@ -201,6 +201,27 @@ constexpr bool is_floating_point(Dtype dt) {
     return dt == Dtype::F16 || dt == Dtype::BF16 || dt == Dtype::F32 || dt == Dtype::F64;
 }
 
+// Predicate: is the dtype one of the two 16-bit float formats?
+//
+// A property of the dtype, so it lives beside :func:`is_floating_point`
+// rather than in any one backend.  Accelerate has kernels for neither
+// format, so both take the same widen-reuse-narrow route through
+// float32 across the CPU backend — and the random generators, which
+// have no input to widen, use it to decide to draw wide and round.
+//
+// Parameters
+// ----------
+// dt : Dtype
+//     The dtype to test.
+//
+// Returns
+// -------
+// bool
+//     ``true`` for :attr:`F16` and :attr:`BF16`, ``false`` otherwise.
+constexpr bool is_half_float(Dtype dt) {
+    return dt == Dtype::F16 || dt == Dtype::BF16;
+}
+
 // Predicate: is the dtype a signed integer type?
 //
 // :attr:`Dtype::Bool` is intentionally **excluded** — booleans are stored

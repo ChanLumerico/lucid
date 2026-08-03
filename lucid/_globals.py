@@ -23,7 +23,18 @@ def set_default_dtype(d: dtype) -> None:
         default) or :data:`lucid.float64` for higher-precision research
         runs.  Also invalidates the dispatch-side default-dtype cache
         so subsequent kwargs normalisation re-resolves the engine enum.
+
+    Raises
+    ------
+    TypeError
+        If ``d`` is not a dtype.  Checked here rather than at first use:
+        this writes process-wide state that every later factory call
+        reads, so an unusable value has to be refused at the point it
+        was passed.  Stored unchecked, it surfaced as a failure inside
+        an unrelated ``lucid.tensor`` call an arbitrary distance away.
     """
+    if not isinstance(d, dtype):
+        raise TypeError(f"Default dtype must be a lucid.dtype, got {d!r}")
     global _default_dtype
     with _lock:
         _default_dtype = d
@@ -67,10 +78,32 @@ def set_default_device(d: _dev | str) -> None:
     d : lucid.device or str
         New default placement.  Either a :class:`~lucid._device.device`
         instance or a string like ``"cpu"`` / ``"metal"``.
+
+    Raises
+    ------
+    TypeError
+        If ``d`` is neither a device nor a string.
+    ValueError
+        If the string does not name a device.
+
+    Notes
+    -----
+    Both are checked here rather than at first use.  The previous
+    ``d if isinstance(d, str) else d.type`` accepted *any* object with a
+    ``.type`` attribute — a tensor has one, and passing one stored a
+    bound method as the process-wide default, after which every
+    subsequent factory call failed with an unparseable device and no
+    trace of where the value came from.
     """
+    if isinstance(d, _dev):
+        resolved = d.type
+    elif isinstance(d, str):
+        resolved = _dev(d).type  # raises ValueError on an unknown name
+    else:
+        raise TypeError(f"Default device must be a lucid.device or str, got {d!r}")
     global _default_device_str
     with _lock:
-        _default_device_str = d if isinstance(d, str) else d.type
+        _default_device_str = resolved
     # Invalidate BOTH device caches:
     #   - ``lucid._factories.converters`` for the ndarray-fast-path
     #   - ``lucid._dispatch`` for ``normalize_factory_kwargs``

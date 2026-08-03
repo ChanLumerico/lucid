@@ -32,18 +32,22 @@
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 #include "../ops/ufunc/Reductions.h"
+#include "../ops/utils/Promote.h"
 #include "../ops/utils/View.h"
 
 namespace lucid {
 
-const OpSchema InterpolateBilinearBackward::schema_v1{"interpolate_bilinear", 1, AmpPolicy::Promote,
-                                                      true};
+const OpSchema InterpolateBilinearBackward::schema_v1{
+    "interpolate_bilinear", 1, AmpPolicy::Promote, true, "", true};
 
-TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
+TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input0,
                                                    int H_out,
                                                    int W_out,
                                                    bool align_corners) {
-    Validator::input(input, "interpolate_bilinear.input").non_null();
+    Validator::input(input0, "interpolate_bilinear.input").non_null();
+    // Resampling asks for the schema dtype the kernel templates
+    // would have applied; see promote_for_schema.
+    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
     if (input->shape().size() != 4)
         throw ShapeMismatch(input->shape(), Shape{},
                             "interpolate_bilinear: input must be 4-D (N, C, H, W)");
@@ -100,12 +104,15 @@ interpolate_bilinear_op(const TensorImplPtr& input, int H_out, int W_out, bool a
 }
 LUCID_REGISTER_OP(InterpolateBilinearBackward)
 
-const OpSchema InterpolateTrilinearBackward::schema_v1{"interpolate_trilinear", 1,
-                                                       AmpPolicy::Promote, true};
+const OpSchema InterpolateTrilinearBackward::schema_v1{
+    "interpolate_trilinear", 1, AmpPolicy::Promote, true, "", true};
 
 TensorImplPtr InterpolateTrilinearBackward::forward(
-    const TensorImplPtr& input, int D_out, int H_out, int W_out, bool align_corners) {
-    Validator::input(input, "interpolate_trilinear.input").non_null();
+    const TensorImplPtr& input0, int D_out, int H_out, int W_out, bool align_corners) {
+    Validator::input(input0, "interpolate_trilinear.input").non_null();
+    // Resampling asks for the schema dtype the kernel templates
+    // would have applied; see promote_for_schema.
+    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
     if (input->shape().size() != 5)
         throw ShapeMismatch(input->shape(), Shape{}, "interpolate_trilinear: input must be 5-D");
     const int N = static_cast<int>(input->shape()[0]);
@@ -147,12 +154,15 @@ TensorImplPtr interpolate_trilinear_op(
 }
 LUCID_REGISTER_OP(InterpolateTrilinearBackward)
 
-const OpSchema InterpolateNearestBackward2D::schema_v1{"interpolate_nearest_2d", 1,
-                                                       AmpPolicy::KeepInput, true};
+const OpSchema InterpolateNearestBackward2D::schema_v1{
+    "interpolate_nearest_2d", 1, AmpPolicy::KeepInput, true, "", true};
 
 TensorImplPtr
-InterpolateNearestBackward2D::forward(const TensorImplPtr& input, int H_out, int W_out) {
-    Validator::input(input, "interpolate_nearest.input").non_null();
+InterpolateNearestBackward2D::forward(const TensorImplPtr& input0, int H_out, int W_out) {
+    Validator::input(input0, "interpolate_nearest.input").non_null();
+    // Resampling asks for the schema dtype the kernel templates
+    // would have applied; see promote_for_schema.
+    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
     if (input->shape().size() != 4)
         throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest: 4-D input required");
     const int N = static_cast<int>(input->shape()[0]);
@@ -211,12 +221,17 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
 }
 LUCID_REGISTER_OP(InterpolateNearestBackward2D)
 
-const OpSchema InterpolateNearestBackward3D::schema_v1{"interpolate_nearest_3d", 1,
-                                                       AmpPolicy::KeepInput, true};
+const OpSchema InterpolateNearestBackward3D::schema_v1{
+    "interpolate_nearest_3d", 1, AmpPolicy::KeepInput, true, "", true};
 
-TensorImplPtr
-InterpolateNearestBackward3D::forward(const TensorImplPtr& input, int D_out, int H_out, int W_out) {
-    Validator::input(input, "interpolate_nearest_3d.input").non_null();
+TensorImplPtr InterpolateNearestBackward3D::forward(const TensorImplPtr& input0,
+                                                    int D_out,
+                                                    int H_out,
+                                                    int W_out) {
+    Validator::input(input0, "interpolate_nearest_3d.input").non_null();
+    // Resampling asks for the schema dtype the kernel templates
+    // would have applied; see promote_for_schema.
+    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
     if (input->shape().size() != 5)
         throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest_3d: 5-D input required");
     const int N = static_cast<int>(input->shape()[0]);

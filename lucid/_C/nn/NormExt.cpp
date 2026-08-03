@@ -36,6 +36,7 @@
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/utils/Promote.h"
 
 namespace lucid {
 
@@ -133,8 +134,11 @@ LUCID_REGISTER_OP(BatchNormEvalBackward)
 const OpSchema LpNormalizeBackward::schema_v1{"lp_normalize", 1, AmpPolicy::ForceFP32, true};
 
 TensorImplPtr
-LpNormalizeBackward::forward(const TensorImplPtr& x, double ord, int axis, double eps) {
-    Validator::input(x, "lp_normalize.x").non_null();
+LpNormalizeBackward::forward(const TensorImplPtr& x0, double ord, int axis, double eps) {
+    Validator::input(x0, "lp_normalize.x").non_null();
+    // Builds its own forward, so it asks for the schema dtype the kernel
+    // templates would have applied.  See promote_for_schema.
+    const TensorImplPtr x = promote_for_schema(schema_v1, x0);
     const int rank = static_cast<int>(x->shape().size());
     // Resolve negative axis to a non-negative index.
     if (axis < 0)
