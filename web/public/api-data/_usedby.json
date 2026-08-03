@@ -805,6 +805,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.neural_ode._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._model"
     }
   ],
   "lucid.diffeq._adjoint.odeint_adjoint": [
@@ -1728,6 +1732,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -2501,6 +2509,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._model"
     }
   ],
   "lucid.models._output.GenerationOutput": [
@@ -2531,6 +2543,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.realnvp._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._model"
     },
     {
       "kind": "module",
@@ -2919,6 +2935,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.realnvp._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._pretrained"
     },
     {
       "kind": "module",
@@ -3635,6 +3655,106 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.realnvp"
+    }
+  ],
+  "lucid.models.generative.rectified_flow": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._config.RectifiedFlowConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._pretrained"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._model.RectifiedFlowForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._pretrained"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._model.RectifiedFlowModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._pretrained"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_afhq_cat": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_afhq_cat_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_bedroom": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_bedroom_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_celeba_hq": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_celeba_hq_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_church": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_church_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_cifar": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.rectified_flow._pretrained.rectified_flow_cifar_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow"
     }
   ],
   "lucid.models.generative.vae": [
@@ -9316,6 +9436,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -9651,6 +9775,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.realnvp._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._model"
     },
     {
       "kind": "module",
