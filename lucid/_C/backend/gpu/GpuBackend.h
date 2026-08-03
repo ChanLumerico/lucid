@@ -1703,6 +1703,22 @@ public:
             a_arr = ::mlx::core::swapaxes(a_arr, -2, -1);
         if (opts.transB)
             b_arr = ::mlx::core::swapaxes(b_arr, -2, -1);
+        // MLX refuses integer operands outright — "[matmul] Only inexact
+        // types are supported" — while the product of two integer matrices
+        // is an integer matrix, which the CPU and the reference framework
+        // both answer.  Widen to float32, multiply, round back: exact while
+        // each dot product stays inside 2^24, which is the same bound the
+        // CPU's own float path carries.
+        const bool discrete = dt != Dtype::F16 && dt != Dtype::BF16 && dt != Dtype::F32
+                              && dt != Dtype::F64 && dt != Dtype::C64;
+        if (discrete) {
+            a_arr = ::mlx::core::astype(a_arr, ::mlx::core::float32);
+            b_arr = ::mlx::core::astype(b_arr, ::mlx::core::float32);
+            auto wide = ::mlx::core::matmul(a_arr, b_arr);
+            auto rounded = ::mlx::core::round(wide);
+            return Storage{gpu::wrap_mlx_array(
+                ::mlx::core::astype(rounded, gpu::to_mlx_dtype(dt)), dt)};
+        }
         auto result = ::mlx::core::matmul(a_arr, b_arr);
         // PERF: matmul produces a fresh contiguous buffer; the defensive
         // wrap-in-contiguous was forcing a redundant memcpy and breaking

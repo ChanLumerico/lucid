@@ -2420,6 +2420,12 @@ public:
     }
 
     Storage cummax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        // Exact through int64: a running extreme over widened values is the
+        // same sequence, narrowed back.
+        if (detail::is_narrow_int(dt) && dt != Dtype::Bool) {
+            const std::size_t n = shape_numel(shape);
+            return detail::narrow_int(cummax(detail::as_i64(a), shape, axis, Dtype::I64), n, dt);
+        }
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
@@ -2485,6 +2491,12 @@ public:
     }
 
     Storage cummin(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        // Exact through int64: a running extreme over widened values is the
+        // same sequence, narrowed back.
+        if (detail::is_narrow_int(dt) && dt != Dtype::Bool) {
+            const std::size_t n = shape_numel(shape);
+            return detail::narrow_int(cummin(detail::as_i64(a), shape, axis, Dtype::I64), n, dt);
+        }
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
@@ -3792,6 +3804,19 @@ public:
                                             int axis,
                                             Dtype dt,
                                             bool descending) override {
+        // int8 and int16 have no kernel here.  Ordering is exact through
+        // int64 — every narrow value fits, and comparing the widened values
+        // gives the same order — and Metal answered these already.
+        //
+        // Only the values come back narrowed.  The second half of the pair
+        // is the index tensor, which is int64 by contract whatever the
+        // operand's dtype was.
+        if (detail::is_narrow_int(dt) && dt != Dtype::Bool) {
+            auto wide = sort_select(detail::as_i64(a), input_shape, output_shape, axis,
+                                    Dtype::I64, descending);
+            const std::size_t out_n = shape_numel(output_shape);
+            return {detail::narrow_int(wide.first, out_n, dt), wide.second};
+        }
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
@@ -3830,6 +3855,11 @@ public:
                              bool keepdims,
                              Dtype dt,
                              bool is_min) override {
+        // The result is an index tensor — int64 by contract — so the
+        // operand widens and nothing narrows back.
+        if (detail::is_narrow_int(dt) && dt != Dtype::Bool)
+            return arg_reduce_index(detail::as_i64(a), shape, axis, keepdims, Dtype::I64,
+                                    is_min);
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask

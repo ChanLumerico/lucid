@@ -752,3 +752,74 @@ def test_bfloat16_agrees_across_devices(name: str) -> None:
         for d in _DEVICES
     ]
     assert np.allclose(outs[0], outs[1], rtol=2e-2), name
+
+
+# ── integer matmul and the ordering family ───────────────────────────────────
+
+
+@pytest.mark.parametrize("dtype_name", ["int8", "int16", "int32", "int64"])
+@pytest.mark.parametrize("device", _DEVICES)
+def test_integer_matmul_agrees_everywhere(dtype_name: str, device: str) -> None:
+    """Neither backend had an integer GEMM, for different reasons.
+
+    BLAS has none, and MLX refuses outright — "[matmul] Only inexact types
+    are supported" — while the product of two integer matrices is an
+    integer matrix. Both widen now, and both land on the exact answer.
+    """
+    values = np.array([[1, 2], [3, 4]])
+    x = lucid.tensor(values, dtype=getattr(lucid, dtype_name), device=device)
+    assert np.array_equal(lucid.matmul(x, x).numpy(), values @ values)
+
+
+@pytest.mark.parametrize("dtype_name", ["int8", "int16"])
+@pytest.mark.parametrize(
+    "name", ["sort", "argsort", "argmax", "kthvalue", "cummax", "cummin"]
+)
+def test_ordering_ops_take_narrow_integers(name: str, dtype_name: str) -> None:
+    """Ordering is exact through int64, so the narrow widths widen.
+
+    Every int8 and int16 value fits in an int64 and comparing the widened
+    values gives the same order, so this is the answer a native kernel
+    would have produced rather than an approximation of it. Metal answered
+    all six already.
+    """
+    values = np.array([[3, 1], [2, 4]])
+    ops = {
+        "sort": lambda t: lucid.sort(t),
+        "argsort": lambda t: lucid.argsort(t),
+        "argmax": lambda t: lucid.argmax(t),
+        "kthvalue": lambda t: lucid.kthvalue(t, 1),
+        "cummax": lambda t: lucid.cummax(t, 0),
+        "cummin": lambda t: lucid.cummin(t, 0),
+    }
+    outs = []
+    for device in _DEVICES:
+        got = ops[name](
+            lucid.tensor(values, dtype=getattr(lucid, dtype_name), device=device)
+        )
+        got = got[0] if isinstance(got, tuple) else got
+        outs.append(np.asarray(got.numpy()))
+    assert np.array_equal(outs[0], outs[1]), f"{name} disagrees across devices"
+
+
+def test_sort_narrow_integer_keeps_its_dtype() -> None:
+    """The values narrow back to the caller's width; the indices do not.
+
+    An index tensor's dtype is the framework's own choice and is checked
+    across devices rather than against a literal — asserting int64 here
+    was asserting my assumption, and Lucid answers int32.
+    """
+    values = np.array([[3, 1], [2, 4]])
+    for device in _DEVICES:
+        x = lucid.tensor(values, dtype=lucid.int8, device=device)
+        sorted_values = lucid.sort(x)
+        sorted_values = (
+            sorted_values[0] if isinstance(sorted_values, tuple) else sorted_values
+        )
+        assert str(sorted_values.dtype).endswith("int8"), device
+
+    index_dtypes = {
+        str(lucid.argsort(lucid.tensor(values, dtype=lucid.int8, device=d)).dtype)
+        for d in _DEVICES
+    }
+    assert len(index_dtypes) == 1, f"index dtype differs across devices: {index_dtypes}"
