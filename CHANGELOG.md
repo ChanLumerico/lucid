@@ -132,6 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - close the remaining dtype gates on both devices
 
+- NaN through minimum/maximum, and the gradient of ceil_
+
 ### Changed
 
 - give the engine ops one shared operand check

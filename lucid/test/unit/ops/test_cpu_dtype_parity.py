@@ -1118,3 +1118,101 @@ def test_local_response_norm_promotes_rather_than_degenerating() -> None:
         assert np.allclose(
             flat, np.asarray(as_float.numpy(), dtype=np.float64).ravel(), atol=1e-5
         ), device
+
+
+# ── NaN, and the gradient of an op that has none ─────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "dtype_name,np_dtype", [("float32", np.float32), ("float64", np.float64)]
+)
+@pytest.mark.parametrize("name", ["minimum", "maximum"])
+def test_minimum_and_maximum_propagate_nan_at_both_widths(
+    name: str, dtype_name: str, np_dtype
+) -> None:
+    """``vDSP_vmaxD`` does not propagate NaN; ``vDSP_vmax`` does.
+
+    Same primitive family, opposite answer, nothing in the documentation
+    distinguishing them — so whether an op saw a NaN depended on the
+    dtype it was called at.  Both widths are pinned here, including the
+    float one that is still on vDSP, so a change in Accelerate is a test
+    failure rather than a silent one.
+    """
+    a = np.array([np.nan, 1.0, 3.0], dtype=np_dtype)
+    b = np.array([2.0, np.nan, 2.0], dtype=np_dtype)
+    for device in _DEVICES:
+        if dtype_name == "float64" and device == "metal":
+            continue  # Metal has no float64
+        got = getattr(lucid, name)(
+            lucid.tensor(
+                np.ascontiguousarray(a), dtype=getattr(lucid, dtype_name), device=device
+            ),
+            lucid.tensor(
+                np.ascontiguousarray(b), dtype=getattr(lucid, dtype_name), device=device
+            ),
+        )
+        flat = np.asarray(got.numpy(), dtype=np.float64)
+        assert np.isnan(
+            flat[0]
+        ), f"{name}/{dtype_name}/{device}: lost NaN from the left"
+        assert np.isnan(
+            flat[1]
+        ), f"{name}/{dtype_name}/{device}: lost NaN from the right"
+        assert flat[2] == (2.0 if name == "minimum" else 3.0)
+
+
+@pytest.mark.parametrize("name", ["ceil_", "floor_", "round_", "sign_"])
+def test_non_differentiable_inplace_ops_end_the_graph(name: str) -> None:
+    """They returned the gradient of whatever produced the tensor.
+
+    ``y = x * 1.0; y.ceil_(); y.sum().backward()`` gave ``dx = 1``.  The
+    in-place wrapper adopts the forward's graph position, and these ops
+    build no node to adopt — so the old one stayed and the gradient
+    flowed through as if the call had not happened.  The reference
+    answers 0; Lucid's own out-of-place ``ceil`` answers with no gradient
+    at all, which is the convention followed here.
+    """
+    x = lucid.tensor(np.array([1.3, 2.7, 3.5]), requires_grad=True)
+    y = x * 1.0
+    getattr(y, name)()
+    y.sum().backward()
+    assert x.grad is None, f"{name} passed a gradient through: {x.grad}"
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("exp_", np.exp(np.array([1.3, 2.7, 3.5]))),
+        ("sin_", np.cos(np.array([1.3, 2.7, 3.5]))),
+        ("sqrt_", 0.5 / np.sqrt(np.array([1.3, 2.7, 3.5]))),
+    ],
+)
+def test_differentiable_inplace_ops_still_carry_their_gradient(
+    name: str, expected: np.ndarray
+) -> None:
+    """Guard the instrument: the cut must only apply where there is no node."""
+    x = lucid.tensor(np.array([1.3, 2.7, 3.5]), requires_grad=True)
+    y = x * 1.0
+    getattr(y, name)()
+    y.sum().backward()
+    assert np.allclose(np.asarray(x.grad.numpy()).ravel(), expected), name
+
+
+def test_inplace_under_no_grad_keeps_the_chain() -> None:
+    """Inside ``no_grad`` the write is an ordinary mutation.
+
+    Severing there would lose a chain the caller means to keep; the
+    version counter is what guards that case.
+    """
+    x = lucid.tensor(np.array([1.3, 2.7]), requires_grad=True)
+    y = x * 2.0
+    with lucid.no_grad():
+        y.ceil_()
+    assert y.requires_grad, "no_grad in-place cut a graph it should have left alone"
+
+
+def test_a_parameter_survives_a_non_differentiable_inplace_op() -> None:
+    """A leaf has no grad_fn to cut, so it keeps requiring grad."""
+    p = lucid.nn.Parameter(lucid.tensor(np.array([1.3, 2.7])))
+    p.round_()
+    assert p.requires_grad

@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "../../core/Error.h"
+#include "../../core/GradMode.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
@@ -100,8 +101,34 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
     // ``a``'s slot, and bumping here reported the legitimate write as
     // tampering — VersionMismatch on every differentiable in-place call.
     // Outside the graph the counter still does its job.
-    if (!adopted)
+    if (!adopted) {
+        // Nothing to adopt means the op is not differentiable — ``ceil``,
+        // ``floor``, ``round`` and ``sign`` all end the graph.  ``a``'s
+        // contents no longer depend on what they were, so leaving its old
+        // grad_fn in place answered with the gradient of whatever produced
+        // ``a``, unchanged:
+        //
+        //     y = x * 1.0; y.ceil_(); y.sum().backward()  ->  dx = 1
+        //
+        // where the reference gives 0 and Lucid's own out-of-place
+        // ``ceil`` gives no gradient at all.  Cut it, which is the
+        // out-of-place convention: a non-differentiable op ends the graph.
+        //
+        // Only under an active GradMode.  Inside ``no_grad`` the write is
+        // an ordinary mutation of a tensor that belongs to a graph built
+        // earlier, and severing it there would lose a chain the caller
+        // means to keep — the version counter guards that case, and it
+        // still runs.
+        //
+        // A leaf has no grad_fn to cut and keeps requiring grad, so
+        // ``parameter.zero_()`` stays a parameter.
+        if (GradMode::is_enabled() && a->grad_fn()) {
+            a->set_grad_fn(nullptr);
+            a->set_grad_output_nr(0);
+            a->set_requires_grad(false);
+        }
         a->bump_version();
+    }
     return a;
 }
 
@@ -232,8 +259,34 @@ TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     // ``a``'s slot, and bumping here reported the legitimate write as
     // tampering — VersionMismatch on every differentiable in-place call.
     // Outside the graph the counter still does its job.
-    if (!adopted)
+    if (!adopted) {
+        // Nothing to adopt means the op is not differentiable — ``ceil``,
+        // ``floor``, ``round`` and ``sign`` all end the graph.  ``a``'s
+        // contents no longer depend on what they were, so leaving its old
+        // grad_fn in place answered with the gradient of whatever produced
+        // ``a``, unchanged:
+        //
+        //     y = x * 1.0; y.ceil_(); y.sum().backward()  ->  dx = 1
+        //
+        // where the reference gives 0 and Lucid's own out-of-place
+        // ``ceil`` gives no gradient at all.  Cut it, which is the
+        // out-of-place convention: a non-differentiable op ends the graph.
+        //
+        // Only under an active GradMode.  Inside ``no_grad`` the write is
+        // an ordinary mutation of a tensor that belongs to a graph built
+        // earlier, and severing it there would lose a chain the caller
+        // means to keep — the version counter guards that case, and it
+        // still runs.
+        //
+        // A leaf has no grad_fn to cut and keeps requiring grad, so
+        // ``parameter.zero_()`` stays a parameter.
+        if (GradMode::is_enabled() && a->grad_fn()) {
+            a->set_grad_fn(nullptr);
+            a->set_grad_output_nr(0);
+            a->set_requires_grad(false);
+        }
         a->bump_version();
+    }
     return a;
 }
 

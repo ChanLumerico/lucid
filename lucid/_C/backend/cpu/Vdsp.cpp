@@ -13,8 +13,10 @@
 
 #include "Vdsp.h"
 
+#include <cmath>
 #include <complex>
 #include <cstring>
+#include <limits>
 
 #include <Accelerate/Accelerate.h>
 
@@ -143,12 +145,36 @@ void vmin_f32(const float* a, const float* b, float* out, std::size_t n) {
     vDSP_vmin(a, 1, b, 1, out, 1, L(n));
 }
 
+// ``vDSP_vmaxD`` and ``vDSP_vminD`` do not propagate NaN — their
+// single-precision counterparts do.  Same primitive family, opposite
+// answer, and nothing in the documentation distinguishes them:
+// ``minimum([nan, 1, 3], [2, nan, 2])`` came back ``[2, nan, 2]`` in
+// double and ``[nan, nan, 2]`` in float, so whether an op saw a NaN
+// depended on the dtype it was called at.  The reference propagates from
+// either operand at both widths, and so does the float path here, so the
+// double one is the one that was wrong.
+//
+// Written out rather than corrected in a second pass: a fix-up would
+// re-read the whole buffer to repair what one compare avoids.  The float
+// versions stay on vDSP because they are already right and already
+// vectorised — the test pins both, so a change in Accelerate is a test
+// failure rather than a silent one.
 void vmax_f64(const double* a, const double* b, double* out, std::size_t n) {
-    vDSP_vmaxD(a, 1, b, 1, out, 1, L(n));
+    for (std::size_t i = 0; i < n; ++i) {
+        if (std::isnan(a[i]) || std::isnan(b[i]))
+            out[i] = std::numeric_limits<double>::quiet_NaN();
+        else
+            out[i] = a[i] > b[i] ? a[i] : b[i];
+    }
 }
 
 void vmin_f64(const double* a, const double* b, double* out, std::size_t n) {
-    vDSP_vminD(a, 1, b, 1, out, 1, L(n));
+    for (std::size_t i = 0; i < n; ++i) {
+        if (std::isnan(a[i]) || std::isnan(b[i]))
+            out[i] = std::numeric_limits<double>::quiet_NaN();
+        else
+            out[i] = a[i] < b[i] ? a[i] : b[i];
+    }
 }
 
 void vge_mask_f32(const float* a, const float* b, float* out, std::size_t n) {
