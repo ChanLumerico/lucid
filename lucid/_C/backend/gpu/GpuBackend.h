@@ -508,14 +508,26 @@ public:
     Storage complex_combine(const Storage& re, const Storage& im, const Shape&) override {
         const auto& re_g = std::get<GpuStorage>(re);
         const auto& im_g = std::get<GpuStorage>(im);
-        // ``re + 1j * im``: cast both to complex64, scale imag by ``j``,
-        // then add.  No native ``complex(r, i)`` builder in MLX yet, so we
-        // construct it from the algebraic identity.
-        auto re_c = ::mlx::core::astype(*re_g.arr, ::mlx::core::complex64);
-        auto im_c = ::mlx::core::astype(*im_g.arr, ::mlx::core::complex64);
-        ::mlx::core::array j(std::complex<float>(0.0f, 1.0f));
-        auto out = ::mlx::core::contiguous(::mlx::core::add(re_c, ::mlx::core::multiply(im_c, j)));
-        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::C64)};
+        // Laid out, not computed.
+        //
+        // This used to build the number from the identity ``re + 1j·im``,
+        // which is exact in real arithmetic and not in IEEE: the real part
+        // of ``(im + 0i)·(0 + 1i)`` is ``im·0``, and that is NaN whenever
+        // ``im`` is infinite.  ``complex(inf, inf)`` came back
+        // ``nan + infj`` — the imaginary part survived and the real one was
+        // destroyed by a multiplication whose only purpose was to move it.
+        // ``polar`` inherited it: an infinite radius gave a NaN real part
+        // on Metal where the CPU and the reference both give infinity.
+        //
+        // A complex64 *is* two adjacent float32s, so stacking the parts and
+        // reinterpreting the bytes moves them without arithmetic touching
+        // either one.
+        auto re_f = ::mlx::core::astype(*re_g.arr, ::mlx::core::float32);
+        auto im_f = ::mlx::core::astype(*im_g.arr, ::mlx::core::float32);
+        auto pairs = ::mlx::core::stack({re_f, im_f}, -1);
+        auto out = ::mlx::core::squeeze(
+            ::mlx::core::view(::mlx::core::contiguous(pairs), ::mlx::core::complex64), -1);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::C64)};
     }
 
     Storage complex_conj(const Storage& a, const Shape&, Dtype dt) override {
@@ -2449,6 +2461,27 @@ public:
     Storage linalg_cholesky(const Storage& a, const Shape&, bool upper, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto out = ::mlx::core::linalg::cholesky(*ga.arr, upper, k_linalg_stream);
+
+        // MLX does not report a failed factorisation — it returns whatever
+        // the recursion produced.  A matrix that is not positive definite
+        // came back as an ordinary-looking factor with an impossible
+        // entry: ``[[1, 2], [2, 1]]`` gave ``[1, 0, 2, -3]``, a Cholesky
+        // factor with a *negative* diagonal.  LAPACK reports it and the
+        // CPU raises; the reference raises; Metal returned the garbage.
+        //
+        // The factorisation is defined exactly when every diagonal entry
+        // of the factor is finite and strictly positive, so that is the
+        // test.  It forces an evaluation, which the CPU's LAPACK call
+        // already does — the two devices now cost the same as well as
+        // answering the same.
+        auto diag = ::mlx::core::diagonal(out, 0, -2, -1, k_linalg_stream);
+        auto zero = ::mlx::core::array(0.0f, diag.dtype());
+        auto broken = ::mlx::core::any(
+            ::mlx::core::logical_or(::mlx::core::less_equal(diag, zero), ::mlx::core::isnan(diag)),
+            k_linalg_stream);
+        broken.eval();
+        if (broken.item<bool>())
+            ErrorBuilder("gpu_backend::linalg_cholesky").fail("matrix is not positive definite");
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
@@ -3286,9 +3319,29 @@ public:
             auto sizes = mx::reshape(mx::sum(oh, std::vector<int>{1}, false), {B, 1});
             auto empty = mx::broadcast_to(mx::less_equal(sizes, mx::array(0.0f, mdt)), {B, D});
             out = mx::where(empty, mx::zeros({B, D}, mdt), out);
-        } else {                        // sum / mean
-            out = mx::matmul(oh, emb);  // (B, D) weighted sum
-            if (mode == 1) {            // mean
+        } else {  // sum / mean
+            // Scattered, not multiplied.
+            //
+            // The sum used to be ``matmul(oh, emb)`` — a one-hot matrix
+            // against the gathered rows — which is a masked reduction
+            // written as arithmetic, and the mask is zero for every row
+            // outside the bag.  ``0 * inf`` is NaN, so one infinite entry
+            // anywhere in the table poisoned every bag that did not contain
+            // it: the CPU and the reference both answered ``[nan, inf]``
+            // for a row summing NaN and infinity, and Metal answered
+            // ``[nan, nan]``.
+            //
+            // A scatter-add adds each row exactly once into its own bag and
+            // never touches the others, so a value outside the bag cannot
+            // reach the result at all.  Rows excluded by ``padding_idx`` are
+            // *selected* to zero first, for the same reason.
+            auto keep_row = mx::broadcast_to(
+                mx::reshape(mx::greater(valid, mx::array(0.0f, mdt)), {n_idx, 1}), {n_idx, D});
+            auto contributions = mx::where(keep_row, emb, mx::zeros({n_idx, D}, mdt));
+            auto seg_col = mx::broadcast_to(mx::reshape(seg, {n_idx, 1}), {n_idx, D});
+            out = mx::scatter_add_axis(mx::zeros({B, D}, mdt), mx::astype(seg_col, mx::int32),
+                                       contributions, 0);
+            if (mode == 1) {  // mean
                 auto sizes = mx::reshape(mx::sum(oh, std::vector<int>{1}, false), {B, 1});
                 auto denom = mx::broadcast_to(mx::maximum(sizes, mx::array(1.0f, mdt)), {B, D});
                 out = mx::divide(out, denom);

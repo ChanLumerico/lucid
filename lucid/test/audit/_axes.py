@@ -112,6 +112,69 @@ class Axis:
             return False
         return not np.array_equal(first, second, equal_nan=first.dtype.kind == "f")
 
+    @staticmethod
+    def _comparable(array: np.ndarray) -> np.ndarray:
+        """An array in a form ``np.allclose`` can read.
+
+        ``astype(float)`` on a complex array **discards the imaginary
+        part**, silently.  Every complex op was being compared on half of
+        its answer, so a backend could have got the imaginary part
+        entirely wrong and this axis would have called it agreement.
+        """
+        if array.dtype.kind == "c":
+            return np.stack([array.real, array.imag], axis=-1).astype(float)
+        return array.astype(float)
+
+    @staticmethod
+    def _same_multiset(a: np.ndarray, b: np.ndarray) -> bool:
+        """Whether the two hold the same magnitudes in a different order.
+
+        A decomposition is not unique.  ``eigvals`` has no defined order,
+        and ``svd``'s singular vectors are fixed only up to the sign of
+        each column — so the two devices can return different valid
+        answers to the same question, and did: Metal listed the same four
+        eigenvalues as the CPU starting from a different one.
+
+        Reported separately rather than passed, because "the same numbers
+        arranged differently" is a weaker statement than agreement and the
+        finding should say which one was established.
+        """
+        if a.size < 2 or a.shape != b.shape:
+            return False
+        return bool(
+            np.allclose(
+                np.sort(np.abs(a).reshape(-1)),
+                np.sort(np.abs(b).reshape(-1)),
+                rtol=2e-5,
+                atol=1e-6,
+                equal_nan=True,
+            )
+        )
+
+    def _ignores_its_values(self, fn: Any, call: "Call") -> bool:
+        """Whether the answer is the same for two different inputs.
+
+        Consulted only once the two devices have already disagreed, where
+        it separates "computed something different" from "reported
+        something about the device".  ``Tensor.is_metal`` is False on the
+        CPU and True on Metal for every input there is, which is the
+        correct answer twice rather than a defect.
+        """
+        try:
+            base = call.base
+        except TypeError:
+            return False
+        try:
+            first = _probe.to_numpy(fn(*call.with_primary(base).args, **call.kwargs))
+            other = _probe.to_numpy(
+                fn(*call.with_primary(base * 2.0 + 1.0).args, **call.kwargs)
+            )
+        except Exception:  # noqa: BLE001 - surveying, not asserting
+            return False
+        if first is None or other is None or first.shape != other.shape:
+            return False
+        return bool(np.array_equal(first, other, equal_nan=first.dtype.kind == "f"))
+
     def _working_call(
         self, fn: Any, symbol: "Symbol", ctx: Context
     ) -> "tuple[Call, str, Any] | tuple[None, None, str]":
@@ -649,14 +712,26 @@ class DeviceAxis(Axis):
         a, b = _probe.to_numpy(cpu_out), _probe.to_numpy(metal_out)
         if a is None or b is None or a.shape != b.shape:
             return self._finding(symbol, Status.SKIP, "outputs not comparable")
-        if not np.allclose(
-            a.astype(float), b.astype(float), rtol=2e-5, atol=1e-6, equal_nan=True
-        ):
+        af, bf = self._comparable(a), self._comparable(b)
+        if not np.allclose(af, bf, rtol=2e-5, atol=1e-6, equal_nan=True):
+            if self._ignores_its_values(fn, call):
+                return self._finding(
+                    symbol,
+                    Status.NOT_APPLICABLE,
+                    "the answer does not depend on the values — this reports "
+                    "the device, and both answers are right",
+                )
+            if self._same_multiset(af, bf):
+                return self._finding(
+                    symbol,
+                    Status.NOT_APPLICABLE,
+                    "same magnitudes in a different arrangement — a "
+                    "decomposition has no canonical order or sign",
+                )
             return self._finding(
                 symbol,
                 Status.FAIL,
-                f"{domain}: cpu and metal differ by "
-                f"{np.nanmax(np.abs(a.astype(float) - b.astype(float))):.3e}",
+                f"{domain}: cpu and metal differ by {np.nanmax(np.abs(af - bf)):.3e}",
             )
 
         # The probe the old sweeps did not carry — but only where a NaN
@@ -683,8 +758,8 @@ class DeviceAxis(Axis):
         if nan_cpu is None or nan_metal is None or nan_cpu.shape != nan_metal.shape:
             return self._finding(symbol, Status.PASS, f"{domain}: finite inputs agree")
         if not np.allclose(
-            nan_cpu.astype(float),
-            nan_metal.astype(float),
+            self._comparable(nan_cpu),
+            self._comparable(nan_metal),
             rtol=2e-5,
             atol=1e-6,
             equal_nan=True,

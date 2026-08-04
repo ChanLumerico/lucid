@@ -342,3 +342,183 @@ def test_unfold_gradient_ignores_the_padding_on_both_devices() -> None:
         grads.append(np.asarray(t.grad.numpy(), dtype=np.float64).ravel())
     assert np.array_equal(grads[0], grads[1])
     assert np.array_equal(grads[0], np.full(9, 4.0))
+
+
+# ── a factorisation that failed has to say so ────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "label,matrix",
+    [
+        ("not positive-definite", [[1.0, 2.0], [2.0, 1.0]]),
+        ("contains NaN", [[float("nan"), 0.0], [0.0, 4.0]]),
+    ],
+)
+def test_cholesky_refuses_a_matrix_it_cannot_factor(label, matrix) -> None:
+    """Metal returned a factor with a negative diagonal and did not raise.
+
+    MLX does not report a failed factorisation — it returns whatever the
+    recursion produced, and ``[[1, 2], [2, 1]]`` produced ``[1, 0, 2, -3]``:
+    a Cholesky factor whose diagonal contains a negative number, which no
+    Cholesky factor does.  LAPACK reports it, the CPU raised, the
+    reference raised.  The factorisation exists exactly when every
+    diagonal entry of the factor is finite and positive, so that is the
+    test now applied on both devices.
+    """
+    values = np.array(matrix, dtype=np.float32)
+    for device in _DEVICES:
+        with pytest.raises(
+            Exception
+        ):  # noqa: B017 - the two backends raise differently
+            lucid.linalg.cholesky(
+                lucid.tensor(
+                    np.ascontiguousarray(values), dtype=lucid.float32, device=device
+                )
+            )
+
+
+@pytest.mark.parametrize(
+    "label,matrix,failed",
+    [
+        ("not positive-definite", [[1.0, 2.0], [2.0, 1.0]], True),
+        ("contains NaN", [[float("nan"), 0.0], [0.0, 4.0]], True),
+        ("valid", [[4.0, 1.0], [1.0, 3.0]], False),
+    ],
+)
+def test_cholesky_ex_reports_failure_on_both_devices(label, matrix, failed) -> None:
+    """``info`` is the whole point of the ``_ex`` variant.
+
+    It read 0 — success — on Metal for a matrix that has no Cholesky
+    factor, because the wrapper decided from whether an exception was
+    raised and Metal was not raising one.  A caller testing ``info``
+    would have gone on to use the garbage.
+    """
+    values = np.array(matrix, dtype=np.float32)
+    infos, factors = [], []
+    for device in _DEVICES:
+        factor, info = lucid.linalg.cholesky_ex(
+            lucid.tensor(
+                np.ascontiguousarray(values), dtype=lucid.float32, device=device
+            )
+        )
+        infos.append(int(np.asarray(info.numpy()).ravel()[0]))
+        factors.append(np.asarray(factor.numpy(), dtype=np.float64))
+    assert infos[0] == infos[1], f"{label}: info differs across devices: {infos}"
+    assert (infos[0] != 0) is failed, f"{label}: info={infos[0]}"
+    assert np.array_equal(factors[0], factors[1], equal_nan=True), label
+
+
+# ── embedding_bag ────────────────────────────────────────────────────────────
+
+
+def test_embedding_bag_sums_without_a_one_hot_matmul() -> None:
+    """Metal reduced with ``matmul(one_hot, rows)``, and ``0 * inf`` is NaN.
+
+    A masked reduction written as arithmetic lets a value from *outside*
+    the bag reach the result: one infinite entry anywhere in the table
+    turned every bag NaN.  A scatter-add adds each row once into its own
+    bag and never touches the others.
+    """
+    weight = np.array([[np.nan, np.inf], [1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    index = np.array([0, 1, 2, 0], dtype=np.int64)
+    offsets = np.array([0, 2], dtype=np.int64)
+    outs = []
+    for device in _DEVICES:
+        got = F.embedding_bag(
+            lucid.tensor(index, dtype=lucid.int64, device=device),
+            lucid.tensor(
+                np.ascontiguousarray(weight), dtype=lucid.float32, device=device
+            ),
+            lucid.tensor(offsets, dtype=lucid.int64, device=device),
+            mode="sum",
+        )
+        outs.append(np.asarray(got.numpy(), dtype=np.float64).ravel())
+    # column 0 sums NaN, column 1 sums infinity — neither may become the other
+    assert np.array_equal(outs[0], outs[1], equal_nan=True), outs
+    assert np.isnan(outs[0][0]) and np.isposinf(outs[0][1]), outs[0]
+
+
+@pytest.mark.parametrize("mode", ["sum", "mean", "max"])
+def test_embedding_bag_modes_agree_across_devices(mode: str) -> None:
+    """Guard the instrument: scattering must compute what the matmul did."""
+    rng = np.random.default_rng(3)
+    weight = rng.random((5, 3)).astype(np.float32)
+    index = np.array([0, 2, 4, 1, 3], dtype=np.int64)
+    offsets = np.array([0, 3], dtype=np.int64)
+    outs = []
+    for device in _DEVICES:
+        got = F.embedding_bag(
+            lucid.tensor(index, dtype=lucid.int64, device=device),
+            lucid.tensor(
+                np.ascontiguousarray(weight), dtype=lucid.float32, device=device
+            ),
+            lucid.tensor(offsets, dtype=lucid.int64, device=device),
+            mode=mode,
+        )
+        outs.append(np.asarray(got.numpy(), dtype=np.float64))
+    assert np.allclose(outs[0], outs[1], rtol=1e-5), mode
+
+
+def test_embedding_bag_refuses_a_mode_it_does_not_know() -> None:
+    """``.get(mode, 1)`` answered "mean" for anything unrecognised.
+
+    ``mode="sun"`` returned an average and said nothing, which is not the
+    kind of thing to guess at from a typo.
+    """
+    rng = np.random.default_rng(3)
+    with pytest.raises(ValueError, match="mode must be one of"):
+        F.embedding_bag(
+            lucid.tensor(np.array([0, 1], dtype=np.int64), dtype=lucid.int64),
+            lucid.tensor(rng.random((3, 2)).astype(np.float32), dtype=lucid.float32),
+            lucid.tensor(np.array([0], dtype=np.int64), dtype=lucid.int64),
+            mode="sun",
+        )
+
+
+# ── complex construction ─────────────────────────────────────────────────────
+
+
+def test_complex_carries_an_infinite_part() -> None:
+    """Metal built the number as ``re + 1j·im``, which is not the identity.
+
+    The real part of ``(im + 0i)·(0 + 1i)`` is ``im·0``, and that is NaN
+    whenever ``im`` is infinite — so ``complex(inf, inf)`` came back
+    ``nan + infj``: the imaginary part survived and the real one was
+    destroyed by a multiplication whose only job was to move it.  A
+    complex64 is two adjacent float32s, so the parts are laid out rather
+    than computed.
+    """
+    re = np.array([np.inf, -np.inf, np.nan, 1.0, 0.0], dtype=np.float32)
+    im = np.array([np.inf, 2.0, 1.0, -3.0, 0.0], dtype=np.float32)
+    outs = []
+    for device in _DEVICES:
+        got = lucid.complex(
+            lucid.tensor(np.ascontiguousarray(re), dtype=lucid.float32, device=device),
+            lucid.tensor(np.ascontiguousarray(im), dtype=lucid.float32, device=device),
+        )
+        outs.append(np.asarray(got.numpy()))
+    assert np.array_equal(outs[0].real, outs[1].real, equal_nan=True)
+    assert np.array_equal(outs[0].imag, outs[1].imag, equal_nan=True)
+    assert np.isposinf(outs[0][0].real) and np.isposinf(outs[0][0].imag)
+    assert np.isneginf(outs[0][1].real) and outs[0][1].imag == 2.0
+
+
+def test_polar_carries_an_infinite_radius() -> None:
+    """It inherited the defect above: ``polar(inf, θ)`` had a NaN real part."""
+    radius = np.array([np.inf, np.inf, 2.0], dtype=np.float32)
+    angle = np.array([0.5, -0.5, 0.5], dtype=np.float32)
+    outs = []
+    for device in _DEVICES:
+        got = lucid.polar(
+            lucid.tensor(
+                np.ascontiguousarray(radius), dtype=lucid.float32, device=device
+            ),
+            lucid.tensor(
+                np.ascontiguousarray(angle), dtype=lucid.float32, device=device
+            ),
+        )
+        outs.append(np.asarray(got.numpy()))
+    for out in outs:
+        assert np.isposinf(out[0].real) and np.isposinf(out[0].imag), out
+        assert np.isposinf(out[1].real) and np.isneginf(out[1].imag), out
+    assert np.allclose(outs[0].real, outs[1].real, rtol=1e-5, equal_nan=True)

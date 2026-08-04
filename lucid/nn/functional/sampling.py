@@ -525,7 +525,14 @@ def embedding_bag(
     (2, 4)
     """
     _mode_map = {"sum": 0, "mean": 1, "max": 2}
-    mode_int = _mode_map.get(mode, 1)
+    # ``.get(mode, 1)`` silently answered "mean" for anything it did not
+    # recognise, so ``mode="sun"`` returned an average and said nothing.
+    # A reduction is not the kind of thing to guess at from a typo.
+    if mode not in _mode_map:
+        raise ValueError(
+            f"embedding_bag: mode must be one of " f"{sorted(_mode_map)}, got {mode!r}"
+        )
+    mode_int = _mode_map[mode]
     pad_idx = int(padding_idx) if padding_idx is not None else -1
 
     # Same bounds contract as ``embedding`` — the engine gather does not check.
