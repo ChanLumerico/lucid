@@ -144,6 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - NaN through threshold, entr, and Metal's unfold padding
 
+- Binomial could not score its own samples
+
 ### Changed
 
 - give the engine ops one shared operand check

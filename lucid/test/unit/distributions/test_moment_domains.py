@@ -174,3 +174,58 @@ def test_relaxed_families_refuse_a_non_positive_temperature(
         D.RelaxedOneHotCategorical(
             temperature=_T(temperature), probs=_T(0.5, 0.5)
         ).rsample((4,))
+
+
+# ── scoring at a degenerate probability ──────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "total,prob,value,expected",
+    [
+        (0.0, 1.0, 0.0, 0.0),  # the only outcome there is
+        (0.0, 0.0, 0.0, 0.0),
+        (5.0, 1.0, 5.0, 0.0),  # certain
+        (5.0, 1.0, 0.0, "-inf"),  # impossible
+        (5.0, 0.0, 0.0, 0.0),
+        (5.0, 0.0, 5.0, "-inf"),
+        (5.0, 0.5, 2.0, -1.1631508098056809),
+    ],
+)
+def test_binomial_scores_a_degenerate_probability(
+    total: float, prob: float, value: float, expected
+) -> None:
+    """A degenerate p makes the logit infinite, and both terms use it.
+
+    ``k·l − n·softplus(l)`` is ``5·inf − 5·inf`` for ``Binomial(5, p=1)``
+    at k=5 — NaN, for an outcome that is certain.  The equivalent
+    ``−k·softplus(−l) − (n−k)·softplus(l)`` puts each infinity in the term
+    whose count is zero, where the guard reaches it before the multiply.
+    """
+    dist = D.Binomial(total_count=_T(total), probs=_T(prob))
+    got = _scalar(dist.log_prob(_T(value)))
+    if expected == "-inf":
+        assert np.isneginf(got), got
+    else:
+        assert np.isclose(got, expected, atol=1e-9), got
+
+
+def test_binomial_scores_its_own_samples() -> None:
+    """Including at p = 1, where the only draw is the certain one."""
+    for total, prob in ((0.0, 1.0), (5.0, 0.5), (10.0, 0.3)):
+        dist = D.Binomial(total_count=_T(total), probs=_T(prob))
+        drawn = dist.sample((32,))
+        scored = np.asarray(dist.log_prob(drawn).numpy(), dtype=np.float64)
+        assert np.isfinite(scored).all(), (total, prob, scored)
+
+
+def test_binomial_keeps_its_precision_at_a_tiny_probability() -> None:
+    """``log C(20,10) + 10·log(1e-8)`` is -172.08, and that is the answer.
+
+    The reference reports -147.3 here: it carries the probability through
+    float32 and 1e-8 clamps to the epsilon, 1.19e-7.  The check is against
+    the arithmetic rather than against the other framework.
+    """
+    dist = D.Binomial(total_count=_T(20.0), probs=_T(1e-8))
+    got = _scalar(dist.log_prob(_T(10.0)))
+    expected = float(np.log(184756.0) + 10.0 * np.log(1e-8) + 10.0 * np.log1p(-1e-8))
+    assert np.isclose(got, expected, rtol=1e-9), (got, expected)

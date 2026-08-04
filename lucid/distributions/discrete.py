@@ -498,13 +498,51 @@ class Binomial(Distribution):
         # log p(k) = lgamma(n+1) − lgamma(k+1) − lgamma(n−k+1)
         #           + k·log(p) + (n−k)·log(1−p).
         n: Tensor = self.total_count
-        k: Tensor = value
+        # ``sample`` answers in the integer dtype a count belongs in, and
+        # everything below is float arithmetic — so the counts join the
+        # parameters rather than the other way round.
+        k: Tensor = value.to(self._logits.dtype)
         log_comb: Tensor = (
             lucid.lgamma(n + 1.0) - lucid.lgamma(k + 1.0) - lucid.lgamma(n - k + 1.0)
         )
         # Stable form via logits: k·l − n·softplus(l).
         l: Tensor = self._logits
-        return log_comb + k * l - n * (1.0 + l.exp()).log()
+
+        # Written as ``−k·softplus(−l) − (n−k)·softplus(l)`` rather than
+        # ``k·l − n·softplus(l)``.  The two are algebraically the same —
+        # ``softplus(−l) = softplus(l) − l`` — and they differ at the
+        # degenerate probabilities, where the logit is infinite.
+        #
+        # ``Binomial(n=5, p=1)``: the old form is ``5·inf − 5·inf``, which
+        # is NaN, for an outcome that is certain and whose log-probability
+        # is 0.  In this arrangement each infinity sits in the term whose
+        # count is zero, so the guards below reach it before it is
+        # multiplied.  ``Binomial(n=0, p=1)`` was the same defect one step
+        # earlier: the distribution could not score the only sample it can
+        # draw.
+        #
+        # Guarded on the *operand*, not on the product.  Replacing a NaN
+        # afterwards leaves it in the gradient, where the mask multiplies
+        # it straight back in.
+        zero_k, zero_n = lucid.zeros_like(k), lucid.zeros_like(n - k)
+        # ``softplus`` rather than ``log(1 + exp(l))``, which reaches inf by
+        # l ≈ 89 in float32 and takes the answer with it.
+        lower = lucid.where(k == zero_k, zero_k, _softplus(-l))
+        upper = lucid.where(n - k == zero_n, zero_n, _softplus(l))
+        return log_comb - k * lower - (n - k) * upper
+
+
+def _softplus(x: Tensor) -> Tensor:
+    """``log(1 + exp(x))``, evaluated so the exponential cannot overflow.
+
+    ``exp`` reaches infinity by x ≈ 89 in float32, and the naive form then
+    answers inf for a quantity that is only about 89.  The standard
+    rearrangement takes the exponential of the *negative* magnitude, which
+    is always in (0, 1], and adds back the linear part:
+
+        softplus(x) = max(x, 0) + log1p(exp(-|x|))
+    """
+    return lucid.maximum(x, lucid.zeros_like(x)) + lucid.log1p((-lucid.abs(x)).exp())
 
 
 class NegativeBinomial(Distribution):
