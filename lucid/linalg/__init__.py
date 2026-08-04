@@ -381,7 +381,26 @@ def norm(
         eff_dim = [int(dim)]
     else:
         eff_dim = [int(d) for d in dim]
-    return _wrap(_la.norm(_unwrap(x), eff_ord, eff_dim, bool(keepdim)))
+    # Scaled, so the squaring cannot overflow on the way to a finite
+    # answer.  ``norm([1e200, 1e200])`` is 1.41e200 — an ordinary double —
+    # and computing it as ``sqrt(Σ x²)`` reaches infinity at the first
+    # square and never comes back.  Factoring out the largest magnitude
+    # first puts every ratio in [0, 1], so nothing squares above 1.
+    #
+    # The reference overflows here too; this is a place Lucid can simply
+    # be right rather than a place it was wrong.  BLAS's own ``nrm2`` has
+    # done the same rescaling for the same reason since the seventies.
+    #
+    # ``m == 0`` means every element is zero and so is the answer, so the
+    # ratio is taken against a floor and multiplied back by ``m``, which
+    # returns the zero.
+    scale = lucid.max(lucid.abs(x))
+    # The smallest normal double, written out: this module is a compute
+    # path and may not import numpy (H4).
+    tiny = lucid.full_like(scale, 2.2250738585072014e-308)
+    safe = lucid.maximum(scale, tiny)
+    scaled = _wrap(_la.norm(_unwrap(x / safe), eff_ord, eff_dim, bool(keepdim)))
+    return scaled * safe
 
 
 # ── SVD with backward ─────────────────────────────────────────────────────────
@@ -398,22 +417,38 @@ def norm(
 # This avoids spurious graph edges between the three Function wrappers.
 #
 # Backward formula (Giles 2008, extended to rectangular A(m×n), k=min(m,n)):
-#   F[i,j] = s_i / (s_i² - s_j²)  for i≠j,  F[i,i] = 0
-#   dA from S: U diag(G_S) Vh
-#   dA from U: U (F ⊙ U^T G_U) Vh + (I_m - U U^T) G_U Σ^{-1} Vh    [if m>k]
-#   dA from Vh: U (F ⊙ -(Vh G_V)^T) Vh + U Σ^{-1} G_Vh (I_n - Vh^T Vh) [if n>k]
+#   F[i,j] = 1 / (s_j² - s_i²)  for i≠j,  F[i,i] = 0
+#   dA from S:  U diag(G_S) Vh
+#   dA from U:  J = F ⊙ (U^T G_U)
+#               U ((J + J^T) diag(s)) Vh + (I_m - U U^T) G_U Σ⁻¹ Vh    [if m>k]
+#   dA from Vh: K = F ⊙ (Vh G_Vh^T)
+#               U (diag(s) (K + K^T)) Vh + U Σ⁻¹ G_Vh (I_n - Vh^T Vh)  [if n>k]
+#
+# Three things were wrong here, and they compounded rather than
+# cancelling.  The Loewner term carried ``s_i`` where the derivation puts
+# ``s_j`` — which is the singular value that multiplies from the *other*
+# side; the sign followed it, since ``s_i² - s_j²`` is the negative of
+# what the formula asks for; and the symmetrisation ``J + J^T`` was
+# missing entirely, so only half the term survived.
+#
+# A left singular vector is defined up to a sign, and that made the
+# defect hard to see: comparing U against another framework's shows
+# columns differing by a sign, and it is tempting to stop there.  What
+# settles it is Lucid's own forward: a central difference of it agrees
+# with the reference's *analytic* gradient to 6e-17 and disagreed with
+# Lucid's by 6e-1, on a matrix whose singular values are well separated.
+# The convention was never the issue.
 
 
 def _svd_loewner(S: Tensor) -> Tensor:
-    """Build the Loewner matrix F[i,j] = s_i/(s_i²-s_j²) for i≠j."""
+    """Build the Loewner matrix F[i,j] = 1/(s_j²-s_i²) for i≠j."""
     k = int(S.shape[-1])
     Si = S.unsqueeze(-1)  # (..., k, 1)
     Sj = S.unsqueeze(-2)  # (..., 1, k)
-    denom = Si * Si - Sj * Sj  # (..., k, k)
+    denom = Sj * Sj - Si * Si  # (..., k, k)
     eye_k = lucid.eye(k, dtype=S.dtype, device=S.device)
     safe_denom = denom + eye_k  # avoid div-by-zero on diagonal
-    F = Si / safe_denom * (1.0 - eye_k)  # zero diagonal
-    return F
+    return (1.0 - eye_k) / safe_denom  # zero diagonal
 
 
 @final
@@ -470,8 +505,9 @@ class _SVDUGrad(_AutogradFunction):
         m = int(U.shape[-2])
         F = _svd_loewner(S)
         UtgU = U.mT @ G_U  # (..., k, k)
-        K = F * UtgU
-        dA = U @ K @ Vh
+        J = F * UtgU
+        # Symmetrised, then scaled by s_j along the columns.
+        dA = U @ ((J + J.mT) * S.unsqueeze(-2)) @ Vh
         if m > k:
             S_inv = lucid.diag_embed(1.0 / S)
             proj_gU = G_U - U @ UtgU
@@ -507,9 +543,10 @@ class _SVDVhGrad(_AutogradFunction):
         n = int(Vh.shape[-1])
         F = _svd_loewner(S)
         gV = G_Vh.mT  # (..., n, k)
-        VtgV = Vh @ gV  # (..., k, k)
-        K = F * (-VtgV.mT)
-        dA = U @ K @ Vh
+        K = F * (Vh @ gV)  # (..., k, k)
+        # The mirror of the U path: symmetrised, scaled by s_i along the
+        # rows rather than s_j along the columns.
+        dA = U @ (S.unsqueeze(-1) * (K + K.mT)) @ Vh
         if n > k:
             S_inv = lucid.diag_embed(1.0 / S)
             proj_gVh = G_Vh - (G_Vh @ Vh.mT) @ Vh

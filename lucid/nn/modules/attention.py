@@ -3,7 +3,7 @@ Multi-head attention module.
 """
 
 import math
-from typing import TYPE_CHECKING, cast, final, override
+from typing import cast, final, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike

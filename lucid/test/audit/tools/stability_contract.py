@@ -78,6 +78,7 @@ def measure(ref: Any, verbose: bool = False) -> dict[str, list[str]]:
             continue
 
         ok: list[str] = []
+        evaluated = 0
         for scale in StabilityAxis._SCALES:
             probe = base * scale
             if not np.isfinite(probe).all():
@@ -105,9 +106,18 @@ def measure(ref: Any, verbose: bool = False) -> dict[str, list[str]]:
             array = _probe.to_numpy(out)
             if array is None or array.dtype.kind not in "fc":
                 continue
+            evaluated += 1
             if not np.isnan(array).any():
                 ok.append(f"{scale:g}")
-        if ok:
+        # Recorded even when the list comes back empty, as long as the
+        # replay actually ran.  Dropping those lost the most useful thing
+        # the table can say: ``zeta`` and ``xlogy`` are NaN in the
+        # reference at *every* scale on this probe — their companion
+        # argument carries negatives from the domain — so a NaN from
+        # Lucid is the function's domain rather than a defect.  Absent and
+        # "finite nowhere" are different facts and were being written the
+        # same way.
+        if evaluated:
             finite[symbol.qualname] = ok
         if verbose:
             print(f"{symbol.qualname:52s} {ok}")

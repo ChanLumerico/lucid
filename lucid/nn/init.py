@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
-from lucid._tensor.tensor import _impl_with_grad as _iwg  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor

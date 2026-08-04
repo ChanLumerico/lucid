@@ -2260,7 +2260,20 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
         coef = coef * (x + float(2 * j)) * (x + float(2 * j + 1))
         tail = tail + (b / f) * coef * a ** (-x - float(2 * j + 1))
 
-    return s + head + half + tail
+    out = s + head + half + tail
+
+    # The Hurwitz zeta converges only for s > 1.  At or below it the
+    # series diverges, and the Euler-Maclaurin form evaluated anyway
+    # returns an ordinary-looking number: -7.15e-06 at s = -1 on the CPU
+    # and exactly 0 on Metal, neither of which is a value ζ takes
+    # there.  The two devices disagreeing was the visible half; both
+    # answering at all was the defect.  The reference returns NaN across
+    # the whole divergent half and so does this now.
+    one = lucid.ones_like(x)
+    # s = 1 is the harmonic series, which diverges *upward* rather than
+    # merely failing to converge — so it is +inf, not NaN.
+    out = lucid.where(x > one, out, lucid.full_like(out, float("nan")))
+    return lucid.where(x == one, lucid.full_like(out, float("inf")), out)
 
 
 # ── Name aliases matching reference framework's lucid.special surface ─────────

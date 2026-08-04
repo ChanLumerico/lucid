@@ -162,6 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - three discriminators, one of them undone by an earlier fix
 
+- the last three defects, and the audit reaches zero
+
 ### Changed
 
 - give the engine ops one shared operand check

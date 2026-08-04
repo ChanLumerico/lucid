@@ -108,6 +108,7 @@ def jacobian(
     _require_differentiable(inputs, "jacobian")
     from lucid._dispatch import _wrap
     from lucid._C import engine as _C_engine
+    from lucid.autograd._backward import grad as _grad_fn
 
     scalar_input = not isinstance(inputs, (list, tuple))
     inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
@@ -146,7 +147,7 @@ def jacobian(
                     xx._impl.zero_grad()
 
                 if out_numel == 1 and out_shape == []:
-                    out_t.backward(retain_graph=True, create_graph=create_graph)
+                    seed_t = None
                 else:
                     # One-hot seed via engine: zeros + scatter-like fill.
                     seed_impl = _C_engine.zeros(
@@ -160,19 +161,32 @@ def jacobian(
                     if out_shape:
                         seed_impl = _C_engine.reshape(seed_impl, out_shape)
                     seed_t = _T.__new_from_impl__(seed_impl)
-                    out_t.backward(
-                        gradient=seed_t, retain_graph=True, create_graph=create_graph
-                    )
 
-                # ``grad_as_impl`` (graph-mode grad) → ``grad_to_tensor``
-                # (detached grad fallback) — both numpy-free accessors that
-                # together replace the prior ``grad_as_python`` +
-                # ``TensorImpl(np.ndarray, ...)`` round-trip.
-                g_impl = x._impl.grad_as_impl()
-                if g_impl is None:
-                    g_impl = x._impl.grad_to_tensor()
-                if g_impl is not None:
-                    J_rows.append(_C_engine.reshape(g_impl, [x_numel]))
+                # ``grad`` rather than ``backward`` and a read-back of
+                # ``x.grad``.
+                #
+                # Each row used to be produced by zeroing the grad slot,
+                # running a backward pass into it, and taking what landed
+                # there — so every row referred to the same slot, and under
+                # ``create_graph=True`` only the last one still had a graph
+                # attached by the time the rows were stacked.  The values
+                # were right; differentiating the result gave the last
+                # row's contribution and nothing else.  ``d/dx Σ jacobian(x²)``
+                # answered ``[0, 0, 6]`` where the Jacobian is ``diag(2x)``,
+                # its sum is ``2Σx``, and the derivative is ``[2, 2, 2]``.
+                #
+                # ``grad`` returns a fresh tensor per call, which is what
+                # makes the rows independent of one another.
+                (row,) = _grad_fn(
+                    out_t,
+                    x,
+                    grad_outputs=None if seed_t is None else [seed_t],
+                    retain_graph=True,
+                    create_graph=create_graph,
+                    allow_unused=True,
+                )
+                if row is not None:
+                    J_rows.append(_C_engine.reshape(row._impl, [x_numel]))
                 else:
                     J_rows.append(
                         _C_engine.zeros([x_numel], _C_engine.F32, x._impl.device)

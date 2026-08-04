@@ -374,6 +374,66 @@ class GradientAxis(_DifferenceAxis):
                 rel=rel,
                 rel_refined=rel_fine,
             )
+        # A function of a *constrained* input cannot be differenced
+        # coordinate by coordinate.
+        #
+        # ``eigvalsh`` reads one triangle and takes the matrix to be
+        # symmetric, so perturbing an entry in the other triangle changes
+        # nothing at all — while its gradient is stated symmetrically and
+        # puts half the sensitivity on each of the mirrored pair.  Six of a
+        # 4x4's sixteen coordinates come back with a difference of exactly
+        # zero against a non-zero derivative, and the rest off by the
+        # factor of two that splitting implies.  Lucid's gradient agrees
+        # with the reference to the last digit; it is the probe that has
+        # stepped off the symmetric matrices, where the function is not
+        # defined.
+        untouched = (np.abs(coarse.reshape(-1)) < 1e-12) & (np.abs(analytic) > 1e-6)
+        if untouched.any():
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                f"{domain}: {int(untouched.sum())} of {analytic.size} coordinates do "
+                "not move the result at all — the input is constrained and a "
+                "coordinate-wise difference leaves its domain",
+                rel=rel,
+            )
+
+        # A corner is not a wrong derivative.
+        #
+        # Where the function has a kink at the probe point, the two
+        # one-sided slopes differ and the central difference reports their
+        # average, which matches neither.  Nothing about the op is wrong
+        # and no step size helps: ``cosine_embedding_loss`` is a hinge, and
+        # its analytic gradient agrees with the reference exactly while the
+        # difference straddles the corner.
+        #
+        # Specific, because a *wrong* derivative still has the two
+        # one-sided slopes agreeing with each other — they are both
+        # measuring the same function.  Only a corner separates them.
+        try:
+            flat = base.reshape(-1)
+            at = scalar(base)
+            forward = np.empty(flat.size, dtype=np.float64)
+            backward = np.empty(flat.size, dtype=np.float64)
+            for i in range(flat.size):
+                up, down = flat.copy(), flat.copy()
+                up[i] += ctx.step
+                down[i] -= ctx.step
+                forward[i] = (scalar(up.reshape(base.shape)) - at) / ctx.step
+                backward[i] = (at - scalar(down.reshape(base.shape))) / ctx.step
+            sided = _probe.relative(forward, backward)
+        except Exception:  # noqa: BLE001
+            sided = 0.0
+        if sided > 1e-3 and np.isfinite(sided):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                f"{domain}: the one-sided slopes differ by {sided:.2e} — a corner "
+                "at the probe, where a central difference is the average of two",
+                rel=rel,
+                one_sided=sided,
+            )
+
         # Refining made it worse or left it alone.  Before calling that a
         # wrong derivative, try the other direction: a step *below the
         # output's resolution* cannot be refined into agreement, only

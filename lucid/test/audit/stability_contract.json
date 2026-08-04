@@ -4289,6 +4289,16 @@
       "1e+15",
       "1e+30"
     ],
+    "lucid.special.xlog1py": [
+      "1e-30",
+      "1e-15",
+      "1e-06",
+      "1",
+      "1e+06",
+      "1e+15",
+      "1e+30"
+    ],
+    "lucid.special.zeta": [],
     "lucid.sqrt": [
       "1e-30",
       "1e-15",
@@ -4577,6 +4587,7 @@
       "1e+15",
       "1e+30"
     ],
+    "lucid.xlogy": [],
     "lucid.zeros_like": [
       "1e-30",
       "1e-15",

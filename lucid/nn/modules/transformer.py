@@ -3,7 +3,7 @@ Transformer modules: TransformerEncoderLayer, TransformerEncoder,
 TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
-from typing import TYPE_CHECKING, cast, override
+from typing import cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike

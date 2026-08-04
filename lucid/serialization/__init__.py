@@ -9,6 +9,7 @@ numpy ``str(arr.dtype)`` it used in v1/v2.
 """
 
 import io
+import os
 import pickle
 import warnings
 from typing import Any, Callable, TYPE_CHECKING, cast, final, override
@@ -282,9 +283,40 @@ def _apply_map_location(
     return obj
 
 
+def _as_directory(path: object, name: str) -> str:
+    """The checkpoint directory named by ``path``, or a refusal.
+
+    The two sharded entry points used to reach their directory through a
+    bare ``str(path)``, which is not a check but a coercion: anything at
+    all has a ``__str__``, so a tensor passed by mistake became a
+    directory literally named ``tensor([[1.225, 1.606, ...]])`` and the
+    save reported success.  Nothing downstream can notice — the write
+    succeeds, the index is valid, and the checkpoint is simply somewhere
+    nobody will look for it.
+
+    ``save`` and ``load`` never had the problem: both gate on
+    ``isinstance(f, (str, bytes))`` and treat anything else as a file
+    object, so a wrong argument fails at the first ``.write``.  This is
+    the same gate, widened by ``os.PathLike`` because ``pathlib.Path``
+    reaches here constantly and used to work through the coercion.
+    """
+    import os
+
+    if isinstance(path, bytes):
+        return path.decode()
+    if isinstance(path, str):
+        return path
+    if isinstance(path, os.PathLike):
+        return str(os.fspath(path))
+    raise TypeError(
+        f"{name}() expects a directory path as str, bytes or os.PathLike, "
+        f"got {type(path).__name__}"
+    )
+
+
 def save_sharded(
     obj: object,
-    path: str | bytes,
+    path: str | bytes | os.PathLike[str],
     *,
     shard_size_mb: float = 1024.0,
     pickle_protocol: int = 4,
@@ -303,7 +335,7 @@ def save_sharded(
         Object to save. ``dict`` / ``OrderedDict`` state dicts are
         sharded; other types are written as a single shard for
         compatibility with :func:`load_sharded`.
-    path : str or bytes
+    path : str, bytes or os.PathLike
         Destination *directory*. Created if it does not exist.
     shard_size_mb : float, optional
         Soft cap on per-shard size in MiB. A tensor exceeding the cap
@@ -332,7 +364,7 @@ def save_sharded(
     import json
     import os
 
-    path_str = path.decode() if isinstance(path, bytes) else str(path)
+    path_str = _as_directory(path, "save_sharded")
     os.makedirs(path_str, exist_ok=True)
 
     if not isinstance(obj, dict):
@@ -394,7 +426,7 @@ def save_sharded(
 
 
 def load_sharded(
-    path: str | bytes,
+    path: str | bytes | os.PathLike[str],
     *,
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: bool = True,
@@ -437,7 +469,7 @@ def load_sharded(
     import os
     from collections import OrderedDict
 
-    path_str = path.decode() if isinstance(path, bytes) else str(path)
+    path_str = _as_directory(path, "load_sharded")
     index_path = os.path.join(path_str, "index.json")
 
     with open(index_path, encoding="utf-8") as fp:
@@ -611,7 +643,7 @@ def load_safetensors(
     import lucid as _lucid
 
     result: dict[str, object] = {}
-    with _safe_open(path, framework="np") as _f:  # type: ignore[no-untyped-call]
+    with _safe_open(path, framework="np") as _f:
         meta: dict[str, str] = _f.metadata() or {}
         scalar_keys: set[str] = set(
             meta.get("__lucid_scalar_keys__", "").split(",")
