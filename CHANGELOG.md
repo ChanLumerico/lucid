@@ -160,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fill_, copy_ and nn.init wrote around the autograd graph
 
+- three discriminators, one of them undone by an earlier fix
+
 ### Changed
 
 - give the engine ops one shared operand check

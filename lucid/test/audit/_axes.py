@@ -102,9 +102,26 @@ class Axis:
 
         Two calls, no list, nothing to keep in sync.
         """
+        # Rebuilt between calls, not reused.  An op that writes into its own
+        # input makes the second call read what the first one wrote, so two
+        # draws look identical and the op reads as deterministic — which
+        # is what happened to ``nn.init.orthogonal`` and ``nn.init.sparse``
+        # the moment they stopped replacing the impl and started writing
+        # through it.  One fix disabling another is the reason this is
+        # worth stating: the probe has to repeat the *experiment*, not the
+        # call.
+        primary = call.args[call.primary] if call.args else None
+        base = None
+        if hasattr(primary, "dtype") and hasattr(primary, "shape"):
+            try:
+                base = call.base
+            except TypeError:
+                base = None
         try:
-            first = _probe.to_numpy(fn(*call.args, **call.kwargs))
-            second = _probe.to_numpy(fn(*call.args, **call.kwargs))
+            one = call if base is None else call.with_primary(base)
+            first = _probe.to_numpy(fn(*one.args, **one.kwargs))
+            two = call if base is None else call.with_primary(base)
+            second = _probe.to_numpy(fn(*two.args, **two.kwargs))
         except Exception:  # noqa: BLE001 - surveying, not asserting
             return False
         if first is None or second is None or first.shape != second.shape:
@@ -259,9 +276,16 @@ class GradientAxis(_DifferenceAxis):
         # analytic
         probe = call.with_primary(base)
         x = probe.args[probe.primary]
+        returned_itself = False
         try:
             x.requires_grad_(True)
-            loss = _probe.contract(fn(*probe.args, **probe.kwargs), weights)
+            produced = fn(*probe.args, **probe.kwargs)
+            # Read here, not after the backward pass: contracting the
+            # output against the covector puts a node on ``x`` itself when
+            # the op returned ``x``, so asking later always answers "it
+            # has one".
+            returned_itself = produced is x and x._impl.grad_fn is None
+            loss = _probe.contract(produced, weights)
             loss.backward()
         except Exception as exc:  # noqa: BLE001
             return self._finding(
@@ -270,6 +294,32 @@ class GradientAxis(_DifferenceAxis):
         if x.grad is None:
             return self._finding(
                 symbol, Status.UNSUPPORTED, "no gradient reached the input"
+            )
+
+        # An op that overwrote its input is asking two different
+        # questions of the two methods.  ``nn.init.eye(x)`` writes into
+        # ``x`` and leaves it a leaf, so the finite difference measures a
+        # function of the *old* values — correctly zero, since the
+        # answer does not depend on them — while the analytic pass
+        # differentiates the tensor that is now the result.  There is no
+        # change to the framework that reconciles those; they are
+        # derivatives of different maps.
+        #
+        # Ops that mutate and *do* leave a node behind are unaffected and
+        # still checked: ``exp_`` adopts one whose saved input is the
+        # pre-write snapshot, so both methods see the same function.
+        # Compared by identity rather than by value: the invocation search
+        # has already run the op once on these very arguments, so an
+        # in-place one has *already* written its answer and a second call
+        # changes nothing.  ``init.eye`` looked like it left its input
+        # alone because the input was an identity matrix by the time this
+        # ran.
+        if returned_itself:
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "overwrites its input and leaves no node — the difference and "
+                "the analytic pass differentiate different maps",
             )
 
         analytic = np.asarray(x.grad.numpy(), dtype=np.float64).reshape(-1)
@@ -323,6 +373,33 @@ class GradientAxis(_DifferenceAxis):
                 f"{domain}: rel {rel:.2e} -> {rel_fine:.2e} at h/10 — the probe, not the op",
                 rel=rel,
                 rel_refined=rel_fine,
+            )
+        # Refining made it worse or left it alone.  Before calling that a
+        # wrong derivative, try the other direction: a step *below the
+        # output's resolution* cannot be refined into agreement, only
+        # coarsened.  ``Tensor.half`` casts to float16, where 1e-5 does not
+        # move a value near 1 at all — ``f(x+h)`` and ``f(x-h)`` round
+        # to the same number and the difference is exactly zero, against an
+        # analytic gradient of 1.  Coarsening recovers it; a genuinely
+        # wrong formula does not move.
+        try:
+            blunt = _probe.finite_difference(scalar, base, ctx.step * 1000.0)
+            rel_blunt = _probe.relative(analytic, blunt.reshape(analytic.shape))
+        except Exception:  # noqa: BLE001
+            rel_blunt = rel
+        # Judged by how fast it falls, not against the tolerance.  float16
+        # is coarse enough that no step reaches 2e-5 — the point is that
+        # the disagreement collapses as the step *grows*, which is the
+        # opposite of truncation and the signature of a step below the
+        # output's resolution.
+        if _probe.quadratic_shrink(rel, rel_blunt):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                f"{domain}: rel {rel:.2e} at h, {rel_blunt:.2e} at 1000h — the step "
+                "is below the output's precision, not the derivative wrong",
+                rel=rel,
+                rel_coarsened=rel_blunt,
             )
         return self._finding(
             symbol,
