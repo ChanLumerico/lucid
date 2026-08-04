@@ -156,6 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - batch_norm's statistics ran at the buffers' dtype
 
+- the dtype axis is at zero — fold, MHA, and differentiating an int
+
 ### Changed
 
 - give the engine ops one shared operand check

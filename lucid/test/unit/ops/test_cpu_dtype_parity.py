@@ -1536,3 +1536,96 @@ def test_embedding_bag_promotes_an_integer_table(dtype_name: str) -> None:
         outs.append(np.asarray(got.numpy(), dtype=np.float64))
     assert np.allclose(outs[0], outs[1])
     assert np.allclose(outs[0].ravel()[:3], [18.0, 21.0, 24.0])
+
+
+@pytest.mark.parametrize("dtype_name", ["int32", "int64", "float32"])
+def test_fold_keeps_its_dtype_on_both_devices(dtype_name: str) -> None:
+    """Metal's fold accumulates with a scatter, which has no int64 kernel.
+
+    Same route the scatter ops themselves take: there is no exact way
+    around it on-device, and refusing a dtype the CPU folds is the
+    device-dependent behaviour the backend pair exists to avoid.
+    """
+    values = np.arange(1, 5).reshape(1, 4, 1).astype(dtype_name)
+    outs = []
+    for device in _DEVICES:
+        got = F.fold(
+            lucid.tensor(
+                np.ascontiguousarray(values),
+                dtype=getattr(lucid, dtype_name),
+                device=device,
+            ),
+            (2, 2),
+            2,
+        )
+        assert str(got.dtype).endswith(dtype_name), device
+        outs.append(np.asarray(got.numpy()).tolist())
+    assert outs[0] == outs[1]
+
+
+def test_fold_masks_its_padding_by_selecting() -> None:
+    """``0 * NaN`` is not nothing — the same defect ``unfold`` had."""
+    values = np.array([[[np.nan], [1.0], [2.0], [3.0]]], dtype=np.float32)
+    outs = []
+    for device in _DEVICES:
+        got = F.fold(
+            lucid.tensor(
+                np.ascontiguousarray(values), dtype=lucid.float32, device=device
+            ),
+            (2, 2),
+            2,
+        )
+        outs.append(np.asarray(got.numpy(), dtype=np.float64).ravel())
+    assert np.array_equal(outs[0], outs[1], equal_nan=True)
+    assert np.isnan(outs[0][0]) and np.array_equal(outs[0][1:], [1.0, 2.0, 3.0])
+
+
+@pytest.mark.parametrize("supplied", ["partial", "none"])
+def test_multi_head_attention_forward_runs_on_metal(supplied: str) -> None:
+    """It built its temporary module on the *default* device.
+
+    Only the weights the caller supplied were bound over those
+    parameters, so with Metal inputs and a partial set the rest stayed on
+    the CPU and the first projection raised a device mismatch — the entry
+    point worked on Metal only if you passed every weight there is.
+    """
+    rng = np.random.default_rng(0)
+    embed, heads, length, batch = 8, 2, 4, 2
+    q = rng.random((length, batch, embed)).astype(np.float32)
+    for device in _DEVICES:
+
+        def make(array, dev=device):
+            return lucid.tensor(
+                np.ascontiguousarray(array), dtype=lucid.float32, device=dev
+            )
+
+        extra = (
+            {"in_proj_weight": make(rng.random((3 * embed, embed)).astype(np.float32))}
+            if supplied == "partial"
+            else {}
+        )
+        out, _ = F.multi_head_attention_forward(
+            make(q), make(q), make(q), embed, heads, **extra
+        )
+        assert tuple(out.shape) == (length, batch, embed), device
+        assert device in str(out.device), device
+
+
+@pytest.mark.parametrize("name", ["jacobian", "vjp", "jvp", "hessian"])
+def test_autograd_functionals_refuse_a_discrete_input(name: str) -> None:
+    """A derivative with respect to an integer is not a number.
+
+    These accepted one and produced whatever the ops underneath happened
+    to do with it, which differed by device — ``jacobian`` ran on Metal
+    for int8 and raised on the CPU, because the two backends refuse
+    different narrow widths for unrelated reasons.  The reference states
+    it as "only Tensors of floating point dtype can require gradients".
+    """
+    fn = getattr(lucid.autograd, name)
+    for device in _DEVICES:
+        x = lucid.tensor(
+            np.array([1, 2, 3], dtype=np.int32), dtype=lucid.int32, device=device
+        )
+        rest = (x.to(lucid.float32),) if name in ("vjp", "jvp") else ()
+        with pytest.raises(TypeError, match="floating-point input"):
+            fn(lambda a: a * a, x, *rest)

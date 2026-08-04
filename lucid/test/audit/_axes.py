@@ -1138,7 +1138,8 @@ class DtypeAxis(Axis):
 
                 try:
                     args = _probe.dtype_args(call, name, build)
-                    if _probe.to_numpy(fn(*args, **call.kwargs)) is not None:
+                    kwargs = _probe.dtype_kwargs(call, build)
+                    if _probe.to_numpy(fn(*args, **kwargs)) is not None:
                         support[device].add(name)
                 except Exception:  # noqa: BLE001
                     continue

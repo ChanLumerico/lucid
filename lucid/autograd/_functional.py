@@ -8,6 +8,30 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
+def _require_differentiable(inputs: "Tensor | tuple[Tensor, ...]", where: str) -> None:
+    """Refuse to differentiate with respect to a discrete input.
+
+    A derivative with respect to an integer is not a small number, it is
+    not a number — there is no neighbouring value to take a limit
+    towards.  These entry points accepted one and produced whatever the
+    ops underneath happened to do with it, which differed by device:
+    ``jacobian`` ran on Metal for int8 and raised on the CPU, because the
+    two backends refuse different narrow widths for unrelated reasons.
+
+    The reference states it as "only Tensors of floating point dtype can
+    require gradients", and that is the same rule.
+    """
+    import lucid  # noqa: PLC0415 - avoids a cycle at module import
+
+    candidates = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
+    for item in candidates:
+        if hasattr(item, "dtype") and not lucid.is_floating_point(item):
+            raise TypeError(
+                f"{where}: only a floating-point input can be differentiated, "
+                f"got {item.dtype}"
+            )
+
+
 def jacobian(
     func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
@@ -81,6 +105,7 @@ def jacobian(
     >>> J.shape
     (3, 3)
     """
+    _require_differentiable(inputs, "jacobian")
     from lucid._dispatch import _wrap
     from lucid._C import engine as _C_engine
 
@@ -228,6 +253,7 @@ def hessian(
     >>> H.shape
     (2, 2)
     """
+    _require_differentiable(inputs, "hessian")
     from lucid._dispatch import _wrap
     from lucid._C import engine as _C_engine
 
@@ -362,6 +388,7 @@ def vjp(
     ...     return x * x
     >>> y, (grad_x,) = vjp(f, x, v)
     """
+    _require_differentiable(inputs, "vjp")
     from lucid.autograd._backward import grad as _grad
 
     scalar_input = not isinstance(inputs, (list, tuple))
@@ -505,6 +532,7 @@ def jvp(
     ...     return x * x
     >>> y, tangent = jvp(f, x, v)
     """
+    _require_differentiable(inputs, "jvp")
 
     scalar_input = not isinstance(inputs, (list, tuple))
     inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]

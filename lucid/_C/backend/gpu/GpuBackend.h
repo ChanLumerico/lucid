@@ -2847,6 +2847,18 @@ public:
                     const std::vector<int>& padding,
                     const std::vector<int>& dilation,
                     Dtype dt) override {
+        // MLX's Metal scatter has no int64 kernel, and the accumulation
+        // below is a scatter.  Same route the scatter ops themselves take
+        // — see scatter_via_cpu: there is no exact way around it
+        // on-device, and refusing a dtype the CPU folds is the
+        // device-dependent behaviour this backend pair exists to avoid.
+        if (dt == Dtype::I64) {
+            auto& cpu = backend::Dispatcher::for_device(Device::CPU);
+            Storage x_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(x), x_shape)};
+            Storage out_cpu =
+                cpu.nn_fold(x_cpu, x_shape, out_shape, kernel_size, stride, padding, dilation, dt);
+            return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(out_cpu), out_shape)};
+        }
         const auto& gx = std::get<GpuStorage>(x);
 
         const int N = static_cast<int>(x_shape[0]);
@@ -2902,10 +2914,11 @@ public:
         // outer of CKK so this is a pure reshape with no transpose.
         auto xr = mx::reshape(*gx.arr, mx::Shape{N, C, M});
 
-        // Mask invalid positions: cast mask to dt to avoid implicit promote.
-        auto mask_dt = mx::astype(mask_mlx, gpu::to_mlx_dtype(dt));
-        // Broadcast mask (M,) against xr (N, C, M).
-        auto x_masked = mx::multiply(xr, mask_dt);
+        // Mask invalid positions by *selecting*, not multiplying.  A
+        // padded column must contribute nothing, and ``0 * NaN`` is not
+        // nothing — the same defect ``unfold`` had one function over.
+        auto keep = mx::broadcast_to(mx::reshape(mask_mlx, mx::Shape{1, 1, M}), mx::Shape{N, C, M});
+        auto x_masked = mx::where(mx::astype(keep, mx::bool_), xr, mx::zeros_like(xr));
 
         // out_flat: (N, C, outH * outW).
         const int OF = outH * outW;

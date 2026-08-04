@@ -297,15 +297,40 @@ def dtype_args(call: Any, name: str, build: "Callable[..., Any]") -> list[Any]:
     for index, value in enumerate(call.args):
         if index == call.primary:
             args.append(build(np.abs(call.base) + 1.0, True))
-        elif hasattr(value, "to"):
-            companion = to_numpy(value)
-            if companion is None:
-                args.append(value)
-            else:
-                args.append(build(companion, companion.dtype.kind in "fc"))
         else:
-            args.append(value)
+            args.append(_rebuild(value, build))
     return args
+
+
+def _rebuild(value: Any, build: "Callable[..., Any]") -> Any:
+    """One companion argument, at the dtype under test.
+
+    Recurses into lists and tuples.  ``vjp(f, primals, cotangents)`` takes
+    its tensors *inside* sequences, so a rebuild that only looked at the
+    top level left them at float64 on the CPU — and float64 does not
+    exist on Metal, so the op reported as unsupported there for a reason
+    that belonged to the probe.
+    """
+    if isinstance(value, (list, tuple)):
+        rebuilt = [_rebuild(item, build) for item in value]
+        return type(value)(rebuilt) if isinstance(value, tuple) else rebuilt
+    if not hasattr(value, "to"):
+        return value
+    companion = to_numpy(value)
+    if companion is None:
+        return value
+    return build(companion, companion.dtype.kind in "fc")
+
+
+def dtype_kwargs(call: Any, build: "Callable[..., Any]") -> "dict[str, Any]":
+    """The same rebuild, for the keyword arguments.
+
+    They were left where they were.  A tensor passed by keyword stayed on
+    the CPU while every positional one moved, so
+    ``multi_head_attention_forward`` reported a device mismatch on its own
+    projection weight — a fault in the probe that read as one in the op.
+    """
+    return {name: _rebuild(value, build) for name, value in call.kwargs.items()}
 
 
 __all__ = [
@@ -319,6 +344,7 @@ __all__ = [
     "contract",
     "covector",
     "dtype_args",
+    "dtype_kwargs",
     "dtype_of",
     "finite_difference",
     "metal_available",

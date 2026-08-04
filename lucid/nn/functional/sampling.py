@@ -1046,6 +1046,13 @@ def multi_head_attention_forward(
         add_bias_kv=bias_k is not None,
         batch_first=False,
     )
+    # The temporary module's parameters are created on the *default*
+    # device, and only the weights the caller supplied get bound over
+    # them.  Given Metal inputs and a partial set of weights, whatever was
+    # left unbound stayed on the CPU and the first projection raised a
+    # device mismatch — so this entry point only worked on Metal if you
+    # passed every weight there is.
+    mha = mha.to(query.device)
     if in_proj_weight is not None and mha.in_proj_weight is not None:
         mha.in_proj_weight._impl = _unwrap(in_proj_weight)
     if in_proj_bias is not None and mha.in_proj_bias is not None:
