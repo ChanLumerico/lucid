@@ -58,6 +58,7 @@ void register_core(py::module_& m) {
         .value("F32", Dtype::F32)
         .value("F64", Dtype::F64)
         .value("C64", Dtype::C64)
+        .value("C128", Dtype::C128)
         .value("BF16", Dtype::BF16)
         .export_values();
     m.def("dtype_size", &dtype_size);

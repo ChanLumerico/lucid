@@ -52,14 +52,20 @@ std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
     // A degenerate matrix has a decomposition; LAPACK just will not be
     // the one to compute it.  See ``empty_matrix`` for why dispatching
     // wrote to a stream Lucid does not own and then raised.
+    // A real matrix's eigenvalues are complex; only the ones whose
+    // characteristic polynomial happens to split over R are not.  The
+    // output dtype follows from the input's lane width rather than being
+    // the input's dtype — see ``unpack_eig`` in the CPU backend.
+    const Dtype out_dt = complex_for(a->dtype());
+
     if (empty_matrix(sh))
-        return {zeros_op(wsh, a->dtype(), a->device()), zeros_op(vsh, a->dtype(), a->device())};
+        return {zeros_op(wsh, out_dt, a->device()), zeros_op(vsh, out_dt, a->device())};
 
     auto out = backend::Dispatcher::for_device(a->device())
                    .linalg_eig(a->storage(), sh, wsh, vsh, a->dtype());
     std::vector<TensorImplPtr> result;
-    result.push_back(fresh(std::move(out.first), wsh, a->dtype(), a->device()));
-    result.push_back(fresh(std::move(out.second), vsh, a->dtype(), a->device()));
+    result.push_back(fresh(std::move(out.first), wsh, out_dt, a->device()));
+    result.push_back(fresh(std::move(out.second), vsh, out_dt, a->device()));
     return result;
 }
 

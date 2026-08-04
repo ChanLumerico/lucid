@@ -1390,62 +1390,108 @@ public:
 
     // ── Complex viewing (interleaved [re, im, re, im, ...] storage) ────────
 
-    Storage complex_real(const Storage& a, const Shape& shape) override {
+    // Project one lane out of an interleaved complex buffer.
+    //
+    // ``lane`` is 0 for the real half and 1 for the imaginary one.  The
+    // lane width follows the storage's own dtype rather than being
+    // assumed float32: reading a complex128 buffer as pairs of floats
+    // would report the top half of a double's mantissa as a number.
+    static Storage project_lane(const Storage& a, const Shape& shape, std::size_t lane) {
         const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * sizeof(float);
+        const std::size_t n = shape_numel(shape);
+        const Dtype out_dt = real_lane_of(cs.dtype);
+        const std::size_t nb = n * dtype_size(out_dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const float* ip = reinterpret_cast<const float*>(cs.ptr.get());
-        float* op = reinterpret_cast<float*>(ptr.get());
-        // Stride-2 copy: even indices in interleaved storage are the real parts.
-        for (std::size_t i = 0; i < n; ++i)
-            op[i] = ip[2 * i];
-        return Storage{CpuStorage{ptr, nb, Dtype::F32}};
+        if (out_dt == Dtype::F64) {
+            const auto* ip = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* op = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ip[2 * i + lane];
+        } else {
+            const auto* ip = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* op = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ip[2 * i + lane];
+        }
+        return Storage{CpuStorage{ptr, nb, out_dt}};
+    }
+
+    Storage complex_real(const Storage& a, const Shape& shape) override {
+        return project_lane(a, shape, 0);
     }
 
     Storage complex_imag(const Storage& a, const Shape& shape) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * sizeof(float);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const float* ip = reinterpret_cast<const float*>(cs.ptr.get());
-        float* op = reinterpret_cast<float*>(ptr.get());
-        // Odd indices in interleaved storage are the imag parts.
-        for (std::size_t i = 0; i < n; ++i)
-            op[i] = ip[2 * i + 1];
-        return Storage{CpuStorage{ptr, nb, Dtype::F32}};
+        return project_lane(a, shape, 1);
     }
 
     Storage complex_combine(const Storage& re, const Storage& im, const Shape& shape) override {
         const auto& re_s = std::get<CpuStorage>(re);
         const auto& im_s = std::get<CpuStorage>(im);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(Dtype::C64);  // 8 bytes per complex
+        const std::size_t n = shape_numel(shape);
+
+        // The lane width follows the inputs, and used to not.
+        //
+        // Both halves were read as ``float*`` whatever they were, so a
+        // pair of f64 inputs was interleaved out of the wrong bytes:
+        // ``complex([1., 2.], [3., 4.])`` answered
+        // ``[0+0j, 1.875+2.125j]``.  Not an error, not a NaN — four
+        // plausible numbers assembled from the halves of four doubles.
+        // f16 was the same, differently wrong.  Only f32 ever worked, and
+        // f32 is what every test used.
+        //
+        // The op layer widens the half formats to f32 before dispatch, so
+        // only the two widths that have a complex type reach here.
+        const Dtype out_dt = complex_for(re_s.dtype);
+        const std::size_t nb = n * dtype_size(out_dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const float* rp = reinterpret_cast<const float*>(re_s.ptr.get());
-        const float* ip = reinterpret_cast<const float*>(im_s.ptr.get());
-        float* op = reinterpret_cast<float*>(ptr.get());
-        // Interleave two F32 arrays into one C64 array.  vDSP's ``vDSP_ztoc``
-        // does this from split-complex form (separate re/im pointers); our
-        // inputs match that layout exactly.
-        DSPSplitComplex split{const_cast<float*>(rp), const_cast<float*>(ip)};
-        vDSP_ztoc(&split, 1, reinterpret_cast<DSPComplex*>(op), 2, static_cast<vDSP_Length>(n));
-        return Storage{CpuStorage{ptr, nb, Dtype::C64}};
+
+        if (out_dt == Dtype::C128) {
+            const auto* rp = reinterpret_cast<const double*>(re_s.ptr.get());
+            const auto* ip = reinterpret_cast<const double*>(im_s.ptr.get());
+            auto* op = reinterpret_cast<double*>(ptr.get());
+            DSPDoubleSplitComplex split{const_cast<double*>(rp), const_cast<double*>(ip)};
+            vDSP_ztocD(&split, 1, reinterpret_cast<DSPDoubleComplex*>(op), 2,
+                       static_cast<vDSP_Length>(n));
+        } else {
+            const auto* rp = reinterpret_cast<const float*>(re_s.ptr.get());
+            const auto* ip = reinterpret_cast<const float*>(im_s.ptr.get());
+            auto* op = reinterpret_cast<float*>(ptr.get());
+            // vDSP's ``vDSP_ztoc`` interleaves from split-complex form
+            // (separate re / im pointers); the inputs match that layout.
+            DSPSplitComplex split{const_cast<float*>(rp), const_cast<float*>(ip)};
+            vDSP_ztoc(&split, 1, reinterpret_cast<DSPComplex*>(op), 2, static_cast<vDSP_Length>(n));
+        }
+        return Storage{CpuStorage{ptr, nb, out_dt}};
     }
 
     Storage complex_conj(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Real dtypes: conjugate is the identity.  Returning the input
-        // storage directly avoids a needless allocation + copy.
-        if (dt != Dtype::C64) {
+        // Real dtypes: the conjugate is the identity, and returning the
+        // input storage directly avoids a needless allocation and copy.
+        //
+        // The test was ``dt != Dtype::C64`` when C64 was the only complex
+        // type, which made "not C64" and "real" the same statement.  They
+        // stopped being the same the moment C128 existed, and a complex128
+        // tensor took the identity branch: ``conj`` returned its argument
+        // unchanged, with no error and no clue.
+        if (!is_complex(dt))
             return a;
-        }
+
         const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(Dtype::C64);
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        cpu::vzconj_c64(reinterpret_cast<const float*>(cs.ptr.get()),
-                        reinterpret_cast<float*>(ptr.get()), n);
-        return Storage{CpuStorage{ptr, nb, Dtype::C64}};
+        if (dt == Dtype::C128) {
+            const auto* ip = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* op = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                op[2 * i] = ip[2 * i];
+                op[2 * i + 1] = -ip[2 * i + 1];
+            }
+        } else {
+            cpu::vzconj_c64(reinterpret_cast<const float*>(cs.ptr.get()),
+                            reinterpret_cast<float*>(ptr.get()), n);
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
     }
 
     Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
@@ -5357,6 +5403,78 @@ public:
         return {Storage{CpuStorage{q_ptr, q_nbytes, dt}}, Storage{CpuStorage{r_ptr, r_nbytes, dt}}};
     }
 
+    // Unpack one matrix's worth of LAPACK ``?geev`` output into complex.
+    //
+    // ``?geev`` reports a real matrix's spectrum in two real arrays,
+    // ``wr`` and ``wi``, and its eigenvectors in a single real ``VR``
+    // where a conjugate pair occupies two adjacent columns.  Reading only
+    // ``wr`` and copying ``VR`` verbatim is what this backend used to do,
+    // and for a matrix with any complex eigenvalue that is not a lossy
+    // answer but a wrong one: the pair a \u00b1 bi came back as a, a — two
+    // equal reals where there were two conjugate numbers — with nothing
+    // to say the imaginary halves had been dropped.
+    //
+    // A real matrix having complex eigenvalues is the ordinary case, not
+    // a corner one.  Any rotation has them; so does every companion
+    // matrix of a polynomial with complex roots.  It went unnoticed
+    // because a symmetric or triangular test matrix has a real spectrum,
+    // and those are what test suites reach for.
+    //
+    // The packing, from ``?geev``'s documentation: if ``wi[j]`` is zero,
+    // eigenvector j is column j of ``VR``.  Otherwise j and j+1 are a
+    // conjugate pair with ``wi[j] > 0``, and
+    //
+    //     v[j]   = VR[:, j] + i * VR[:, j + 1]
+    //     v[j+1] = VR[:, j] - i * VR[:, j + 1]
+    //
+    // ``vr`` arrives row-major (the LAPACK wrapper transposes on the way
+    // out), so eigenvector j is still column j, read with stride n.
+    template <typename T>
+    static void
+    unpack_eig(const T* wr, const T* wi, const T* vr, int n, T* values_out, T* vectors_out) {
+        for (int j = 0; j < n; ++j) {
+            values_out[2 * j] = wr[j];
+            values_out[2 * j + 1] = wi[j];
+        }
+        if (vectors_out == nullptr)
+            return;
+
+        const auto at = [&](int i, int col) { return vr[static_cast<std::size_t>(i) * n + col]; };
+        const auto put = [&](int i, int col, T re, T im) {
+            const std::size_t k = 2 * (static_cast<std::size_t>(i) * n + col);
+            vectors_out[k] = re;
+            vectors_out[k + 1] = im;
+        };
+
+        int j = 0;
+        while (j < n) {
+            if (wi[j] == T{0}) {
+                for (int i = 0; i < n; ++i)
+                    put(i, j, at(i, j), T{0});
+                ++j;
+                continue;
+            }
+            // A conjugate pair: two real columns, four real numbers per
+            // row, becoming two complex entries that are each other's
+            // conjugate.  ``j + 1 < n`` is guaranteed by LAPACK, and
+            // checked rather than assumed because reading past the last
+            // column would be silent.
+            if (j + 1 >= n) {
+                for (int i = 0; i < n; ++i)
+                    put(i, j, at(i, j), T{0});
+                ++j;
+                continue;
+            }
+            for (int i = 0; i < n; ++i) {
+                const T re = at(i, j);
+                const T im = at(i, j + 1);
+                put(i, j, re, im);
+                put(i, j + 1, re, -im);
+            }
+            j += 2;
+        }
+    }
+
     StoragePair linalg_eig(const Storage& a,
                            const Shape& shape,
                            const Shape& values_shape,
@@ -5366,8 +5484,15 @@ public:
         const std::int64_t batch = leading_matrix_batch_count(shape, 2);
         const std::size_t per_mat = static_cast<std::size_t>(n) * n;
         const std::size_t per_w = static_cast<std::size_t>(n);
-        const std::size_t values_nbytes = shape_numel(values_shape) * dtype_size(dt);
-        const std::size_t vectors_nbytes = shape_numel(vectors_shape) * dtype_size(dt);
+
+        // The eigenvalues of a real matrix are complex, so the output
+        // dtype is not the input's.  ``complex_for`` keeps the lane width:
+        // an f64 matrix whose spectrum came back as complex64 would shed
+        // eight decimal digits, which is the same class of quiet loss as
+        // dropping the imaginary part outright.
+        const Dtype out_dt = complex_for(dt);
+        const std::size_t values_nbytes = shape_numel(values_shape) * dtype_size(out_dt);
+        const std::size_t vectors_nbytes = shape_numel(vectors_shape) * dtype_size(out_dt);
         auto values_ptr = allocate_aligned_bytes(values_nbytes, Device::CPU);
         auto vectors_ptr = allocate_aligned_bytes(vectors_nbytes, Device::CPU);
         const auto& cs = std::get<CpuStorage>(a);
@@ -5377,30 +5502,30 @@ public:
             const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
             auto* w_p = reinterpret_cast<float*>(values_ptr.get());
             auto* v_p = reinterpret_cast<float*>(vectors_ptr.get());
-            std::vector<float> wr(n), wi(n);
+            std::vector<float> wr(n), wi(n), vr(per_mat);
             for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_eig_f32(in_p + b * per_mat, n, wr.data(), wi.data(), v_p + b * per_mat,
-                                    &info);
+                cpu::lapack_eig_f32(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
                 check_lapack_info(info, "eig");
-                std::memcpy(w_p + b * per_w, wr.data(), per_w * sizeof(float));
+                unpack_eig<float>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
+                                  v_p + 2 * b * per_mat);
             }
         } else if (dt == Dtype::F64) {
             const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
             auto* w_p = reinterpret_cast<double*>(values_ptr.get());
             auto* v_p = reinterpret_cast<double*>(vectors_ptr.get());
-            std::vector<double> wr(n), wi(n);
+            std::vector<double> wr(n), wi(n), vr(per_mat);
             for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_eig_f64(in_p + b * per_mat, n, wr.data(), wi.data(), v_p + b * per_mat,
-                                    &info);
+                cpu::lapack_eig_f64(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
                 check_lapack_info(info, "eig");
-                std::memcpy(w_p + b * per_w, wr.data(), per_w * sizeof(double));
+                unpack_eig<double>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
+                                   v_p + 2 * b * per_mat);
             }
         } else {
             ErrorBuilder("cpu_backend::linalg_eig").not_implemented("dtype not supported");
         }
 
-        return {Storage{CpuStorage{values_ptr, values_nbytes, dt}},
-                Storage{CpuStorage{vectors_ptr, vectors_nbytes, dt}}};
+        return {Storage{CpuStorage{values_ptr, values_nbytes, out_dt}},
+                Storage{CpuStorage{vectors_ptr, vectors_nbytes, out_dt}}};
     }
 
     StoragePair linalg_eigh(const Storage& a,

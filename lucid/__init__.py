@@ -35,6 +35,7 @@ from lucid._dtype import (
     int64,
     bool_,
     complex64,
+    complex128,
     # Existing aliases kept for backward compat
     half,
     double,
@@ -117,7 +118,7 @@ __all__ = [
     "dtype", "dtypes",
     "float16", "bfloat16", "float32", "float64",
     "int8", "int16", "int32", "int64",
-    "bool_", "complex64",
+    "bool_", "complex64", "complex128",
     "half", "double", "short", "long",   # aliases (excluded from import *)
     # ── device / defaults ─────────────────────────────────────────────────
     "device",

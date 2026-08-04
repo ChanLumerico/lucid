@@ -78,6 +78,19 @@ enum class Dtype : std::uint8_t {
     // are written into checkpoints and traces, and inserting in the middle
     // would renumber everything after it.
     BF16,
+    // Complex pair of two ``float64`` lanes, 16 bytes per element.
+    //
+    // Added for ``eig``, which is the one op whose output dtype is not a
+    // choice: a real matrix has complex eigenvalues, and the only real
+    // matrices that do not are the ones whose characteristic polynomial
+    // happens to split over R.  Without a double-width complex type the
+    // eigenvalues of an ``f64`` matrix had nowhere to go, and the answer
+    // was the real parts alone — silently, with the imaginary halves
+    // dropped and no indication that a conjugate pair had been there.
+    //
+    // CPU only.  MLX has no complex128, so the GPU path refuses it the
+    // same way it already refuses ``f64``.
+    C128,
 };
 
 // Returns the size in bytes of a single element of the given dtype.
@@ -123,6 +136,8 @@ constexpr std::size_t dtype_size(Dtype dt) {
         return 8;
     case Dtype::C64:
         return 8;
+    case Dtype::C128:
+        return 16;
     case Dtype::BF16:
         return 2;
     }
@@ -170,6 +185,8 @@ constexpr std::string_view dtype_name(Dtype dt) {
         return "float64";
     case Dtype::C64:
         return "complex64";
+    case Dtype::C128:
+        return "complex128";
     case Dtype::BF16:
         return "bfloat16";
     }
@@ -241,6 +258,49 @@ constexpr bool is_half_float(Dtype dt) {
 //     ``false`` for everything else (including :attr:`Bool`).
 constexpr bool is_integral(Dtype dt) {
     return dt == Dtype::I8 || dt == Dtype::I16 || dt == Dtype::I32 || dt == Dtype::I64;
+}
+
+// Predicate: does the dtype hold a complex pair?
+//
+// Both complex types answer ``true`` and neither is floating point under
+// :func:`is_floating_point`, which is deliberate: their lanes are floats
+// but they take a separate dispatch, and a real-only kernel handed a
+// complex buffer would read two elements as one.
+//
+// Parameters
+// ----------
+// dt : Dtype
+//     The dtype to test.
+//
+// Returns
+// -------
+// bool
+//     ``true`` for :attr:`C64` and :attr:`C128`.
+constexpr bool is_complex(Dtype dt) {
+    return dt == Dtype::C64 || dt == Dtype::C128;
+}
+
+// The complex type whose lanes match a given real float type.
+//
+// ``f32 -> C64``, ``f64 -> C128``, and the half formats widen to
+// :attr:`C64` because there is no half-precision complex.  Used by
+// ``eig`` to pick an output dtype that loses nothing: an ``f64`` matrix
+// whose eigenvalues came back as :attr:`C64` would silently shed eight
+// decimal digits, which is the failure this type was added to avoid.
+constexpr Dtype complex_for(Dtype real) {
+    return real == Dtype::F64 ? Dtype::C128 : Dtype::C64;
+}
+
+// The real type of one lane of a complex dtype.
+//
+// The inverse of :func:`complex_for` on the range where it is
+// invertible; the identity on anything already real.
+constexpr Dtype real_lane_of(Dtype dt) {
+    if (dt == Dtype::C128)
+        return Dtype::F64;
+    if (dt == Dtype::C64)
+        return Dtype::F32;
+    return dt;
 }
 
 }  // namespace lucid

@@ -88,6 +88,8 @@ Dtype np_dtype_to_lucid(const py::dtype& d) {
     case 'c':
         if (sz == 8)
             return Dtype::C64;
+        if (sz == 16)
+            return Dtype::C128;
         break;
     default:
         break;
@@ -125,6 +127,8 @@ py::dtype lucid_dtype_to_np(Dtype dt) {
         return py::dtype("float64");
     case Dtype::C64:
         return py::dtype("complex64");
+    case Dtype::C128:
+        return py::dtype("complex128");
     }
     ErrorBuilder("lucid_dtype_to_np").fail("unknown Dtype");
 }
@@ -459,6 +463,18 @@ void format_element(const std::byte* ptr, Dtype dt, int precision, std::ostrings
         os << "j)";
         break;
     }
+    case Dtype::C128: {
+        // The same, in two contiguous f64.
+        const double re = *reinterpret_cast<const double*>(ptr);
+        const double im = *reinterpret_cast<const double*>(ptr + 8);
+        os << "(";
+        fmt_float(re);
+        if (im >= 0 || std::isnan(im))
+            os << "+";
+        fmt_float(im);
+        os << "j)";
+        break;
+    }
     }
 }
 
@@ -787,6 +803,13 @@ py::object TensorImpl::tolist() const {
             std::memcpy(&im, p + sizeof(re), sizeof(im));
             return py::cast(std::complex<double>(static_cast<double>(re), static_cast<double>(im)));
         });
+    case Dtype::C128:
+        return walk([](const char* p) -> py::object {
+            double re, im;
+            std::memcpy(&re, p, sizeof(re));
+            std::memcpy(&im, p + sizeof(re), sizeof(im));
+            return py::cast(std::complex<double>(re, im));
+        });
     }
     ErrorBuilder("tolist").fail("unsupported dtype");
     return py::none();
@@ -877,6 +900,12 @@ static py::object decode_scalar(const char* raw, Dtype dt) {
         std::memcpy(&re, raw, sizeof(re));
         std::memcpy(&im, raw + sizeof(re), sizeof(im));
         return py::cast(std::complex<double>(static_cast<double>(re), static_cast<double>(im)));
+    }
+    case Dtype::C128: {
+        double re, im;
+        std::memcpy(&re, raw, sizeof(re));
+        std::memcpy(&im, raw + sizeof(re), sizeof(im));
+        return py::cast(std::complex<double>(re, im));
     }
     }
     ErrorBuilder("item").fail("unsupported dtype");

@@ -18,6 +18,7 @@ from lucid._dtype import (
     float64,
     bfloat16,
     complex64,
+    complex128,
 )
 from lucid._device import device, device as _device_cls, _device_from_engine
 from lucid._dispatch import _wrap, _impl_with_grad
@@ -2803,15 +2804,14 @@ class Tensor:
     def is_complex(self) -> bool:
         r"""Return ``True`` if the dtype is a complex type.
 
-        Currently Lucid supports a single complex dtype, ``complex64``
-        (two 32-bit floats per element). Future complex dtypes will also
-        be reported here.
+        Two complex dtypes exist: ``complex64`` (two 32-bit floats per
+        element) and ``complex128`` (two 64-bit floats).
 
         Returns
         -------
         bool
-            ``True`` if ``self.dtype is lucid.complex64``; ``False``
-            otherwise.
+            ``True`` for ``lucid.complex64`` and ``lucid.complex128``;
+            ``False`` otherwise.
 
         Examples
         --------
@@ -2825,10 +2825,12 @@ class Tensor:
         -----
         Complex tensors store interleaved real/imag pairs:
         :math:`z_i = a_i + b_i \mathrm{i}` with :math:`a_i, b_i \in \mathbb{R}`.
-        Lucid currently supports a single complex dtype (``complex64``),
-        backed by two 32-bit floats per element.
+        ``complex128`` is backed by two 64-bit floats and exists for
+        ``linalg.eig``, whose output dtype is not a choice — the
+        eigenvalues of an ``f64`` matrix need the wider lanes, and
+        narrowing them to ``complex64`` would shed eight decimal digits.
         """
-        return self.dtype is complex64
+        return self.dtype in (complex64, complex128)
 
     def share_memory_(self) -> Self:
         r"""Mark storage as shareable across processes — a no-op on Apple Silicon.

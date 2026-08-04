@@ -67,6 +67,12 @@ namespace lucid::gpu {
         ErrorBuilder("to_mlx_dtype")
             .not_implemented("float64 is not supported on GPU (MLX-Metal limitation). "
                              "Cast to float32 first, or keep the tensor on CPU.");
+    case Dtype::C128:
+        ErrorBuilder("to_mlx_dtype")
+            .not_implemented("complex128 is not supported on GPU (MLX has no complex128). "
+                             "Cast to complex64 first, or keep the tensor on CPU. "
+                             "linalg.eig on an f64 matrix produces one — it is the only "
+                             "dtype wide enough to hold its eigenvalues.");
     case Dtype::C64:
         return ::mlx::core::complex64;
     case Dtype::BF16:

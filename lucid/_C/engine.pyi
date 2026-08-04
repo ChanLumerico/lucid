@@ -17,6 +17,7 @@ class Dtype:
     I64: Dtype
     Bool: Dtype
     C64: Dtype
+    C128: Dtype
 
 class Device:
     CPU: Device
@@ -247,6 +248,7 @@ I32: Dtype
 I64: Dtype
 Bool: Dtype
 C64: Dtype
+C128: Dtype
 
 # Module-level Device aliases
 CPU: Device

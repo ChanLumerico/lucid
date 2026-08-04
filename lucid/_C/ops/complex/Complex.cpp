@@ -12,6 +12,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
+#include "../ufunc/Astype.h"            // astype_op
 #include "../utils/Layout.h"            // broadcast_to_op
 #include "_Detail.h"
 
@@ -42,9 +43,20 @@ TensorImplPtr complex_op(const TensorImplPtr& re_in, const TensorImplPtr& im_in)
 
     OpScopeFull scope{"complex", re->device(), re->dtype(), re->shape()};
 
+    // There is no half-precision complex, so the half formats widen here
+    // rather than in the backend — which used to read their bytes as
+    // float32 and assemble a number out of the wrong halves.
+    if (is_half_float(re->dtype()))
+        re = astype_op(re, Dtype::F32);
+    if (is_half_float(im->dtype()))
+        im = astype_op(im, Dtype::F32);
+    if (re->dtype() != im->dtype())
+        ErrorBuilder("complex").fail("real and imag must have the same dtype");
+
     Storage out = backend::Dispatcher::for_device(re->device())
                       .complex_combine(re->storage(), im->storage(), re->shape());
-    return complex_detail::fresh(std::move(out), re->shape(), Dtype::C64, re->device());
+    return complex_detail::fresh(std::move(out), re->shape(), complex_for(re->dtype()),
+                                 re->device());
 }
 
 }  // namespace lucid

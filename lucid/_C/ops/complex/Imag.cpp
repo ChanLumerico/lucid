@@ -21,7 +21,7 @@ TensorImplPtr imag_op(const TensorImplPtr& a) {
 
     Storage out =
         backend::Dispatcher::for_device(a->device()).complex_imag(a->storage(), a->shape());
-    return complex_detail::fresh(std::move(out), a->shape(), Dtype::F32, a->device());
+    return complex_detail::fresh(std::move(out), a->shape(), real_lane_of(a->dtype()), a->device());
 }
 
 }  // namespace lucid

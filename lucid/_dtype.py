@@ -92,6 +92,7 @@ int32: dtype = dtype("int32", _C_engine.Dtype.I32, 4)
 int64: dtype = dtype("int64", _C_engine.Dtype.I64, 8)
 bool_: dtype = dtype("bool", _C_engine.Dtype.Bool, 1)
 complex64: dtype = dtype("complex64", _C_engine.Dtype.C64, 8)
+complex128: dtype = dtype("complex128", _C_engine.Dtype.C128, 16)
 
 half: dtype = float16
 double: dtype = float64
@@ -109,6 +110,7 @@ _ENGINE_TO_DTYPE: dict[_C_engine.Dtype, dtype] = {
     _C_engine.Dtype.I64: int64,
     _C_engine.Dtype.Bool: bool_,
     _C_engine.Dtype.C64: complex64,
+    _C_engine.Dtype.C128: complex128,
 }
 
 _NAME_TO_DTYPE: dict[str, dtype] = {
@@ -123,6 +125,9 @@ _NAME_TO_DTYPE: dict[str, dtype] = {
     "bool": bool_,
     "bool_": bool_,
     "complex64": complex64,
+    "complex128": complex128,
+    "cfloat": complex64,
+    "cdouble": complex128,
     "half": float16,
     "float": float32,
     "double": float64,

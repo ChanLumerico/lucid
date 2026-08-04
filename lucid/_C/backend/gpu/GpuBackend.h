@@ -531,9 +531,14 @@ public:
     }
 
     Storage complex_conj(const Storage& a, const Shape&, Dtype dt) override {
-        if (dt != Dtype::C64) {
+        if (dt == Dtype::C128)
+            ErrorBuilder("conj").not_implemented(
+                "complex128 is not supported on GPU (MLX has no complex128)");
+        if (!is_complex(dt)) {
             // For real dtypes the conjugate is the identity — return the
-            // input directly without an MLX call.
+            // input directly without an MLX call.  Testing "not C64" here
+            // would have meant a complex128 tensor silently came back
+            // unchanged; it is refused above instead.
             return a;
         }
         const auto& gs = std::get<GpuStorage>(a);
@@ -2573,8 +2578,14 @@ public:
     linalg_eig(const Storage& a, const Shape&, const Shape&, const Shape&, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto [w, v] = ::mlx::core::linalg::eig(*ga.arr, k_linalg_stream);
-        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(w), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), dt)}};
+        // MLX returns complex64 here, and tagging it with the real input
+        // dtype used to be enough to lose it: since ``wrap_mlx_array``
+        // converts rather than relabels, the astype to float32 discarded
+        // every imaginary part on the way out.  Same defect as the CPU
+        // path had, by a different route.
+        const Dtype out_dt = complex_for(dt);
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(w), out_dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), out_dt)}};
     }
 
     StoragePair

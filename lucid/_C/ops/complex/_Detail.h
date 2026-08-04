@@ -19,7 +19,7 @@
 //
 // Notes
 // -----
-// Only ``C64`` is currently dispatched at the op layer; ``C128`` is reserved
+// Both are dispatched at the op layer; ``C128`` arrived with ``linalg.eig``,
 // for future support and gated at the validator.
 
 #pragma once
@@ -43,7 +43,7 @@ using ::lucid::helpers::fresh;
 // Parameters
 // ----------
 // dt : Dtype
-//     Dtype to check.  Only ``Dtype::C64`` is currently accepted.
+//     Dtype to check.  ``Dtype::C64`` and ``Dtype::C128``.
 // op : const char*
 //     Name of the calling op, used in the error message.
 //
@@ -52,14 +52,16 @@ using ::lucid::helpers::fresh;
 // NotImplemented
 //     If ``dt`` is not a complex dtype.
 inline void require_complex(Dtype dt, const char* op) {
-    if (dt != Dtype::C64)
-        ErrorBuilder(op).not_implemented("expected C64 input, got " + std::string(dtype_name(dt)));
+    if (!is_complex(dt))
+        ErrorBuilder(op).not_implemented("expected a complex input, got " +
+                                         std::string(dtype_name(dt)));
 }
 
 // Assert that ``dt`` is a real-floating dtype, raising otherwise.
 //
 // Used by ``complex_combine`` to gate the ``re`` / ``im`` arguments to
-// ``complex_op``: only ``F16`` / ``F32`` / ``F64`` are accepted.  Any
+// ``complex_op``: any real float is accepted.  The half formats widen
+// to ``F32`` at the op layer, since there is no half complex.  Any
 // integer, boolean, or complex dtype triggers a ``NotImplemented`` error
 // from the named op via ``ErrorBuilder``.
 //
@@ -73,9 +75,9 @@ inline void require_complex(Dtype dt, const char* op) {
 // Raises
 // ------
 // NotImplemented
-//     If ``dt`` is not one of ``F16`` / ``F32`` / ``F64``.
+//     If ``dt`` is not a real floating-point dtype.
 inline void require_real_float(Dtype dt, const char* op) {
-    if (dt != Dtype::F32 && dt != Dtype::F16 && dt != Dtype::F64)
+    if (!is_floating_point(dt))
         ErrorBuilder(op).not_implemented("expected real floating dtype, got " +
                                          std::string(dtype_name(dt)));
 }
