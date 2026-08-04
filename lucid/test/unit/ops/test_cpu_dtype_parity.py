@@ -1233,3 +1233,90 @@ def test_a_leaf_requiring_grad_refuses_inplace_mutation() -> None:
         p.round_()
     assert p.requires_grad
     assert np.array_equal(np.asarray(p.numpy()).ravel(), [1.0, 3.0])
+
+
+@pytest.mark.parametrize("name", ["cummax", "cummin"])
+def test_running_extremes_accept_bool(name: str) -> None:
+    """A running maximum of booleans is a running OR.
+
+    The widen-onto-int64 path already covered the narrow integers and
+    excluded bool by name, so Metal answered a bool scan and the CPU
+    refused one.  0 and 1 survive the widening unchanged, which is the
+    whole reason the widening is exact.
+    """
+    values = np.array([[True, False], [False, True]])
+    outs = []
+    for device in _DEVICES:
+        got = getattr(lucid, name)(
+            lucid.tensor(values, dtype=lucid.bool, device=device), 0
+        )
+        got = got[0] if isinstance(got, tuple) else got
+        assert str(got.dtype).endswith("bool"), f"{name} on {device}"
+        outs.append(np.asarray(got.numpy()).tolist())
+    assert outs[0] == outs[1]
+
+
+@pytest.mark.parametrize("dtype_name", ["int8", "int16", "int32", "int64"])
+def test_cube_keeps_its_integer_width(dtype_name: str) -> None:
+    """``x·x·x`` is arithmetic, so it goes through int64, not double."""
+    values = np.array([[1, 2], [3, 4]]).astype(dtype_name)
+    outs = []
+    for device in _DEVICES:
+        x = lucid.tensor(
+            np.ascontiguousarray(values),
+            dtype=getattr(lucid, dtype_name),
+            device=device,
+        )
+        x.cube_()
+        assert str(x.dtype).endswith(dtype_name), device
+        outs.append(np.asarray(x.numpy()).tolist())
+    assert outs[0] == outs[1]
+
+
+def test_int64_cube_is_exact_past_doubles_range() -> None:
+    """1e6 cubed is 1e18, which a double cannot hold exactly.
+
+    The widen-through-double route that works for a *selection* would
+    round here — the cube of an int64 leaves double's exact range at
+    |x| > 2^17 — so this one is written out at its own width.
+    """
+    x = lucid.tensor(np.array([1_000_000], dtype=np.int64), dtype=lucid.int64)
+    x.cube_()
+    assert int(np.asarray(x.numpy()).ravel()[0]) == 10**18
+
+
+def test_dropout_refuses_integers_on_both_devices() -> None:
+    """The mask is 1/(1-p) and 0, and neither survives an integer dtype.
+
+    The scale truncates to 1, so the op silently becomes a random zeroing
+    with no compensation.  The CPU has no integer Bernoulli and said so;
+    Metal cast one into existence, so the same call ran on one device and
+    raised on the other.  The reference refuses it too.
+    """
+    values = np.array([[1, 2], [3, 4]], dtype=np.int32)
+    for device in _DEVICES:
+        with pytest.raises(
+            Exception
+        ):  # noqa: B017 - the two backends raise differently
+            F.dropout(
+                lucid.tensor(
+                    np.ascontiguousarray(values), dtype=lucid.int32, device=device
+                ),
+                p=0.5,
+            )
+
+
+@pytest.mark.parametrize("dtype_name", ["float16", "float32"])
+def test_dropout_still_takes_every_float(dtype_name: str) -> None:
+    """Guard the instrument: the gate must not have closed on half."""
+    values = np.ones((4, 4)).astype(dtype_name)
+    for device in _DEVICES:
+        got = F.dropout(
+            lucid.tensor(
+                np.ascontiguousarray(values),
+                dtype=getattr(lucid, dtype_name),
+                device=device,
+            ),
+            p=0.5,
+        )
+        assert str(got.dtype).endswith(dtype_name), device

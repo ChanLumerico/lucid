@@ -201,6 +201,15 @@ public:
                            const Shape& shape,
                            Dtype dt,
                            std::uint64_t key_seed) override {
+        // A dropout mask is 1/(1-p) and 0, and neither survives an integer
+        // dtype — the scale truncates to 1 and the op silently becomes a
+        // random zeroing with no compensation.  The CPU has no integer
+        // Bernoulli and said so; this cast made one, so `dropout` ran on
+        // Metal and raised on the CPU for the same call.  The reference
+        // refuses integer input here too.
+        if (!is_floating_point(dt))
+            ErrorBuilder("gpu_backend::bernoulli_mask")
+                .not_implemented("a Bernoulli mask needs a floating dtype (F16/F32)");
         auto key = ::mlx::core::random::key(key_seed);
         auto mask = ::mlx::core::random::bernoulli(
             ::mlx::core::array(static_cast<float>(keep_prob)), gpu::to_mlx_shape(shape), key);

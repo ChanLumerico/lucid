@@ -140,6 +140,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - moments evaluated outside the range they hold on
 
+- bool scans, integer cubes, and dropout's integer mask
+
 ### Changed
 
 - give the engine ops one shared operand check

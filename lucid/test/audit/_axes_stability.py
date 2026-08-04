@@ -349,6 +349,12 @@ class ContiguityAxis(Axis):
         call, _, _ = self._working_call(fn, symbol, ctx)
         if call is None:
             return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+        if self._draws_randomly(fn, call):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "two identical calls disagree — this measures the draw, not the op",
+            )
         try:
             base = call.base
         except TypeError:

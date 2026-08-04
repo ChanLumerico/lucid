@@ -87,6 +87,31 @@ class Axis:
     ) -> Finding:
         return Finding(self.name, symbol.qualname, status, detail, evidence)
 
+    def _draws_randomly(self, fn: Any, call: "Call") -> bool:
+        """Whether two identical calls disagree.
+
+        The definition of stochastic, asked rather than looked up.  It was
+        looked up before — a tuple of substrings, ``rand``, ``dropout``,
+        ``gumbel`` — and ``nn.init.orthogonal`` and ``nn.init.sparse``
+        matched none of them while drawing a fresh random matrix on every
+        call.  Four separate axes reported them for it, each measuring the
+        draw rather than the op: a finite difference across two draws, a
+        cpu/metal comparison across two RNG streams that differ by design,
+        and a strided view across a third.
+
+        Two calls, no list, nothing to keep in sync.
+        """
+        try:
+            first = _probe.to_numpy(fn(*call.args, **call.kwargs))
+            second = _probe.to_numpy(fn(*call.args, **call.kwargs))
+        except Exception:  # noqa: BLE001 - surveying, not asserting
+            return False
+        if first is None or second is None or first.shape != second.shape:
+            return False
+        if first.dtype.kind not in "fciub" or second.dtype.kind not in "fciub":
+            return False
+        return not np.array_equal(first, second, equal_nan=first.dtype.kind == "f")
+
     def _working_call(
         self, fn: Any, symbol: "Symbol", ctx: Context
     ) -> "tuple[Call, str, Any] | tuple[None, None, str]":
@@ -147,6 +172,12 @@ class GradientAxis(_DifferenceAxis):
         call, domain, first = self._working_call(fn, symbol, ctx)
         if call is None:
             return self._finding(symbol, Status.SKIP, str(first))
+        if self._draws_randomly(fn, call):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "two identical calls disagree — this measures the draw, not the op",
+            )
 
         try:
             base = call.base
@@ -258,6 +289,12 @@ class SecondGradientAxis(_DifferenceAxis):
         call, domain, _ = self._working_call(fn, symbol, ctx)
         if call is None:
             return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+        if self._draws_randomly(fn, call):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "two identical calls disagree — this measures the draw, not the op",
+            )
 
         try:
             base = call.base
@@ -372,6 +409,12 @@ class CreateGraphAxis(Axis):
         call, domain, _ = self._working_call(fn, symbol, ctx)
         if call is None:
             return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+        if self._draws_randomly(fn, call):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "two identical calls disagree — this measures the draw, not the op",
+            )
         try:
             base = call.base
         except TypeError:
@@ -551,6 +594,12 @@ class DeviceAxis(Axis):
         call, domain, _ = self._working_call(fn, symbol, ctx)
         if call is None:
             return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+        if self._draws_randomly(fn, call):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "two identical calls disagree — this measures the draw, not the op",
+            )
 
         def on(device: str, override: np.ndarray | None = None) -> Any:
             args = []
@@ -720,6 +769,12 @@ class NonFiniteAxis(Axis):
         call, _, _ = self._working_call(fn, symbol, ctx)
         if call is None:
             return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+        if self._draws_randomly(fn, call):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "two identical calls disagree — this measures the draw, not the op",
+            )
 
         try:
             shape = _probe.to_numpy(call.args[call.primary]).shape  # type: ignore[union-attr]

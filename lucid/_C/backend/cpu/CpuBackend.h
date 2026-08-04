@@ -1247,6 +1247,12 @@ public:
         // operands travel through untouched.  See detail::widen_half.
         if (detail::is_half_like(dt))
             return detail::back_to_f16(cube(detail::as_f32(a), shape, Dtype::F32), dt);
+        // x·x·x is arithmetic, not a selection, so it goes through int64 —
+        // exact for every narrower width whose cube fits, and wrapping the
+        // same way a native kernel would for the ones that do not, which is
+        // what naming the width asks for.
+        if (detail::is_narrow_int(dt))
+            return detail::back_to_int(cube(detail::as_i64(a), shape, Dtype::I64), dt);
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -1261,6 +1267,14 @@ public:
             auto* q = reinterpret_cast<double*>(ptr.get());
             cpu::vsq_f64(p, q, n);
             cpu::vmul_f64(p, q, q, n);
+        } else if (dt == Dtype::I64) {
+            // Written out rather than routed through double: the cube of an
+            // int64 leaves double's exact range at |x| > 2^17, so the widen
+            // that works for a selection would quietly round here.
+            const auto* p = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
+            auto* q = reinterpret_cast<std::int64_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = p[i] * p[i] * p[i];
         } else {
             ErrorBuilder("cpu_backend::cube").not_implemented("dtype not supported");
         }
@@ -2500,8 +2514,11 @@ public:
 
     Storage cummax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
         // Exact through int64: a running extreme over widened values is the
-        // same sequence, narrowed back.
-        if (detail::is_narrow_int(dt) && dt != Dtype::Bool) {
+        // same sequence, narrowed back.  bool travels with them — the
+        // running maximum of a sequence of booleans is a running OR, and 0
+        // and 1 survive the widening unchanged.  It was excluded here, so
+        // Metal answered a bool scan and the CPU refused one.
+        if (detail::is_narrow_int(dt)) {
             const std::size_t n = shape_numel(shape);
             return detail::narrow_int(cummax(detail::as_i64(a), shape, axis, Dtype::I64), n, dt);
         }
@@ -2571,8 +2588,11 @@ public:
 
     Storage cummin(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
         // Exact through int64: a running extreme over widened values is the
-        // same sequence, narrowed back.
-        if (detail::is_narrow_int(dt) && dt != Dtype::Bool) {
+        // same sequence, narrowed back.  bool travels with them — the
+        // running maximum of a sequence of booleans is a running OR, and 0
+        // and 1 survive the widening unchanged.  It was excluded here, so
+        // Metal answered a bool scan and the CPU refused one.
+        if (detail::is_narrow_int(dt)) {
             const std::size_t n = shape_numel(shape);
             return detail::narrow_int(cummin(detail::as_i64(a), shape, axis, Dtype::I64), n, dt);
         }
