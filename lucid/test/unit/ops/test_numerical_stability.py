@@ -522,3 +522,24 @@ def test_polar_carries_an_infinite_radius() -> None:
         assert np.isposinf(out[0].real) and np.isposinf(out[0].imag), out
         assert np.isposinf(out[1].real) and np.isneginf(out[1].imag), out
     assert np.allclose(outs[0].real, outs[1].real, rtol=1e-5, equal_nan=True)
+
+
+def test_posterize_carries_a_nan_pixel() -> None:
+    """It cast through int64, and a NaN has no bit pattern to mask.
+
+    The cast is undefined and came back 0, so a NaN entering the pipeline
+    left it as an ordinary black pixel with nothing raised.
+    """
+    values = np.array([np.nan, 0.25, 0.5, 1.0], dtype=np.float32)
+    for device in _DEVICES:
+        got = np.asarray(
+            lucid.utils.transforms.functional.posterize(
+                lucid.tensor(
+                    np.ascontiguousarray(values), dtype=lucid.float32, device=device
+                ),
+                4,
+            ).numpy(),
+            dtype=np.float64,
+        )
+        assert np.isnan(got[0]), f"{device}: {got}"
+        assert np.allclose(got[1:], [0.2509804, 0.5019608, 0.9411765], atol=1e-6), got

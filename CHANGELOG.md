@@ -150,6 +150,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the in-place binary ops never joined the graph
 
+- five axes were asking questions their targets do not answer
+
 ### Changed
 
 - give the engine ops one shared operand check

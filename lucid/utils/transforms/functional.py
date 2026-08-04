@@ -1391,7 +1391,12 @@ def posterize(img: Tensor, num_bits: int) -> Tensor:
     mask_int = (~((1 << (8 - num_bits)) - 1)) & 0xFF
     u8 = lucid.clip(lucid.round(img * 255.0), 0.0, 255.0).long()
     masked = u8 & mask_int
-    return masked.to(img.dtype) / 255.0
+    out = masked.to(img.dtype) / 255.0
+    # A NaN pixel has no bit pattern to mask, and casting one to an
+    # integer is undefined — it came back 0, so a NaN entering the
+    # pipeline left it as an ordinary black pixel with nothing raised.
+    # Carry it through instead, as every other op here does.
+    return lucid.where(img != img, lucid.full_like(out, float("nan")), out)
 
 
 def solarize(img: Tensor, threshold: float) -> Tensor:

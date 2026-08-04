@@ -456,10 +456,28 @@ class DeterminismAxis(Axis):
         for domain in ctx.domains:
             for call in _specs.invocations(symbol.short, domain, symbol.qualname, fn):
                 draws = []
+                # Only where the primary is a tensor.  ``empty_like`` takes a
+                # *shape*, and ``to_numpy`` reads a tuple of ints as an array
+                # happily — rebuilding it handed the op a tensor where it
+                # wanted a size.
+                primary = call.args[call.primary] if call.args else None
+                if not hasattr(primary, "dtype") or not hasattr(primary, "shape"):
+                    base = None
+                else:
+                    try:
+                        base = call.base
+                    except TypeError:
+                        base = None
                 for _ in range(2):
                     lucid.manual_seed(1234)
+                    # Rebuilt between draws, not reused.  An in-place op
+                    # writes into its own input, so the second call reads
+                    # what the first one left — ``rrelu_`` was compared
+                    # against itself applied twice and reported as
+                    # non-reproducible for being perfectly reproducible.
+                    probe = call if base is None else call.with_primary(base)
                     try:
-                        got = _probe.to_numpy(fn(*call.args, **call.kwargs))
+                        got = _probe.to_numpy(fn(*probe.args, **probe.kwargs))
                     except Exception:  # noqa: BLE001
                         draws = []
                         break

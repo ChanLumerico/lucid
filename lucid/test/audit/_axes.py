@@ -19,6 +19,7 @@ Three habits are built into the base rather than left to each axis:
 """
 
 import contextlib
+import inspect
 import functools
 import json
 import pathlib
@@ -553,6 +554,43 @@ class CreateGraphAxis(Axis):
         )
 
 
+def _receiver_position(free_fn: Any, method_fn: Any) -> int:
+    """Which of the free function's arguments the method's receiver is.
+
+    Almost always the first — ``x.exp()`` is ``lucid.exp(x)`` — and the
+    axis assumed it always.  ``where`` is the exception:
+    ``lucid.where(condition, x, y)`` is spelled ``x.where(condition, y)``,
+    so the receiver is the *second* free argument.  Passing the arguments
+    positionally to both asked two different questions, and the axis
+    reported the two different answers as a defect.  The reference has
+    the same asymmetry, so this was never Lucid's to fix.
+
+    Derived rather than listed: the method names every free parameter it
+    still takes, so the one it does not name is the one it became.
+    """
+    try:
+        free_names = [
+            name
+            for name, param in inspect.signature(free_fn).parameters.items()
+            if param.kind in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD)
+        ]
+        method_names = {name for name in inspect.signature(method_fn).parameters}
+    except TypeError, ValueError, NameError:
+        return 0
+    method_names.discard("self")
+    missing = [i for i, name in enumerate(free_names) if name not in method_names]
+    if len(missing) == 1:
+        return missing[0]
+    # The names did not settle it.  With two arguments position 0 is the
+    # only reading that does not have the method reversing its operands,
+    # which no API does — and that assumption is what found the
+    # scalar-coercion gap this axis exists for.  With three there is a
+    # real choice and ``where`` makes it: ``lucid.where(cond, x, y)`` is
+    # ``x.where(condition, y)``, the receiver in the middle.  Nothing here
+    # can tell which, so it says so instead of guessing.
+    return 0 if len(free_names) <= 2 else -1
+
+
 class EntryPointAxis(Axis):
     """The same op through every spelling it has.
 
@@ -583,8 +621,29 @@ class EntryPointAxis(Axis):
                 results.clear()
                 errors.clear()
                 for label, fn in routes:
-                    args = call.args if label != "method" else call.args[1:]
-                    target = call.args[0] if label == "method" else None
+                    at = _receiver_position(probe_fn, fn) if label == "method" else 0
+                    if at < 0:
+                        # The two spellings name their arguments
+                        # differently and there is more than one candidate
+                        # for the receiver, so there is no alignment to
+                        # compare — ``lucid.where(cond, x, y)`` against
+                        # ``Tensor.where(self, condition, other)`` shares
+                        # not one parameter name.  Guessing position 0 made
+                        # the axis call ``where(cond, x, y)`` against
+                        # ``cond.where(x, y)``, which are two different
+                        # questions, and report the two answers.
+                        return self._finding(
+                            symbol,
+                            Status.NOT_APPLICABLE,
+                            "the spellings order their arguments differently and "
+                            "share no parameter name — no alignment to compare",
+                        )
+                    args = (
+                        call.args
+                        if label != "method"
+                        else call.args[:at] + call.args[at + 1 :]
+                    )
+                    target = call.args[at] if label == "method" else None
                     try:
                         out = (
                             fn(target, *args, **call.kwargs)
@@ -988,6 +1047,8 @@ class BroadcastAxis(Axis):
             )
 
         failures: list[str] = []
+        follows_first = True
+        follows_second = True
         for sa, sb in self._PAIRS:
             a = _probe.as_f64(_probe.rng(1).uniform(0.5, 1.5, sa))
             b = _probe.as_f64(_probe.rng(2).uniform(0.5, 1.5, sb))
@@ -996,9 +1057,32 @@ class BroadcastAxis(Axis):
                 got = _probe.to_numpy(fn(a, b))
             except Exception as exc:  # noqa: BLE001
                 failures.append(f"{sa}x{sb}: {type(exc).__name__}")
+                follows_first = follows_second = False
                 continue
-            if got is not None and tuple(got.shape) != want:
+            if got is None:
+                continue
+            follows_first &= tuple(got.shape) == sa
+            follows_second &= tuple(got.shape) == sb
+            if tuple(got.shape) != want:
                 failures.append(f"{sa}x{sb} -> {got.shape}, expected {want}")
+        # ...and being elementwise on equal shapes is not the same as
+        # broadcasting.  ``isin`` asks "is each element of a somewhere in
+        # b", so its answer has *a*'s shape whatever b's is; ``selu_``
+        # writes into its first operand and cannot change shape;
+        # ``new_tensor`` builds from the second and takes that one.  Each
+        # passes the equal-shape test above and none of them broadcasts.
+        #
+        # Read off the results rather than listed: an op whose output
+        # follows one operand in *every* direction is shaped by that
+        # operand, not by the pair.
+        if failures and (follows_first or follows_second):
+            which = "first" if follows_first else "second"
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                f"the output follows the {which} operand in every direction — "
+                "shaped by one argument, not broadcast between them",
+            )
         if failures:
             return self._finding(
                 symbol, Status.FAIL, "; ".join(failures[:4]), failures=failures
@@ -1144,6 +1228,23 @@ class EdgeAxis(Axis):
                 and out.shape[0] != 0
                 and out.size != 0
             ):
+                # Only the *primary* was emptied.  Where another tensor
+                # argument is still full size, it is the one supplying the
+                # shape and nothing was invented: ``solve_ex(A_empty, B)``
+                # answers with B's batch, and ``new_tensor`` builds from
+                # its data argument and takes that.  Emptiness can only
+                # propagate from an operand the answer's shape depends on.
+                others = [
+                    a
+                    for i, a in enumerate(call.args)
+                    if i != call.primary and hasattr(a, "shape")
+                ]
+                if any(int(np.prod(tuple(a.shape))) != 0 for a in others):
+                    return self._finding(
+                        symbol,
+                        Status.NOT_APPLICABLE,
+                        "another operand is still full size and supplies the shape",
+                    )
                 return self._finding(
                     symbol, Status.FAIL, f"empty input produced shape {out.shape}"
                 )
