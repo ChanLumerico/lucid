@@ -30,6 +30,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -53,6 +54,11 @@ TensorImplPtr pinv_op(const TensorImplPtr& a) {
     Shape out_shape(sh.begin(), sh.end() - 2);
     out_shape.push_back(n);
     out_shape.push_back(m);
+
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (empty_matrix(sh))
+        return zeros_op(out_shape, a->dtype(), a->device());
 
     Storage out =
         backend::Dispatcher::for_device(a->device()).linalg_pinv(a->storage(), sh, a->dtype());

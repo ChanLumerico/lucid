@@ -33,6 +33,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -53,6 +54,12 @@ std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a) {
     // Eigenvalue shape: one value per row/column, so remove the last dim.
     Shape wsh(sh.begin(), sh.end() - 1);
     Shape vsh = sh;
+
+    // A degenerate matrix has a decomposition; LAPACK just will not be
+    // the one to compute it.  See ``empty_matrix`` for why dispatching
+    // wrote to a stream Lucid does not own and then raised.
+    if (empty_matrix(sh))
+        return {zeros_op(wsh, a->dtype(), a->device()), zeros_op(vsh, a->dtype(), a->device())};
 
     auto out = backend::Dispatcher::for_device(a->device())
                    .linalg_eigh(a->storage(), sh, wsh, vsh, a->dtype());

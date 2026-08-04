@@ -6,6 +6,7 @@
 #include "../../core/Helpers.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 namespace lucid {
 
@@ -15,6 +16,14 @@ std::vector<TensorImplPtr> ldl_factor_op(const TensorImplPtr& a) {
 
     const auto& sh = a->shape();
     const int n = static_cast<int>(sh[sh.size() - 1]);
+
+    Shape empty_piv(sh.begin(), sh.end() - 2);
+    empty_piv.push_back(static_cast<std::int64_t>(n));
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (empty_matrix(sh))
+        return {zeros_op(sh, a->dtype(), a->device()),
+                zeros_op(empty_piv, Dtype::I32, a->device())};
 
     auto [ld_storage, piv_storage] = backend::Dispatcher::for_device(a->device())
                                          .linalg_ldl_factor(a->storage(), sh, a->dtype());

@@ -5,6 +5,7 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 namespace lucid {
 
@@ -18,10 +19,15 @@ TensorImplPtr householder_product_op(const TensorImplPtr& H, const TensorImplPtr
     const int n = static_cast<int>(hs[hs.size() - 1]);
     const int k = std::min(m, n);
 
+    Shape q_shape = {static_cast<std::int64_t>(m), static_cast<std::int64_t>(k)};
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (empty_matrix(hs))
+        return zeros_op(q_shape, H->dtype(), H->device());
+
     auto result = backend::Dispatcher::for_device(H->device())
                       .linalg_householder_product(H->storage(), tau->storage(), hs, H->dtype());
 
-    Shape q_shape = {static_cast<std::int64_t>(m), static_cast<std::int64_t>(k)};
     return fresh(std::move(result), q_shape, H->dtype(), H->device());
 }
 

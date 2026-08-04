@@ -34,6 +34,7 @@
 #include "../../ops/bfunc/Matmul.h"
 #include "../../ops/ufunc/Arith.h"
 #include "../../ops/ufunc/Transpose.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -93,6 +94,11 @@ TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     Validator::input(a, "solve.a").float_only().square_2d();
     Validator::pair(a, b, "solve").same_dtype().same_device();
     OpScopeFull scope{"solve", a->device(), a->dtype(), a->shape()};
+
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (linalg_detail::empty_matrix(a->shape()))
+        return zeros_op(b->shape(), a->dtype(), a->device());
 
     Storage out_storage =
         backend::Dispatcher::for_device(a->device())

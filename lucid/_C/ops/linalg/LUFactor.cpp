@@ -11,6 +11,7 @@
 #include "../../core/Helpers.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -25,6 +26,13 @@ std::vector<TensorImplPtr> lu_factor_op(const TensorImplPtr& a) {
     // Shape of the pivot tensor: same batch dims as A, plus length n.
     Shape pivot_shape(sh.begin(), sh.end() - 2);
     pivot_shape.push_back(n);
+
+    // A degenerate matrix has a decomposition; LAPACK just will not be
+    // the one to compute it.  See ``empty_matrix`` for why dispatching
+    // wrote to a stream Lucid does not own and then raised.
+    if (empty_matrix(sh))
+        return {zeros_op(sh, a->dtype(), a->device()),
+                zeros_op(pivot_shape, Dtype::I32, a->device())};
 
     auto [lu_storage, ipiv_storage] =
         backend::Dispatcher::for_device(a->device()).linalg_lu_factor(a->storage(), sh, a->dtype());

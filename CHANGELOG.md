@@ -168,6 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep the live display to itself while the sweep runs
 
+- empty matrices have decompositions, and LAPACK is not asked
+
 ### Changed
 
 - give the engine ops one shared operand check

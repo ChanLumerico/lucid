@@ -23,6 +23,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -40,6 +41,11 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
     require_square_2d(a->shape(), "matrix_power");
     OpScopeFull scope{"matrix_power", a->device(), a->dtype(), a->shape()};
     scope.set_attr("p", static_cast<std::int64_t>(p));
+
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (empty_matrix(a->shape()))
+        return zeros_op(a->shape(), a->dtype(), a->device());
 
     Storage out = backend::Dispatcher::for_device(a->device())
                       .linalg_matrix_power(a->storage(), a->shape(), p, a->dtype());

@@ -11,6 +11,7 @@
 #include "../../core/Helpers.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -26,6 +27,11 @@ TensorImplPtr solve_triangular_op(const TensorImplPtr& a,
         ErrorBuilder("solve_triangular").fail("A and b must have the same dtype");
     if (a->device() != b->device())
         ErrorBuilder("solve_triangular").fail("A and b must be on the same device");
+
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (empty_matrix(a->shape()))
+        return zeros_op(b->shape(), b->dtype(), b->device());
 
     auto out_storage = backend::Dispatcher::for_device(a->device())
                            .linalg_solve_triangular(a->storage(), b->storage(), a->shape(),

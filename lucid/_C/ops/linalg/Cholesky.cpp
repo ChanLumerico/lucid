@@ -34,6 +34,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -52,6 +53,12 @@ namespace lucid {
 TensorImplPtr cholesky_op(const TensorImplPtr& a, bool upper) {
     Validator::input(a, "cholesky.a").float_only().square_2d();
     OpScopeFull scope{"cholesky", a->device(), a->dtype(), a->shape()};
+
+    // A degenerate matrix has a decomposition; LAPACK just will not be
+    // the one to compute it.  See ``empty_matrix`` for why dispatching
+    // wrote to a stream Lucid does not own and then raised.
+    if (linalg_detail::empty_matrix(a->shape()))
+        return zeros_op(a->shape(), a->dtype(), a->device());
 
     Storage out = backend::Dispatcher::for_device(a->device())
                       .linalg_cholesky(a->storage(), a->shape(), upper, a->dtype());

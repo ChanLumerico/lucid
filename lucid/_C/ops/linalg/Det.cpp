@@ -36,6 +36,7 @@
 #include "../../ops/ufunc/Transpose.h"
 #include "../../ops/utils/Layout.h"
 #include "../../ops/utils/View.h"
+#include "../gfunc/Gfunc.h"
 #include "Inv.h"
 #include "_Detail.h"
 
@@ -102,6 +103,13 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
     const auto& sh = a->shape();
     // Drop the last two dims: [B, N, N] -> [B],  [N, N] -> [] (scalar).
     Shape out_shape(sh.begin(), sh.end() - 2);
+
+    // det of a 0x0 matrix is 1, not 0: it is the empty product, the same
+    // reason an empty sum is 0.  This is the one degenerate result here
+    // that is not simply an empty tensor — the output has no matrix axes
+    // left to be empty in.
+    if (empty_matrix(sh))
+        return ones_op(out_shape, a->dtype(), a->device());
 
     Storage out_storage =
         backend::Dispatcher::for_device(a->device()).linalg_det(a->storage(), sh, a->dtype());

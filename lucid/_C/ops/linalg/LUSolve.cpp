@@ -5,6 +5,7 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 namespace lucid {
 
@@ -21,6 +22,11 @@ lu_solve_op(const TensorImplPtr& LU, const TensorImplPtr& pivots, const TensorIm
     // width this reads, so only I32 may be passed.
     Validator::input(pivots, "lu_solve.pivots").non_null().dtype_eq(Dtype::I32);
     Validator::input(b, "lu_solve.b").float_only().non_null();
+
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (empty_matrix(LU->shape()))
+        return zeros_op(b->shape(), LU->dtype(), LU->device());
 
     auto result = backend::Dispatcher::for_device(LU->device())
                       .linalg_lu_solve(LU->storage(), pivots->storage(), b->storage(), LU->shape(),

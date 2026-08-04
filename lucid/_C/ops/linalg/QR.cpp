@@ -30,6 +30,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -60,6 +61,12 @@ std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
     Shape rsh(sh.begin(), sh.end() - 2);
     rsh.push_back(k);  // R has k rows
     rsh.push_back(n);  // R has n columns (same as A)
+
+    // A degenerate matrix has a decomposition; LAPACK just will not be
+    // the one to compute it.  See ``empty_matrix`` for why dispatching
+    // wrote to a stream Lucid does not own and then raised.
+    if (empty_matrix(sh))
+        return {zeros_op(qsh, a->dtype(), a->device()), zeros_op(rsh, a->dtype(), a->device())};
 
     // linalg_qr returns a pair<Storage, Storage> for {Q, R}.
     auto out = backend::Dispatcher::for_device(a->device())

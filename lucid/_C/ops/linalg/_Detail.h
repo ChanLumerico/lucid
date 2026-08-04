@@ -226,6 +226,52 @@ inline void require_square_2d(const Shape& sh, const char* op) {
         ErrorBuilder(op).fail("last two dims must be equal (square)");
 }
 
+// Whether the trailing matrix of ``sh`` has no entries.
+//
+// An empty matrix is a legal object, not a malformed one: a 0x3 matrix is
+// the unique linear map from R^3 to R^0, its rank is 0, its reduced SVD
+// has no singular values, and the determinant of the 0x0 matrix is the
+// empty product, 1.  Every linalg op here has a defined answer for it and
+// none of them used to give it.
+//
+// They dispatched instead, and LAPACK refused the call: its leading
+// dimensions must be at least 1 even when the extent they describe is 0,
+// so ``dgesdd`` on a 0x3 matrix got ``LDA = 0`` and reported argument 5
+// illegal.  That surfaced two ways, both wrong.  The Fortran runtime
+// prints the complaint itself, straight to file descriptor 2 —
+//
+//     ** On entry to DGESDD, parameter number  5 had an illegal value
+//
+// — which is not routed through anything Lucid can catch, and then the
+// negative ``info`` became ``LucidError: LAPACK invalid argument index5``,
+// which reads like a numerical failure in the caller's data and is
+// actually this library calling LAPACK wrongly.
+//
+// The leading dimensions are clamped at their source now, so no call is
+// malformed.  That is not sufficient on its own: LAPACK returns early and
+// successfully for a degenerate matrix *without writing to the output
+// buffers*, so the answer would have been whatever the allocation held.
+// Every op that can receive one checks here and builds its result
+// directly.
+inline bool empty_matrix(const Shape& sh) {
+    const auto rank = sh.size();
+    if (rank < 2)
+        return false;
+    return sh[rank - 2] == 0 || sh[rank - 1] == 0;
+}
+
+// The shape a degenerate result takes, with the trailing matrix replaced.
+//
+// Batch dimensions are carried through unchanged; only the last two axes
+// are rewritten.  ``trailing`` may name one axis (a vector of eigenvalues
+// or singular values) or two (a matrix).
+inline Shape with_matrix_shape(const Shape& sh, std::initializer_list<std::int64_t> trailing) {
+    Shape out(sh.begin(), sh.end() - 2);
+    for (auto d : trailing)
+        out.push_back(d);
+    return out;
+}
+
 // Translate a LAPACK ``info`` return code into a Lucid error.
 //
 // LAPACK convention

@@ -31,6 +31,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -64,6 +65,19 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
     Shape vsh(sh.begin(), sh.end() - 2);
     vsh.push_back(k);  // Vh: k rows (right singular vectors, transposed)
     vsh.push_back(n);  // Vh: n columns
+
+    // A degenerate matrix has a decomposition; LAPACK just will not be
+    // the one to compute it.  See ``empty_matrix`` for why dispatching
+    // wrote to a stream Lucid does not own and then raised.
+    if (empty_matrix(sh)) {
+        std::vector<TensorImplPtr> empty;
+        if (compute_uv)
+            empty.push_back(zeros_op(ush, a->dtype(), a->device()));
+        empty.push_back(zeros_op(ssh, a->dtype(), a->device()));
+        if (compute_uv)
+            empty.push_back(zeros_op(vsh, a->dtype(), a->device()));
+        return empty;
+    }
 
     auto storages = backend::Dispatcher::for_device(a->device())
                         .linalg_svd(a->storage(), sh, compute_uv, ush, ssh, vsh, a->dtype());

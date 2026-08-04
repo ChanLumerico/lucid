@@ -6,6 +6,7 @@
 #include "../../core/Helpers.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 namespace lucid {
 
@@ -19,13 +20,18 @@ std::vector<TensorImplPtr> lstsq_op(const TensorImplPtr& a, const TensorImplPtr&
     const int n = static_cast<int>(as[as.size() - 1]);
     const int nrhs = (bs.size() > 1) ? static_cast<int>(bs[bs.size() - 1]) : 1;
 
-    auto results = backend::Dispatcher::for_device(a->device())
-                       .linalg_lstsq(a->storage(), b->storage(), as, bs, a->dtype());
-
     // Solution shape: (n, nrhs) or (n,) if nrhs==1
     Shape sol_shape = {static_cast<std::int64_t>(n)};
     if (nrhs > 1)
         sol_shape.push_back(static_cast<std::int64_t>(nrhs));
+
+    // A degenerate matrix has an answer; LAPACK just will not be the one
+    // to compute it — see ``empty_matrix``.
+    if (empty_matrix(as))
+        return {zeros_op(sol_shape, a->dtype(), a->device())};
+
+    auto results = backend::Dispatcher::for_device(a->device())
+                       .linalg_lstsq(a->storage(), b->storage(), as, bs, a->dtype());
 
     auto sol = fresh(std::move(results[0]), sol_shape, a->dtype(), a->device());
     return {sol};
