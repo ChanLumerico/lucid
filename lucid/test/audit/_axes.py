@@ -659,7 +659,22 @@ class DeviceAxis(Axis):
                 f"{np.nanmax(np.abs(a.astype(float) - b.astype(float))):.3e}",
             )
 
-        # The probe the old sweeps did not carry.
+        # The probe the old sweeps did not carry — but only where a NaN
+        # means anything.  The substitution rewrites the *primary*
+        # argument, and for ``one_hot`` that argument is a tensor of class
+        # indices: replacing it with NaN and casting to float asks the two
+        # backends what the zeroth column of a NaN-th class is, and they
+        # answered differently because the question has no answer.
+        primary = call.args[call.primary] if call.args else None
+        if primary is None or not str(getattr(primary, "dtype", "")).endswith(
+            ("float16", "float32", "float64")
+        ):
+            return self._finding(
+                symbol,
+                Status.PASS,
+                f"{domain}: finite inputs agree (primary is not a float — "
+                "a non-finite probe would not mean anything)",
+            )
         try:
             nan_cpu = _probe.to_numpy(on("cpu", _probe.NON_FINITE))
             nan_metal = _probe.to_numpy(on("metal", _probe.NON_FINITE))

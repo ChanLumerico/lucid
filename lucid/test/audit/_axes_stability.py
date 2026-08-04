@@ -97,6 +97,28 @@ class StabilityAxis(Axis):
         # narrows the claim, it does not gate it.
         reference_finite = _stability_contract().get(symbol.qualname)
 
+        # What the check is actually about: does *changing the magnitude*
+        # introduce a NaN?  A NaN that was there before anything was scaled
+        # belongs to the probe, not to the op's conditioning.
+        #
+        # Only the primary argument is made positive.  Every companion
+        # keeps whatever the domain drew, and ``moderate`` draws from
+        # (-1.05, 1.35) — so ``xlogy(x, y)`` met a negative ``y``, answered
+        # NaN for it at every scale including 1.0, and was reported for
+        # arithmetic that was never in question.  Five findings, all of
+        # them the second operand.
+        #
+        # Held per element rather than per array, so an op that is NaN
+        # somewhere for that reason can still be caught going NaN
+        # elsewhere under scaling.
+        baseline_finite = None
+        try:
+            at_one = _probe.to_numpy(fn(*call.with_primary(base).args, **call.kwargs))
+            if at_one is not None and at_one.dtype.kind in "fc":
+                baseline_finite = ~np.isnan(at_one)
+        except Exception:  # noqa: BLE001 - surveying, not asserting
+            baseline_finite = None
+
         broken: list[str] = []
         domain: list[str] = []
         ran = 0
@@ -119,7 +141,10 @@ class StabilityAxis(Axis):
             if out is None or out.dtype.kind not in "fc":
                 continue
             ran += 1
-            if np.isnan(out).any():
+            appeared = np.isnan(out)
+            if baseline_finite is not None and baseline_finite.shape == appeared.shape:
+                appeared = appeared & baseline_finite
+            if appeared.any():
                 broken.append(f"scale 1e{int(np.log10(scale)):+d} -> NaN")
         if not ran:
             if domain:

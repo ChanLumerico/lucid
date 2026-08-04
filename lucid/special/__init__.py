@@ -703,11 +703,20 @@ def entr(x: Tensor) -> Tensor:
     Tensor([0.0000, 0.3466, 0.0000, -1.3863])
     """
     x = _real(x)
-    safe_x = lucid.where(x > lucid.zeros_like(x), x, lucid.full_like(x, 1.0))
+    zero = lucid.zeros_like(x)
+    safe_x = lucid.where(x > zero, x, lucid.full_like(x, 1.0))
     val = -safe_x * lucid.log(safe_x)
-    val = lucid.where(x == lucid.zeros_like(x), lucid.full_like(val, 0.0), val)
-    val = lucid.where(x < lucid.zeros_like(x), lucid.full_like(val, float("nan")), val)
-    return val
+    val = lucid.where(x == zero, lucid.full_like(val, 0.0), val)
+    # Negative x is -inf, not NaN.  The entropy kernel is defined as
+    # ``-x log x`` on the positive half, ``0`` at zero and ``-inf`` below
+    # — it is an extended-real-valued function, not an undefined one, and
+    # a NaN there loses the ordering that makes it usable as a penalty.
+    val = lucid.where(x < zero, lucid.full_like(val, float("-inf")), val)
+    # A NaN input has to survive.  Every branch above is chosen by a
+    # comparison against NaN, and all of them are false, so the value fell
+    # through to the ``x > 0`` branch's placeholder of 1.0 and came back
+    # -0.0 — a NaN entering the expression left it as an ordinary number.
+    return lucid.where(x != x, lucid.full_like(val, float("nan")), val)
 
 
 # ── Gamma family ───────────────────────────────────────────────────────────

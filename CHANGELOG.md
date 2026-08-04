@@ -142,6 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - bool scans, integer cubes, and dropout's integer mask
 
+- NaN through threshold, entr, and Metal's unfold padding
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -22,7 +22,10 @@ import numpy as np
 import pytest
 
 import lucid
+import lucid.nn.functional as F
 import lucid.special as sp
+
+_DEVICES = ["cpu", "metal"]
 
 _LARGE = np.array([1.0, 2.0, 5.0, 10.0, 100.0, 1e4, 1e6, 1e12])
 
@@ -229,3 +232,113 @@ def test_xlog1py_follows_log1p() -> None:
         dtype=np.float64,
     )
     assert np.allclose(got, [1e-60, 1.0986122886681098], rtol=1e-9), got
+
+
+# ── NaN through the ops that select rather than compute ──────────────────────
+
+
+def test_threshold_keeps_a_nan() -> None:
+    """The comparison runs the wrong way and the NaN disappears.
+
+    ``x > t ? x : v`` and ``x <= t ? v : x`` are the same function
+    everywhere except at NaN, where *both* comparisons are false — so the
+    first replaces the NaN with ``value`` and the second keeps it.
+    Written the first way, a NaN entering a network became a 0 at the
+    first threshold and the loss went finite with nothing to show for it.
+    """
+    x = np.array([np.nan, 0.5, 1.0, 1.5], dtype=np.float32)
+    for device in _DEVICES:
+        got = np.asarray(
+            F.threshold(
+                lucid.tensor(
+                    np.ascontiguousarray(x), dtype=lucid.float32, device=device
+                ),
+                1.0,
+                9.0,
+            ).numpy(),
+            dtype=np.float64,
+        )
+        assert np.isnan(got[0]), f"{device}: {got}"
+        assert np.array_equal(got[1:], [9.0, 9.0, 1.5]), got
+
+
+def test_entr_is_negative_infinity_below_zero_and_nan_at_nan() -> None:
+    """It answered NaN for negative x and swallowed a NaN input.
+
+    ``entr`` is ``-x log x`` on the positive half, 0 at zero and -inf
+    below — extended-real-valued, not undefined, and a NaN there loses
+    the ordering that makes it usable as a penalty.  Separately, every
+    branch is chosen by a comparison against NaN and all of them are
+    false, so a NaN input fell through to the positive branch's
+    placeholder and came back -0.0.
+    """
+    x = np.array([np.nan, -1.0, -0.5, 0.0, 0.5], dtype=np.float32)
+    for device in _DEVICES:
+        got = np.asarray(
+            lucid.special.entr(
+                lucid.tensor(
+                    np.ascontiguousarray(x), dtype=lucid.float32, device=device
+                )
+            ).numpy(),
+            dtype=np.float64,
+        )
+        assert np.isnan(got[0]), f"{device}: {got}"
+        assert np.isneginf(got[1]) and np.isneginf(got[2]), got
+        assert got[3] == 0.0
+        assert np.isclose(got[4], -0.5 * np.log(0.5))
+
+
+def test_unfold_padding_stays_zero_when_the_data_is_nan() -> None:
+    """Metal masked the padding by multiplying, and ``0 * NaN`` is NaN.
+
+    The index feeding the gather is *clipped*, so a padded cell still
+    samples a real element and is zeroed afterwards.  Multiplying by the
+    validity mask does that for every ordinary value and fails for
+    exactly one — so a single NaN anywhere in the operand turned every
+    padded position NaN, and the two devices disagreed about an op that
+    only moves data.
+    """
+    x = np.full((1, 1, 2, 2), np.nan, dtype=np.float32)
+    counts = []
+    for device in _DEVICES:
+        got = np.asarray(
+            F.unfold(
+                lucid.tensor(
+                    np.ascontiguousarray(x), dtype=lucid.float32, device=device
+                ),
+                2,
+                padding=1,
+            ).numpy(),
+            dtype=np.float64,
+        ).ravel()
+        counts.append(int(np.isnan(got).sum()))
+        assert got.size == 36
+    assert counts == [16, 16], f"padded positions went non-finite: {counts}"
+
+
+def test_unfold_is_unchanged_for_ordinary_values() -> None:
+    """Guard the instrument: selecting must compute what multiplying did."""
+    x = np.arange(1, 10, dtype=np.float32).reshape(1, 1, 3, 3)
+    outs = []
+    for device in _DEVICES:
+        t = lucid.tensor(np.ascontiguousarray(x), dtype=lucid.float32, device=device)
+        outs.append(np.asarray(F.unfold(t, 2, padding=1).numpy(), dtype=np.float64))
+    assert np.array_equal(outs[0], outs[1])
+    assert outs[0].shape == (1, 4, 16)
+
+
+def test_unfold_gradient_ignores_the_padding_on_both_devices() -> None:
+    """The backward masked multiplicatively too."""
+    x = np.arange(1, 10, dtype=np.float32).reshape(1, 1, 3, 3)
+    grads = []
+    for device in _DEVICES:
+        t = lucid.tensor(
+            np.ascontiguousarray(x),
+            dtype=lucid.float32,
+            device=device,
+            requires_grad=True,
+        )
+        F.unfold(t, 2, padding=1).sum().backward()
+        grads.append(np.asarray(t.grad.numpy(), dtype=np.float64).ravel())
+    assert np.array_equal(grads[0], grads[1])
+    assert np.array_equal(grads[0], np.full(9, 4.0))

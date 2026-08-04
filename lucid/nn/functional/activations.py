@@ -1463,9 +1463,15 @@ def threshold(
     >>> threshold(x, threshold=0.5, value=-99.0)
     Tensor([-99.0000, -99.0000, -99.0000,   1.0000])
     """
-    keep = x > threshold
+    # ``x <= t ? v : x``, not ``x > t ? x : v``.  The two are the same
+    # function everywhere except at NaN, where *both* comparisons are
+    # false — so the first keeps the NaN and the second replaces it with
+    # ``value``.  Written the second way, a NaN entering a network became
+    # a 0 at the first threshold and the loss went finite with nothing to
+    # show for it.  The reference is the first.
+    replaced = x <= threshold
     replacement = _l.full_like(x, float(value))
-    return _l.where(keep, x, replacement)
+    return _l.where(replaced, replacement, x)
 
 
 def gumbel_softmax(

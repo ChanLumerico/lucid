@@ -5138,9 +5138,19 @@ public:
         int O_total = 1;
         for (int o : O)
             O_total *= o;
-        auto valid_b =
-            ::mlx::core::astype(::mlx::core::broadcast_to(valid, composite), gpu::to_mlx_dtype(dt));
-        auto masked = ::mlx::core::multiply(sampled, valid_b);
+        // Select, do not multiply.
+        //
+        // ``valid`` marks the positions that came from inside the image
+        // rather than from the padding, and the index feeding ``take`` was
+        // *clipped* — so a padded cell still sampled a real element and was
+        // meant to be zeroed afterwards.  Multiplying by the mask does that
+        // for every ordinary value and fails for exactly one: ``0 * NaN`` is
+        // NaN.  A single NaN anywhere in the operand turned every padded
+        // position NaN, 36 of 36 against the CPU's and the reference's 16,
+        // and the two devices disagreed about an op that only moves data.
+        auto zeros_like_sampled = ::mlx::core::zeros_like(sampled);
+        auto masked = ::mlx::core::where(::mlx::core::broadcast_to(valid, composite), sampled,
+                                         zeros_like_sampled);
         auto reshaped = ::mlx::core::reshape(masked, {B, C * K_total, O_total});
         return Storage{gpu::wrap_mlx_array(std::move(reshaped), dt)};
         (void)out_shape;
@@ -5222,11 +5232,12 @@ public:
         }
         flat = ::mlx::core::broadcast_to(flat, composite);
 
-        auto valid_b =
-            ::mlx::core::astype(::mlx::core::broadcast_to(valid, composite), gpu::to_mlx_dtype(dt));
-
+        // Select rather than multiply, for the reason given in the forward:
+        // a padded position must contribute nothing, and ``0 * NaN`` is not
+        // nothing.
         auto g_comp = ::mlx::core::reshape(*gg.arr, composite);
-        g_comp = ::mlx::core::multiply(g_comp, valid_b);
+        g_comp = ::mlx::core::where(::mlx::core::broadcast_to(valid, composite), g_comp,
+                                    ::mlx::core::zeros_like(g_comp));
 
         auto flat_1d = ::mlx::core::reshape(flat, {B * C * K_total * O_total});
         auto g_flat = ::mlx::core::reshape(g_comp, {B * C * K_total * O_total});
