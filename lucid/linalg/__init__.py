@@ -312,7 +312,7 @@ class _CholeskyAutograd(_AutogradFunction):
 def norm(
     x: Tensor,
     ord: int | float | str | None = None,
-    dim: int | list[int] | None = None,
+    dim: int | list[int] | tuple[int, ...] | None = None,
     keepdim: bool = False,
 ) -> Tensor:
     r"""Compute a vector or matrix norm.
@@ -337,7 +337,7 @@ def norm(
         when None), ``inf``, ``-inf``, or any positive real.  Matrix
         orders: ``"fro"``, ``"nuc"``, ``1``, ``-1``, ``2``, ``-2``,
         ``inf``, ``-inf``.
-    dim : int, list of int or None, optional
+    dim : int, list of int, tuple of int or None, optional
         Reduction axis (or pair of axes for matrix norms).  ``None``
         reduces over all elements.
     keepdim : bool, optional
@@ -348,11 +348,43 @@ def norm(
     Tensor
         Norm value(s); shape depends on ``dim`` / ``keepdim``.
 
+    Raises
+    ------
+    ValueError
+        If ``ord`` is given without ``dim`` and the input is neither a
+        vector nor a single matrix — a batch of matrices leaves it
+        ambiguous whether one norm or one per matrix was meant.  Also if
+        ``dim`` names more than two axes, or if a matrix order is asked
+        of a vector.
+
     Notes
     -----
+    Which of the two norms runs is decided as follows:
+
+    ============================  ==========================================
+    arguments                     reduction
+    ============================  ==========================================
+    ``dim=None, ord=None``        flatten, Euclidean norm, any rank
+    ``dim=None, ord`` given       vector norm if 1-D, matrix norm if 2-D
+    ``dim`` names one axis        vector norm along it
+    ``dim`` names two axes        matrix norm over that plane
+    ``ord`` is ``"fro"``/``"nuc"``  matrix norm regardless
+    ============================  ==========================================
+
+    So ``ord`` means different things at different ranks, and the same
+    order names two different quantities: ``ord=2`` is the Euclidean norm
+    of a vector but the *spectral* norm — the largest singular value — of
+    a matrix, which is not its Frobenius norm.  Pass an explicit ``dim``,
+    or call :func:`vector_norm` or :func:`matrix_norm` directly, wherever
+    that distinction matters.
+
     Many norm orders (spectral, nuclear) require an SVD and therefore
     cost :math:`O(\min(m,n) \cdot mn)`; entry-wise norms reduce in a
     single pass.
+
+    Overflow is not a failure mode here: the input is rescaled by its
+    largest magnitude before reducing, so a norm whose value is
+    representable is computed even when its squares are not.
 
     Examples
     --------
@@ -360,47 +392,112 @@ def norm(
     >>> from lucid.linalg import norm
     >>> norm(lucid.tensor([3.0, 4.0]))
     tensor(5.)
+    >>> A = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    >>> norm(A, ord=1)          # max absolute column sum
+    tensor(9.)
+    >>> norm(A, ord=1, dim=1)   # per-row vector 1-norm
+    tensor([ 6., 15.])
     """
-    # Forward user kwargs into the engine's positional signature:
-    #   norm(a, ord=2.0, dim=[], keepdims=False)
-    eff_ord: float
-    if ord is None:
-        eff_ord = 2.0
-    elif isinstance(ord, str):
-        if ord.lower() == "fro":
-            eff_ord = 2.0
-        else:
-            raise NotImplementedError(
-                f"lucid.linalg.norm: ord={ord!r} not supported via engine path"
-            )
-    else:
-        eff_ord = float(ord)
+    # Dispatch, which is what the docstring above has always promised and
+    # what this function did not do.  Every argument used to go straight
+    # into the engine's flat p-norm, so ``ord`` was read as a *vector*
+    # order over the flattened input no matter the rank.  On a 2-D input
+    # that is a different function under the same name:
+    #
+    #   ord=1     21    vs      9   (max absolute column sum)
+    #   ord=2     9.539 vs  9.508   (Frobenius, not spectral)
+    #   ord=inf    6    vs     15   (max absolute row sum)
+    #
+    # None of these raised.  ``ord=2`` is the worst of them: Frobenius and
+    # spectral agree to three significant figures on well-conditioned
+    # matrices and diverge exactly where the answer starts to matter, so
+    # anything using ``norm(A, ord=2)`` as a Lipschitz bound or a
+    # conditioning estimate was quietly reading the wrong number.
+    #
+    # The rules, measured rather than assumed:
+    #
+    #   ord is a string          matrix norm ("fro" / "nuc")
+    #   dim is None, ord None    flatten, 2-norm, any rank
+    #   dim is None, ord given   1-D vector norm / 2-D matrix norm; else refuse
+    #   dim names one axis       vector norm
+    #   dim names two axes       matrix norm
+    rank = len(_unwrap(x).shape)
+    axes: tuple[int, ...] | None
     if dim is None:
-        eff_dim: list[int] = []
-    elif isinstance(dim, int):
-        eff_dim = [int(dim)]
+        axes = None
+    elif isinstance(dim, (list, tuple)):
+        axes = tuple(int(d) for d in dim)
     else:
-        eff_dim = [int(d) for d in dim]
-    # Scaled, so the squaring cannot overflow on the way to a finite
-    # answer.  ``norm([1e200, 1e200])`` is 1.41e200 — an ordinary double —
-    # and computing it as ``sqrt(Σ x²)`` reaches infinity at the first
-    # square and never comes back.  Factoring out the largest magnitude
-    # first puts every ratio in [0, 1], so nothing squares above 1.
-    #
-    # The reference overflows here too; this is a place Lucid can simply
-    # be right rather than a place it was wrong.  BLAS's own ``nrm2`` has
-    # done the same rescaling for the same reason since the seventies.
-    #
-    # ``m == 0`` means every element is zero and so is the answer, so the
-    # ratio is taken against a floor and multiplied back by ``m``, which
-    # returns the zero.
+        axes = (int(dim),)
+
+    if axes is None:
+        if ord is None:
+            # Flat 2-norm over everything, whatever the rank.
+            return _scaled(x, ord, lambda t: vector_norm(t, 2, None, keepdim))
+        # An order without axes: only a vector or a single matrix says
+        # unambiguously which reduction was meant.  Above rank 2 there is
+        # a batch and no way to tell whether the caller wanted one norm or
+        # one per matrix, so refuse rather than pick.
+        if rank == 2:
+            return _scaled(x, ord, lambda t: matrix_norm(t, ord, (0, 1), keepdim))
+        if rank == 1 and not isinstance(ord, str):
+            return _scaled(x, ord, lambda t: vector_norm(t, ord, 0, keepdim))
+        if rank == 1:
+            raise ValueError(
+                f"norm: ord={ord!r} is a matrix order and needs at least "
+                "2 dimensions, got 1-D"
+            )
+        raise ValueError(
+            "norm: when dim is not given but ord is, the input must be 1-D "
+            f"or 2-D, got {rank}-D — pass dim to say which axes to reduce"
+        )
+
+    if isinstance(ord, str) or len(axes) == 2:
+        if len(axes) != 2:
+            raise ValueError(
+                f"norm: ord={ord!r} is a matrix order and needs a pair of "
+                f"axes, got dim={dim!r}"
+            )
+        pair = (axes[0], axes[1])
+        m_ord: int | float | str = "fro" if ord is None else ord
+        return _scaled(x, ord, lambda t: matrix_norm(t, m_ord, pair, keepdim))
+    if len(axes) == 1:
+        v_ord: int | float = 2 if ord is None else ord
+        one = [axes[0]]
+        return _scaled(x, ord, lambda t: vector_norm(t, v_ord, one, keepdim))
+    raise ValueError(f"norm: dim must name one or two axes, got {dim!r}")
+
+
+def _scaled(
+    x: Tensor, ord: int | float | str | None, compute: Callable[[Tensor], Tensor]
+) -> Tensor:
+    """Run ``compute`` on a rescaled ``x`` and undo the scaling.
+
+    Every norm order here is absolutely homogeneous — ``‖αx‖ = |α|‖x‖`` —
+    so the largest magnitude can be divided out first and multiplied back
+    at the end.  Every order but one: ``ord=0`` counts non-zero entries,
+    which no positive scaling changes, so multiplying the scale back in
+    inflates the count by it — ``norm([1, -2, 3], ord=0)`` answered 9
+    instead of 3.  It also cannot overflow, so it skips the rescaling
+    rather than being corrected for it.  That matters because the squaring in a 2-norm reaches
+    infinity before the answer does: ``norm([1e200, 1e200])`` is 1.41e200,
+    an ordinary double, and the direct evaluation says ``inf``.  The other
+    end underflows to zero.  Dividing by the largest magnitude puts every
+    ratio in [0, 1], so nothing squares out of range.  BLAS's ``nrm2`` has
+    rescaled for the same reason since the seventies.
+
+    The scale is only used when it is finite and positive.  An all-zero
+    input has scale 0, and an input containing an infinity has scale inf —
+    dividing by either turns the answer into NaN, which is how the first
+    version of this rescaling reported ``norm([inf, 1])``.  Both fall back
+    to 1, where the unscaled evaluation is already right.
+    """
+    if ord == 0 and not isinstance(ord, str):
+        return compute(x)
     scale = lucid.max(lucid.abs(x))
-    # The smallest normal double, written out: this module is a compute
-    # path and may not import numpy (H4).
-    tiny = lucid.full_like(scale, 2.2250738585072014e-308)
-    safe = lucid.maximum(scale, tiny)
-    scaled = _wrap(_la.norm(_unwrap(x / safe), eff_ord, eff_dim, bool(keepdim)))
-    return scaled * safe
+    usable = lucid.isfinite(scale) & (scale > lucid.zeros_like(scale))
+    safe = lucid.where(usable, scale, lucid.ones_like(scale))
+    return compute(x / safe) * safe
 
 
 # ── SVD with backward ─────────────────────────────────────────────────────────
@@ -1745,7 +1842,7 @@ def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
 def vector_norm(
     x: Tensor,
     ord: int | float = 2,
-    dim: int | list[int] | None = None,
+    dim: int | list[int] | tuple[int, ...] | None = None,
     keepdim: bool = False,
     dtype: object = None,
 ) -> Tensor:
@@ -1799,24 +1896,32 @@ def vector_norm(
     >>> vector_norm(lucid.tensor([1.0, -2.0, 3.0]), ord=1)
     tensor(6.)
     """
-    import math
-
     xi = _unwrap(x)
     axes: list[int] = []
     if dim is None:
-        # Flatten then reduce over all elements
-        xi = _C_engine.reshape(xi, [-1])
-        axes = [0]
-    elif isinstance(dim, list):
-        axes = dim
+        # Every axis, rather than a flatten.
+        #
+        # Flattening first threw away the rank, so ``keepdim`` had nothing
+        # left to keep and a (2, 3) input reduced to shape (1,) where it
+        # should hold its place as (1, 1).  Naming the axes gives the same
+        # numbers and the right shape.
+        axes = list(range(len(xi.shape)))
+    elif isinstance(dim, (list, tuple)):
+        axes = [int(d) for d in dim]
     else:
-        axes = [dim]
+        axes = [int(dim)]
 
     if ord == 0:
-        # Count non-zero elements
+        # Count non-zero elements.  Counting produces an integer, and
+        # every other order here produces a float; a norm whose dtype
+        # depends on its order is a trap for anything downstream that
+        # divides by it, so the count is cast to match.
         zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
         nz = _C_engine.not_equal(xi, zeros)
-        return _wrap(_C_engine.sum(nz, axes, keepdim))
+        counted = _C_engine.sum(nz, axes, keepdim)
+        if xi.dtype in (_C_engine.F16, _C_engine.BF16, _C_engine.F64):
+            return _wrap(_C_engine.astype(counted, xi.dtype))
+        return _wrap(_C_engine.astype(counted, _C_engine.F32))
 
     if ord == float("inf"):
         return _wrap(_C_engine.max(_C_engine.abs(xi), axes, keepdim))
@@ -2114,44 +2219,87 @@ def matrix_norm(
     tensor(5.)
     """
     xi = _unwrap(x)
-    d0, d1 = int(dim[0]), int(dim[1])
+    rank = len(xi.shape)
+    if rank < 2:
+        raise ValueError(
+            f"matrix_norm: the input must have at least 2 dimensions, got {rank}"
+        )
+    if len(dim) != 2:
+        raise ValueError(f"matrix_norm: dim must be a pair of axes, got {dim!r}")
+
+    # Both axes as non-negative indices, once, up front.
+    #
+    # The two-pass orders (max/min absolute row or column sum) used to
+    # reduce the first axis and then reach for the second by the index it
+    # had *before* that reduction removed a dimension — which for the
+    # default ``dim=(-2, -1)`` named an axis that no longer existed, so
+    # every one of ``ord`` 1, -1, inf and -inf raised IndexError on a plain
+    # 2-D matrix.  With an explicit ``dim`` there was no error and the
+    # wrong axis was reduced instead, which is the worse half: a batch of
+    # matrices returned a per-column answer that looked like a norm.
+    #
+    # Reducing with ``keepdims=True`` throughout and dropping the two axes
+    # at the end keeps every index meaning the same thing from start to
+    # finish.
+    d0, d1 = int(dim[0]) % rank, int(dim[1]) % rank
+    if d0 == d1:
+        raise ValueError(f"matrix_norm: dim must name two distinct axes, got {dim!r}")
+
+    def _drop(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
+        """Remove the two reduced axes unless the caller keeps them."""
+        if keepdim:
+            return impl
+        shape = list(impl.shape)
+        return _C_engine.reshape(
+            impl, [n for i, n in enumerate(shape) if i not in (d0, d1)]
+        )
 
     if ord == "fro":
         sq = _C_engine.mul(xi, xi)
-        s = _C_engine.sum(sq, [d0, d1], keepdim)
-        return _wrap(_C_engine.sqrt(s))
+        return _wrap(_drop(_C_engine.sqrt(_C_engine.sum(sq, [d0, d1], True))))
 
-    if ord == "nuc":
-        # Nuclear norm = sum of singular values (requires SVD)
-        _, S, _ = svd(x)
-        return _wrap(_C_engine.sum(_unwrap(S), [-1], keepdim))
+    if ord == 1 or ord == -1:
+        # Absolute column sums: sum down the rows (d0), then take the
+        # extreme across the columns (d1).
+        col_sums = _C_engine.sum(_C_engine.abs(xi), [d0], True)
+        pick = _C_engine.max if ord == 1 else _C_engine.min
+        return _wrap(_drop(pick(col_sums, [d1], True)))
 
-    if ord == 1:
-        # Max absolute column sum
-        col_sums = _C_engine.sum(_C_engine.abs(xi), [d0], keepdim)
-        return _wrap(_C_engine.max(col_sums, [d1 if keepdim else d1 - 1], keepdim))
+    if ord == float("inf") or ord == float("-inf"):
+        # Absolute row sums: the same, with the axes exchanged.
+        row_sums = _C_engine.sum(_C_engine.abs(xi), [d1], True)
+        pick = _C_engine.max if ord == float("inf") else _C_engine.min
+        return _wrap(_drop(pick(row_sums, [d0], True)))
 
-    if ord == -1:
-        col_sums = _C_engine.sum(_C_engine.abs(xi), [d0], keepdim)
-        return _wrap(_C_engine.min(col_sums, [d1 if keepdim else d1 - 1], keepdim))
+    if ord not in ("nuc", 2, -2):
+        raise ValueError(f"matrix_norm: unsupported ord={ord!r}")
 
-    if ord == float("inf"):
-        row_sums = _C_engine.sum(_C_engine.abs(xi), [d1], keepdim)
-        return _wrap(_C_engine.max(row_sums, [d0], keepdim))
+    # Singular-value orders.  ``svd`` reads the matrix off the trailing two
+    # axes, so an arbitrary ``dim`` has to be moved there first; the
+    # remaining axes keep their relative order, which is what makes the
+    # result's shape the input's with ``d0`` and ``d1`` removed.
+    rest = [i for i in range(rank) if i not in (d0, d1)]
+    moved = x
+    if rest + [d0, d1] != list(range(rank)):
+        moved = _wrap(_C_engine.permute(xi, rest + [d0, d1]))
 
-    if ord == float("-inf"):
-        row_sums = _C_engine.sum(_C_engine.abs(xi), [d1], keepdim)
-        return _wrap(_C_engine.min(row_sums, [d0], keepdim))
-
-    # Spectral norms: use SVD
-    _, S, _ = svd(x)
+    _, S, _ = svd(moved)
     sv = _unwrap(S)
-    if ord == 2:
-        return _wrap(_C_engine.max(sv, [-1], keepdim))
-    if ord == -2:
-        return _wrap(_C_engine.min(sv, [-1], keepdim))
+    if ord == "nuc":
+        reduced = _C_engine.sum(sv, [-1], False)
+    elif ord == 2:
+        reduced = _C_engine.max(sv, [-1], False)
+    else:
+        reduced = _C_engine.min(sv, [-1], False)
 
-    raise ValueError(f"matrix_norm: unsupported ord={ord!r}")
+    if not keepdim:
+        return _wrap(reduced)
+    # Put the two reduced axes back where they were, as size 1.  ``rest``
+    # is ascending, so the surviving extents are already in this order.
+    shape = [1] * rank
+    for axis in rest:
+        shape[axis] = list(xi.shape)[axis]
+    return _wrap(_C_engine.reshape(reduced, shape))
 
 
 def lstsq(

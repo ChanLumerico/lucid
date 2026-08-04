@@ -164,6 +164,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the last three defects, and the audit reaches zero
 
+- norm dispatches by rank and axes, as it always documented
+
 ### Changed
 
 - give the engine ops one shared operand check
