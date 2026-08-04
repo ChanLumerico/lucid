@@ -64,8 +64,16 @@ _L, _H, _W = 8, 6, 6
 _MAX_CANDIDATES = 6
 
 
-def _tensor(shape: "tuple[int, ...]", domain: str) -> Any:
-    return _probe.as_f64(_probe.sample(domain, shape))
+def _tensor(shape: "tuple[int, ...]", domain: str, variant: int = 0) -> Any:
+    """One tensor argument.
+
+    ``variant`` must differ between the operands of a binary op.  Built
+    the same way they were identical — the draw is seeded — and every
+    comparison was then probed exactly on its tie, which is the one input
+    where it has no derivative: ``maximum(a, a)`` reports a convention
+    rather than a slope, and no finite difference can agree with it.
+    """
+    return _probe.as_f64(_probe.sample(domain, shape, variant))
 
 
 def _indices(shape: "tuple[int, ...]", high: int) -> Any:
@@ -269,9 +277,9 @@ def _related_value(
         return False, None
 
     if name in ("other", "mat2", "tensor2"):
-        return True, _tensor(shape, domain)
+        return True, _tensor(shape, domain, variant=1)
     if name in ("key", "value"):
-        return True, _tensor(shape, domain)
+        return True, _tensor(shape, domain, variant=1 if name == "key" else 2)
     if name in ("mask", "attn_mask"):
         return True, _mask(shape)
     if name in ("index", "indices"):
@@ -296,7 +304,13 @@ def _related_value(
         # not a soft failure — an out-of-range index reads past the table.
         if re.search(r"cross_entropy|nll|multi_margin|_class", op_name):
             return True, _indices(shape[:1] or (1,), max(shape[-1], 1))
-        return True, _tensor(shape, domain)
+        # A regression target drawn the same way as the prediction *is*
+        # the prediction — the draw is seeded — so every such loss was
+        # evaluated at its own minimum, where the loss is 0 and so is its
+        # gradient.  The check then passed by measuring nothing, which is
+        # what VACUOUS exists to say and what the grad axis reported for
+        # the whole loss family.
+        return True, _tensor(shape, domain, variant=1)
 
     if name == "weight":
         if re.search(r"conv", op_name):
@@ -343,8 +357,15 @@ def _value_for(
     domain: str,
     reference: Any,
     shape: "tuple[int, ...]",
+    variant: int = 0,
 ) -> "tuple[bool, Any, bool]":
-    """``(found, value, is_tensor)`` for one required parameter."""
+    """``(found, value, is_tensor)`` for one required parameter.
+
+    ``variant`` is how many tensor arguments have already been built, so
+    each operand of a binary op gets a different fixed draw.  Given the
+    same one they were *identical*, and every comparison was probed
+    exactly on its tie.
+    """
     name = param.name
     text = _clean(param.annotation)
 
@@ -360,7 +381,11 @@ def _value_for(
         # the operand, and the generic ladder's ``op([x, x])`` form treats
         # it the same way.  Left un-marked, ``_build`` finds no tensor to
         # differentiate and discards a perfectly good invocation.
-        return True, [_tensor(shape, domain), _tensor(shape, domain)], True
+        return (
+            True,
+            [_tensor(shape, domain, variant), _tensor(shape, domain, variant=1)],
+            True,
+        )
     if name == "parameters" or re.search(r"Iterable\[Parameter\]", text):
         return True, list(lucid.nn.Linear(_COUT, _COUT).parameters()), False
     if re.search(r"\bCallable\b", text):
@@ -369,7 +394,7 @@ def _value_for(
         # derivative that is not zero, so it exercises what they compute.
         return True, (lambda *operands: operands[0] * operands[0]), False
     if _is_tensor_annotation(text) or name in _TENSOR_PARAMS:
-        return True, _tensor(shape, domain), True
+        return True, _tensor(shape, domain, variant), True
     if name == "module_cls" or re.search(r"^type$", text):
         return True, lucid.nn.Linear, False
     if re.search(r"PackedSequence", text):
@@ -380,7 +405,7 @@ def _value_for(
         # The bridge functions — ``tensor``, ``as_tensor``, ``from_numpy``.
         # Annotated ``object`` or ``np.ndarray``, so only the name says
         # what they want, and what they want is not a Lucid tensor.
-        return True, np.asarray(_probe.sample(domain, shape)), True
+        return True, np.asarray(_probe.sample(domain, shape, variant)), True
 
     if name in _BY_NAME:
         return True, _BY_NAME[name], False
@@ -421,6 +446,7 @@ def _build(
     plan = _Plan()
     first_tensor: "int | None" = None
     reference: Any = None
+    tensors_built = 0
     for name, param in signature.parameters.items():
         # ``self`` is *not* skipped.  A Tensor method is enumerated with
         # ``getattr_static`` and so arrives unbound — the receiver is a
@@ -434,14 +460,16 @@ def _build(
             # ``f(*tensors)`` — two of the primary shape is the reading
             # that makes ``stack`` and ``cat`` mean something.
             plan.args.append(_tensor(shape, domain))
-            plan.args.append(_tensor(shape, domain))
+            plan.args.append(_tensor(shape, domain, variant=1))
             if first_tensor is None:
                 first_tensor, reference = len(plan.args) - 2, plan.args[-2]
             continue
         if param.default is not param.empty:
             continue
 
-        found, value, is_tensor = _value_for(param, op_name, domain, reference, shape)
+        found, value, is_tensor = _value_for(
+            param, op_name, domain, reference, shape, variant=tensors_built
+        )
         if not found:
             plan.unknown.append(
                 f"{name}: {_clean(param.annotation) or '<no annotation>'}"
@@ -449,10 +477,14 @@ def _build(
             return None
         if param.kind is param.KEYWORD_ONLY:
             plan.kwargs[name] = value
+            if is_tensor:
+                tensors_built += 1
         else:
             plan.args.append(value)
-            if is_tensor and first_tensor is None:
-                first_tensor, reference = len(plan.args) - 1, value
+            if is_tensor:
+                tensors_built += 1
+                if first_tensor is None:
+                    first_tensor, reference = len(plan.args) - 1, value
 
     if first_tensor is None:
         # No tensor *input* is not the same as nothing to check.

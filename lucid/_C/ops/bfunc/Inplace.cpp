@@ -12,6 +12,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/TensorImpl.h"
+#include "../utils/InplaceGraph.h"
 #include "Add.h"
 #include "Div.h"
 #include "Maximum.h"
@@ -43,7 +44,22 @@ inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const
     if (a->storage_is_shared())
         ErrorBuilder(name).fail("in-place op on a tensor that shares storage with a view — "
                                 "call .clone() first or operate on the base tensor");
-    auto out = fwd_fn(a, b);
+    inplace::refuse_on_leaf(a, name);
+    // The same three rules the unary family follows — see
+    // ``ops/utils/InplaceGraph.h``.  This helper had none of them, so the
+    // whole binary family took only the storage and left the derivative
+    // behind:
+    //
+    //     z = x * 1.0; z.mul_(y); z.sum().backward()
+    //         dx = 1     (the identity — the gradient z had before)
+    //         dy = None  (the second operand was never in the graph)
+    //
+    //     reference:  dx = y,  dy = x
+    //
+    // Seven ops, and ``add_`` hid it: its derivative with respect to the
+    // first operand really is 1, so the wrong answer and the right one
+    // coincided there while ``y`` still received nothing.
+    auto out = fwd_fn(inplace::snapshot(a), b);
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
@@ -51,9 +67,8 @@ inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const
     a->mutable_storage() = std::move(out->mutable_storage());
     a->set_dtype(out->dtype());
     a->set_device(out->device());
-    // Increment the version counter so that any backward node that retained a
-    // weak reference to a will detect the mutation during validate_versions().
-    a->bump_version();
+    if (!inplace::adopt_graph_position(a, out))
+        inplace::detach_and_bump(a);
     return a;
 }
 

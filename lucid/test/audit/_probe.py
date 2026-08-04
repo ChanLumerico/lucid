@@ -46,13 +46,16 @@ def rng(seed: int) -> np.random.Generator:
 # narrow onto the sets that log / sqrt / acosh / atanh need.  None of them
 # samples within 0.05 of a pole.
 
-DOMAINS: dict[str, "Callable[[Sequence[int]], np.ndarray]"] = {
-    "moderate": lambda s: rng(SEED_X).uniform(-1.2, 1.2, s) + 0.15,
-    "positive": lambda s: rng(SEED_X).uniform(0.35, 1.75, s),
-    "unit": lambda s: rng(SEED_X).uniform(-0.75, 0.75, s),
-    "gt_one": lambda s: rng(SEED_X).uniform(1.3, 2.6, s),
-    "small_pos": lambda s: rng(SEED_X).uniform(0.08, 0.48, s),
-    "wide": lambda s: rng(SEED_X).standard_normal(s) * 2.0,
+#: Each takes the shape and a seed.  The seed is a parameter rather than
+#: a closed-over constant so a second operand can be given a *different*
+#: fixed draw — see :func:`sample`.
+DOMAINS: dict[str, "Callable[[Sequence[int], int], np.ndarray]"] = {
+    "moderate": lambda s, k: rng(k).uniform(-1.2, 1.2, s) + 0.15,
+    "positive": lambda s, k: rng(k).uniform(0.35, 1.75, s),
+    "unit": lambda s, k: rng(k).uniform(-0.75, 0.75, s),
+    "gt_one": lambda s, k: rng(k).uniform(1.3, 2.6, s),
+    "small_pos": lambda s, k: rng(k).uniform(0.08, 0.48, s),
+    "wide": lambda s, k: rng(k).standard_normal(s) * 2.0,
 }
 
 #: The probe that finds NaN-swallowing.  ``relu`` returned 0 for the first
@@ -111,8 +114,23 @@ def covector(n: int, seed: int = SEED_A) -> np.ndarray:
     return rng(seed).standard_normal(max(n, 1))
 
 
-def sample(domain: str, shape: "Sequence[int]" = SHAPE) -> np.ndarray:
-    return np.asarray(DOMAINS[domain](tuple(shape)), dtype=np.float64)
+def sample(domain: str, shape: "Sequence[int]" = SHAPE, variant: int = 0) -> np.ndarray:
+    """A probe from ``domain``.  ``variant`` picks a different draw.
+
+    The seed is fixed so a run is reproducible and a finding can be
+    re-derived by hand — which meant two operands built the same way got
+    the *same numbers*, and every binary op was probed with ``a == b``
+    everywhere.  That is the one input where a comparison has no
+    derivative: ``maximum(a, a)`` sits exactly on its tie, so the analytic
+    gradient reports a convention (Lucid gives 1 and 0, the reference
+    splits 0.5 and 0.5) and a central difference reports the average of
+    the two one-sided limits.  They cannot agree there, and the
+    disagreement says nothing about the op.
+
+    Still deterministic — the variant selects a different fixed seed, not
+    a fresh one.
+    """
+    return np.asarray(DOMAINS[domain](tuple(shape), SEED_X + variant), dtype=np.float64)
 
 
 # ── numeric helpers ──────────────────────────────────────────────────────────

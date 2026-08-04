@@ -1320,3 +1320,67 @@ def test_dropout_still_takes_every_float(dtype_name: str) -> None:
             p=0.5,
         )
         assert str(got.dtype).endswith(dtype_name), device
+
+
+# ── the in-place binary family and its graph position ────────────────────────
+
+
+@pytest.mark.parametrize(
+    "name,expected_dx,expected_dy",
+    [
+        ("add_", [1.0, 1.0], [1.0, 1.0]),
+        ("sub_", [1.0, 1.0], [-1.0, -1.0]),
+        ("mul_", [2.0, 0.5], [1.5, 2.5]),  # d/dx = y, d/dy = x
+        ("div_", [0.5, 2.0], [-0.375, -10.0]),
+    ],
+)
+def test_inplace_binary_ops_carry_both_gradients(
+    name: str, expected_dx, expected_dy
+) -> None:
+    """``z.mul_(y)`` gave ``dx = 1`` and ``dy = None``.
+
+    The binary in-place helper took the forward's storage and left its
+    grad_fn behind, so ``z`` stayed where it sat before the call and
+    reported the gradient of whatever produced it — while ``y`` was never
+    in the graph at all.  Seven ops, and ``add_`` hid it: its derivative
+    with respect to the first operand really is 1, so the wrong answer
+    and the right one coincided there.
+    """
+    x = lucid.tensor(np.array([1.5, 2.5]), requires_grad=True)
+    y = lucid.tensor(np.array([2.0, 0.5]), requires_grad=True)
+    z = x * 1.0
+    getattr(z, name)(y)
+    z.sum().backward()
+    assert x.grad is not None and y.grad is not None, f"{name}: a gradient is missing"
+    assert np.allclose(np.asarray(x.grad.numpy()).ravel(), expected_dx), name
+    assert np.allclose(np.asarray(y.grad.numpy()).ravel(), expected_dy), name
+
+
+def test_inplace_binary_op_on_a_leaf_is_refused() -> None:
+    """Same rule as the unary family — one header, one decision."""
+    p = lucid.nn.Parameter(lucid.tensor(np.array([1.0, 2.0])))
+    with pytest.raises(Exception, match="leaf tensor that requires grad"):
+        p.mul_(lucid.tensor(np.array([2.0, 2.0])))
+
+    with lucid.no_grad():
+        p.mul_(lucid.tensor(np.array([2.0, 2.0])))
+    assert p.requires_grad
+    assert np.array_equal(np.asarray(p.numpy()).ravel(), [2.0, 4.0])
+
+
+def test_inplace_binary_survives_create_graph() -> None:
+    """The forward runs against a snapshot, so the saved input is intact.
+
+    Without it the node re-reads a buffer the assignment has already
+    overwritten, and only the graph-mode route notices — eager
+    ``backward()`` saves a Storage by value at forward time.
+    """
+    x = lucid.tensor(np.array([1.5, 2.5]), requires_grad=True)
+    y = lucid.tensor(np.array([2.0, 3.0]), requires_grad=True)
+    z = x * 1.0
+    z.mul_(y)
+    (first,) = lucid.autograd.grad(z.sum(), x, create_graph=True)
+    assert np.allclose(np.asarray(first.numpy()).ravel(), [2.0, 3.0])
+    # d²/dxdy of (x·y) is 1
+    (second,) = lucid.autograd.grad(first.sum(), y)
+    assert np.allclose(np.asarray(second.numpy()).ravel(), [1.0, 1.0])

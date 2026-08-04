@@ -148,6 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cholesky reported success on a matrix it could not factor
 
+- the in-place binary ops never joined the graph
+
 ### Changed
 
 - give the engine ops one shared operand check
