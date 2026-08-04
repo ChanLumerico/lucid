@@ -206,6 +206,44 @@ class Categorical(Distribution):
         )
 
     @override
+    @property
+    def variance(self) -> Tensor:
+        """Variance of the Categorical distribution (undefined — NaN).
+
+        A variance is a squared distance, and the labels this distribution
+        assigns have no metric to measure one with — the same reason
+        :attr:`mean` is NaN.  Returned rather than raised so the moment
+        composes with the rest of the API the way the reference framework's
+        does; a caller who wants an error can test for NaN.
+
+        Returns
+        -------
+        Tensor
+            Tensor of ``float('nan')`` with shape ``batch_shape``.
+        """
+        return lucid.full(
+            self._batch_shape,
+            float("nan"),
+            device=self._probs.device,
+            dtype=self._probs.dtype,
+        )
+
+    @override
+    @property
+    def stddev(self) -> Tensor:
+        """Standard deviation of the Categorical distribution (NaN).
+
+        The square root of :attr:`variance`, which is NaN for the reason
+        given there.
+
+        Returns
+        -------
+        Tensor
+            Tensor of ``float('nan')`` with shape ``batch_shape``.
+        """
+        return self.variance
+
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Categorical distribution.
 
@@ -255,24 +293,20 @@ class Categorical(Distribution):
         Tensor
             Log-probabilities of shape ``batch_shape``.
         """
+        # The probabilities broadcast onto the *value*, not the other way
+        # round.  Forcing ``value`` into ``batch_shape`` could not express
+        # the ordinary case where a sample carries a sample_shape in front
+        # of it: with ``probs`` of shape (2,) the batch shape is empty, so
+        # ``sample((64,))`` gives a (64,) tensor that has no batch shape to
+        # be reshaped into, and scoring it raised a rank mismatch out of
+        # ``gather``.  A distribution that cannot evaluate its own draws is
+        # broken at the one round trip it exists for.
         log_p = self._log_probs
-        # Reshape value so it matches log_p[:-1] exactly, then add a
-        # trailing length-1 axis for the ``gather`` index.
-        target_shape = tuple(log_p.shape[:-1])
-        v = value
-        if tuple(v.shape) != target_shape:
-            if v.ndim == 0 or v.shape == (1,):
-                v = lucid.full(
-                    target_shape,
-                    float(v.item()),
-                    dtype=v.dtype,
-                    device=v.device,
-                )
-            else:
-                v = v + lucid.zeros(target_shape, dtype=v.dtype, device=v.device)
-        v_long = v.to(lucid.int64).unsqueeze(-1)
-        gathered = lucid.gather(log_p, v_long, dim=-1)
-        return gathered.squeeze(-1)
+        num_categories = int(log_p.shape[-1])
+        target = tuple(value.shape) + (num_categories,)
+        log_p_broadcast = log_p.broadcast_to(target)
+        index = value.to(lucid.int64).unsqueeze(-1)
+        return lucid.gather(log_p_broadcast, index, dim=-1).squeeze(-1)
 
     @override
     def entropy(self) -> Tensor:
@@ -472,3 +506,55 @@ class OneHotCategorical(Distribution):
             Entropy values of shape ``batch_shape`` (nats).
         """
         return self._cat.entropy()
+
+    @override
+    @property
+    def mean(self) -> Tensor:
+        r"""Mean of the OneHotCategorical distribution.
+
+        A one-hot sample is a vector of indicators, and the expectation of
+        an indicator is the probability of the event it indicates — so the
+        mean is the probability vector itself.
+
+        .. math::
+
+            \mathbb{E}[X_k] = p_k
+
+        Unlike the underlying :class:`Categorical`, whose labels carry no
+        metric, this one is perfectly well defined: the one-hot encoding
+        supplies the vector space the expectation needs.
+
+        Returns
+        -------
+        Tensor
+            Probabilities of shape ``batch_shape + (K,)``.
+        """
+        return self._cat._probs
+
+    @override
+    @property
+    def variance(self) -> Tensor:
+        r"""Variance of the OneHotCategorical distribution.
+
+        Each coordinate is a Bernoulli indicator, so
+
+        .. math::
+
+            \operatorname{Var}[X_k] = p_k (1 - p_k)
+
+        This is the diagonal of the covariance; the off-diagonal terms
+        :math:`-p_j p_k` are not returned.
+
+        Returns
+        -------
+        Tensor
+            Per-coordinate variances of shape ``batch_shape + (K,)``.
+        """
+        probs = self._cat._probs
+        return probs * (1.0 - probs)
+
+    @override
+    @property
+    def stddev(self) -> Tensor:
+        r"""Per-coordinate standard deviation, :math:`\sqrt{p_k (1 - p_k)}`."""
+        return self.variance.sqrt()

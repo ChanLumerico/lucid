@@ -150,7 +150,12 @@ class Pareto(Distribution):
             Mean values of shape ``batch_shape``.
         """
         # Defined only for α > 1.
-        return self.alpha * self.scale / (self.alpha - 1.0)
+        # Only valid for α > 1; at or below it the first moment diverges
+        # and the bare formula changes sign instead of blowing up.
+        closed = self.alpha * self.scale / (self.alpha - 1.0)
+        return lucid.where(
+            self.alpha > 1.0, closed, lucid.full_like(closed, float("inf"))
+        )
 
     @override
     @property
@@ -168,7 +173,11 @@ class Pareto(Distribution):
         """
         # Defined only for α > 2.
         a: Tensor = self.alpha
-        return self.scale * self.scale * a / ((a - 1.0) ** 2 * (a - 2.0))
+        # Only valid for α > 2; below that the second moment diverges.
+        # The bare formula answers -1.33 at α = 0.5 and -inf at α = 1 — a
+        # negative variance, silently.  The reference answers +∞.
+        closed = self.scale * self.scale * a / ((a - 1.0) ** 2 * (a - 2.0))
+        return lucid.where(a > 2.0, closed, lucid.full_like(closed, float("inf")))
 
     @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
@@ -753,6 +762,41 @@ class HalfCauchy(Distribution):
             Log-density values of the same shape as ``value``.
         """
         return math.log(2.0) + self._base.log_prob(value)
+
+    # A moment that does not exist is still an answer, and the shape of the
+    # answer matters: the reference returns NaN or infinity rather than
+    # raising, so a caller can carry it through an expression and test for
+    # it at the end.  Raising ``NotImplementedError`` reads as "Lucid has
+    # not got round to this" when the truth is that the integral diverges.
+
+    @override
+    @property
+    def mean(self) -> Tensor:
+        r"""Mean of the half-Cauchy — infinite.
+
+        Folding the Cauchy onto :math:`[0, \infty)` removes the
+        cancellation that made the full distribution's mean undefined and
+        leaves a single divergent tail, so the answer is :math:`+\infty`
+        rather than NaN.
+
+        Returns
+        -------
+        Tensor
+            Tensor of ``inf`` with shape ``batch_shape``.
+        """
+        return lucid.full_like(self.scale, float("inf"))
+
+    @override
+    @property
+    def variance(self) -> Tensor:
+        r"""Variance of the half-Cauchy — infinite."""
+        return lucid.full_like(self.scale, float("inf"))
+
+    @override
+    @property
+    def stddev(self) -> Tensor:
+        r"""Standard deviation of the half-Cauchy — infinite."""
+        return lucid.full_like(self.scale, float("inf"))
 
 
 class FisherSnedecor(Distribution):

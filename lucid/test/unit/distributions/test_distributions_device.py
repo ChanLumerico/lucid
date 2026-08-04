@@ -97,7 +97,17 @@ def test_scalar_constant_broadcast_reconciles_devices(device):
 
 
 def test_cauchy_has_no_mean():
-    """Not a bug — the Cauchy mean is undefined and must stay unimplemented."""
+    """Not a bug — the Cauchy mean is undefined, and NaN is how it says so.
+
+    This used to assert ``NotImplementedError``, which reads as "Lucid has
+    not got round to this" when the truth is that the defining integral
+    diverges.  The reference returns NaN for the mean and +inf for the
+    variance, and that is the more useful shape: the value carries through
+    an expression and can be tested at the end, where an exception has to
+    be caught at the call.
+    """
     dist = _build("Cauchy", dict(loc=0.0, scale=1.0), "cpu")
-    with pytest.raises(NotImplementedError):
-        _ = dist.mean
+    mean = np.asarray(dist.mean.numpy(), dtype=np.float64)
+    assert np.isnan(mean).all(), mean
+    variance = np.asarray(dist.variance.numpy(), dtype=np.float64)
+    assert np.isposinf(variance).all(), variance

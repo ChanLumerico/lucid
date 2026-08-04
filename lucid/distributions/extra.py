@@ -290,7 +290,11 @@ class InverseGamma(Distribution):
     @override
     def mean(self) -> Tensor:
         """Defined for ``concentration > 1``: ``β / (α − 1)``."""
-        return self.rate / (self.concentration - 1.0)
+        # Only valid for α > 1; the mean diverges at or below it.
+        closed = self.rate / (self.concentration - 1.0)
+        return lucid.where(
+            self.concentration > 1.0, closed, lucid.full_like(closed, float("inf"))
+        )
 
     @property
     @override
@@ -298,7 +302,11 @@ class InverseGamma(Distribution):
         """Defined for ``concentration > 2``:
         ``β² / ((α − 1)² (α − 2))``."""
         c, r = self.concentration, self.rate
-        return r * r / ((c - 1.0) ** 2 * (c - 2.0))
+        # Only valid for α > 2 — see Pareto for the same defect and the
+        # same reason: below the threshold the formula returns a negative
+        # variance rather than the divergence it stands for.
+        closed = r * r / ((c - 1.0) ** 2 * (c - 2.0))
+        return lucid.where(c > 2.0, closed, lucid.full_like(closed, float("inf")))
 
     @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

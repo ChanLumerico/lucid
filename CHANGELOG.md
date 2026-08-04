@@ -138,6 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the scaled functions, log1p, and lgamma's left half
 
+- moments evaluated outside the range they hold on
+
 ### Changed
 
 - give the engine ops one shared operand check

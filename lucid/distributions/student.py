@@ -221,7 +221,16 @@ class StudentT(Distribution):
         Tensor(2.0)
         """
         # Defined for df > 2:  scale² · df / (df − 2).
-        return self.scale * self.scale * self.df / (self.df - 2.0)
+        # The closed form is only the answer above ν = 2.  Below it the
+        # integral diverges, and evaluating ν/(ν−2) anyway returns a
+        # *negative* variance — -0.333 at ν = 0.5, which is not a number
+        # any distribution has.  The reference answers ∞ on (1, 2] and NaN
+        # at or below 1, where the second moment has no sign to diverge in.
+        closed = self.scale * self.scale * self.df / (self.df - 2.0)
+        heavy = lucid.full_like(closed, float("inf"))
+        undefined = lucid.full_like(closed, float("nan"))
+        out = lucid.where(self.df > 2.0, closed, heavy)
+        return lucid.where(self.df > 1.0, out, undefined)
 
     @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

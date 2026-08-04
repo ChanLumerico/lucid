@@ -288,7 +288,9 @@ class Exponential(ExponentialFamily):
         defined on the whole line and is zero to the left of its support.
         """
         below = value < 0.0
-        return lucid.where(below, lucid.zeros_like(value), 1.0 - (-self.rate * value).exp())
+        return lucid.where(
+            below, lucid.zeros_like(value), 1.0 - (-self.rate * value).exp()
+        )
 
     @override
     def icdf(self, value: Tensor) -> Tensor:
@@ -823,3 +825,47 @@ class Cauchy(Distribution):
         Tensor(2.5310)
         """
         return math.log(4.0 * math.pi) + self.scale.log()
+
+    # A moment that does not exist is still an answer, and the shape of the
+    # answer matters: the reference returns NaN or infinity rather than
+    # raising, so a caller can carry it through an expression and test for
+    # it at the end.  Raising ``NotImplementedError`` reads as "Lucid has
+    # not got round to this" when the truth is that the integral diverges.
+
+    @override
+    @property
+    def mean(self) -> Tensor:
+        r"""Mean of the Cauchy distribution — undefined, returns NaN.
+
+        The defining integral :math:`\int x\, p(x)\, dx` does not converge
+        for the Cauchy: the tails decay as :math:`x^{-2}`, so the two halves
+        are each infinite and their difference has no value.  This is not a
+        limitation of the parameters — no Cauchy has a mean.
+
+        Returns
+        -------
+        Tensor
+            Tensor of ``float('nan')`` with shape ``batch_shape``.
+        """
+        return lucid.full_like(self.scale, float("nan"))
+
+    @override
+    @property
+    def variance(self) -> Tensor:
+        r"""Variance of the Cauchy distribution — infinite.
+
+        Unlike the mean, the second moment integral diverges in one
+        direction only, so the answer is :math:`+\infty` rather than NaN.
+
+        Returns
+        -------
+        Tensor
+            Tensor of ``inf`` with shape ``batch_shape``.
+        """
+        return lucid.full_like(self.scale, float("inf"))
+
+    @override
+    @property
+    def stddev(self) -> Tensor:
+        r"""Standard deviation — infinite, as the square root of :attr:`variance`."""
+        return lucid.full_like(self.scale, float("inf"))

@@ -21,6 +21,7 @@ from lucid.distributions.bernoulli import (
 from lucid.distributions.constraints import (
     Constraint,
     open_unit_interval,
+    positive,
     real,
     simplex,
 )
@@ -97,8 +98,13 @@ class RelaxedBernoulli(Distribution):
     >>> ((samples > 0) & (samples < 1)).all()
     """
 
+    # The relaxation temperature divides the logits, so zero is not a
+    # degenerate-but-valid setting — it is a division by zero, and the
+    # sample comes back non-finite with nothing raised.  Declared
+    # ``real`` here, it was never checked; the reference does not check it
+    # either, and produces the same non-finite draw.
     arg_constraints = {
-        "temperature": real,
+        "temperature": positive,
         "probs": open_unit_interval,
         "logits": real,
     }
@@ -303,8 +309,13 @@ class RelaxedOneHotCategorical(Distribution):
     >>> samples.sum(dim=-1)  # each row sums to ~1
     """
 
+    # The relaxation temperature divides the logits, so zero is not a
+    # degenerate-but-valid setting — it is a division by zero, and the
+    # sample comes back non-finite with nothing raised.  Declared
+    # ``real`` here, it was never checked; the reference does not check it
+    # either, and produces the same non-finite draw.
     arg_constraints = {
-        "temperature": real,
+        "temperature": positive,
         "probs": simplex,
         "logits": real,
     }

@@ -19,6 +19,7 @@ guard that snapshots and restores the global state, so they are checked
 rather than merely counted.
 """
 
+import functools
 import math
 import tempfile
 from pathlib import Path
@@ -188,6 +189,29 @@ def _smoke_arguments(
 # ── distributions ────────────────────────────────────────────────────────────
 
 
+@functools.lru_cache(maxsize=1)
+def _dist_base() -> Any:
+    """The abstract base every distribution derives from."""
+    import lucid.distributions as distributions  # noqa: PLC0415 - optional subsystem
+
+    return distributions.Distribution
+
+
+def _moment(dist: Any, name: str) -> Any:
+    """One attribute of a distribution, or ``None`` when it has none.
+
+    ``getattr`` with a default is not enough here: these are properties,
+    and a getter that raises anything other than AttributeError escapes.
+    ``NotImplementedError`` is re-raised so the caller can tell "this
+    distribution has no closed form for that moment" — which both
+    frameworks spell that way — from "the probe fell over".
+    """
+    try:
+        return getattr(dist, name)
+    except AttributeError:
+        return None
+
+
 class DistributionAxis(Axis):
     """Sample, score, and invert — the three must agree with each other.
 
@@ -213,7 +237,22 @@ class DistributionAxis(Axis):
     def applies(self, symbol: "Symbol") -> bool:
         if symbol.subsystem != "distributions":
             return False
-        return isinstance(symbol.obj, type) or symbol.short == "kl_divergence"
+        if symbol.short == "kl_divergence":
+            return True
+        if not isinstance(symbol.obj, type):
+            return False
+        # ``Distribution`` and ``ExponentialFamily`` are what the others are
+        # built on, not distributions of their own — asking them for a mean
+        # gets the base's "subclasses must implement this", which is the
+        # base doing its job.  A class that others derive from *and* that
+        # defines no moment of its own is that shape; ``Gamma`` has a
+        # subclass and its own mean, so it is not caught.
+        base_mean = getattr(_dist_base(), "mean", None)
+        if symbol.obj.__subclasses__() and (
+            getattr(symbol.obj, "mean", None) is base_mean
+        ):
+            return False
+        return True
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         if symbol.short == "kl_divergence":
@@ -267,7 +306,12 @@ class DistributionAxis(Axis):
                         f"log_prob raised {type(exc).__name__} on its own samples"
                     )
 
-        cdf, icdf = getattr(dist, "cdf", None), getattr(dist, "icdf", None)
+        # ``getattr(obj, name, default)`` only falls back on
+        # AttributeError.  These are *properties*, so a getter that raises
+        # NotImplementedError propagates straight out — which is how
+        # "Cauchy.mean" arrived as a harness ERROR rather than as anything
+        # the axis had decided.
+        cdf, icdf = _moment(dist, "cdf"), _moment(dist, "icdf")
         if cdf is not None:
             grid = _probe.as_f64(np.linspace(-2.0, 2.0, 9))
             try:
@@ -282,37 +326,86 @@ class DistributionAxis(Axis):
                             f"cdf leaves [0, 1]: [{flat.min():.3f}, {flat.max():.3f}]"
                         )
                     if icdf is not None:
-                        inside = _probe.as_f64(np.clip(flat, 1e-4, 1 - 1e-4))
-                        back = _probe.to_numpy(icdf(inside))
-                        checked.append("icdf")
-                        if back is not None:
-                            ok = np.isfinite(back)
-                            if ok.any():
-                                err = np.abs(
-                                    np.asarray(back, dtype=np.float64).reshape(-1)[
-                                        ok.reshape(-1)
-                                    ]
-                                    - np.asarray(_probe.to_numpy(grid)).reshape(-1)[
-                                        ok.reshape(-1)
-                                    ]
-                                ).max()
-                                if err > 1e-3:
-                                    problems.append(f"icdf(cdf(x)) is off by {err:.2e}")
+                        # ``icdf(cdf(x)) == x`` only where the cdf is
+                        # strictly increasing.  The grid runs from -2 to 2
+                        # and most distributions have support over part of
+                        # that at best: ``Exponential`` is flat at 0 for
+                        # every negative x and ``Uniform([0, 1])`` is flat
+                        # at both ends, so the cdf there is not injective
+                        # and there is no inverse to check.  Both were
+                        # reported as "off by 2.00e+00" — the distance
+                        # from -2 back to the edge of the support, which
+                        # is the right answer to the wrong question.
+                        rises = np.diff(flat) > 1e-9
+                        invertible = np.zeros(flat.shape, dtype=bool)
+                        invertible[:-1] |= rises
+                        invertible[1:] |= rises
+                        invertible &= (flat > 1e-6) & (flat < 1 - 1e-6)
+                        if invertible.any():
+                            inside = _probe.as_f64(np.clip(flat, 1e-4, 1 - 1e-4))
+                            back = _probe.to_numpy(icdf(inside))
+                            checked.append("icdf")
+                            if back is not None:
+                                ok = np.isfinite(back).reshape(-1) & invertible
+                                if ok.any():
+                                    err = np.abs(
+                                        np.asarray(back, dtype=np.float64).reshape(-1)[
+                                            ok
+                                        ]
+                                        - np.asarray(_probe.to_numpy(grid)).reshape(-1)[
+                                            ok
+                                        ]
+                                    ).max()
+                                    if err > 1e-3:
+                                        problems.append(
+                                            f"icdf(cdf(x)) is off by {err:.2e}"
+                                        )
             except Exception:  # noqa: BLE001
                 pass
 
+        # A moment is checked for the things that are true of every
+        # distribution, not for being finite.
+        #
+        # Being finite is a property of the *parameters*, and the axis did
+        # not choose them: Cauchy has no mean at any parameter, Pareto has
+        # none for α ≤ 1, StudentT has no variance for ν ≤ 2.  The
+        # reference returns NaN and infinity for exactly these, rather
+        # than raising, because a divergent integral is an answer.  An
+        # axis that calls it a defect is reporting the mathematics.
+        #
+        # What does hold regardless: a variance is not negative, and a
+        # standard deviation is its square root.  Both survive infinity.
+        moments: dict[str, np.ndarray] = {}
         for stat in ("mean", "variance", "stddev", "entropy"):
-            attr = getattr(dist, stat, None)
-            if attr is None:
-                continue
             try:
-                value = attr() if callable(attr) else attr
-                array = _probe.to_numpy(value)
-                checked.append(stat)
-                if array is not None and not np.isfinite(array).all():
-                    problems.append(f"{stat} is not finite")
-            except Exception:  # noqa: BLE001
+                value = _moment(dist, stat)
+                if value is None:
+                    continue
+                array = _probe.to_numpy(value() if callable(value) else value)
+            except NotImplementedError:
+                # Both frameworks spell "no closed form" this way —
+                # LKJCholesky, RelaxedBernoulli and RelaxedOneHotCategorical
+                # raise it in the reference too.
                 continue
+            except Exception as exc:  # noqa: BLE001
+                problems.append(f"{stat} raised {type(exc).__name__}")
+                continue
+            checked.append(stat)
+            if array is not None:
+                moments[stat] = np.asarray(array, dtype=np.float64)
+
+        variance = moments.get("variance")
+        if variance is not None and np.any(variance < -1e-9):
+            problems.append(f"variance is negative: {variance.min():.3e}")
+        stddev = moments.get("stddev")
+        if stddev is not None and np.any(stddev < -1e-9):
+            problems.append(f"stddev is negative: {stddev.min():.3e}")
+        if variance is not None and stddev is not None:
+            finite = np.isfinite(variance) & np.isfinite(stddev)
+            if finite.any() and not np.allclose(
+                stddev[finite] ** 2, variance[finite], rtol=1e-6, atol=1e-9
+            ):
+                problems.append("stddev is not the square root of variance")
 
         if problems:
             return self._finding(
