@@ -23,6 +23,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../einops/Einops.h"
+#include "../ufunc/Astype.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -107,6 +108,17 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
 
     const Dtype dt = a->dtype();
     const Device device = a->device();
+
+    // Accelerate has no half GEMM, and the loop below is written out for
+    // float and double only — so the pair widens at the door and the
+    // result rounds back, which is the route every other CPU entry point
+    // takes for these two formats.  Metal ran float16 and the CPU did
+    // not, which made a half-precision contraction a device-dependent
+    // proposition.
+    if (device == Device::CPU && is_half_float(dt))
+        return astype_op(
+            tensordot_op(astype_op(a, Dtype::F32), astype_op(b, Dtype::F32), axes_a, axes_b), dt);
+
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
     {
         std::vector<std::int64_t> ax_a, ax_b;

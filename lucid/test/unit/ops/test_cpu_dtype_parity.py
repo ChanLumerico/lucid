@@ -1384,3 +1384,56 @@ def test_inplace_binary_survives_create_graph() -> None:
     # d²/dxdy of (x·y) is 1
     (second,) = lucid.autograd.grad(first.sum(), y)
     assert np.allclose(np.asarray(second.numpy()).ravel(), [1.0, 1.0])
+
+
+def test_tensordot_takes_half_on_both_devices() -> None:
+    """Accelerate has no half GEMM and the loop is written out per float type.
+
+    Metal ran a half-precision contraction and the CPU did not, so
+    ``tensordot`` was a device-dependent proposition under ``model.half()``.
+    """
+    a = np.arange(6, dtype=np.float16).reshape(2, 3)
+    b = np.arange(12, dtype=np.float16).reshape(3, 4)
+    outs = []
+    for device in _DEVICES:
+        got = lucid.tensordot(
+            lucid.tensor(np.ascontiguousarray(a), dtype=lucid.float16, device=device),
+            lucid.tensor(np.ascontiguousarray(b), dtype=lucid.float16, device=device),
+            1,
+        )
+        assert str(got.dtype).endswith("float16"), device
+        outs.append(np.asarray(got.numpy(), dtype=np.float64))
+    assert np.allclose(outs[0], outs[1], rtol=1e-2)
+    assert np.allclose(outs[0], a.astype(np.float64) @ b.astype(np.float64), rtol=1e-2)
+
+
+@pytest.mark.parametrize("dtype_name", ["int32", "float32"])
+def test_grid_sample_promotes_both_of_its_operands(dtype_name: str) -> None:
+    """Resampling interpolates *between* samples, so the answer is real.
+
+    The forward is assembled by hand and read ``input->dtype()`` directly
+    rather than the schema that already said so, so an integer image ran
+    on Metal and raised on the CPU.  Both operands promote: the grid
+    carries fractional coordinates and is no more integral than the image.
+    """
+    image = np.arange(16).reshape(1, 1, 4, 4).astype(dtype_name)
+    grid = np.zeros((1, 2, 2, 2)).astype(dtype_name)
+    outs = []
+    for device in _DEVICES:
+        got = F.grid_sample(
+            lucid.tensor(
+                np.ascontiguousarray(image),
+                dtype=getattr(lucid, dtype_name),
+                device=device,
+            ),
+            lucid.tensor(
+                np.ascontiguousarray(grid),
+                dtype=getattr(lucid, dtype_name),
+                device=device,
+            ),
+        )
+        assert lucid.is_floating_point(got), device
+        outs.append(np.asarray(got.numpy(), dtype=np.float64))
+    assert np.allclose(outs[0], outs[1])
+    # the centre of a 4x4 ramp
+    assert np.allclose(outs[0].ravel()[:2], [7.5, 7.5])

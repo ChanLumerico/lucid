@@ -34,6 +34,7 @@
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/utils/Promote.h"
 
 namespace lucid {
 
@@ -93,13 +94,21 @@ LUCID_REGISTER_OP(AffineGridBackward)
 
 const OpSchema GridSampleBackward::schema_v1{"grid_sample", 1, AmpPolicy::Promote, true, "", true};
 
-TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
-                                          const TensorImplPtr& grid,
+TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input0,
+                                          const TensorImplPtr& grid0,
                                           int mode,
                                           int padding_mode,
                                           bool align_corners) {
-    if (!input || !grid)
+    if (!input0 || !grid0)
         ErrorBuilder("grid_sample").fail("null input");
+    // Both operands, not just the primary.  Resampling interpolates
+    // *between* samples, so the answer is real whatever went in — the
+    // schema says so and this forward is assembled by hand, so it has to
+    // ask.  The grid carries fractional coordinates and is no more
+    // integral than the image; promoting one and not the other would only
+    // move the dtype mismatch below.
+    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
+    const TensorImplPtr grid = promote_for_schema(schema_v1, grid0);
     if (input->device() != grid->device())
         throw DeviceMismatch(std::string(device_name(input->device())),
                              std::string(device_name(grid->device())), "grid_sample: input/grid");

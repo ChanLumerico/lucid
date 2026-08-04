@@ -152,6 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - five axes were asking questions their targets do not answer
 
+- tensordot on half, grid_sample on an integer image
+
 ### Changed
 
 - give the engine ops one shared operand check
