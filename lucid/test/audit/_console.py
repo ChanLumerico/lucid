@@ -305,21 +305,66 @@ def iter_ticks() -> "Iterator[int]":
         tick += 1
 
 
+#: A write-only ``/dev/null``, opened once.  ``Suppress`` is entered per
+#: probed cell — over ten thousand times in a full sweep — and opening
+#: and closing the same file that many times is work for nothing.
+_DEVNULL_FD: int | None = None
+
+
+def _devnull_fd() -> int:
+    """int: A file descriptor for ``/dev/null``, shared by every Suppress."""
+    global _DEVNULL_FD
+    if _DEVNULL_FD is None:
+        _DEVNULL_FD = os.open(os.devnull, os.O_WRONLY)
+    return _DEVNULL_FD
+
+
 class Suppress:
     """Silence stdout/stderr while probing.
 
     Ops under audit print warnings, and a survey that emits one line per
     op would bury its own progress display.
+
+    Notes
+    -----
+    The redirection is at the **file-descriptor** level, not merely
+    ``sys.stdout`` and ``sys.stderr``.  Rebinding those two names only
+    silences Python; the libraries underneath write to descriptors 1 and
+    2 themselves and never consult either.  Three of them did:
+
+    * Accelerate's LAPACK prints its own argument complaints from the
+      Fortran runtime — ``** On entry to DGESDD, parameter number 5 had
+      an illegal value``;
+    * so does its Hessenberg path, under ``func.linearize``;
+    * MLX warns once that ``mx.metal.device_info`` is deprecated.
+
+    Each landed in the middle of a live-progress frame, which the display
+    then could not redraw over, leaving a stale half-drawn copy of itself
+    in the scrollback.  Three writes, three stale frames — the same three
+    at every terminal size, which is what showed it was not the display
+    being too tall for the screen.
+
+    Both levels are still swapped: a descriptor pointed at ``/dev/null``
+    catches the C libraries, and rebinding the Python names keeps
+    anything buffered in the real ``sys.stdout`` from being flushed into
+    the terminal after the descriptor is restored.
     """
 
     def __init__(self, enabled: bool = True) -> None:
         self.enabled = enabled
         self._devnull: object | None = None
         self._saved: tuple[object, object] | None = None
+        self._saved_fds: tuple[int, int] | None = None
 
     def __enter__(self) -> "Suppress":
         if not self.enabled:
             return self
+        sys.stdout.flush()
+        sys.stderr.flush()
+        null = _devnull_fd()
+        self._saved_fds = (os.dup(1), os.dup(2))
+        os.dup2(null, 1)
+        os.dup2(null, 2)
         self._devnull = open(os.devnull, "w")
         self._saved = (sys.stdout, sys.stderr)
         sys.stdout = self._devnull  # type: ignore[assignment]
@@ -332,13 +377,21 @@ class Suppress:
         exc: "BaseException | None",
         tb: "TracebackType | None",
     ) -> None:
-        if not self.enabled or self._saved is None:
+        if not self.enabled:
             return
-        sys.stdout, sys.stderr = self._saved  # type: ignore[assignment]
+        if self._saved is not None:
+            sys.stdout, sys.stderr = self._saved  # type: ignore[assignment]
+            self._saved = None
         if self._devnull is not None:
             self._devnull.close()  # type: ignore[attr-defined]
-        self._devnull = None
-        self._saved = None
+            self._devnull = None
+        if self._saved_fds is not None:
+            out_fd, err_fd = self._saved_fds
+            os.dup2(out_fd, 1)
+            os.dup2(err_fd, 2)
+            os.close(out_fd)
+            os.close(err_fd)
+            self._saved_fds = None
 
 
 __all__ = [

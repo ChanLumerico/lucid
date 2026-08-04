@@ -383,10 +383,11 @@ def run(args: argparse.Namespace, console: Console) -> Report:
                 tick += 1
 
                 if reporter is not None:
+                    # Counted, not printed.  Every defect is listed in
+                    # full by ``summarise`` once the sweep is over;
+                    # printing them as they arrive scrolled the live
+                    # region on each one and said it twice.
                     reporter.record(symbol, axis.name, finding)
-                    if finding.status is Status.FAIL:
-                        label, _ = STATUS_STYLE[Status.FAIL]
-                        reporter.defect(label, symbol.qualname, finding.detail)
                 elif finding.status is Status.FAIL and not console.live:
                     label, colour = STATUS_STYLE[Status.FAIL]
                     console.always(

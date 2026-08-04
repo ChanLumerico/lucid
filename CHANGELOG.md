@@ -166,6 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - norm dispatches by rank and axes, as it always documented
 
+- keep the live display to itself while the sweep runs
+
 ### Changed
 
 - give the engine ops one shared operand check
