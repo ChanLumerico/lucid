@@ -62,7 +62,8 @@ def _matched_models() -> tuple[nn.Module, nn.Module]:
     a = _EmbedNet().to(COMPILE_DEVICE)
     b = _EmbedNet().to(COMPILE_DEVICE)
     for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
-        pb.copy_(pa.detach().clone())
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
     return a, b
 
 

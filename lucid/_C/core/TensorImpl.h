@@ -707,6 +707,21 @@ public:
     //     ``other.shape() != shape()``.
     void copy_from(const TensorImpl& other);
 
+    // An in-place assignment as a *user* means it, as opposed to
+    // ``copy_from``, which is the raw buffer write every internal caller
+    // uses — an optimiser step, a ``load_state_dict``, the compiled
+    // executable's ghost-grad placeholders.  Putting the graph handling
+    // into ``copy_from`` itself broke all of those at once, because the
+    // two want opposite things from the same function.
+    //
+    // Here it is the assignment: the values are overwritten, so the
+    // tensor's place in the graph becomes the *source's* where there is
+    // one — that is what routes the gradient to ``z`` in
+    // ``y.copy_(z)`` — and ends where there is not.  A leaf that
+    // requires grad is refused for the same reason every other in-place
+    // op refuses one.
+    void assign_from(const TensorImpl& other, const char* name);
+
     // Clears the accumulated gradient.
     //
     // Sets :attr:`grad` to :type:`std::nullopt` but leaves the

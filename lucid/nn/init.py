@@ -15,10 +15,32 @@ if TYPE_CHECKING:
 
 
 def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
-    """Replace tensor's impl with src_impl, preserving requires_grad."""
-    rg = tensor._impl.requires_grad
-    impl = _C_engine.reshape(src_impl, list(tensor.shape))  # type: ignore[arg-type]
-    tensor._impl = _iwg(impl, rg)
+    """Write ``src_impl`` into ``tensor``, in place.
+
+    It used to *replace* ``tensor._impl`` with a fresh one carrying the
+    same ``requires_grad``.  That silently detached the tensor from any
+    graph it was in: initialising something mid-computation left every
+    node that had saved it pointing at storage the tensor no longer used,
+    and the backward pass went on to give an answer built from values
+    that had been overwritten.  Nothing raised, because the version
+    counter never saw a write — there was none.
+
+    Written through instead, so the counter fires and a later backward
+    says so.  Under ``no_grad``, because an initialiser is not a step in a
+    computation and the target is nearly always a leaf that requires
+    grad, which an in-place write is otherwise refused on.  That is the
+    same shape the reference gives its own ``nn.init``.
+    """
+    reshaped = _C_engine.reshape(src_impl, list(tensor.shape))  # type: ignore[arg-type]
+    # The draw does not always land on the target's dtype —
+    # ``orthogonal_`` builds its factor at float32.  Replacing the impl
+    # hid that by adopting the source's dtype wholesale, so initialising a
+    # float64 parameter quietly turned it into a float32 one.  Writing
+    # through cannot: the parameter keeps the dtype it was declared with.
+    if reshaped.dtype != tensor._impl.dtype:
+        reshaped = _C_engine.astype(reshaped, tensor._impl.dtype)
+    with _lucid.no_grad():
+        tensor._impl.assign_from(reshaped, "nn.init")
     return tensor
 
 

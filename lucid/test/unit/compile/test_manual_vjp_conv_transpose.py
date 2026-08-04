@@ -52,7 +52,8 @@ def test_manual_vjp_conv_transpose2d_parity() -> None:
     a = _ConvTransposeNet().to(COMPILE_DEVICE)
     b = _ConvTransposeNet().to(COMPILE_DEVICE)
     for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
-        pb.copy_(pa.detach().clone())
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
 
     x = metal_tensor(2, 4, 3, 3)
     t = metal_tensor(2, 1)
@@ -102,7 +103,8 @@ def test_manual_vjp_conv3d_parity() -> None:
     a = _Conv3dNet().to(COMPILE_DEVICE)
     b = _Conv3dNet().to(COMPILE_DEVICE)
     for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
-        pb.copy_(pa.detach().clone())
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
 
     x = metal_tensor(2, 2, 3, 3, 3)
     t = metal_tensor(2, 1)

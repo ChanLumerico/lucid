@@ -136,8 +136,9 @@ def test_compile_optimizer_step_parity(mk_opt: object) -> None:
     for (n, p), (_, q) in zip(
         model_eager.named_parameters(), model_comp.named_parameters()
     ):
-        p.copy_(state[n])
-        q.copy_(state[n])
+        with lucid.no_grad():
+            p.copy_(state[n])
+            q.copy_(state[n])
 
     x = metal_tensor(4, 8)
     t = metal_tensor(4, 4)
@@ -172,8 +173,9 @@ def test_fused_step_parity(mk_opt: object) -> None:
     for (n, p), (_, q) in zip(
         model_eager.named_parameters(), model_comp.named_parameters()
     ):
-        p.copy_(state[n])
-        q.copy_(state[n])
+        with lucid.no_grad():
+            p.copy_(state[n])
+            q.copy_(state[n])
 
     x = metal_tensor(4, 8)
     t = metal_tensor(4, 4)

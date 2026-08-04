@@ -2904,7 +2904,11 @@ class Tensor:
         filled = _C_engine.full(
             list(self._impl.shape), value, self._impl.dtype, self._impl.device
         )
-        self._impl.copy_from(filled)
+        # ``assign_from``, not ``copy_from``: the values are overwritten, so
+        # the tensor no longer depends on what it was.  Written through the
+        # raw buffer copy, the graph position stayed put and the gradient
+        # flowed back through it as if the fill had not happened.
+        self._impl.assign_from(filled, "fill_")
         return self
 
     def copy_(self, other: Self) -> Self:
@@ -2949,7 +2953,10 @@ class Tensor:
         [1.0, 2.0, 3.0]
         """
         src = _C_engine.contiguous(other._impl)
-        self._impl.copy_from(src)
+        # The gradient belongs to ``other`` after this, not to whatever
+        # produced ``self`` — which is the whole point of copying a
+        # differentiable tensor in.
+        self._impl.assign_from(src, "copy_")
         return self
 
     # ``flip`` / ``fliplr`` / ``flipud`` are auto-injected from the registry

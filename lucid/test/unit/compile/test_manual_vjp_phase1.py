@@ -82,7 +82,8 @@ def _matched_models() -> tuple[nn.Module, nn.Module]:
     b = _mlp_model()
     # Mirror weights so eager and compile start identical.
     for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
-        pb.copy_(pa.detach().clone())
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
     return a, b
 
 

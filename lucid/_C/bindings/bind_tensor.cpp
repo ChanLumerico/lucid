@@ -190,6 +190,7 @@ void register_tensor_impl(py::module_& m) {
             "Return the gradient as a TensorImpl (set when backward was called with "
             "create_graph=True). Returns None if no graph-mode gradient is available.")
         .def("copy_from", &TensorImpl::copy_from)
+        .def("assign_from", &TensorImpl::assign_from)
         .def("zero_grad", &TensorImpl::zero_grad)
         .def("eval", &TensorImpl::eval,
              "Force evaluation of this tensor's lazy MLX graph.\n"

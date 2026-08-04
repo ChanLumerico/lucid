@@ -57,7 +57,8 @@ def test_manual_vjp_f16_smoke() -> None:
     a = a.half()  # convert params + buffers to f16
     b = _F16Net().to(COMPILE_DEVICE).half()
     for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
-        pb.copy_(pa.detach().clone())
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
 
     x = metal_tensor(4, D).half()
     t = metal_tensor(4, 1).half()

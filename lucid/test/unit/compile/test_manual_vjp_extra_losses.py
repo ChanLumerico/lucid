@@ -70,7 +70,8 @@ def test_manual_vjp_huber_parity() -> None:
     a = _HuberNet().to(COMPILE_DEVICE)
     b = _HuberNet().to(COMPILE_DEVICE)
     for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
-        pb.copy_(pa.detach().clone())
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
 
     x = metal_tensor(8, 8)
     t = metal_tensor(8, 4)

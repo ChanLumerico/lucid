@@ -1629,3 +1629,73 @@ def test_autograd_functionals_refuse_a_discrete_input(name: str) -> None:
         rest = (x.to(lucid.float32),) if name in ("vjp", "jvp") else ()
         with pytest.raises(TypeError, match="floating-point input"):
             fn(lambda a: a * a, x, *rest)
+
+
+# ── the overwriting assignments ──────────────────────────────────────────────
+
+
+def test_fill_and_zero_end_the_graph() -> None:
+    """They wrote through the raw buffer copy, so the graph stayed put.
+
+    ``y = x * 1.0; y.fill_(2.0); y.sum().backward()`` gave ``dx = 1`` —
+    the gradient ``y`` had before the fill, for a tensor whose value no
+    longer depends on ``x`` at all.
+    """
+    for name, call in (
+        ("fill_", lambda y: y.fill_(2.0)),
+        ("zero_", lambda y: y.zero_()),
+    ):
+        x = lucid.tensor(np.array([1.0, 2.0]), requires_grad=True)
+        y = x * 1.0
+        call(y)
+        y.sum().backward()
+        grad = None if x.grad is None else np.asarray(x.grad.numpy()).ravel()
+        assert grad is None or np.allclose(grad, 0.0), f"{name}: {grad}"
+
+
+def test_copy_routes_the_gradient_to_its_source() -> None:
+    """Which is the whole point of copying a differentiable tensor in."""
+    x = lucid.tensor(np.array([1.0, 2.0]), requires_grad=True)
+    z = lucid.tensor(np.array([3.0, 4.0]), requires_grad=True)
+    y = x * 1.0
+    y.copy_(z * 2.0)
+    y.sum().backward()
+    assert z.grad is not None and np.allclose(np.asarray(z.grad.numpy()).ravel(), 2.0)
+    assert x.grad is None or np.allclose(np.asarray(x.grad.numpy()).ravel(), 0.0)
+
+
+@pytest.mark.parametrize("name", ["fill_", "zero_", "copy_"])
+def test_assignment_to_a_leaf_is_refused(name: str) -> None:
+    """The reference refuses all three on a leaf that requires grad."""
+    p = lucid.nn.Parameter(lucid.tensor(np.array([1.0, 2.0])))
+    call = {
+        "fill_": lambda: p.fill_(3.0),
+        "zero_": lambda: p.zero_(),
+        "copy_": lambda: p.copy_(lucid.tensor(np.array([3.0, 4.0]))),
+    }[name]
+    with pytest.raises(Exception, match="leaf tensor that requires grad"):
+        call()
+    with lucid.no_grad():
+        call()
+    assert p.requires_grad
+
+
+@pytest.mark.parametrize("dtype_name", ["float32", "float64"])
+def test_initialisers_keep_the_parameter_they_were_given(dtype_name: str) -> None:
+    """``_fill_from_impl`` replaced the impl rather than writing through it.
+
+    That silently detached the tensor from any graph it was in — no write
+    means no version bump, so a backward built from overwritten values
+    said nothing — and it adopted the source's dtype wholesale, so
+    ``orthogonal_`` turned a float64 parameter into a float32 one.
+    """
+    for name in ("eye", "constant", "xavier_uniform", "orthogonal", "zeros_", "ones_"):
+        fn = getattr(lucid.nn.init, name)
+        p = lucid.nn.Parameter(
+            lucid.tensor(np.zeros((4, 4)), dtype=getattr(lucid, dtype_name))
+        )
+        before = id(p._impl)
+        fn(p, 1.0) if name == "constant" else fn(p)
+        assert str(p.dtype).endswith(dtype_name), f"{name} changed the dtype"
+        assert p.requires_grad, f"{name} dropped requires_grad"
+        assert id(p._impl) == before, f"{name} replaced the impl instead of writing"

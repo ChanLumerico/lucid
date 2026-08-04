@@ -33,6 +33,7 @@
 #include "Allocator.h"
 #include "Error.h"
 #include "ErrorBuilder.h"
+#include "GradMode.h"
 
 namespace lucid {
 
@@ -1053,6 +1054,24 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                storage_, other.storage());
 
     bump_version();
+}
+
+void TensorImpl::assign_from(const TensorImpl& other, const char* name) {
+    if (GradMode::is_enabled() && requires_grad() && !grad_fn())
+        ErrorBuilder(name).fail("a leaf tensor that requires grad cannot be assigned in place — "
+                                "wrap the call in no_grad, or build a new tensor");
+    copy_from(other);
+    if (!GradMode::is_enabled())
+        return;
+    if (other.grad_fn()) {
+        set_grad_fn(other.grad_fn());
+        set_grad_output_nr(other.grad_output_nr());
+        set_requires_grad(true);
+    } else if (grad_fn()) {
+        set_grad_fn(nullptr);
+        set_grad_output_nr(0);
+        set_requires_grad(false);
+    }
 }
 
 void TensorImpl::zero_grad() {

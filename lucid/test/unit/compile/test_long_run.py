@@ -55,7 +55,8 @@ def _make_problem() -> tuple[lucid.Tensor, lucid.Tensor, callable]:
 def _sync_params(src: nn.Module, dst: nn.Module) -> None:
     """Copy ``src.parameters()`` into ``dst.parameters()`` slot-by-slot."""
     for (_, p_s), (_, p_d) in zip(src.named_parameters(), dst.named_parameters()):
-        p_d.copy_(p_s)
+        with lucid.no_grad():
+            p_d.copy_(p_s)
 
 
 def _train_eager(

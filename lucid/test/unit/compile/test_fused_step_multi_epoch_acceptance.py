@@ -70,7 +70,8 @@ def _train_fused(
 def _sync_models(a: nn.Module, b: nn.Module) -> None:
     """Copy parameter tensors from `a` to `b` so both start identical."""
     for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
-        pb.copy_(pa.detach().clone())
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
 
 
 # ── Workload 1: MLP ─────────────────────────────────────────────────
