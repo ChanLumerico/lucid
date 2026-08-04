@@ -154,6 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - tensordot on half, grid_sample on an integer image
 
+- batch_norm's statistics ran at the buffers' dtype
+
 ### Changed
 
 - give the engine ops one shared operand check

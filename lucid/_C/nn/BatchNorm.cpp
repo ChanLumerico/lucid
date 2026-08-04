@@ -179,6 +179,28 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         const Dtype buf_dt = running_mean->dtype();
         backend::IBackend& be = backend::Dispatcher::for_device(x_eff->device());
 
+        // The update runs at the dtype the forward computed in, not at the
+        // buffers'.
+        //
+        // Two things were wrong with using ``buf_dt`` throughout.
+        // ``saved_rstd_C`` is at ``eff_dt``, and passing it to ``square``
+        // labelled as ``buf_dt`` reads one dtype's bytes as another's
+        // whenever the two differ — the relabel this codebase has had to
+        // fix in three other places.  And a running mean and variance are
+        // real numbers: handed integer buffers, every op here ran at that
+        // integer width and ``reciprocal`` refused on the CPU while Metal
+        // answered, so the same call worked on one device and not the
+        // other.
+        //
+        // ``stat_dt`` is that float.  The buffers are read into it and the
+        // result is cast back on the way out, so the caller's storage keeps
+        // its own dtype and nothing is reinterpreted in between.
+        const Dtype stat_dt = eff_dt;
+        auto into_stat = [&](const Storage& v, Dtype from) {
+            return from == stat_dt ? v
+                                   : be.cast(v, Shape{static_cast<std::int64_t>(C)}, from, stat_dt);
+        };
+
         // saved_mean/rstd are at shape (1, C, 1, ..., 1); reshape to (C,)
         // for the elementwise update.  Backend reshape is metadata-only.
         Shape kept_shape;
@@ -193,19 +215,28 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         Storage saved_rstd_C = be.reshape(bwd->saved_rstd_, kept_shape, stat_shape, eff_dt);
 
         // var = 1 / rstd^2 - eps
-        Storage rstd_sq = be.square(saved_rstd_C, stat_shape, buf_dt);
-        Storage inv_rstd_sq = be.reciprocal(rstd_sq, stat_shape, buf_dt);
-        Storage var = be.add_scalar(inv_rstd_sq, stat_shape, buf_dt, -eps);
+        Storage rstd_sq = be.square(saved_rstd_C, stat_shape, stat_dt);
+        Storage inv_rstd_sq = be.reciprocal(rstd_sq, stat_shape, stat_dt);
+        Storage var = be.add_scalar(inv_rstd_sq, stat_shape, stat_dt, -eps);
+
+        Storage rm_in = into_stat(running_mean->storage(), buf_dt);
+        Storage rv_in = into_stat(running_var->storage(), buf_dt);
 
         // new_rm = (1-m) * running_mean + m * mean
-        Storage rm_scaled = be.mul_scalar(running_mean->storage(), stat_shape, buf_dt, 1.0 - m);
-        Storage bm_scaled = be.mul_scalar(saved_mean_C, stat_shape, buf_dt, m);
-        Storage new_rm = be.add(rm_scaled, bm_scaled, stat_shape, buf_dt);
+        Storage rm_scaled = be.mul_scalar(rm_in, stat_shape, stat_dt, 1.0 - m);
+        Storage bm_scaled = be.mul_scalar(saved_mean_C, stat_shape, stat_dt, m);
+        Storage new_rm = be.add(rm_scaled, bm_scaled, stat_shape, stat_dt);
 
         // new_rv = (1-m) * running_var + (m * n/(n-1)) * var
-        Storage rv_scaled = be.mul_scalar(running_var->storage(), stat_shape, buf_dt, 1.0 - m);
-        Storage bv_scaled = be.mul_scalar(var, stat_shape, buf_dt, m * unbiased_factor);
-        Storage new_rv = be.add(rv_scaled, bv_scaled, stat_shape, buf_dt);
+        Storage rv_scaled = be.mul_scalar(rv_in, stat_shape, stat_dt, 1.0 - m);
+        Storage bv_scaled = be.mul_scalar(var, stat_shape, stat_dt, m * unbiased_factor);
+        Storage new_rv = be.add(rv_scaled, bv_scaled, stat_shape, stat_dt);
+
+        // Back to the buffers' own dtype for the write.
+        if (stat_dt != buf_dt) {
+            new_rm = be.cast(new_rm, stat_shape, stat_dt, buf_dt);
+            new_rv = be.cast(new_rv, stat_shape, stat_dt, buf_dt);
+        }
 
         if (tracing) {
             // Compile trace: leave the live buffers UNTOUCHED — the compiled

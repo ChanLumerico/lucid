@@ -1437,3 +1437,102 @@ def test_grid_sample_promotes_both_of_its_operands(dtype_name: str) -> None:
     assert np.allclose(outs[0], outs[1])
     # the centre of a 4x4 ramp
     assert np.allclose(outs[0].ravel()[:2], [7.5, 7.5])
+
+
+@pytest.mark.parametrize("buffer_dtype", ["int32", "float32", "float64"])
+def test_batch_norm_updates_its_statistics_in_a_float(buffer_dtype: str) -> None:
+    """A running mean and variance are real numbers.
+
+    The update ran at the *buffers'* dtype, so integer buffers put every
+    step of it at that width and ``reciprocal`` refused on the CPU while
+    Metal answered.  It runs at the dtype the forward computed in now and
+    casts back on the write, so the caller's storage keeps its own dtype.
+    """
+    if buffer_dtype == "float64":
+        devices = ["cpu"]  # Metal has no float64
+    else:
+        devices = _DEVICES
+    values = np.random.default_rng(0).random((2, 3, 2, 2)) * 10
+    outs = []
+    for device in devices:
+        dt = getattr(lucid, buffer_dtype)
+
+        def make(array, d=dt, dev=device):
+            return lucid.tensor(
+                np.ascontiguousarray(np.asarray(array).astype(buffer_dtype)),
+                dtype=d,
+                device=dev,
+            )
+
+        running_mean, running_var = make(np.zeros(3)), make(np.ones(3))
+        got = F.batch_norm(
+            make(values),
+            running_mean,
+            running_var,
+            make(np.ones(3)),
+            make(np.zeros(3)),
+            True,
+        )
+        assert lucid.is_floating_point(got), (buffer_dtype, device)
+        assert str(running_mean.dtype).endswith(buffer_dtype), "buffer changed dtype"
+        outs.append(np.asarray(got.numpy(), dtype=np.float64))
+    if len(outs) == 2:
+        assert np.allclose(outs[0], outs[1], rtol=1e-4)
+
+
+def test_batch_norm_keeps_float32_statistics_under_a_half_input() -> None:
+    """The AMP shape, and the one the relabel would have corrupted.
+
+    ``saved_rstd`` is at the forward's dtype and was handed to ``square``
+    labelled as the *buffers'* — reading one dtype's bytes as another's
+    whenever the two differ, which under autocast they do.
+    """
+    values = (np.random.default_rng(0).random((2, 3, 2, 2)) * 10).astype(np.float16)
+    means = []
+    for device in _DEVICES:
+        x = lucid.tensor(
+            np.ascontiguousarray(values), dtype=lucid.float16, device=device
+        )
+        f32 = lambda a: lucid.tensor(  # noqa: E731
+            np.ascontiguousarray(np.asarray(a, dtype=np.float32)),
+            dtype=lucid.float32,
+            device=device,
+        )
+        running_mean, running_var = f32(np.zeros(3)), f32(np.ones(3))
+        got = F.batch_norm(
+            x, running_mean, running_var, f32(np.ones(3)), f32(np.zeros(3)), True
+        )
+        assert str(got.dtype).endswith("float16"), device
+        assert str(running_mean.dtype).endswith("float32"), device
+        means.append(np.asarray(running_mean.numpy(), dtype=np.float64))
+    assert np.allclose(means[0], means[1], atol=1e-3)
+    assert np.isfinite(means[0]).all()
+
+
+@pytest.mark.parametrize("dtype_name", ["int32", "float32"])
+def test_embedding_bag_promotes_an_integer_table(dtype_name: str) -> None:
+    """Embeddings are real numbers; pooling them sums or averages.
+
+    The CPU kernel is written for floats only, so Metal took an integer
+    table and the CPU refused one.  The indices and offsets beside it stay
+    integral — they are positions, not values.
+    """
+    weight = np.arange(15).reshape(5, 3).astype(dtype_name)
+    index = np.array([0, 2, 4, 1, 3], dtype=np.int64)
+    offsets = np.array([0, 3], dtype=np.int64)
+    outs = []
+    for device in _DEVICES:
+        got = F.embedding_bag(
+            lucid.tensor(index, dtype=lucid.int64, device=device),
+            lucid.tensor(
+                np.ascontiguousarray(weight),
+                dtype=getattr(lucid, dtype_name),
+                device=device,
+            ),
+            lucid.tensor(offsets, dtype=lucid.int64, device=device),
+            mode="sum",
+        )
+        assert lucid.is_floating_point(got), device
+        outs.append(np.asarray(got.numpy(), dtype=np.float64))
+    assert np.allclose(outs[0], outs[1])
+    assert np.allclose(outs[0].ravel()[:3], [18.0, 21.0, 24.0])

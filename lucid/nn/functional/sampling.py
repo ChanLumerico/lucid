@@ -540,6 +540,20 @@ def embedding_bag(
 
     x_impl = _unwrap(x)
     w_impl = _unwrap(weight)
+    # The table holds embeddings, which are real numbers — pooling them
+    # sums or averages, and the CPU kernel is written for floats only.
+    # Metal took an integer table and the CPU refused one, so the same
+    # call worked on one device and not the other.  Promote, as the
+    # engine's real-valued ops do; the indices and offsets beside it stay
+    # integral, because they are positions rather than values.
+    if w_impl.dtype in (
+        _C_engine.Dtype.Bool,
+        _C_engine.Dtype.I8,
+        _C_engine.Dtype.I16,
+        _C_engine.Dtype.I32,
+        _C_engine.Dtype.I64,
+    ):
+        w_impl = _C_engine.astype(w_impl, _C_engine.Dtype.F32)
     x_ndim = len(x_impl.shape)
 
     if x_ndim == 2:
