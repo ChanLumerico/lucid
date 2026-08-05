@@ -29,7 +29,12 @@
 
 #pragma once
 
+#include <vector>
+
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
+#include "../../core/AmpPolicy.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
 
@@ -67,6 +72,18 @@ namespace lucid {
 // See Also
 // --------
 // real_op, imag_op, complex_op
+// Backward for ``conj`` — see :class:`RealBackward`.  Conjugation is its
+// own inverse, so the gradient is conjugated back.
+class LUCID_API ConjBackward : public FuncOp<ConjBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    Shape shape_;
+    Dtype dtype_ = Dtype::C64;
+    Device device_ = Device::CPU;
+
+    std::vector<Storage> apply(Storage grad_out);
+};
+
 LUCID_API TensorImplPtr conj_op(const TensorImplPtr& a);
 
 }  // namespace lucid

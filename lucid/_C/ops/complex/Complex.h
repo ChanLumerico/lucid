@@ -23,7 +23,12 @@
 
 #pragma once
 
+#include <vector>
+
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
+#include "../../core/AmpPolicy.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
 
@@ -71,6 +76,18 @@ namespace lucid {
 // See Also
 // --------
 // real_op, imag_op, conj_op
+// Backward for ``complex`` — see :class:`RealBackward`.  The inverse of
+// the two projections: each operand takes the lane it supplied.
+class LUCID_API ComplexBackward : public FuncOp<ComplexBackward, 2> {
+public:
+    static const OpSchema schema_v1;
+    Shape shape_;
+    Device device_ = Device::CPU;
+
+    // Returns ``(real(g), imag(g))``, one per operand.
+    std::vector<Storage> apply(Storage grad_out);
+};
+
 LUCID_API TensorImplPtr complex_op(const TensorImplPtr& re, const TensorImplPtr& im);
 
 }  // namespace lucid

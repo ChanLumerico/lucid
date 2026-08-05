@@ -27,7 +27,12 @@
 
 #pragma once
 
+#include <vector>
+
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
+#include "../../core/AmpPolicy.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
 
@@ -62,6 +67,19 @@ namespace lucid {
 // See Also
 // --------
 // real_op, complex_op, conj_op
+// Backward for ``imag`` — see :class:`RealBackward` for why these were
+// missing and what it cost.  The same statement about the other lane.
+class LUCID_API ImagBackward : public FuncOp<ImagBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    Shape shape_;
+    Dtype lane_ = Dtype::F32;
+    Device device_ = Device::CPU;
+
+    // ``g`` lands in the imaginary lane: ``0 + g i``.
+    std::vector<Storage> apply(Storage grad_out);
+};
+
 LUCID_API TensorImplPtr imag_op(const TensorImplPtr& a);
 
 }  // namespace lucid

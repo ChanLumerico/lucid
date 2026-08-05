@@ -9,8 +9,10 @@
 #pragma once
 
 #include <utility>
+#include <vector>
 
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
 #include "../../backend/IBackend.h"
 #include "../../core/AmpPolicy.h"
 #include "../../core/OpSchema.h"
@@ -83,6 +85,32 @@ public:
 // Notes
 // -----
 // Dispatch: Accelerate ``vDSP_vabs`` (CPU) / MLX ``abs`` (GPU).
+// Backward for ``abs`` of a *complex* input.
+//
+// The forward is a composite (scale, divide, square, sqrt) chosen to be
+// overflow-safe, and its derivative cannot be, at exactly zero: the
+// divide's own backward forms ``-re / m^2``, and the clamped ``m`` is
+// ``FLT_MIN``, whose square underflows to zero in float32.  ``0 / 0`` is
+// NaN, so ``abs(fft2(x))`` came back all-NaN whenever one coefficient of
+// the transform was zero — which for most real inputs, one is.
+//
+// Raising the clamp is not available: the trailing multiply uses the
+// *unclamped* magnitude, so a floor above ``|z|`` would silently wreck
+// genuinely tiny inputs.  The derivative is exact and simple enough to
+// state directly instead:
+//
+//     d|z| / dz = z / |z|,     and 0 at z = 0
+//
+// which is the subgradient the reference reports there.
+LUCID_API TensorImplPtr complex_abs_forward(const TensorImplPtr& a);
+
+class LUCID_API ComplexAbsBackward : public FuncOp<ComplexAbsBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    TensorImplPtr saved_input_;  // z, for z / |z|
+    std::vector<Storage> apply(Storage grad_out);
+};
+
 class LUCID_API AbsBackward : public UnaryOp<AbsBackward> {
 public:
     static const OpSchema schema_v1;

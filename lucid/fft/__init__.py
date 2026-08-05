@@ -150,13 +150,24 @@ def _conj(x: Tensor) -> Tensor:
 
 
 def _scale(x: Tensor, s: float) -> Tensor:
-    """Multiply by a real scalar.  Now a thin wrapper over ``Tensor * float``
-    — both backends support ``full(C64)`` and ``mul(C64, C64)`` natively
-    after the P2-B complex extension landed, so the previous private
-    ``_C_engine.fft._scale`` helper is no longer required."""
+    """Multiply by a real scalar, lane-wise when ``x`` is complex.
+
+    ``x * s`` is enough for a real tensor.  For a complex one it is not:
+    a scalar operand goes through the *broadcast* path, and that path has
+    no complex branch — only equal-shape ``mul(C64, C64)`` does.  This
+    used to say both were supported, and the mistake was invisible while
+    nothing differentiated through a complex tensor.  The moment ``real``
+    and ``imag`` had backwards, every FFT backward reached here and
+    raised ``broadcast: dtype not supported``.
+
+    Scaling a complex number by a real one is scaling each lane by it, so
+    the projections do the work and no complex arithmetic is needed.
+    """
     if s == 1.0:
         return x
-    return x * s
+    if not x.is_complex():
+        return x * s
+    return lucid.complex(lucid.real(x) * s, lucid.imag(x) * s)
 
 
 # ── Autograd Function classes (one per base transform) ──────────────────────

@@ -27,7 +27,12 @@
 
 #pragma once
 
+#include <vector>
+
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
+#include "../../core/AmpPolicy.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
 
@@ -62,6 +67,41 @@ namespace lucid {
 // See Also
 // --------
 // imag_op, complex_op, conj_op
+// Backward for the complex projections.
+//
+// None of them had one.  ``real``, ``imag`` and ``conj`` built their
+// output and returned it, so a complex tensor was where every gradient
+// stopped:
+//
+//     real(fft(x)).sum().backward()   ->  x.grad is None
+//
+// with no error raised.  ``fft`` is wired correctly; the chain broke one
+// step later, which meant any loss written through a frequency-domain
+// transform trained on nothing at all.  ``abs`` on a complex input is a
+// composite of ``real`` and ``imag``, so it was unreachable for the same
+// reason and becomes differentiable with them.
+//
+// The header above used to say this belonged to "the Python autograd
+// layer".  There was no such layer.
+//
+// The conventions are the reference's, measured rather than derived:
+//
+//     d/dz real(z) = g + 0i        d/dz imag(z) = 0 + g i
+//     d/dz conj(z) = conj(g)       d/dz |z|     = g z / |z|
+//
+// Each is expressible with ops that already exist, so the backward is a
+// storage-level call rather than a new kernel.
+class LUCID_API RealBackward : public FuncOp<RealBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    Shape shape_;
+    Dtype lane_ = Dtype::F32;  // the real dtype one lane holds
+    Device device_ = Device::CPU;
+
+    // ``g`` lands in the real lane; the imaginary lane receives nothing.
+    std::vector<Storage> apply(Storage grad_out);
+};
+
 LUCID_API TensorImplPtr real_op(const TensorImplPtr& a);
 
 }  // namespace lucid

@@ -88,6 +88,21 @@ void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
     case Dtype::F16:
         add_half_inplace(dst.ptr.get(), src.ptr.get(), n);
         break;
+    case Dtype::C64:
+    case Dtype::C128:
+        // Complex addition *is* lane-wise addition, so an interleaved
+        // buffer accumulates as twice as many reals.
+        //
+        // Reaching here at all is new: nothing produced a complex
+        // gradient until ``real`` / ``imag`` / ``conj`` were given
+        // backwards, and the first thing that did was ``abs(z)``, which
+        // reads ``z`` through both projections and so needs its two
+        // contributions summed.
+        if (dst.dtype == Dtype::C64)
+            add_typed<float>(dst.ptr.get(), src.ptr.get(), n * 2);
+        else
+            add_typed<double>(dst.ptr.get(), src.ptr.get(), n * 2);
+        break;
     default:
         ErrorBuilder("accumulate_into").not_implemented("dtype not yet supported in Phase 2");
     }

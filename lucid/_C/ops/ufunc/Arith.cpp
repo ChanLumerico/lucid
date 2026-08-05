@@ -10,14 +10,19 @@
 #include <limits>
 
 #include "../../core/ErrorBuilder.h"
+#include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/Add.h"
+#include "../bfunc/Compare.h"
 #include "../bfunc/Div.h"
 #include "../bfunc/Maximum.h"
 #include "../bfunc/Mul.h"
+#include "../complex/Complex.h"
 #include "../complex/Imag.h"
 #include "../complex/Real.h"
 #include "../gfunc/Gfunc.h"
+#include "../utils/Select.h"
 #include "Exponential.h"
 #include "ScalarParam.h"
 
@@ -69,7 +74,8 @@ TensorImplPtr abs_op(const TensorImplPtr& a) {
     // *and* a hand-written C64 branch in the CPU backend; reusing ops that are
     // already device-parity tested is the better trade until a profile says
     // otherwise.
-    if (a->dtype() == Dtype::C64) {
+    if (is_complex(a->dtype())) {
+        return complex_abs_forward(a);
         auto re = real_op(a);
         auto im = imag_op(a);
         // Scale by m = max(|Re|, |Im|) before squaring: the naive
@@ -88,10 +94,77 @@ TensorImplPtr abs_op(const TensorImplPtr& a) {
         auto safe_m = clip_op(m, tiny, huge);
         auto r_re = div_op(re, safe_m);
         auto r_im = div_op(im, safe_m);
-        return mul_op(m, sqrt_op(add_op(square_op(r_re), square_op(r_im))));
+        // The sum of squared ratios is clamped below for the *backward*.
+        //
+        // ``sqrt`` differentiates to ``1 / (2 sqrt(u))``, which is
+        // infinite at ``u == 0``; the trailing ``m`` is exactly 0 there,
+        // and ``0 * inf`` is NaN.  So ``abs(z)`` was right at ``z == 0``
+        // and its gradient was NaN, which then spread through every
+        // downstream term — ``abs(fft2(x))`` came back all-NaN because
+        // one coefficient of that transform happens to be zero.  The
+        // reference reports 0 there.
+        //
+        // Free of side effects: ``m`` is ``max(|re|, |im|)``, so for any
+        // non-zero ``z`` the ratios put ``u`` in [1, 2].  ``u`` can only
+        // be below that when ``z`` is exactly zero, and there the answer
+        // is 0 either way.
+        auto u = add_op(square_op(r_re), square_op(r_im));
+        return mul_op(m, sqrt_op(clip_op(u, tiny, huge)));
     }
     return AbsBackward::forward(a);
 }
+const OpSchema ComplexAbsBackward::schema_v1{"abs", 1, AmpPolicy::KeepInput, true};
+
+// ``|z|`` with the composite kept for the value and a stated derivative.
+//
+// The composite runs under ``NoGradGuard`` so its intermediate divisions
+// leave no nodes behind; the single node wired here owns the derivative.
+TensorImplPtr complex_abs_forward(const TensorImplPtr& a) {
+    TensorImplPtr magnitude;
+    {
+        NoGradGuard nograd;
+        auto re = real_op(a);
+        auto im = imag_op(a);
+        // Scale by m = max(|Re|, |Im|) before squaring: the naive
+        // sqrt(Re^2 + Im^2) overflows once |z| > ~1.8e19 and underflows
+        // below ~1e-19, even though both results are representable.
+        auto m = maximum_op(abs_op(re), abs_op(im));
+        const double tiny = static_cast<double>(std::numeric_limits<float>::min());
+        const double huge = static_cast<double>(std::numeric_limits<float>::max());
+        auto safe_m = clip_op(m, tiny, huge);
+        auto r_re = div_op(re, safe_m);
+        auto r_im = div_op(im, safe_m);
+        magnitude = mul_op(m, sqrt_op(add_op(square_op(r_re), square_op(r_im))));
+    }
+    if (!GradMode::is_enabled() || !a->requires_grad())
+        return magnitude;
+
+    auto bwd = std::make_shared<ComplexAbsBackward>();
+    bwd->saved_input_ = a;
+    kernel::NaryKernel<ComplexAbsBackward, 1>::wire_autograd(std::move(bwd), {a}, magnitude, false);
+    return magnitude;
+}
+
+std::vector<Storage> ComplexAbsBackward::apply(Storage grad_out) {
+    NoGradGuard nograd;
+    const auto& z = saved_input_;
+    auto g = std::make_shared<TensorImpl>(std::move(grad_out), z->shape(), real_lane_of(z->dtype()),
+                                          z->device(), false);
+    // ``g * z / |z|``, lane by lane, with the quotient forced to zero
+    // where the magnitude is — the direction of a zero vector is not
+    // defined and the reference reports 0.
+    auto re = real_op(z);
+    auto im = imag_op(z);
+    auto mag = complex_abs_forward(z);
+    auto zero = zeros_like_op(mag);
+    auto nonzero = greater_op(mag, zero);
+    auto safe = where_op(nonzero, mag, ones_like_op(mag));
+    auto scale = where_op(nonzero, div_op(g, safe), zero);
+    return {complex_op(mul_op(re, scale), mul_op(im, scale))->storage()};
+}
+
+LUCID_REGISTER_OP(ComplexAbsBackward)
+
 TensorImplPtr AbsBackward::grad_formula_impl(const TensorImplPtr& g,
                                              const TensorImplPtr& x,
                                              const TensorImplPtr&) {

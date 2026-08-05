@@ -7,13 +7,15 @@
 #include "Complex.h"
 
 #include "../../backend/Dispatcher.h"
+#include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
-#include "../ufunc/Astype.h"            // astype_op
-#include "../utils/Layout.h"            // broadcast_to_op
+#include "../../kernel/NaryKernel.h"
+#include "../ufunc/Astype.h"  // astype_op
+#include "../utils/Layout.h"  // broadcast_to_op
 #include "_Detail.h"
 
 namespace lucid {
@@ -55,8 +57,23 @@ TensorImplPtr complex_op(const TensorImplPtr& re_in, const TensorImplPtr& im_in)
 
     Storage out = backend::Dispatcher::for_device(re->device())
                       .complex_combine(re->storage(), im->storage(), re->shape());
-    return complex_detail::fresh(std::move(out), re->shape(), complex_for(re->dtype()),
-                                 re->device());
+    auto result =
+        complex_detail::fresh(std::move(out), re->shape(), complex_for(re->dtype()), re->device());
+
+    auto bwd = std::make_shared<ComplexBackward>();
+    bwd->shape_ = re->shape();
+    bwd->device_ = re->device();
+    kernel::NaryKernel<ComplexBackward, 2>::wire_autograd(std::move(bwd), {re, im}, result, false);
+    return result;
 }
+
+const OpSchema ComplexBackward::schema_v1{"complex", 1, AmpPolicy::KeepInput, true};
+
+std::vector<Storage> ComplexBackward::apply(Storage grad_out) {
+    auto& be = backend::Dispatcher::for_device(device_);
+    return {be.complex_real(grad_out, shape_), be.complex_imag(grad_out, shape_)};
+}
+
+LUCID_REGISTER_OP(ComplexBackward)
 
 }  // namespace lucid

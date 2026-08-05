@@ -49,7 +49,25 @@ std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
     const Dtype src_dt = storage_dtype(grad_out);
     if (src_dt != target_dt) {
         auto& be = backend::Dispatcher::for_device(t->device());
-        grad_out = be.astype(grad_out, t->shape(), src_dt, target_dt);
+        if (is_complex(src_dt) && !is_complex(target_dt)) {
+            // A complex gradient arriving at a real leaf keeps its real
+            // part.  That is a projection, not a cast, and it is the
+            // convention the reference uses: ``fft`` of a real input is
+            // complex, so the gradient coming back is too, while
+            // ``d/dx`` of a real parameter has to be real.
+            //
+            // Reached only once the complex projections had backwards —
+            // before that no complex gradient ever flowed — and it
+            // arrived here as ``astype: complex64 -> float32``, an
+            // unimplemented cast standing in for a well-defined
+            // operation.
+            grad_out = be.complex_real(grad_out, t->shape());
+            const Dtype lane = real_lane_of(src_dt);
+            if (lane != target_dt)
+                grad_out = be.astype(grad_out, t->shape(), lane, target_dt);
+        } else {
+            grad_out = be.astype(grad_out, t->shape(), src_dt, target_dt);
+        }
     }
 
     auto& grad = t->mutable_grad_storage();

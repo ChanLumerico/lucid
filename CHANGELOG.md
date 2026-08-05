@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - integer matmul on Metal, narrow integers in the sort family
 
+- complex tensors carry a gradient
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
