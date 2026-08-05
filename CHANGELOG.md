@@ -176,6 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the vacuous cells were the instrument, and one was not
 
+- reach the nn.Module classes, and EmbeddingBag never trained
+
 ### Changed
 
 - give the engine ops one shared operand check

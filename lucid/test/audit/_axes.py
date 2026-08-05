@@ -18,6 +18,7 @@ Three habits are built into the base rather than left to each axis:
   differently (``hardtanh`` at its own clamp boundary).
 """
 
+import annotationlib
 import contextlib
 import inspect
 import functools
@@ -1683,7 +1684,168 @@ _CTOR_ARGS: tuple[tuple[tuple[Any, ...], dict[str, Any]], ...] = (
 )
 
 
+#: Constructor arguments by parameter name.
+#:
+#: ``nn`` layer constructors are almost entirely small integers with
+#: self-describing names, which is what makes deriving them possible at
+#: all.  Sizes agree with :data:`_FORWARD_SHAPES` so that a module built
+#: here has a chance of accepting one of the inputs tried against it.
+_CTOR_BY_NAME: "dict[str, Any]" = {
+    # widths, all agreeing with the (2, 4) / (2, 3, 6, 6) probe inputs
+    "in_features": 4,
+    "out_features": 4,
+    "in1_features": 4,
+    "in2_features": 4,
+    "in_channels": 3,
+    "out_channels": 3,
+    "num_features": 4,
+    "num_channels": 4,
+    "channels": 4,
+    "features": 4,
+    "hidden_size": 4,
+    "input_size": 4,
+    "embed_dim": 4,
+    "embedding_dim": 4,
+    "d_model": 4,
+    "dim": 4,
+    "head_dim": 2,
+    "size": 4,
+    "num_embeddings": 8,
+    "vocab_size": 8,
+    "normalized_shape": 4,
+    "unflattened_size": (2, 2),
+    "output_size": 2,
+    "num_positions": 8,
+    "max_position_embeddings": 8,
+    "height": 6,
+    "width": 6,
+    # counts
+    "num_heads": 2,
+    "nhead": 2,
+    "num_kv_heads": 2,
+    "num_layers": 1,
+    "num_classes": 4,
+    "groups": 1,
+    "num_groups": 1,
+    "upscale_factor": 2,
+    "downscale_factor": 2,
+    # windowing
+    "kernel_size": 3,
+    "stride": 1,
+    "padding": 1,
+    "output_padding": 0,
+    "dilation": 1,
+    # scalars
+    "eps": 1e-5,
+    "p": 0.5,
+    "bias": True,
+    "momentum": 0.1,
+    "affine": True,
+}
+
+
+def _ctor_value(name: str, annotation: Any, depth: int) -> Any:
+    """One constructor argument, by name first and annotation second.
+
+    Raises ``KeyError`` when neither says anything, so the caller can
+    fall back to the fixed ladder rather than pass a wrong-typed value
+    and read the resulting ``TypeError`` as "this class is unbuildable".
+    """
+    if name in _CTOR_BY_NAME:
+        return _CTOR_BY_NAME[name]
+
+    if isinstance(annotation, type):
+        # A sub-module, which is how the fused ``intrinsic`` layers are
+        # spelled: ``ConvReLU2d(conv, relu)`` takes the two layers it
+        # fuses.  Built one level deep, so a cycle cannot run away.
+        if depth < 1 and _is_module_class(annotation):
+            built = _construct_module(annotation, depth + 1)
+            if built is None:
+                raise KeyError(name)
+            return built
+        if issubclass(annotation, bool):
+            return True
+        if issubclass(annotation, int):
+            return 4
+        if issubclass(annotation, float):
+            return 0.5
+        members = list(getattr(annotation, "__members__", {}).values())
+        if members:  # an Enum: the first member is as good as any
+            return members[0]
+
+    text = str(annotation)
+    if "int" in text and "tuple" in text:
+        return 1
+    if text.endswith("int") or "_Size" in text:
+        return 2
+    raise KeyError(name)
+
+
+def _is_module_class(obj: Any) -> bool:
+    try:
+        import lucid.nn as _nn
+
+        return isinstance(obj, type) and issubclass(obj, _nn.Module)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _construct_module(cls: Any, depth: int = 0) -> Any:
+    """Build ``cls`` from its own signature, or ``None``.
+
+    The ladder this replaces tried eight fixed argument tuples —
+    ``(4,)``, ``(4, 4)``, ``(3, 4, 3)`` and so on — and reported
+    everything it could not hit as "no constructor signature worked".
+    That was 114 of the framework's ``nn.Module`` classes, every one of
+    them then contributing nothing to any axis: not the module lifecycle,
+    not the smoke pass, nothing.  A class that is never constructed is a
+    class the audit cannot notice a regression in.
+
+    Reading the signature works here because ``nn`` constructors are
+    almost entirely small integers with self-describing names.  Where the
+    name says nothing the annotation usually does, and where neither does
+    the fixed ladder still runs underneath.
+    """
+    try:
+        # ``FORWARDREF`` rather than the default.
+        #
+        # H7 requires annotations that exist only under ``TYPE_CHECKING``,
+        # and PEP 649 leaves those unevaluated until something asks.
+        # ``inspect.signature`` asking is what raised ``NameError: name
+        # 'QConfig' is not defined`` on every quantised layer — not a
+        # defect in the layer, this function reading it wrongly.
+        # ``FORWARDREF`` resolves the names it can and returns the rest as
+        # forward references, which the annotation fallback below reads as
+        # text in any case.
+        signature = inspect.signature(
+            cls, annotation_format=annotationlib.Format.FORWARDREF
+        )
+    except Exception:  # noqa: BLE001 - an unreadable signature is not a finding
+        return None
+
+    kwargs: "dict[str, Any]" = {}
+    for parameter in signature.parameters.values():
+        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
+            continue
+        if parameter.default is not inspect.Parameter.empty:
+            continue  # a default the author chose is better than a guess
+        try:
+            kwargs[parameter.name] = _ctor_value(
+                parameter.name, parameter.annotation, depth
+            )
+        except KeyError:
+            return None
+
+    try:
+        return cls(**kwargs)
+    except Exception:  # noqa: BLE001 - the fixed ladder is the fallback
+        return None
+
+
 def _try_construct(cls: Any) -> Any:
+    derived = _construct_module(cls)
+    if derived is not None:
+        return derived
     for args, kwargs in _CTOR_ARGS:
         try:
             return cls(*args, **kwargs)
@@ -1702,24 +1864,111 @@ _FORWARD_SHAPES: tuple[tuple[int, ...], ...] = (
 )
 
 
+def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
+    """Shapes this particular module might accept, its own answer first.
+
+    A constructed module knows its input width — ``Linear(4, 4)`` wants
+    a trailing 4, ``Conv2d(3, ...)`` wants 3 channels — and asking it is
+    the difference between probing and guessing.  Five fixed shapes left
+    84 modules stuck at ``forward`` with ShapeMismatch after they had
+    already been built successfully, which is the least useful place to
+    stop: the object exists and nothing is asked of it.
+
+    Its own answer comes from the declared width where the module
+    exposes one, and from the first parameter otherwise — a weight of
+    rank 2 is ``(out, in)`` and one of rank 4 is ``(out, in, kh, kw)``,
+    so in both the second axis is what the input must supply.
+    """
+    widths: "list[int]" = []
+    for attribute in ("in_features", "in_channels", "num_features", "embedding_dim"):
+        value = getattr(module, attribute, None)
+        if isinstance(value, int) and 0 < value <= 64:
+            widths.append(value)
+    normalized = getattr(module, "normalized_shape", None)
+    if isinstance(normalized, int):
+        widths.append(normalized)
+    elif isinstance(normalized, (tuple, list)) and normalized:
+        widths.append(int(normalized[-1]))
+
+    shapes: "list[tuple[int, ...]]" = []
+    for width in widths:
+        shapes += [(2, width), (2, width, 6), (2, width, 6, 6), (2, 6, width)]
+
+    try:
+        first = next(iter(module.parameters()), None)
+    except Exception:  # noqa: BLE001
+        first = None
+    if first is not None and hasattr(first, "shape"):
+        dims = tuple(int(d) for d in first.shape)
+        if len(dims) == 2:
+            shapes += [(2, dims[1]), (2, 6, dims[1])]
+        elif len(dims) == 3:
+            shapes.append((2, dims[1], 6))
+        elif len(dims) == 4:
+            shapes.append((2, dims[1], 6, 6))
+        elif len(dims) == 5:
+            shapes.append((2, dims[1], 4, 6, 6))
+        elif len(dims) == 1:
+            shapes += [(2, dims[0]), (2, dims[0], 6, 6)]
+
+    shapes += list(_FORWARD_SHAPES)
+    seen: "set[tuple[int, ...]]" = set()
+    return [sh for sh in shapes if not (sh in seen or seen.add(sh))]
+
+
+def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
+    """Argument lists to try for one shape.
+
+    Three things the single float64 tensor could not reach: a module
+    whose forward takes a pair (every loss: ``input`` and ``target``) or
+    a triple (attention: query, key, value); one whose parameters are
+    float32, where a float64 probe is a DtypeMismatch and not a defect;
+    and an embedding, which indexes and wants integers.
+    """
+    if getattr(module, "num_embeddings", None) is not None:
+        rows = int(module.num_embeddings)
+        idx = _probe.as_int(_probe.rng(_probe.SEED_B).integers(0, rows, shape[:2]))
+        return [[idx]]
+
+    dtypes = [_probe.as_f64]
+    try:
+        first = next(iter(module.parameters()), None)
+        if first is not None and str(first.dtype).endswith("float32"):
+            dtypes.insert(0, _probe.as_f32)
+    except Exception:  # noqa: BLE001
+        pass
+
+    out: "list[list[Any]]" = []
+    for cast in dtypes:
+        one = cast(_probe.sample("moderate", shape, 0))
+        two = cast(_probe.sample("moderate", shape, 1))
+        three = cast(_probe.sample("moderate", shape, 2))
+        out += [[one], [one, two], [one, two, three]]
+    return out
+
+
 def _try_forward(module: Any) -> "tuple[Any, str]":
     last = "no input shape worked"
-    for shape in _FORWARD_SHAPES:
-        x = _probe.as_f64(_probe.sample("moderate", shape))
-        try:
-            out = module(x)
-        except Exception as exc:  # noqa: BLE001
-            last = f"{shape}: {type(exc).__name__}"
-            continue
-        tensor = out if hasattr(out, "shape") else None
-        if tensor is None:
-            for attr in ("logits", "sample", "last_hidden_state"):
-                tensor = getattr(out, attr, None)
-                if tensor is not None:
-                    break
-        if tensor is not None and hasattr(tensor, "shape"):
-            return tensor, str(shape)
-        last = f"{shape}: returned no tensor"
+    for shape in _module_input_shapes(module):
+        for args in _forward_inputs(module, shape):
+            try:
+                out = module(*args)
+            except Exception as exc:  # noqa: BLE001
+                last = f"{shape}: {type(exc).__name__}"
+                continue
+            tensor = out if hasattr(out, "shape") else None
+            if tensor is None and isinstance(out, (tuple, list)) and out:
+                # RNNs and attention return ``(output, state)``; the
+                # first element is the one the axes can measure.
+                tensor = out[0] if hasattr(out[0], "shape") else None
+            if tensor is None:
+                for attr in ("logits", "sample", "last_hidden_state"):
+                    tensor = getattr(out, attr, None)
+                    if tensor is not None:
+                        break
+            if tensor is not None and hasattr(tensor, "shape"):
+                return tensor, str(shape)
+            last = f"{shape}: returned no tensor"
     return None, last
 
 

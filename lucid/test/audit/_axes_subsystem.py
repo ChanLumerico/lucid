@@ -115,6 +115,12 @@ class SmokeAxis(Axis):
     def applies(self, symbol: "Symbol") -> bool:
         if symbol.kind in ("module", "optim"):
             return False  # ModuleAxis / OptimAxis do this properly
+        if symbol.kind == "declaration":
+            # A Protocol, a metaclass or an abstract base.  Callable in
+            # the sense that every class is, with nothing behind the call
+            # — and this axis reaches by ``callable()`` rather than by
+            # ``kinds``, so the kind has to be named here too.
+            return False
         return callable(_surface.resolve(symbol))
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:

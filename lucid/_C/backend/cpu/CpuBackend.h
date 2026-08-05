@@ -6069,6 +6069,119 @@ public:
         return Storage{CpuStorage{out_ptr, out_nb, dt}};
     }
 
+    Storage embedding_bag_backward(const Storage& grad_out,
+                                   const Storage& weight,
+                                   const Storage& indices,
+                                   const Storage& offsets,
+                                   const Shape& weight_shape,
+                                   const Shape& indices_shape,
+                                   int mode,
+                                   int padding_idx,
+                                   bool include_last_offset,
+                                   Dtype dt) override {
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(
+                embedding_bag_backward(detail::as_f32(grad_out), detail::as_f32(weight), indices,
+                                       offsets, weight_shape, indices_shape, mode, padding_idx,
+                                       include_last_offset, Dtype::F32),
+                dt);
+
+        const auto& cg = std::get<CpuStorage>(grad_out);
+        const auto& cw = std::get<CpuStorage>(weight);
+        const auto& ci = std::get<CpuStorage>(indices);
+        const auto& co = std::get<CpuStorage>(offsets);
+
+        const int num_emb = static_cast<int>(weight_shape[0]);
+        const int D = static_cast<int>(weight_shape[1]);
+        const int n_idx = static_cast<int>(shape_numel(indices_shape));
+        auto read_int = [](const CpuStorage& s, int k) -> int {
+            return s.dtype == Dtype::I64
+                       ? static_cast<int>(reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
+                       : static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
+        };
+        const int B = static_cast<int>(co.nbytes / dtype_size(co.dtype));
+
+        // The same bag boundaries the forward computed, derived the same
+        // way so the two cannot disagree about which rows a bag owns.
+        std::vector<int> starts(static_cast<std::size_t>(B));
+        std::vector<int> ends(static_cast<std::size_t>(B));
+        for (int b = 0; b < B; ++b) {
+            starts[static_cast<std::size_t>(b)] = read_int(co, b);
+            ends[static_cast<std::size_t>(b)] =
+                (b + 1 < B && !include_last_offset) ? read_int(co, b + 1) : n_idx;
+        }
+        if (include_last_offset && B > 0)
+            ends[static_cast<std::size_t>(B - 1)] = read_int(co, B - 1);
+
+        const std::size_t gw_nb = static_cast<std::size_t>(num_emb) * D * dtype_size(dt);
+        auto gw_ptr = allocate_aligned_bytes(gw_nb, Device::CPU);
+        std::memset(gw_ptr.get(), 0, gw_nb);
+
+        auto run = [&](auto* tag) {
+            using T = std::remove_pointer_t<decltype(tag)>;
+            const T* gp = reinterpret_cast<const T*>(cg.ptr.get());
+            const T* wp = reinterpret_cast<const T*>(cw.ptr.get());
+            T* gwp = reinterpret_cast<T*>(gw_ptr.get());
+            for (int b = 0; b < B; ++b) {
+                const int s = starts[static_cast<std::size_t>(b)];
+                const int e = ends[static_cast<std::size_t>(b)];
+                const T* grow = gp + static_cast<std::size_t>(b) * D;
+
+                int count = 0;
+                for (int k = s; k < e; ++k) {
+                    const int emb = read_int(ci, k);
+                    if (emb == padding_idx || emb < 0 || emb >= num_emb)
+                        continue;
+                    ++count;
+                }
+                if (count == 0)
+                    continue;
+
+                if (mode == 2) {
+                    // max: only the row that won each column receives
+                    // anything.  Recomputed rather than saved, because the
+                    // forward records no argmax; ties go to the first,
+                    // matching the forward's strict ``>``.
+                    for (int d = 0; d < D; ++d) {
+                        int best = -1;
+                        T best_val = std::numeric_limits<T>::lowest();
+                        for (int k = s; k < e; ++k) {
+                            const int emb = read_int(ci, k);
+                            if (emb == padding_idx || emb < 0 || emb >= num_emb)
+                                continue;
+                            const T v = wp[static_cast<std::size_t>(emb) * D + d];
+                            if (best < 0 || v > best_val) {
+                                best = emb;
+                                best_val = v;
+                            }
+                        }
+                        if (best >= 0)
+                            gwp[static_cast<std::size_t>(best) * D + d] += grow[d];
+                    }
+                    continue;
+                }
+
+                const T scale = mode == 1 ? T(1) / static_cast<T>(count) : T(1);
+                for (int k = s; k < e; ++k) {
+                    const int emb = read_int(ci, k);
+                    if (emb == padding_idx || emb < 0 || emb >= num_emb)
+                        continue;
+                    T* dst = gwp + static_cast<std::size_t>(emb) * D;
+                    for (int d = 0; d < D; ++d)
+                        dst[d] += grow[d] * scale;
+                }
+            }
+        };
+
+        if (dt == Dtype::F32)
+            run(static_cast<float*>(nullptr));
+        else if (dt == Dtype::F64)
+            run(static_cast<double*>(nullptr));
+        else
+            ErrorBuilder("embedding_bag_backward").not_implemented("only F32/F64");
+        return Storage{CpuStorage{gw_ptr, gw_nb, dt}};
+    }
+
     // ── astype ────────────────────────────────────────────────────────────────
     //
     // Generic Cartesian-product cast over the supported scalar dtypes.  Earlier

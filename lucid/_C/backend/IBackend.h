@@ -1572,6 +1572,23 @@ public:
                                           bool include_last_offset,
                                           Dtype dt) = 0;
 
+    // EmbeddingBag backward: accumulate the incoming gradient back onto the
+    // rows each bag gathered.  ``sum`` sends the bag's gradient to every row
+    // it touched, ``mean`` divides it by the bag size first, and ``max``
+    // sends it only to the row that won each column — which is why the
+    // weight is a parameter here and not in ``embedding_backward``: the
+    // argmax is not recorded by the forward and has to be recomputed.
+    virtual Storage embedding_bag_backward(const Storage& grad_out,
+                                           const Storage& weight,
+                                           const Storage& indices,
+                                           const Storage& offsets,
+                                           const Shape& weight_shape,
+                                           const Shape& indices_shape,
+                                           int mode,
+                                           int padding_idx,
+                                           bool include_last_offset,
+                                           Dtype dt) = 0;
+
     // Flip (reverse) along the given axes.
     virtual Storage
     flip(const Storage& a, const Shape& shape, const std::vector<int>& dims, Dtype dt) = 0;

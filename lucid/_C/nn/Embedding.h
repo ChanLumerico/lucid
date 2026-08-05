@@ -352,6 +352,35 @@ LUCID_API TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,
 // See Also
 // --------
 // embedding_op : Per-token lookup without reduction.
+// Backward for :func:`embedding_bag_op`.
+//
+// The op had none.  ``embedding`` beside it wires one and this did not,
+// which meant an ``nn.EmbeddingBag`` layer produced correct activations
+// and no gradient at all — ``weight.grad`` stayed ``None`` and the layer
+// never trained, with nothing raised to say so.
+//
+// The weight is saved as well as the indices, which ``EmbeddingBackward``
+// does not need: ``mode="max"`` sends the incoming gradient only to the
+// row that won each column, and the forward records no argmax, so the
+// backward recomputes it from the weight it was given.
+class LUCID_API EmbeddingBagBackward : public FuncOp<EmbeddingBagBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    Storage saved_weight_;   // (num_embeddings, embed_dim), for the argmax.
+    Storage saved_indices_;  // Flat integer index buffer.
+    Storage saved_offsets_;  // Bag boundaries.
+    Shape weight_shape_;
+    Shape indices_shape_;
+    int mode_ = 1;  // 0 = sum, 1 = mean, 2 = max.
+    int padding_idx_ = -1;
+    bool include_last_offset_ = false;
+    Dtype dtype_ = Dtype::F32;
+    Device device_ = Device::CPU;
+
+    // Accumulate ``grad_out`` back onto the rows each bag gathered.
+    std::vector<Storage> apply(Storage grad_out);
+};
+
 LUCID_API TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
                                          const TensorImplPtr& indices,
                                          const TensorImplPtr& offsets,

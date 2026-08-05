@@ -194,12 +194,45 @@ TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
     OpScopeFull scope{"embedding_bag", weight->device(), weight->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(weight->device());
-    Storage out = be.embedding_bag_forward(weight->storage(), indices->storage(),
-                                           offsets->storage(), weight->shape(), indices->shape(),
-                                           mode, padding_idx, include_last_offset, weight->dtype());
+    Storage out_storage = be.embedding_bag_forward(
+        weight->storage(), indices->storage(), offsets->storage(), weight->shape(),
+        indices->shape(), mode, padding_idx, include_last_offset, weight->dtype());
 
-    return std::make_shared<TensorImpl>(std::move(out), out_shape, weight->dtype(),
-                                        weight->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, weight->dtype(),
+                                            weight->device(), false);
+
+    // This op used to return here, with no backward of any kind.
+    //
+    // ``embedding`` directly above wires one; this did not, and nothing
+    // said so: the forward was right, the output simply had no grad_fn,
+    // so ``weight.grad`` stayed ``None`` and an ``nn.EmbeddingBag`` layer
+    // silently never trained.  No error, no NaN — the loss just never
+    // moved through it.  The reference gives a gradient here.
+    auto bwd = std::make_shared<EmbeddingBagBackward>();
+    bwd->saved_weight_ = weight->storage();
+    bwd->saved_indices_ = indices->storage();
+    bwd->saved_offsets_ = offsets->storage();
+    bwd->weight_shape_ = weight->shape();
+    bwd->indices_shape_ = indices->shape();
+    bwd->mode_ = mode;
+    bwd->padding_idx_ = padding_idx;
+    bwd->include_last_offset_ = include_last_offset;
+    bwd->dtype_ = weight->dtype();
+    bwd->device_ = weight->device();
+    kernel::NaryKernel<EmbeddingBagBackward, 1>::wire_autograd(std::move(bwd), {weight}, out,
+                                                               false);
+    return out;
 }
+
+const OpSchema EmbeddingBagBackward::schema_v1{"embedding_bag", 1, AmpPolicy::Promote, true};
+
+std::vector<Storage> EmbeddingBagBackward::apply(Storage grad_out) {
+    auto& be = backend::Dispatcher::for_device(device_);
+    return {be.embedding_bag_backward(grad_out, saved_weight_, saved_indices_, saved_offsets_,
+                                      weight_shape_, indices_shape_, mode_, padding_idx_,
+                                      include_last_offset_, dtype_)};
+}
+
+LUCID_REGISTER_OP(EmbeddingBagBackward)
 
 }  // namespace lucid

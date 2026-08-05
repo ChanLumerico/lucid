@@ -3376,6 +3376,43 @@ public:
         return Storage{gpu::wrap_mlx_array(mx::contiguous(out), dt)};
     }
 
+    Storage embedding_bag_backward(const Storage& grad_out,
+                                   const Storage& weight,
+                                   const Storage& indices,
+                                   const Storage& offsets,
+                                   const Shape& weight_shape,
+                                   const Shape& indices_shape,
+                                   int mode,
+                                   int padding_idx,
+                                   bool include_last_offset,
+                                   Dtype dt) override {
+        // Through the CPU kernel, which is the same choice ``scatter``
+        // makes a few hundred lines up.  The ``max`` mode has to recompute
+        // an argmax per column and then scatter one row per column, and
+        // expressing that in MLX is more machinery than the op is worth —
+        // an EmbeddingBag backward is bounded by the bag contents, not by
+        // the vocabulary.  The device axis compares the two paths, so if
+        // this ever diverges the audit says so.
+        const Shape grad_shape = {static_cast<std::int64_t>(offsets_count(offsets)),
+                                  weight_shape[1]};
+        const Shape offsets_shape = {static_cast<std::int64_t>(offsets_count(offsets))};
+        Storage grad_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(grad_out), grad_shape)};
+        Storage weight_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(weight), weight_shape)};
+        Storage idx_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(indices), indices_shape)};
+        Storage off_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(offsets), offsets_shape)};
+
+        auto& cpu = backend::Dispatcher::for_device(Device::CPU);
+        Storage out_cpu =
+            cpu.embedding_bag_backward(grad_cpu, weight_cpu, idx_cpu, off_cpu, weight_shape,
+                                       indices_shape, mode, padding_idx, include_last_offset, dt);
+        return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(out_cpu), weight_shape)};
+    }
+
+    // How many bags an offsets buffer describes.
+    static std::int64_t offsets_count(const Storage& offsets) {
+        return static_cast<std::int64_t>(std::get<GpuStorage>(offsets).arr->shape(0));
+    }
+
     // ── astype ────────────────────────────────────────────────────────────────
     // ── Type / casts / misc ───────────────────────────────────────────────
     // Convert ``a`` to ``dst_dt``.  Identical to :meth:`cast` on this backend.

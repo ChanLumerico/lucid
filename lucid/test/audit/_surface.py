@@ -390,8 +390,20 @@ def _classify(obj: Any, subsystem_kind: str) -> str:
     An ``nn.Module`` subclass is a module wherever it lives — the
     quantized layers are in ``lucid.quantization`` and still want the
     module lifecycle run over them.
+
+    ``"declaration"`` is the kind for names that exist for the type
+    checker or for subclasses to fill in, and have no behaviour of their
+    own to audit: :class:`typing.Protocol` definitions, metaclasses, and
+    abstract bases.  They were being counted in the denominator and then
+    skipped one axis at a time, which makes a coverage figure that can
+    never reach its own ceiling and buries the symbols that *should* be
+    reachable under ones that never can be.  Naming them is not an
+    exemption — every concrete subclass is still audited in its own
+    right, which is where the behaviour actually is.
     """
     if isinstance(obj, type):
+        if _is_declaration(obj):
+            return "declaration"
         if _is_nn_module(obj):
             return "module"
         # ``PaddingMode`` lives among the conv layers and ``PackedSequence``
@@ -405,6 +417,23 @@ def _classify(obj: Any, subsystem_kind: str) -> str:
         # is a function and wants the function axes, not the module lifecycle.
         return "op" if subsystem_kind in ("op", "module") else subsystem_kind
     return "value"
+
+
+def _is_declaration(obj: type) -> bool:
+    """A name with nothing of its own to run.
+
+    Three kinds, and each fails a survey for a different reason: a
+    Protocol has no implementation, a metaclass builds classes rather
+    than values, and an abstract base refuses instantiation by design.
+    """
+    if getattr(obj, "_is_protocol", False):
+        return True
+    try:
+        if issubclass(obj, type):  # a metaclass
+            return True
+    except TypeError:
+        return False
+    return bool(getattr(obj, "__abstractmethods__", frozenset()))
 
 
 def _is_nn_module(obj: type) -> bool:
