@@ -254,3 +254,60 @@ def test_rrelu_actually_draws_under_that_flag() -> None:
     lucid.manual_seed(2)
     d = np.asarray(F.rrelu(x).numpy())
     assert np.array_equal(c, d)  # the default is the expectation
+
+
+# ── every module class is constructible ───────────────────────────────────────
+
+
+def test_every_nn_module_class_can_be_built() -> None:
+    """A class the audit cannot construct is a class it cannot notice a
+    regression in.
+
+    It could not construct 114 of the 221, because the ladder tried eight
+    fixed argument tuples and reported everything it missed as "no
+    constructor signature worked".  Those contributed nothing to any
+    axis.  In a subprocess: building every layer in the framework leaves
+    global state behind.
+    """
+    code = """
+from lucid.test.audit import _surface
+from lucid.test.audit._axes import _try_construct
+
+failed = []
+total = 0
+for symbol in _surface.enumerate_surface():
+    if symbol.kind != "module":
+        continue
+    total += 1
+    try:
+        built = _try_construct(symbol.obj)
+    except Exception:
+        built = None
+    if built is None:
+        failed.append(symbol.qualname)
+print("%d/%d" % (total - len(failed), total))
+for name in failed:
+    print(name)
+"""
+    done = subprocess.run(
+        [sys.executable, "-W", "ignore", "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    lines = [ln for ln in done.stdout.splitlines() if ln.strip()]
+    built, total = lines[0].split("/")
+    assert built == total, f"{built}/{total} built; missing: {lines[1:]}"
+
+
+def test_a_quantisation_layer_gets_the_qconfig_it_demands() -> None:
+    """``qat.Linear`` declares ``qconfig=None`` and then refuses it.  A
+    signature-derived constructor honours the author's default, so it
+    never supplied one and the whole qat stack stayed unaudited."""
+    from lucid.test.audit._axes import _try_construct
+
+    import lucid.nn.qat as qat
+
+    module = _try_construct(qat.Linear)
+    assert module is not None
+    assert getattr(module, "qconfig", None) is not None

@@ -1772,6 +1772,22 @@ _CTOR_ARGS: tuple[tuple[tuple[Any, ...], dict[str, Any]], ...] = (
 )
 
 
+def _ctor_args_with_qconfig() -> "list[tuple[tuple[Any, ...], dict[str, Any]]]":
+    """The ladder again, each rung carrying a qconfig.
+
+    ``qat.Conv1d`` / ``2d`` / ``3d`` and their fused ReLU variants
+    declare ``(*args, **kwargs)``, so a signature says nothing about them
+    and only the ladder can reach them — and the plain ladder is refused
+    with "requires a qconfig".  ``qat.Conv2d(3, 3, 3, qconfig=...)``
+    builds.
+    """
+    try:
+        qconfig = _default_qconfig()
+    except Exception:  # noqa: BLE001
+        return []
+    return [(args, {**kwargs, "qconfig": qconfig}) for args, kwargs in _CTOR_ARGS]
+
+
 #: Constructor arguments by parameter name.
 #:
 #: ``nn`` layer constructors are almost entirely small integers with
@@ -1832,6 +1848,84 @@ _CTOR_BY_NAME: "dict[str, Any]" = {
 }
 
 
+def _default_qconfig() -> Any:
+    """A QConfig, built on demand.
+
+    The quantisation layers declare ``qconfig`` with a default of
+    ``None`` and then refuse it: ``qat.Linear requires a qconfig``.  A
+    signature-derived constructor honours the author's default and so
+    never supplied one, which left the whole ``qat`` / ``intrinsic.qat``
+    stack — fifteen classes — unconstructible and therefore unaudited.
+    """
+    import lucid.quantization as quantization
+
+    return quantization.QConfig(
+        quantization.MinMaxObserver, quantization.MinMaxObserver
+    )
+
+
+def _default_qscheme() -> Any:
+    import lucid.quantization as quantization
+
+    return quantization.QScheme.PER_TENSOR_AFFINE
+
+
+def _default_qdtype() -> Any:
+    import lucid.quantization as quantization
+
+    return quantization.quint8
+
+
+def _default_qparams(kind: str) -> Any:
+    """A ``scale`` or ``zero_point`` for the quantised activations."""
+    import numpy as _np
+
+    if kind == "scale":
+        return _probe.as_f32(_np.array(0.1))
+    return _probe.as_int(_np.array(0))
+
+
+def _default_submodule(name: str) -> Any:
+    """A concrete layer for a parameter annotated as the ``Module`` base.
+
+    The fused ``intrinsic`` layers take the layers they fuse, and the
+    annotation names the base class — which says nothing about what
+    would actually work.  The parameter name does.
+    """
+    import lucid.nn as nn
+
+    return {
+        "conv": lambda: nn.Conv2d(3, 3, 3, padding=1),
+        "bn": lambda: nn.BatchNorm2d(3),
+        "relu": lambda: nn.ReLU(),
+        "linear": lambda: nn.Linear(4, 4),
+        "encoder_layer": lambda: nn.TransformerEncoderLayer(4, 2),
+        "decoder_layer": lambda: nn.TransformerDecoderLayer(4, 2),
+    }[name]()
+
+
+#: Constructor arguments that have to be built rather than named, keyed
+#: on the parameter name.  Kept separate from :data:`_CTOR_BY_NAME` so
+#: that table stays a table of constants and nothing is constructed at
+#: import time.
+_CTOR_FACTORY: "dict[str, Any]" = {
+    "qconfig": _default_qconfig,
+    "scale": lambda: _default_qparams("scale"),
+    "zero_point": lambda: _default_qparams("zero_point"),
+    "conv": lambda: _default_submodule("conv"),
+    "bn": lambda: _default_submodule("bn"),
+    "relu": lambda: _default_submodule("relu"),
+    "linear": lambda: _default_submodule("linear"),
+    "encoder_layer": lambda: _default_submodule("encoder_layer"),
+    "decoder_layer": lambda: _default_submodule("decoder_layer"),
+    # ``QScheme`` is an enum and answers to the enum rule; ``QDtype`` is a
+    # dataclass whose instances are module-level constants, so there is
+    # nothing on the class to enumerate and the name has to say it.
+    "qscheme": _default_qscheme,
+    "qdtype": _default_qdtype,
+}
+
+
 def _ctor_value(name: str, annotation: Any, depth: int) -> Any:
     """One constructor argument, by name first and annotation second.
 
@@ -1841,6 +1935,11 @@ def _ctor_value(name: str, annotation: Any, depth: int) -> Any:
     """
     if name in _CTOR_BY_NAME:
         return _CTOR_BY_NAME[name]
+    if name in _CTOR_FACTORY:
+        try:
+            return _CTOR_FACTORY[name]()
+        except Exception as exc:  # noqa: BLE001
+            raise KeyError(name) from exc
 
     if isinstance(annotation, type):
         # A sub-module, which is how the fused ``intrinsic`` layers are
@@ -1916,6 +2015,14 @@ def _construct_module(cls: Any, depth: int = 0) -> Any:
         if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
             continue
         if parameter.default is not inspect.Parameter.empty:
+            # ...unless the author's default is one the class then
+            # rejects.  ``qconfig`` defaults to ``None`` and every
+            # quantisation layer raises "requires a qconfig" on it.
+            if parameter.name == "qconfig" and parameter.default is None:
+                try:
+                    kwargs["qconfig"] = _default_qconfig()
+                except Exception:  # noqa: BLE001
+                    pass
             continue  # a default the author chose is better than a guess
         try:
             kwargs[parameter.name] = _ctor_value(
@@ -1934,7 +2041,7 @@ def _try_construct(cls: Any) -> Any:
     derived = _construct_module(cls)
     if derived is not None:
         return derived
-    for args, kwargs in _CTOR_ARGS:
+    for args, kwargs in list(_CTOR_ARGS) + _ctor_args_with_qconfig():
         try:
             return cls(*args, **kwargs)
         except Exception:  # noqa: BLE001
