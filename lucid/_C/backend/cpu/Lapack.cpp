@@ -614,38 +614,52 @@ void lapack_eig_f64(const double* A, int n, double* wr, double* wi, double* VR, 
 //   LU_out  : n×n row-major packed LU  (L below diagonal, U on/above diagonal,
 //             implicit unit diagonal of L)
 //   ipiv_out: n int32_t pivot indices (1-based, matching LAPACK convention)
-void lapack_lu_factor_f32(const float* A, int n, float* LU_out, int* ipiv_out, int* info_out) {
-    std::vector<float> Ac(static_cast<std::size_t>(n) * n);
-    rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
+void lapack_lu_factor_f32(
+    const float* A, int m, int n, float* LU_out, int* ipiv_out, int* info_out) {
+    // ``?getrf`` factorises an m-by-n matrix and always has; this wrapper
+    // passed ``n`` for both extents, which made the rectangular case
+    // unreachable rather than unsupported.  The pivot vector has
+    // ``min(m, n)`` entries — one per elimination step, and there are only
+    // as many steps as the shorter side.
+    const int k = std::min(m, n);
+    std::vector<float> Ac(static_cast<std::size_t>(m) * n);
+    rowmajor_to_colmajor_f32(A, Ac.data(), m, n);
 
-    std::vector<i32> ipiv_local(n);
-    i32 N = n, lda = ld(n), info = 0;
-    sgetrf_(&N, &N, Ac.data(), &lda, ipiv_local.data(), &info);
+    std::vector<i32> ipiv_local(static_cast<std::size_t>(k));
+    i32 M = m, N = n, lda = ld(m), info = 0;
+    sgetrf_(&M, &N, Ac.data(), &lda, ipiv_local.data(), &info);
     if (info < 0) {
         *info_out = info;
         return;
     }
 
-    colmajor_to_rowmajor_f32(Ac.data(), LU_out, n, n);
-    for (int i = 0; i < n; ++i)
+    colmajor_to_rowmajor_f32(Ac.data(), LU_out, m, n);
+    for (int i = 0; i < k; ++i)
         ipiv_out[i] = static_cast<int>(ipiv_local[i]);
     *info_out = info;
 }
 
-void lapack_lu_factor_f64(const double* A, int n, double* LU_out, int* ipiv_out, int* info_out) {
-    std::vector<double> Ac(static_cast<std::size_t>(n) * n);
-    rowmajor_to_colmajor_f64(A, Ac.data(), n, n);
+void lapack_lu_factor_f64(
+    const double* A, int m, int n, double* LU_out, int* ipiv_out, int* info_out) {
+    // ``?getrf`` factorises an m-by-n matrix and always has; this wrapper
+    // passed ``n`` for both extents, which made the rectangular case
+    // unreachable rather than unsupported.  The pivot vector has
+    // ``min(m, n)`` entries — one per elimination step, and there are only
+    // as many steps as the shorter side.
+    const int k = std::min(m, n);
+    std::vector<double> Ac(static_cast<std::size_t>(m) * n);
+    rowmajor_to_colmajor_f64(A, Ac.data(), m, n);
 
-    std::vector<i32> ipiv_local(n);
-    i32 N = n, lda = ld(n), info = 0;
-    dgetrf_(&N, &N, Ac.data(), &lda, ipiv_local.data(), &info);
+    std::vector<i32> ipiv_local(static_cast<std::size_t>(k));
+    i32 M = m, N = n, lda = ld(m), info = 0;
+    dgetrf_(&M, &N, Ac.data(), &lda, ipiv_local.data(), &info);
     if (info < 0) {
         *info_out = info;
         return;
     }
 
-    colmajor_to_rowmajor_f64(Ac.data(), LU_out, n, n);
-    for (int i = 0; i < n; ++i)
+    colmajor_to_rowmajor_f64(Ac.data(), LU_out, m, n);
+    for (int i = 0; i < k; ++i)
         ipiv_out[i] = static_cast<int>(ipiv_local[i]);
     *info_out = info;
 }

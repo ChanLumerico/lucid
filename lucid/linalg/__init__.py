@@ -1441,21 +1441,29 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     Parameters
     ----------
     A : Tensor
-        Square matrix of shape ``(*, n, n)``.
+        Matrix of shape ``(*, m, n)``.  Need not be square.
 
     Returns
     -------
     LU : Tensor
-        Packed factorization of shape ``(*, n, n)``.  :math:`U`
+        Packed factorization of shape ``(*, m, n)``.  :math:`U`
         occupies the diagonal and above; :math:`L` (without its unit
         diagonal) occupies the strict lower triangle.
     pivots : Tensor
-        ``int32`` tensor of shape ``(*, n)`` containing 1-based pivot
-        indices (LAPACK convention).
+        ``int32`` tensor of shape ``(*, min(m, n))`` containing 1-based
+        pivot indices (LAPACK convention) — one per elimination step,
+        and there are only as many steps as the shorter side.
 
     Notes
     -----
-    Backed by LAPACK ``getrf``.  Cost is :math:`O(\tfrac{2}{3} n^3)`.
+    Backed by LAPACK ``getrf``.  Cost is :math:`O(\tfrac{2}{3} n^3)` for
+    a square input.
+
+    For a rectangular :math:`A \in \mathbb{R}^{m \times n}` with
+    :math:`k = \min(m, n)`, :math:`L` is :math:`m \times k`
+    unit-lower-trapezoidal and :math:`U` is :math:`k \times n`
+    upper-trapezoidal.  :func:`lu_solve` still requires a square factor:
+    only a square system has a solution.
 
     Use :func:`lu_factor` + :func:`lu_solve` instead of :func:`solve`
     when the same coefficient matrix :math:`A` is reused with many

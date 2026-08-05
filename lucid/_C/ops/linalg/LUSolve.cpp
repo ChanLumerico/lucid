@@ -23,6 +23,19 @@ lu_solve_op(const TensorImplPtr& LU, const TensorImplPtr& pivots, const TensorIm
     Validator::input(pivots, "lu_solve.pivots").non_null().dtype_eq(Dtype::I32);
     Validator::input(b, "lu_solve.b").float_only().non_null();
 
+    // The factor has to be square.  ``?getrs`` solves ``A X = B`` from an
+    // LU of A, and only a square A has a solve; ``lu_factor`` accepts any
+    // shape, so a rectangular factor can now reach this call.  It used to
+    // be handed to LAPACK anyway, which read ``n`` rows out of a matrix
+    // that had fewer and answered ``[nan, nan, -inf]``.
+    const auto& lu_sh = LU->shape();
+    if (lu_sh.size() < 2)
+        ErrorBuilder("lu_solve.LU").fail("LU must be at least 2-D");
+    if (lu_sh[lu_sh.size() - 1] != lu_sh[lu_sh.size() - 2])
+        ErrorBuilder("lu_solve.LU")
+            .fail("LU must be square to solve with — lu_factor accepts a "
+                  "rectangular matrix, but only a square system has a solution");
+
     // A degenerate matrix has an answer; LAPACK just will not be the one
     // to compute it — see ``empty_matrix``.
     if (empty_matrix(LU->shape()))

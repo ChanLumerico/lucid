@@ -5,6 +5,8 @@
 
 #include "LUFactor.h"
 
+#include <algorithm>
+
 #include "../../backend/Dispatcher.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -18,14 +20,25 @@ namespace lucid {
 
 std::vector<TensorImplPtr> lu_factor_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    Validator::input(a, "lu_factor.a").float_only().square_2d();
+    Validator::input(a, "lu_factor.a").float_only();
+    if (a->shape().size() < 2)
+        ErrorBuilder("lu_factor.a").fail("input must be at least 2-D");
 
     const auto& sh = a->shape();
+    const int m = static_cast<int>(sh[sh.size() - 2]);
     const int n = static_cast<int>(sh[sh.size() - 1]);
 
-    // Shape of the pivot tensor: same batch dims as A, plus length n.
+    // LU with partial pivoting is defined for any shape — ``?getrf``
+    // factorises an m-by-n matrix into ``P L U`` with L unit-lower
+    // m-by-min(m,n) and U upper min(m,n)-by-n.  This op required a square
+    // input, which was a restriction of the wrapper rather than of the
+    // factorisation: the LAPACK call underneath was passing the same
+    // extent for both dimensions.
+    //
+    // One pivot per elimination step, and there are only as many steps as
+    // the shorter side.
     Shape pivot_shape(sh.begin(), sh.end() - 2);
-    pivot_shape.push_back(n);
+    pivot_shape.push_back(std::min(m, n));
 
     // A degenerate matrix has a decomposition; LAPACK just will not be
     // the one to compute it.  See ``empty_matrix`` for why dispatching

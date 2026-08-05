@@ -172,6 +172,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - eig returns complex, and complex128 exists to hold it
 
+- lu_factor takes any shape, because getrf always did
+
 ### Changed
 
 - give the engine ops one shared operand check

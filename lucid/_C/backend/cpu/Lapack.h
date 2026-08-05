@@ -434,7 +434,7 @@ lapack_eig_f64(const double* A, int n, double* wr, double* wi, double* VR, int* 
 // ----------
 // LAPACK ``sgetrf_``.
 LUCID_INTERNAL void
-lapack_lu_factor_f32(const float* A, int n, float* LU_out, int* ipiv_out, int* info);
+lapack_lu_factor_f32(const float* A, int m, int n, float* LU_out, int* ipiv_out, int* info);
 
 // Double-precision packed LU factorisation.  Uses ``dgetrf_``.
 //
@@ -455,7 +455,7 @@ lapack_lu_factor_f32(const float* A, int n, float* LU_out, int* ipiv_out, int* i
 // ----------
 // LAPACK ``dgetrf_``.
 LUCID_INTERNAL void
-lapack_lu_factor_f64(const double* A, int n, double* LU_out, int* ipiv_out, int* info);
+lapack_lu_factor_f64(const double* A, int m, int n, double* LU_out, int* ipiv_out, int* info);
 
 // Single-precision triangular linear solve.
 //

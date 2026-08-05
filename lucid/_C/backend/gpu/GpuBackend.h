@@ -2630,13 +2630,15 @@ public:
         const auto& ga = std::get<GpuStorage>(a);
         auto cpu_arr = ::mlx::core::contiguous(*ga.arr);
         cpu_arr.eval();
+        const int m = static_cast<int>(shape[shape.size() - 2]);
         const int n = static_cast<int>(shape[shape.size() - 1]);
+        const int k = std::min(m, n);
         std::int64_t batch = 1;
         for (std::size_t i = 0; i + 2 < shape.size(); ++i)
             batch *= static_cast<std::int64_t>(shape[i]);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        const std::size_t per_mat = static_cast<std::size_t>(m) * n;
         const std::size_t nbytes = static_cast<std::size_t>(batch) * per_mat * dtype_size(dt);
-        const std::size_t ipiv_nbytes = static_cast<std::size_t>(batch) * n * sizeof(std::int32_t);
+        const std::size_t ipiv_nbytes = static_cast<std::size_t>(batch) * k * sizeof(std::int32_t);
         auto lu_ptr = allocate_aligned_bytes(nbytes, Device::CPU);
         auto ipiv_ptr = allocate_aligned_bytes(ipiv_nbytes, Device::CPU);
         auto* ipiv_out = reinterpret_cast<std::int32_t*>(ipiv_ptr.get());
@@ -2645,21 +2647,21 @@ public:
             const float* src = cpu_arr.data<float>();
             float* lu_p = reinterpret_cast<float*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
-                std::vector<int> ipiv_local(n);
-                cpu::lapack_lu_factor_f32(src + b * per_mat, n, lu_p + b * per_mat,
+                std::vector<int> ipiv_local(static_cast<std::size_t>(k));
+                cpu::lapack_lu_factor_f32(src + b * per_mat, m, n, lu_p + b * per_mat,
                                           ipiv_local.data(), &info);
-                for (int i = 0; i < n; ++i)
-                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+                for (int i = 0; i < k; ++i)
+                    ipiv_out[b * k + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
         } else {
             const double* src = cpu_arr.data<double>();
             double* lu_p = reinterpret_cast<double*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
-                std::vector<int> ipiv_local(n);
-                cpu::lapack_lu_factor_f64(src + b * per_mat, n, lu_p + b * per_mat,
+                std::vector<int> ipiv_local(static_cast<std::size_t>(k));
+                cpu::lapack_lu_factor_f64(src + b * per_mat, m, n, lu_p + b * per_mat,
                                           ipiv_local.data(), &info);
-                for (int i = 0; i < n; ++i)
-                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+                for (int i = 0; i < k; ++i)
+                    ipiv_out[b * k + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
         }
         // Must upload: the op wrapper tags both outputs with the *input* device
@@ -2668,7 +2670,7 @@ public:
         // Shapes mirror lu_factor_op: LU keeps the input shape, pivots are
         // batch dims + n.
         Shape pivot_shape(shape.begin(), shape.end() - 2);
-        pivot_shape.push_back(static_cast<std::int64_t>(n));
+        pivot_shape.push_back(static_cast<std::int64_t>(k));
         CpuStorage lu_cs{lu_ptr, nbytes, dt};
         CpuStorage piv_cs{ipiv_ptr, ipiv_nbytes, Dtype::I32};
         return {Storage{gpu::upload_cpu_to_gpu(lu_cs, shape)},

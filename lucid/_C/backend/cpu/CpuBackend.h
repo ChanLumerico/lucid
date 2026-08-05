@@ -5643,16 +5643,20 @@ public:
     StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
         if (dt != Dtype::F32 && dt != Dtype::F64)
             ErrorBuilder("cpu_backend::linalg_lu_factor").not_implemented("only F32/F64 supported");
-        if (shape.size() < 2 || shape[shape.size() - 1] != shape[shape.size() - 2])
-            ErrorBuilder("cpu_backend::linalg_lu_factor").fail("input must be square 2-D");
+        if (shape.size() < 2)
+            ErrorBuilder("cpu_backend::linalg_lu_factor").fail("input must be at least 2-D");
         const auto& cs = std::get<CpuStorage>(a);
+        const int m = static_cast<int>(shape[shape.size() - 2]);
         const int n = static_cast<int>(shape[shape.size() - 1]);
+        // One pivot per elimination step, and there are as many steps as
+        // the shorter side — not ``n``, which was only ever right because
+        // the op refused anything but a square matrix.
+        const int k = std::min(m, n);
         const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        const std::size_t per_mat = static_cast<std::size_t>(m) * n;
         // LU output (same size as A)
         auto lu_ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
-        // pivots: n int32_t per batch element
-        const std::size_t ipiv_nbytes = static_cast<std::size_t>(batch) * n * sizeof(std::int32_t);
+        const std::size_t ipiv_nbytes = static_cast<std::size_t>(batch) * k * sizeof(std::int32_t);
         auto ipiv_ptr = allocate_aligned_bytes(ipiv_nbytes, Device::CPU);
         int info = 0;
         auto* ipiv_out = reinterpret_cast<std::int32_t*>(ipiv_ptr.get());
@@ -5660,23 +5664,23 @@ public:
             const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
             auto* lu_p = reinterpret_cast<float*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
-                std::vector<int> ipiv_local(n);
-                cpu::lapack_lu_factor_f32(in_p + b * per_mat, n, lu_p + b * per_mat,
+                std::vector<int> ipiv_local(static_cast<std::size_t>(k));
+                cpu::lapack_lu_factor_f32(in_p + b * per_mat, m, n, lu_p + b * per_mat,
                                           ipiv_local.data(), &info);
                 check_lapack_info(info < 0 ? info : 0, "lu_factor");
-                for (int i = 0; i < n; ++i)
-                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+                for (int i = 0; i < k; ++i)
+                    ipiv_out[b * k + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
         } else {
             const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
             auto* lu_p = reinterpret_cast<double*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
-                std::vector<int> ipiv_local(n);
-                cpu::lapack_lu_factor_f64(in_p + b * per_mat, n, lu_p + b * per_mat,
+                std::vector<int> ipiv_local(static_cast<std::size_t>(k));
+                cpu::lapack_lu_factor_f64(in_p + b * per_mat, m, n, lu_p + b * per_mat,
                                           ipiv_local.data(), &info);
                 check_lapack_info(info < 0 ? info : 0, "lu_factor");
-                for (int i = 0; i < n; ++i)
-                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+                for (int i = 0; i < k; ++i)
+                    ipiv_out[b * k + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
         }
         Storage lu_storage{CpuStorage{lu_ptr, cs.nbytes, dt}};
