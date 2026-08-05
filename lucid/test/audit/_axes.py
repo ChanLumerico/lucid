@@ -1563,6 +1563,20 @@ class ModuleAxis(Axis):
         if module is None:
             return self._finding(symbol, Status.SKIP, "no constructor signature worked")
 
+        # A container holds layers and has no forward of its own —
+        # ``ModuleList`` and ``ParameterDict`` raise NotImplementedError by
+        # design, and the base ``Module`` does too.  Running the lifecycle
+        # against them reported a shape probe failing to find an input for
+        # something that never accepts one.
+        if getattr(type(module), "forward", None) is getattr(
+            lucid.nn.Module, "forward", None
+        ):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "a container: it holds layers and defines no forward",
+            )
+
         params = list(module.parameters())
         # Non-persistent buffers are excluded from ``state_dict`` on
         # purpose — a positional-encoding table or a rotary cache is
@@ -2139,6 +2153,20 @@ def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
         two = cast(_probe.sample("moderate", shape, 1))
         three = cast(_probe.sample("moderate", shape, 2))
         out += [[one], [one, two], [one, two, three]]
+
+        # A classification loss wants class *indices*, not a second float
+        # tensor of the same shape: ``CrossEntropyLoss``, ``NLLLoss``,
+        # ``CTCLoss`` and the margin losses all read the second argument
+        # as an integer label per row and raised TypeError on a float one.
+        if len(shape) >= 2:
+            classes = int(shape[-1])
+            labels = _probe.as_int(
+                _probe.rng(_probe.SEED_B).integers(0, max(classes, 1), (shape[0],))
+            )
+            out.append([one, labels])
+            # ...and the pair losses want a +/-1 sign per row.
+            signs = cast(_probe.rng(_probe.SEED_A).choice([-1.0, 1.0], (shape[0],)))
+            out.append([one, two, signs])
     return out
 
 

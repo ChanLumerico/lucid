@@ -184,6 +184,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the adjoint of a half-spectrum transform is not its inverse
 
+- max_unpool allocated from an unvalidated output_size
+
 ### Changed
 
 - give the engine ops one shared operand check

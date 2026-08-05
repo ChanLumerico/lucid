@@ -1090,6 +1090,20 @@ def _scatter_unpool(
             f"max_unpool: expected input and indices shapes to match, got "
             f"{tuple(x.shape)} vs {tuple(indices.shape)}"
         )
+    # Every spatial extent has to be a positive integer.
+    #
+    # These went straight into an allocation.  ``output_size`` is
+    # annotated ``tuple[int, ...]`` and anything indexable satisfies that
+    # at runtime, so a tensor passed by mistake was read element-wise,
+    # ``int(-1.0)`` became a spatial extent of ``-1``, and the engine
+    # allocated from it — SIGSEGV, with no Python-level error to catch.
+    # A wrong argument has to raise; it must not take the process down.
+    for extent in output_spatial:
+        if int(extent) <= 0:
+            raise ValueError(
+                f"max_unpool: output_size must be positive in every dimension, "
+                f"got {tuple(int(v) for v in output_spatial)}"
+            )
     leading = list(x.shape[:-n_spatial])
     spatial_numel = 1
     for s in output_spatial:
