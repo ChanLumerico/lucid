@@ -14,6 +14,7 @@ it failed — 278 of them.  ``STATEFUL`` is that lesson.
 
 import importlib
 import inspect
+import re
 import types
 from typing import TYPE_CHECKING, Any
 
@@ -131,23 +132,34 @@ STATEFUL: tuple[str, ...] = (
 )
 
 #: Draw fresh random numbers, so two calls never agree.  Probed for shape
-#: and dtype but never compared value-for-value.
-STOCHASTIC: tuple[str, ...] = (
-    "rand",
-    "randn",
-    "randint",
-    "randperm",
-    "normal",
-    "uniform",
-    "bernoulli",
-    "multinomial",
-    "poisson",
-    "dropout",
-    "rrelu",
-    "gumbel",
-    "empty",
-    "sample",
-    "rsample",
+#: and dtype but never compared value-for-value, and the determinism axis
+#: asks these and only these to reproduce under a fixed seed.
+#:
+#: Matched as a regex against the symbol's last component rather than as a
+#: substring, which is what the list used to be.  Substrings caught
+#: whatever happened to contain them:
+#:
+#:     "normal"  in "normalize"            F.normalize
+#:     "sample"  in "grid_sample"          F.grid_sample, nn.Upsample
+#:     "poisson" in "poisson_nll_loss"     F.poisson_nll_loss
+#:
+#: Nine deterministic symbols were flagged that way, and the determinism
+#: axis then reported each as vacuous — "a different seed gave identical
+#: numbers, this op may not draw" — which was true and was not a finding
+#: about the op.  A resampler is not a sampler.
+#:
+#: ``empty`` is deliberately absent.  It returns uninitialised memory
+#: rather than a draw, so there is no seed for it to respect and nothing
+#: for this axis to assert; its shape and dtype are checked everywhere
+#: else.
+STOCHASTIC_PATTERN = (
+    r"^rand"  # rand, randn, randint, randperm, random_split, ...
+    r"|(^|_)normal_?$"  # normal, kaiming_normal, trunc_normal_
+    r"|(^|_)uniform_?$"  # uniform, xavier_uniform
+    r"|dropout"  # dropout, dropout2d, feature_alpha_dropout
+    r"|bernoulli|multinomial|gumbel|rrelu"
+    r"|^poisson$"
+    r"|^r?sample$"  # a distribution's sample / rsample
 )
 
 
@@ -179,7 +191,7 @@ class Symbol:
             self.flags.add("stateful")
         if tail.endswith("_") and not tail.startswith("_"):
             self.flags.add("inplace")
-        if any(p in tail for p in STOCHASTIC):
+        if re.search(STOCHASTIC_PATTERN, tail):
             self.flags.add("stochastic")
 
     @property
@@ -487,7 +499,7 @@ __all__ = [
     "EXCLUDED",
     "independent_walk",
     "STATEFUL",
-    "STOCHASTIC",
+    "STOCHASTIC_PATTERN",
     "SUBSYSTEMS",
     "Symbol",
     "counterparts",

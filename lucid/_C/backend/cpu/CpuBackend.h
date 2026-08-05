@@ -9156,7 +9156,24 @@ public:
                             std::abs(static_cast<double>(xp[(o * axis_len + a) * inner + n])),
                             ord));
                     const T nm = static_cast<T>(std::pow(static_cast<double>(acc), 1.0 / ord));
-                    const T denom = nm > static_cast<T>(eps) ? nm : static_cast<T>(eps);
+                    // ``max(nm, eps)``, written so a NaN norm survives it.
+                    //
+                    // ``nm > eps`` is *false* when ``nm`` is NaN — every
+                    // comparison against NaN is — so the ternary quietly
+                    // took the other branch and the denominator became
+                    // ``eps``.  A row containing one NaN then normalised to
+                    // ``x / 1e-12``:
+                    //
+                    //     normalize([nan, inf, -inf, -1])
+                    //       cpu       [nan, inf, -inf, -1e12]
+                    //       metal     [nan, nan,  nan,   nan]
+                    //
+                    // The norm of a vector with a NaN in it is NaN, so every
+                    // output is NaN; Metal and the reference both say so.
+                    // ``std::fmax`` would not help — it is specified to
+                    // return the non-NaN operand.
+                    const T nan_safe_eps = static_cast<T>(eps);
+                    const T denom = (nm > nan_safe_eps || nm != nm) ? nm : nan_safe_eps;
                     np[o * inner + n] = denom;
                     for (int a = 0; a < axis_len; ++a) {
                         const std::size_t idx = (o * axis_len + a) * inner + n;

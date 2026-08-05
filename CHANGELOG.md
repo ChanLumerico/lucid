@@ -174,6 +174,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lu_factor takes any shape, because getrf always did
 
+- the vacuous cells were the instrument, and one was not
+
 ### Changed
 
 - give the engine ops one shared operand check

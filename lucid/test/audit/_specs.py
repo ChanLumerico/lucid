@@ -97,8 +97,40 @@ _L, _H, _W = 8, 6, 6
 _D = 4
 
 
+#: How many times each ``(shape, domain)`` has been drawn while building
+#: the current invocation.  Reset by :func:`invocations`.
+_DRAWN: "dict[tuple[Any, ...], int]" = {}
+
+
 def _f(shape: "tuple[int, ...]", domain: str = "moderate") -> Any:
-    return _probe.as_f64(_probe.sample(domain, shape))
+    """One float operand.  Repeat draws of the same shape differ.
+
+    Two operands built the same way used to be the *same numbers*, and
+    that is the one input where several checks cannot fail:
+
+    * every regression loss was probed as ``loss(x, x)``, which sits at
+      its exact minimum, so the gradient is identically zero and the grad
+      axis had nothing to compare.  Thirteen losses, all reported vacuous
+      — honestly, but that meant the whole family's derivative was going
+      unmeasured;
+    * ``where(cond, a, a)`` cannot tell the two branches apart;
+    * ``lerp(a, a, w)`` is constant in ``w``;
+    * ``maximum(a, a)`` sits exactly on its tie, where the analytic
+      gradient reports a convention and a central difference reports the
+      average of two one-sided limits.
+
+    The variant counter is keyed on ``(shape, domain)``, so a spec that
+    asks for one operand of a given shape gets exactly what it got
+    before; only the second and later repeats move.  Still fully
+    deterministic — the variant selects another fixed seed.
+
+    Where a spec passes the *same variable* into two slots, this cannot
+    help; those are fixed at the call site.
+    """
+    key = (tuple(shape), domain)
+    variant = _DRAWN.get(key, 0)
+    _DRAWN[key] = variant + 1
+    return _probe.as_f64(_probe.sample(domain, shape, variant))
 
 
 def _int(shape: "tuple[int, ...]", high: int) -> Any:
@@ -209,8 +241,13 @@ def _loss(name: str, domain: str) -> "Iterator[Call]":
         yield Call([probs, _f((_N, classes), "small_pos")], {}, 0, "loss(prob, prob)")
     if any(k in name for k in _PAIR_LOSSES):
         sign = _probe.as_f64(np.array([1.0, -1.0]))
+        # The negative was the anchor.  A triplet loss whose anchor and
+        # negative coincide is at a corner of its own hinge, and its
+        # gradient there is neither what the formula gives nor stable
+        # under a finite difference — the check could not fail.
+        negative = _f((_N, classes), domain)
         yield Call([logits, same, sign], {}, 0, "loss(a, b, target sign)")
-        yield Call([logits, same, logits], {}, 0, "loss(anchor, positive, negative)")
+        yield Call([logits, same, negative], {}, 0, "loss(anchor, positive, negative)")
     # The elementwise regressions, and the fallback for anything unmatched.
     yield Call([logits, same], {}, 0, "loss(input, target) same shape")
     yield Call([logits, target_idx], {}, 0, "loss(logits, class index)")
@@ -371,13 +408,19 @@ def _ternary(name: str, domain: str) -> "Iterator[Call]":
     if name in ("addr",):
         yield Call([m, v, _f((_CIN,), domain)], {}, 0, "addr(mat, vec1, vec2)")
     if name in ("addcmul", "addcdiv"):
+        # ``t`` and ``a`` were the same variable, so the accumulate and
+        # the multiplicand were the same numbers — an operand pair the
+        # gradient cannot tell apart.
+        addend = _f(_probe.SHAPE, domain)
         yield Call(
-            [same, same, _f(_probe.SHAPE, "positive")],
+            [same, addend, _f(_probe.SHAPE, "positive")],
             {"value": 0.5},
             0,
             "addc*(t, a, b)",
         )
-        yield Call([same, same, _f(_probe.SHAPE, "positive")], {}, 0, "addc*(t, a, b)")
+        yield Call(
+            [same, addend, _f(_probe.SHAPE, "positive")], {}, 0, "addc*(t, a, b)"
+        )
     if name == "lerp":
         yield Call([same, _f(_probe.SHAPE, domain), 0.3], {}, 0, "lerp(a, b, weight)")
 
@@ -866,6 +909,27 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
 #: Exact overrides, for the handful whose family cannot be inferred.
 _EXACT: dict[str, "Callable[[str, str], Iterator[Call]]"] = {
     "one_hot": lambda n, d: iter([Call([_int((_N,), 4), 4], {}, 0, "one_hot(idx, n)")]),
+    # ``rrelu`` only draws in training mode; its default is the
+    # *expectation* of the uniform slope, which is deterministic by
+    # design.  Called with the default the determinism axis saw the same
+    # numbers under two seeds and reported, correctly, that it could not
+    # tell whether the op respects a seed — of an op that was not being
+    # asked to draw.  ``dropout`` defaults to ``training=True`` and so
+    # never needed this.
+    "rrelu": lambda n, d: iter(
+        [
+            Call([_f((_N, _CIN), d)], {"training": True}, 0, "rrelu(x, training=True)"),
+            Call([_f((_N, _CIN), d)], {}, 0, "rrelu(x)"),
+        ]
+    ),
+    "rrelu_": lambda n, d: iter(
+        [
+            Call(
+                [_f((_N, _CIN), d)], {"training": True}, 0, "rrelu_(x, training=True)"
+            ),
+            Call([_f((_N, _CIN), d)], {}, 0, "rrelu_(x)"),
+        ]
+    ),
     "linear": lambda n, d: iter(
         [
             Call(
@@ -1041,6 +1105,9 @@ def invocations(
     Call
         Tried in order until one runs.
     """
+    # Fresh draw counters per invocation, so a run stays reproducible and
+    # a finding can still be re-derived by hand.
+    _DRAWN.clear()
     if qualname is not None and qualname in _QUALIFIED:
         yield from _QUALIFIED[qualname](domain)
     if name in _EXACT:

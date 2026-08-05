@@ -274,6 +274,41 @@ class GradientAxis(_DifferenceAxis):
             return float(_probe.contract(fn(*probe.args, **probe.kwargs), weights))
 
         # analytic
+        #
+        # Re-drawn if the gradient comes back identically zero, because
+        # that is usually a fact about the sample rather than the op.
+        # ``maximum(a, b)`` differentiates to zero wherever ``b`` wins, so
+        # a companion that happens to dominate every element leaves
+        # nothing for the finite difference to confirm — which is what
+        # the two draws of ``moderate`` did here, all six elements of one
+        # above all six of the other.  That is a 1-in-64 accident and not
+        # a property of ``maximum``, so reporting it as vacuous told the
+        # reader about the seed.
+        #
+        # An op whose gradient really is zero everywhere — ``floor``,
+        # ``sign`` — stays vacuous after every retry, and then the verdict
+        # is about the op.
+        for attempt in range(4):
+            if attempt:
+                try:
+                    base = _probe.sample(domain, base.shape, attempt)
+                except Exception:  # noqa: BLE001 - the first draw stands
+                    break
+            probe = call.with_primary(base)
+            x = probe.args[probe.primary]
+            try:
+                x.requires_grad_(True)
+                produced = fn(*probe.args, **probe.kwargs)
+                loss = _probe.contract(produced, weights)
+                loss.backward()
+            except Exception:  # noqa: BLE001 - reported by the real pass below
+                break
+            if x.grad is None:
+                break
+            probe_grad = np.asarray(x.grad.numpy(), dtype=np.float64)
+            if np.abs(probe_grad).max(initial=0.0) != 0.0:
+                break
+
         probe = call.with_primary(base)
         x = probe.args[probe.primary]
         returned_itself = False
@@ -631,16 +666,31 @@ class CreateGraphAxis(Axis):
             x.requires_grad_(True)
             return x, _probe.contract(fn(*probe.args, **probe.kwargs), weights)
 
-        try:
-            x_ref, loss = loss_of(base)
-            loss.backward()
-            reference = np.asarray(x_ref.grad.numpy(), dtype=np.float64).reshape(-1)
-        except Exception as exc:  # noqa: BLE001
-            return self._finding(
-                symbol,
-                Status.UNSUPPORTED,
-                f"backward(): {type(exc).__name__}: {str(exc)[:60]}",
-            )
+        # Re-drawn on an all-zero reference, for the same reason the grad
+        # axis re-draws: a gradient that is zero everywhere leaves the
+        # two routes nothing to disagree about, and for a comparison op
+        # that is usually the companion having won every element rather
+        # than anything about the op.  An op whose gradient really is
+        # zero stays zero through every draw.
+        reference = np.zeros(0)
+        for attempt in range(4):
+            if attempt:
+                try:
+                    base = _probe.sample(domain, base.shape, attempt)
+                except Exception:  # noqa: BLE001 - the first draw stands
+                    break
+            try:
+                x_ref, loss = loss_of(base)
+                loss.backward()
+                reference = np.asarray(x_ref.grad.numpy(), dtype=np.float64).reshape(-1)
+            except Exception as exc:  # noqa: BLE001
+                return self._finding(
+                    symbol,
+                    Status.UNSUPPORTED,
+                    f"backward(): {type(exc).__name__}: {str(exc)[:60]}",
+                )
+            if np.abs(reference).max(initial=0.0) != 0.0:
+                break
         if np.abs(reference).max(initial=0.0) == 0.0:
             return self._finding(
                 symbol, Status.VACUOUS, "reference gradient is identically zero"
