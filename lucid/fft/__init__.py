@@ -142,11 +142,28 @@ def _engine_rfftn(x: Tensor, s: list[int], axes: list[int]) -> Tensor:
 
 
 def _engine_irfftn(x: Tensor, s: list[int], axes: list[int]) -> Tensor:
+    """The inverse real transform, promoting a real input first.
+
+    The engine kernel takes a complex spectrum and refused anything else,
+    so ``irfft`` / ``irfft2`` / ``irfftn`` / ``hfft`` of a real array
+    raised ``irfftn requires C64 input, got float32``.  The reference
+    accepts one — a real array *is* a spectrum with no imaginary part,
+    and reading it as one is the only sensible interpretation.
+    """
+    if not x.is_complex():
+        x = lucid.complex(x, lucid.zeros_like(x))
     return _wrap(_fft.irfftn(_unwrap(x), s, axes))
 
 
 def _conj(x: Tensor) -> Tensor:
-    return _wrap(_fft._conj_complex(_unwrap(x)))
+    """Conjugate, through the op that carries a gradient.
+
+    This called ``_fft._conj_complex`` directly, which is a bare engine
+    entry point with no autograd node, so it was where ``ihfft``'s chain
+    ended: the forward was right and ``x.grad`` came back ``None``.
+    ``lucid.conj`` is the same computation with a backward attached.
+    """
+    return lucid.conj(x)
 
 
 def _scale(x: Tensor, s: float) -> Tensor:
@@ -252,6 +269,33 @@ class _IfftnAutograd(_AutogradFunction):
         return g
 
 
+def _hermitian_weights(like: Tensor, axis: int, bins: int, full: int) -> Tensor:
+    """``[1, 2, 2, ..., 2, 1?]`` shaped to broadcast along ``axis``.
+
+    The adjoint of a transform that reads a half-spectrum has to count
+    each interior bin twice, because ``irfft`` reads each one twice: once
+    as itself and once as the conjugate mirror it reconstructs.  DC is
+    its own mirror, and so is Nyquist when the full length is even, so
+    those two are counted once.
+
+    Built from ``cat`` rather than an array literal because this is a
+    compute path and may not import numpy (H4).
+    """
+    ones_head = lucid.ones(1, dtype=like.dtype, device=like.device)
+    has_nyquist = full % 2 == 0 and bins > 1
+    middle = bins - 1 - (1 if has_nyquist else 0)
+    parts = [ones_head]
+    if middle > 0:
+        parts.append(lucid.full((middle,), 2.0, dtype=like.dtype, device=like.device))
+    if has_nyquist:
+        parts.append(lucid.ones(1, dtype=like.dtype, device=like.device))
+    weights = lucid.cat(parts) if len(parts) > 1 else ones_head
+
+    shape = [1] * like.ndim
+    shape[axis % like.ndim] = bins
+    return weights.reshape(tuple(shape))
+
+
 @final
 class _RfftnAutograd(_AutogradFunction):
     @override
@@ -278,12 +322,50 @@ class _RfftnAutograd(_AutogradFunction):
     @override
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
-        # rfft backward: the dual transform is irfft restricted to the original
-        # full real length along each transformed axis.
+        """The adjoint of ``rfft``, which is not ``irfft``.
+
+        This used to call ``irfftn``, and ``irfft`` is the *inverse* of
+        ``rfft`` rather than its adjoint.  The two differ by exactly the
+        thing that makes ``irfft`` cheap: it assumes its input is the
+        half-spectrum of a real signal, so it counts every bin between DC
+        and Nyquist twice, reconstructing the conjugate half it was not
+        given.  The adjoint counts each bin once, because those
+        conjugate entries are not inputs the gradient can flow to.
+
+        Every interior bin was therefore doubled.  On a length-6 signal:
+
+            d/dx sum|rfft(x)|   was  [-2.73, 0, 0.73, 1.27, 2, 4.73]
+                                 is  [-1.37, 1, 0.37, 1.63, 1, 3.37]
+
+        DC and Nyquist were right, which is the worst way for it to be
+        wrong: the two bins a quick check looks at.
+
+        Unreachable until complex tensors carried a gradient at all, so
+        this is newly visible rather than newly broken.
+
+        Zero-padding the half-spectrum back to full length and taking the
+        ordinary inverse gives the adjoint directly: the padded bins
+        contribute nothing, which is precisely "count each once".  The
+        real part is taken because the input to ``rfft`` was real.
+        """
         dual = _dual_norm(cast(str, ctx.norm))
-        g = _engine_irfftn(
-            grad_out, cast(list[int], ctx.in_sizes), cast(list[int], ctx.axes)
-        )
+        axes = cast(list[int], ctx.axes)
+        in_sizes = cast(list[int], ctx.in_sizes)
+
+        # Only the last transformed axis is halved by ``rfft``; the
+        # others are full complex transforms already.
+        last_axis = axes[-1]
+        full = in_sizes[-1]
+        have = int(grad_out.shape[last_axis])
+        padded = grad_out
+        if have < full:
+            widths: list[int] = []
+            for axis in range(grad_out.ndim - 1, -1, -1):
+                pad_hi = (full - have) if axis == last_axis % grad_out.ndim else 0
+                widths += [0, pad_hi]
+            padded = lucid.pad(grad_out, tuple(widths))
+
+        g = lucid.real(_engine_ifftn(padded, in_sizes, axes))
         scale = _scale_after_ifft(cast(int, ctx.N), dual)
         if scale != 1.0:
             g = _scale(g, scale)
@@ -316,12 +398,30 @@ class _IrfftnAutograd(_AutogradFunction):
     @override
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
-        # irfft backward: rfft of the real grad with the same size along the
-        # last transformed axis, dual normalisation.
+        """The adjoint of ``irfft``, which is not ``rfft``.
+
+        The mirror of the mistake in ``_RfftnAutograd``: ``rfft`` is the
+        *inverse* of ``irfft`` and not its adjoint.  ``irfft`` reads each
+        interior bin of its half-spectrum twice — once as itself and once
+        as the conjugate mirror it reconstructs — so the adjoint sends
+        the gradient back twice.  Plain ``rfft`` sends it once, leaving
+        every bin between DC and Nyquist short by a factor of two.
+
+        DC and Nyquist were right, being their own mirrors, which is
+        again the worst way to be wrong: they are the entries a spot
+        check reads first.
+        """
         dual = _dual_norm(cast(str, ctx.norm))
-        g = _engine_rfftn(
-            grad_out, cast(list[int], ctx.out_sizes), cast(list[int], ctx.axes)
-        )
+        axes = cast(list[int], ctx.axes)
+        out_sizes = cast(list[int], ctx.out_sizes)
+        g = _engine_rfftn(grad_out, out_sizes, axes)
+
+        last_axis = axes[-1]
+        bins = int(g.shape[last_axis])
+        weights = _hermitian_weights(lucid.real(g), last_axis, bins, int(out_sizes[-1]))
+        # Lane-wise, because a broadcast multiply has no complex branch.
+        g = lucid.complex(lucid.real(g) * weights, lucid.imag(g) * weights)
+
         scale = _scale_after_fft(cast(int, ctx.N), dual)
         if scale != 1.0:
             g = _scale(g, scale)

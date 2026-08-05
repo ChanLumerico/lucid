@@ -182,6 +182,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - an op given a Metal tensor must not answer on the CPU
 
+- the adjoint of a half-spectrum transform is not its inverse
+
 ### Changed
 
 - give the engine ops one shared operand check
