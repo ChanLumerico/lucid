@@ -895,6 +895,60 @@ class DeviceAxis(Axis):
     def applies(self, symbol: "Symbol") -> bool:
         return super().applies(symbol) and "stochastic" not in symbol.flags
 
+    @staticmethod
+    def _takes_device_argument(fn: Any) -> bool:
+        """Whether the callable has a ``device`` parameter of its own."""
+        try:
+            return (
+                "device"
+                in inspect.signature(
+                    fn, annotation_format=annotationlib.Format.FORWARDREF
+                ).parameters
+            )
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _device_kwarg_check(self, symbol: "Symbol", fn: Any, call: Any) -> Finding:
+        """Does a factory put its output where ``device=`` says?
+
+        ``zeros``, ``arange``, ``eye``, ``linspace`` and the signal
+        windows build a tensor from nothing, so there is no input device
+        for the output to follow and the cpu-vs-metal comparison has
+        nothing to compare.  They do take a ``device`` argument, though,
+        and whether they honour it is a real question that was going
+        unasked — twenty-odd symbols reported as skips.
+        """
+        try:
+            parameters = inspect.signature(
+                fn, annotation_format=annotationlib.Format.FORWARDREF
+            ).parameters
+        except Exception:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.NOT_APPLICABLE, "builds from no tensor input"
+            )
+        if "device" not in parameters:
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "builds from no tensor input and takes no device argument",
+            )
+        try:
+            out = fn(*call.args, **{**call.kwargs, "device": "metal"})
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.UNSUPPORTED, f"device='metal': {type(exc).__name__}"
+            )
+        device = getattr(out, "device", None)
+        if device is None:
+            return self._finding(symbol, Status.SKIP, "returned no tensor")
+        if "metal" not in str(device):
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"asked for device='metal' and built the result on {device}",
+            )
+        return self._finding(symbol, Status.PASS, "honours its device argument")
+
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         if not ctx.metal:
             return self._finding(symbol, Status.SKIP, "metal unavailable")
@@ -911,10 +965,14 @@ class DeviceAxis(Axis):
                 "two identical calls disagree — this measures the draw, not the op",
             )
 
+        moved_any = False
+
         def on(device: str, override: np.ndarray | None = None) -> Any:
+            nonlocal moved_any
             args = []
             for i, a in enumerate(call.args):
                 if hasattr(a, "to"):
+                    moved_any = True
                     if override is not None and i == call.primary:
                         arr = np.resize(override, _probe.to_numpy(a).shape)  # type: ignore[arg-type]
                         args.append(_probe.as_f32(arr, device=device))
@@ -947,14 +1005,44 @@ class DeviceAxis(Axis):
                 symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:70]}"
             )
 
-        # Guard the instrument: a tensor that quietly stayed on the CPU
-        # would make every comparison below trivially true.
+        # A tensor that quietly stayed on the CPU makes every comparison
+        # below trivially true, so the landing device is checked first.
+        # What it *means* depends on whether anything was moved.
+        #
+        # If the call had tensor arguments and they were all moved, an
+        # output on the other device is a defect and not an unanswerable
+        # question: ``linalg.matrix_rank`` and ``histc`` each took a Metal
+        # matrix and returned a CPU tensor, and the next op raised
+        # DeviceMismatch.  Reported as SKIP, both sat unnoticed among 45
+        # cells that were mostly factories.
+        #
+        # A factory has no tensor argument to move, so its output follows
+        # the default device and that is correct.  The question worth
+        # asking there is a different one — whether it honours its own
+        # ``device=`` argument — and it is asked below.
         for out, want in ((cpu_out, "cpu"), (metal_out, "metal")):
             device = getattr(out, "device", None)
-            if device is not None and want not in str(device):
+            if device is None or want in str(device):
+                continue
+            # An op that takes a ``device`` argument decides its own
+            # output device, whatever its inputs are on.  Checked before
+            # ``moved_any``, because a tensor argument is not proof of a
+            # transform: ``signal.windows.general_cosine(M, a)`` reads
+            # ``a`` as plain coefficients — ``float(a[k])`` — so moving
+            # it to Metal moves nothing that reaches the output, and
+            # calling that a failure blames the op for the probe.
+            if self._takes_device_argument(fn):
+                return self._device_kwarg_check(symbol, fn, call)
+            if moved_any:
                 return self._finding(
-                    symbol, Status.SKIP, f"output landed on {device}, expected {want}"
+                    symbol,
+                    Status.FAIL,
+                    f"every tensor input was moved to {want}, and the output "
+                    f"came back on {device}",
                 )
+            return self._finding(
+                symbol, Status.NOT_APPLICABLE, "builds from no tensor input"
+            )
 
         a, b = _probe.to_numpy(cpu_out), _probe.to_numpy(metal_out)
         if a is None or b is None or a.shape != b.shape:

@@ -795,11 +795,24 @@ class HistogramObserver(ObserverBase):
         bins = self.bins
         old_width = (old_max - old_min) / bins
         new_width = (new_max - new_min) / bins
-        centers = old_min + (lucid.arange(bins).to(lucid.float32) + 0.5) * old_width
+        # Built where ``hist`` lives, not on the default device.
+        #
+        # These were plain ``arange`` / ``zeros``, so they landed wherever
+        # the default device pointed and the scatter mixed devices.  It
+        # never showed because ``histc`` returned a CPU tensor whatever it
+        # was given — so on Metal every operand here was CPU and agreed
+        # by accident.  Once ``histc`` answered on the input's device this
+        # raised ``bad_variant_access``, which is the latent bug becoming
+        # visible rather than a new one.
+        device = hist.device
+        centers = (
+            old_min
+            + (lucid.arange(bins, device=device).to(lucid.float32) + 0.5) * old_width
+        )
         # Clip in the float domain (CPU has no integer clamp kernel) then cast.
         raw = lucid.clip((centers - new_min) / new_width, 0.0, float(bins - 1))
         dst = raw.to(lucid.int64)
-        out = lucid.zeros(bins)
+        out = lucid.zeros(bins, device=device)
         return lucid.scatter_add(out, 0, dst, hist)
 
     @override

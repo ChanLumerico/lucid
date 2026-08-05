@@ -178,6 +178,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - reach the nn.Module classes, and EmbeddingBag never trained
 
+- an op given a Metal tensor must not answer on the CPU
+
 ### Changed
 
 - give the engine ops one shared operand check

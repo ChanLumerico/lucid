@@ -15,7 +15,9 @@
 
 #include "../../backend/Dispatcher.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/Helpers.h"
 #include "../../core/TensorImpl.h"
+#include "../ufunc/Astype.h"
 #include "../ufunc/Reductions.h"
 #include "../utils/Concat.h"
 #include "../utils/Histogram.h"
@@ -45,6 +47,16 @@ double scalar_to_double(const TensorImplPtr& s) {
 TensorImplPtr histc_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi) {
     if (!a)
         ErrorBuilder("histc").fail("null input");
+    // Integer input is refused, as the reference refuses it.
+    //
+    // It was accepted and answered ``[0, 0, 0, 0]`` for data with values
+    // plainly inside the range — the auto-range bounds are read back
+    // through a float path that an integer buffer does not survive.  A
+    // histogram of zeros is the worst possible answer here: it is the
+    // shape the caller expects, so nothing downstream can tell.
+    if (!is_floating_point(a->dtype()))
+        ErrorBuilder("histc").not_implemented("input must be a floating-point dtype, got " +
+                                              std::string(dtype_name(a->dtype())));
 
     double effective_lo = lo;
     double effective_hi = hi;
@@ -57,8 +69,24 @@ TensorImplPtr histc_op(const TensorImplPtr& a, std::int64_t bins, double lo, dou
         if (effective_lo == effective_hi)
             effective_hi = effective_lo + 1.0;
     }
-    auto pieces = histogram_op(a, bins, effective_lo, effective_hi, false);
-    return pieces.front();
+    auto counts = histogram_op(a, bins, effective_lo, effective_hi, false).front();
+
+    // ``histogram`` counts in F64 by design; ``histc`` reports in the
+    // input's dtype, which is what the reference does and what lets the
+    // result stay where the input was.
+    //
+    // Always returning F64 had a second consequence, because MLX has no
+    // float64: the counts could only live on the CPU.  So ``histc`` of a
+    // Metal tensor came back on the CPU and the next op raised
+    // DeviceMismatch — a device bug whose actual cause was a dtype.
+    if (is_floating_point(a->dtype()) && a->dtype() != counts->dtype())
+        counts = astype_op(counts, a->dtype());
+    if (counts->device() != a->device() && a->device() == Device::GPU) {
+        counts = helpers::fresh(backend::Dispatcher::for_device(Device::GPU)
+                                    .from_cpu(storage_cpu(counts->storage()), counts->shape()),
+                                counts->shape(), counts->dtype(), Device::GPU);
+    }
+    return counts;
 }
 
 TensorImplPtr cartesian_prod_op(const std::vector<TensorImplPtr>& tensors) {

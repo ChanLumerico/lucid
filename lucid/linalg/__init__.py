@@ -1596,7 +1596,16 @@ def matrix_rank(
     zero = _C_engine.full(list(S_impl.shape), 0.0, S_impl.dtype, S_impl.device)
     gt_f = _C_engine.where(gt, one, zero)
     rank = int(_wrap(_C_engine.sum(gt_f, [], False)).item())
-    return _wrap(_C_engine.full([], float(rank), _C_engine.I64, _C_engine.CPU))
+    # On the input's device, not unconditionally the CPU.
+    #
+    # The rank is read back to a Python int — a data-dependent output, so
+    # the round trip is the H3 carve-out and not a mistake — but the
+    # tensor built from it was tagged ``CPU`` regardless of where ``A``
+    # lived.  Handed a Metal matrix it returned a CPU scalar, and the next
+    # op raised DeviceMismatch.  Every neighbour that takes the same
+    # round trip (``det``, ``svd``, ``eigvalsh``, ``matrix_norm``) returns
+    # the input's device.
+    return _wrap(_C_engine.full([], float(rank), _C_engine.I64, _unwrap(A).device))
 
 
 def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
