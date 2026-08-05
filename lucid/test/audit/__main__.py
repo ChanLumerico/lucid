@@ -23,6 +23,7 @@ the work queue for extending :mod:`~lucid.test.audit._specs`.
 
 import argparse
 import contextlib
+import json
 import re
 import sys
 import time
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 _DEFAULT_KNOWN = Path(__file__).with_name("known.json")
+_DEFAULT_COVERAGE = Path(__file__).with_name("coverage.json")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -81,6 +83,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--json", type=Path, default=None, help="write the full report here"
     )
     out.add_argument("--known", type=Path, default=_DEFAULT_KNOWN, help="baseline file")
+    out.add_argument(
+        "--coverage-baseline",
+        type=Path,
+        default=_DEFAULT_COVERAGE,
+        help="recorded set of answered cells, compared against on every run",
+    )
+    out.add_argument(
+        "--update-coverage",
+        action="store_true",
+        help="record the current answered set as the new floor",
+    )
+    out.add_argument(
+        "--no-coverage-diff",
+        action="store_true",
+        help="skip the comparison against the recorded set",
+    )
     out.add_argument(
         "--update-known",
         action="store_true",
@@ -540,6 +558,115 @@ def summarise(report: Report, console: Console, show: "Sequence[str]") -> None:
         )
 
 
+# ── coverage baseline ────────────────────────────────────────────────────────
+
+
+def _answered(report: Report) -> "dict[str, str]":
+    """``axis::symbol -> status`` for every cell that produced a verdict.
+
+    Only the verdicts.  ``skip`` and ``unsupported`` move around with
+    probe details that have nothing to do with the framework, and a
+    baseline that churns is a baseline nobody re-reads.
+    """
+    out: "dict[str, str]" = {}
+    for finding in report.findings:
+        if finding.status in (Status.PASS, Status.FAIL, Status.ERROR, Status.VACUOUS):
+            out[f"{finding.axis}::{finding.symbol}"] = finding.status.value
+    return out
+
+
+def load_coverage(path: Path) -> "dict[str, str] | None":
+    """The recorded set, or ``None`` when there is nothing to compare to."""
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except OSError, ValueError:
+        return None
+    answered = data.get("answered")
+    return answered if isinstance(answered, dict) else None
+
+
+def save_coverage(path: Path, report: Report) -> int:
+    answered = _answered(report)
+    payload = {
+        "comment": [
+            "Which (axis, symbol) cells produced a verdict, and which.",
+            "",
+            "The audit reports absolute counts, and an absolute count cannot",
+            "show a regression: an op that stops being reachable moves one",
+            "cell from 'pass' to 'unsupported' among fifteen hundred, and",
+            "nothing in the summary changes visibly.  This file is what a run",
+            "is compared against, so 'did my change break something' has an",
+            "answer that does not depend on remembering yesterday's numbers.",
+            "",
+            "Regenerate with:  lucid-audit --update-coverage",
+            "Do that only when the new state is the intended one.",
+        ],
+        "cells": len(answered),
+        "answered": dict(sorted(answered.items())),
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n")
+    return len(answered)
+
+
+def report_coverage_diff(
+    report: Report, recorded: "dict[str, str]", console: Console
+) -> int:
+    """Print what moved since the baseline.  Returns the regression count.
+
+    A cell that answered and no longer does is the interesting direction:
+    the op is still there, the audit simply cannot reach it any more,
+    which is what a refactor breaks without breaking a test.
+    """
+    current = _answered(report)
+    lost = sorted(set(recorded) - set(current))
+    gained = sorted(set(current) - set(recorded))
+    worsened = sorted(
+        key
+        for key in set(recorded) & set(current)
+        if recorded[key] == "pass" and current[key] != "pass"
+    )
+
+    if not (lost or gained or worsened):
+        console.always("")
+        console.always(
+            console.paint("  coverage unchanged against the baseline", "green")
+        )
+        return 0
+
+    if lost or worsened:
+        console.always("")
+        console.rule(f"coverage regressions · {len(lost) + len(worsened)}", "red")
+        for key in lost:
+            console.always(
+                "  " + console.paint("LOST ", "red", "bold") + f" {key}"
+                f"  (was {recorded[key]}, now unanswered)"
+            )
+        for key in worsened:
+            console.always(
+                "  "
+                + console.paint("WORSE", "red", "bold")
+                + f" {key}  (pass -> {current[key]})"
+            )
+    if gained:
+        console.always("")
+        console.rule(f"newly answered · {len(gained)}", "green")
+        for key in gained[:20]:
+            console.always("  " + console.paint("NEW  ", "green") + f" {key}")
+        if len(gained) > 20:
+            console.always(
+                console.paint(f"       ... and {len(gained) - 20} more", "grey")
+            )
+        console.always(
+            console.paint(
+                "  run with --update-coverage to record these as the new floor",
+                "grey",
+            )
+        )
+    return len(lost) + len(worsened)
+
+
 def report_uncovered(console: Console, args: argparse.Namespace) -> int:
     """What the harness could not build inputs for — the work queue."""
     from lucid.test.audit import _autospec, _specs
@@ -659,6 +786,30 @@ def main(argv: "Sequence[str] | None" = None) -> int:
     if args.json is not None:
         report.write_json(args.json)
         console.always(console.paint(f"  report written to {args.json}", "grey"))
+    if args.update_coverage:
+        recorded = save_coverage(args.coverage_baseline, report)
+        console.always(
+            console.paint(
+                f"  {recorded} answered cells recorded in {args.coverage_baseline}",
+                "grey",
+            )
+        )
+        return 0
+
+    regressions = 0
+    if not args.no_coverage_diff:
+        recorded = load_coverage(args.coverage_baseline)
+        if recorded is None:
+            console.always("")
+            console.always(
+                console.paint(
+                    "  no coverage baseline yet — run --update-coverage to record one",
+                    "grey",
+                )
+            )
+        else:
+            regressions = report_coverage_diff(report, recorded, console)
+
     if args.update_known:
         Baseline.load(args.known).save(args.known, report.defects)
         console.always(
@@ -667,7 +818,7 @@ def main(argv: "Sequence[str] | None" = None) -> int:
             )
         )
         return 0
-    return 1 if report.defects else 0
+    return 1 if (report.defects or regressions) else 0
 
 
 if __name__ == "__main__":

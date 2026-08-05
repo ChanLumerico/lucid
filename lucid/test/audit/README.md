@@ -137,6 +137,53 @@ much of the framework a run actually checked.
 
 ---
 
+## Did my change break something?
+
+An absolute count cannot answer that. An op that stops being reachable
+moves one cell from `pass` to `unsupported` among fifteen hundred
+already-unsupported ones, and nothing in the summary changes visibly.
+
+So every run is diffed against `coverage.json`, which records which
+`(axis, symbol)` cells produce a verdict:
+
+```bash
+lucid-audit                 # runs, then reports what moved
+```
+
+```
+── coverage regressions · 1 ──────────────────────────────
+  LOST  grad::lucid.expm1  (was pass, now unanswered)
+```
+
+The exit code is non-zero for a regression as well as for a defect, so
+this works as a gate without reading the output. A cell that used to
+answer and no longer does is the interesting direction: the op is still
+exported, the audit simply cannot reach it any more — which is what a
+refactor breaks without breaking a test.
+
+Newly answered cells are reported too, as progress rather than failure.
+When the new state is the intended one:
+
+```bash
+lucid-audit --update-coverage
+```
+
+Do that deliberately. Re-recording to make a red run go green silences
+exactly the signal the file exists for.
+
+Only verdicts are recorded. `SKIP` and `UNSUPPORTED` carry probe details
+that move for reasons unrelated to the framework, and a baseline that
+churns is a baseline nobody re-reads.
+
+`--no-coverage-diff` turns the comparison off.
+
+> `coverage.json` answers "is this still reachable". `known.json` answers
+> "is this failure accepted". A failing cell belongs in the second; a cell
+> that stopped being asked belongs in neither — fix it or record it as the
+> new floor on purpose.
+
+---
+
 ## Extending it
 
 **A symbol is skipped.** Read the reason in the report. If the block is a
