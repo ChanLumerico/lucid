@@ -73,6 +73,18 @@ public:
     // Clone the dense gradient storage so that upstream nodes receive a
     // concrete buffer regardless of the original input's layout.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode: the gradient passes through unchanged.
+    //
+    // ``contiguous`` copies bytes into a dense layout without touching a
+    // value, so its derivative is the identity — and layout is not a
+    // property the graph carries, so nothing needs re-laying out on the
+    // way back.  Ten symbols were blocked on this one missing override:
+    // ``clone``, ``contiguous``, ``float``, ``half`` and the other dtype
+    // and layout conversions built over it.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        return {grad_out};
+    }
 };
 
 // Materialise a C-contiguous copy of a tensor.

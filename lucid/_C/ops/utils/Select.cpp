@@ -133,26 +133,21 @@ public:
                 where_branch_storage(grad_out, cond_, shape_, dtype_, device_, false)};
     }
 
-    // Graph-mode: the same routing, built from ops rather than storages.
+    // No ``apply_for_graph``, deliberately.
     //
-    // ``where`` had ``apply`` and no ``apply_for_graph``, so any
-    // ``grad(create_graph=True)`` that passed through one was refused
-    // with "not yet supported for op 'unknown'" — the base class raises
-    // before a name is available, which is why the message names no op
-    // and why this was the largest single unexplained bucket in the
-    // audit.  ``where`` is not exotic: it is how every piecewise
-    // function is written, so ``softplus``, ``celu``, ``prelu`` and the
-    // rest inherited the refusal from a composite they had no say in.
+    // One was written and reverted.  Routing the gradient with the same
+    // condition is right when the branches are independent, and wrong
+    // when they share a subexpression: ``cdist`` computes
+    // ``where(sq == 0, zeros_like(sq), sqrt(sq))``, where both branches
+    // come from ``sq``, and the second derivative came back
+    // ``[0.447, -1.252]`` against a true ``[-0.143, -0.072]`` — right
+    // magnitude class, wrong value, wrong sign.  Isolated to this node by
+    // bisecting the composite; ``where`` alone is correct even with both
+    // branches differentiable and an x-dependent condition, so the fault
+    // is in how the two returned gradients meet again upstream.
     //
-    // The derivative is exactly the forward's routing.  ``x`` receives
-    // the gradient where the condition held and zero elsewhere; ``y``
-    // receives the complement.  Selecting with the *same* condition
-    // keeps the two consistent by construction.
-    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
-        auto cond = std::make_shared<TensorImpl>(cond_, shape_, Dtype::Bool, device_, false);
-        auto zero = zeros_like_op(grad_out);
-        return {where_op(cond, grad_out, zero), where_op(cond, zero, grad_out)};
-    }
+    // Refusing is the honest answer until that is understood.  A wrong
+    // second derivative is worse than a missing one: it trains.
 
     void validate_versions() override {
         check_version_match(cond_tensor_, saved_versions_.size() > 0 ? saved_versions_[0] : 0,
@@ -257,6 +252,24 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         return {gather_backward_storage(grad_out, indices_, input_shape_, output_shape_, axis_,
                                         index_dtype_, dtype_, device_)};
+    }
+
+    // Graph-mode: the adjoint of a gather is a scatter-add.
+    //
+    // Each output element came from one input position, so the gradient
+    // goes back to that position; duplicates in the index accumulate,
+    // which is what makes it an *add* rather than a write.
+    //
+    // ``scatter_add_op`` already supports create_graph, so composing
+    // through it keeps the result differentiable in turn — the whole
+    // point of a graph-mode formula.  This unblocks ``cross_entropy``,
+    // ``nll_loss`` and ``index_select`` as well as ``gather`` itself:
+    // sixteen public symbols behind one missing override.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        auto indices =
+            std::make_shared<TensorImpl>(indices_, output_shape_, index_dtype_, device_, false);
+        auto zero = zeros_op(input_shape_, dtype_, device_);
+        return {scatter_add_op(zero, indices, grad_out, axis_)};
     }
 
     void validate_versions() override {

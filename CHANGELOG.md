@@ -194,6 +194,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a backward node that could not say what it was
 
+- gather and contiguous get graph-mode; where gives its back
+
 ### Changed
 
 - give the engine ops one shared operand check

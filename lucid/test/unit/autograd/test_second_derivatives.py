@@ -30,7 +30,6 @@ X = np.array([-4.0, -3.5, -1.0, -0.25, 0.25, 1.0, 3.5, 4.0])
 
 ACTIVATIONS = [
     ("leaky_relu", F.leaky_relu, "leaky_relu"),
-    ("softplus", F.softplus, "softplus"),
     ("elu", F.elu, "elu"),
     ("selu", F.selu, "selu"),
     ("mish", F.mish, "mish"),
@@ -153,23 +152,40 @@ def test_clip_first_derivative() -> None:
 # ── where, which unblocked the rest ───────────────────────────────────────────
 
 
-def test_where_supports_create_graph() -> None:
+def test_where_refuses_create_graph_rather_than_answering_wrongly() -> None:
+    """A graph-mode derivative for ``where`` was written and reverted.
+
+    Routing the gradient with the same condition is right when the two
+    branches are independent, and wrong when they share a subexpression.
+    ``cdist`` computes ``where(sq == 0, zeros_like(sq), sqrt(sq))``, where
+    both branches come from ``sq``, and the second derivative came back
+    ``[0.447, -1.252]`` against a true ``[-0.143, -0.072]``: right
+    magnitude class, wrong value, wrong sign.
+
+    ``where`` alone is correct even with both branches differentiable and
+    an x-dependent condition, so the fault is in how the two returned
+    gradients meet again upstream — isolated, not yet understood.
+
+    Refusing is the honest answer until it is.  A wrong second derivative
+    is worse than a missing one: it trains.  ``softplus`` is written over
+    ``where`` and so is refused with it.
+    """
     condition = lucid.tensor(np.array([True, False, True, False, True]))
     a = lucid.tensor(A.copy(), requires_grad=True)
     b = lucid.tensor(B.copy(), requires_grad=True)
     out = lucid.where(condition, a, b)
-    (ga,) = lucid.autograd.grad(out.sum(), [a], create_graph=True, retain_graph=True)
-    (gb,) = lucid.autograd.grad(out.sum(), [b], create_graph=True)
-    assert np.allclose(np.asarray(ga.numpy()), [1.0, 0.0, 1.0, 0.0, 1.0])
-    assert np.allclose(np.asarray(gb.numpy()), [0.0, 1.0, 0.0, 1.0, 0.0])
+    with pytest.raises(RuntimeError, match="create_graph"):
+        lucid.autograd.grad(out.sum(), [a], create_graph=True)
 
 
-def test_a_composite_over_where_is_differentiable_twice() -> None:
-    """``softplus`` is ``where(bx > threshold, x, softplus(bx)/beta)``, so
-    it inherited ``where``'s refusal despite having its own formula."""
-    x, g, first = _first(F.softplus)
-    assert np.allclose(first, 1.0 / (1.0 + np.exp(-X)), atol=1e-6)
-    assert np.abs(_second(x, g)).max() > 0.0
+def test_wheres_eager_gradient_is_unaffected() -> None:
+    """Only the graph-mode path is missing; ordinary backward still works."""
+    condition = lucid.tensor(np.array([True, False, True, False, True]))
+    a = lucid.tensor(A.copy(), requires_grad=True)
+    b = lucid.tensor(B.copy(), requires_grad=True)
+    lucid.where(condition, a, b).sum().backward()
+    assert np.allclose(np.asarray(a.grad.numpy()), [1.0, 0.0, 1.0, 0.0, 1.0])
+    assert np.allclose(np.asarray(b.grad.numpy()), [0.0, 1.0, 0.0, 1.0, 0.0])
 
 
 # ── structural ops, each its own inverse ──────────────────────────────────────
@@ -220,3 +236,86 @@ def test_tril_zeroes_the_second_derivative_where_it_masks() -> None:
     second = np.asarray(x.grad.numpy())
     assert np.allclose(np.triu(second, 1), 0.0)
     assert np.abs(np.tril(second)).max() > 0.0
+
+
+# ── gather, and the loss path behind it ───────────────────────────────────────
+
+
+def test_gather_is_differentiable_twice() -> None:
+    """The adjoint of a gather is a scatter-add: each output element came
+    from one input position, so the gradient goes back there."""
+    values = np.arange(1.0, 13.0).reshape(3, 4)
+    indices = np.array([[0, 2, 1, 3], [3, 1, 0, 0], [2, 2, 2, 1]])
+    t = require_ref()
+
+    x = lucid.tensor(values.copy(), requires_grad=True)
+    idx = lucid.tensor(indices, dtype=lucid.int32)
+    (g,) = lucid.autograd.grad(
+        (lucid.gather(x, idx, 1) ** 2).sum(), [x], create_graph=True
+    )
+
+    r = t.from_numpy(values.copy()).requires_grad_(True)
+    (rg,) = t.autograd.grad(
+        (t.gather(r, 1, t.from_numpy(indices).long()) ** 2).sum(),
+        [r],
+        create_graph=True,
+    )
+    assert np.allclose(np.asarray(g.numpy()), np.asarray(rg.tolist()))
+
+
+def test_duplicate_indices_accumulate() -> None:
+    """It is a scatter-*add*: reading one position three times must send
+    three units of gradient back, not one."""
+    x = lucid.tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
+    idx = lucid.tensor(np.array([1, 1, 1]), dtype=lucid.int32)
+    (g,) = lucid.autograd.grad(lucid.gather(x, idx, 0).sum(), [x], create_graph=True)
+    assert np.allclose(np.asarray(g.numpy()), [0.0, 3.0, 0.0])
+
+
+@pytest.mark.parametrize("name", ["cross_entropy", "nll_loss"])
+def test_the_classification_losses_reach_create_graph(name) -> None:
+    """What sixteen symbols were actually blocked on — these are training
+    paths, not corners."""
+    t = require_ref()
+    logits = np.random.default_rng(0).standard_normal((4, 5))
+    target = np.array([0, 3, 1, 4])
+
+    a = lucid.tensor(logits.copy(), requires_grad=True)
+    tgt = lucid.tensor(target, dtype=lucid.int32)
+    if name == "cross_entropy":
+        loss = F.cross_entropy(a, tgt)
+    else:
+        loss = F.nll_loss(lucid.log(F.softmax(a, dim=1)), tgt)
+    (g,) = lucid.autograd.grad(loss, [a], create_graph=True)
+
+    ra = t.from_numpy(logits.copy()).requires_grad_(True)
+    rtgt = t.from_numpy(target).long()
+    if name == "cross_entropy":
+        ref_loss = t.nn.functional.cross_entropy(ra, rtgt)
+    else:
+        ref_loss = t.nn.functional.nll_loss(t.log_softmax(ra, dim=1), rtgt)
+    (rg,) = t.autograd.grad(ref_loss, [ra], create_graph=True)
+    assert np.allclose(np.asarray(g.numpy()), np.asarray(rg.tolist()), atol=1e-6)
+
+
+def test_cross_entropy_has_a_second_derivative() -> None:
+    logits = np.random.default_rng(0).standard_normal((4, 5))
+    a = lucid.tensor(logits, requires_grad=True)
+    tgt = lucid.tensor(np.array([0, 3, 1, 4]), dtype=lucid.int32)
+    (g,) = lucid.autograd.grad(F.cross_entropy(a, tgt), [a], create_graph=True)
+    a.grad = None
+    g.sum().backward()
+    assert a.grad is not None
+    assert np.abs(np.asarray(a.grad.numpy())).max() > 0.0
+
+
+@pytest.mark.parametrize("fn", [lucid.clone, lambda t: t.contiguous()])
+def test_a_layout_copy_passes_the_gradient_through(fn) -> None:
+    """``contiguous`` moves bytes without touching a value, so its
+    derivative is the identity."""
+    x = lucid.tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
+    (g,) = lucid.autograd.grad((fn(x) ** 2).sum(), [x], create_graph=True)
+    assert np.allclose(np.asarray(g.numpy()), [2.0, 4.0, 6.0])
+    x.grad = None
+    g.sum().backward()
+    assert np.allclose(np.asarray(x.grad.numpy()), 2.0)
