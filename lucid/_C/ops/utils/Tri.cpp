@@ -73,6 +73,13 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         return {tri_storage(grad_out, out_shape_, dtype_, device_, k_, upper_, name_)};
     }
+
+    // Graph-mode: the same mask.  ``tril``/``triu`` zero one triangle, so
+    // the gradient is zeroed in exactly the same places — the operation
+    // is idempotent and its own derivative.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        return {upper_ ? triu_op(grad_out, k_) : tril_op(grad_out, k_)};
+    }
 };
 
 const OpSchema TriBackward::schema_v1{"tri", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, true};

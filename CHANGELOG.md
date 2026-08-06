@@ -192,6 +192,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - vander built its exponent at a hardcoded dtype
 
+- a backward node that could not say what it was
+
 ### Changed
 
 - give the engine ops one shared operand check

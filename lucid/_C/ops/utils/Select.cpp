@@ -218,6 +218,15 @@ public:
         return {backend::Dispatcher::for_device(device_).roll(grad_out, out_shape_, dtype_,
                                                               inv_shifts, axes_)};
     }
+
+    // Graph-mode: rolling back by the same shifts.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        std::vector<std::int64_t> inv_shifts;
+        inv_shifts.reserve(shifts_.size());
+        for (auto shift : shifts_)
+            inv_shifts.push_back(-shift);
+        return {roll_op(grad_out, inv_shifts, axes_)};
+    }
 };
 
 const OpSchema RollBackward::schema_v1{"roll", 1, AmpPolicy::KeepInput, true};
@@ -616,6 +625,12 @@ public:
 
     std::vector<Storage> apply(Storage grad_out) override {
         return {backend::Dispatcher::for_device(device_).flip(grad_out, out_shape_, dims_, dtype_)};
+    }
+
+    // Graph-mode: flipping is its own inverse, so the derivative is the
+    // same rearrangement expressed in ops rather than storages.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        return {flip_op(grad_out, dims_)};
     }
 };
 

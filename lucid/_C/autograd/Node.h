@@ -12,9 +12,11 @@
 #pragma once
 
 #include <atomic>
+#include <cctype>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <typeinfo>
 #include <vector>
 
 #include "../api.h"
@@ -258,7 +260,27 @@ public:
     // -----
     // Used in error messages emitted by :meth:`apply_for_graph` and in
     // debugger / profiler output.
-    virtual std::string node_name() const { return "unknown"; }
+    virtual std::string node_name() const {
+        // The C++ type, demangled, rather than a literal "unknown".
+        //
+        // Only a handful of nodes overrode this, so every other one
+        // reported ``op 'unknown'`` — which made "create_graph=True is
+        // not yet supported for op 'unknown'" the single largest
+        // unexplained failure in the audit: 115 symbols, all naming the
+        // same non-op.  A diagnostic that cannot say what it is about
+        // costs more than the feature it is reporting on.
+        //
+        // ``typeid`` is available because this class is polymorphic, and
+        // the mangled name is stripped to the class: ``12MulBackward``
+        // becomes ``MulBackward``.  Nodes that override this with their
+        // schema name still win.
+        const char* mangled = typeid(*this).name();
+        std::string name(mangled ? mangled : "");
+        std::size_t start = 0;
+        while (start < name.size() && std::isdigit(static_cast<unsigned char>(name[start])))
+            ++start;
+        return start < name.size() ? name.substr(start) : "unknown";
+    }
 
     // Return weak references to the forward-input :class:`TensorImpl`
     // objects that the engine may need to accumulate into.

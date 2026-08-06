@@ -170,3 +170,53 @@ def test_a_composite_over_where_is_differentiable_twice() -> None:
     x, g, first = _first(F.softplus)
     assert np.allclose(first, 1.0 / (1.0 + np.exp(-X)), atol=1e-6)
     assert np.abs(_second(x, g)).max() > 0.0
+
+
+# ── structural ops, each its own inverse ──────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "name,fn,values",
+    [
+        ("flip", lambda t: lucid.flip(t, 0), np.arange(1.0, 7.0)),
+        ("fliplr", lucid.fliplr, np.arange(1.0, 10.0).reshape(3, 3)),
+        ("roll", lambda t: lucid.roll(t, [2], [0]), np.arange(1.0, 7.0)),
+        ("tril", lucid.tril, np.arange(1.0, 10.0).reshape(3, 3)),
+        ("triu", lambda t: lucid.triu(t, 1), np.arange(1.0, 10.0).reshape(3, 3)),
+    ],
+)
+def test_a_rearrangement_is_differentiable_twice(name, fn, values) -> None:
+    """``flip``, ``roll`` and the triangle masks move or zero elements
+    without computing anything, so the graph-mode derivative is the same
+    rearrangement applied to the gradient.  Checked against a finite
+    difference, which knows nothing about that symmetry."""
+    x = lucid.tensor(values.copy(), requires_grad=True)
+    (g,) = lucid.autograd.grad((fn(x) ** 2).sum(), [x], create_graph=True)
+    analytic = np.asarray(g.numpy()).ravel()
+
+    step = 1e-4
+    flat = values.ravel().copy()
+    numeric = np.empty_like(flat)
+    for i in range(flat.size):
+        up, down = flat.copy(), flat.copy()
+        up[i] += step
+        down[i] -= step
+
+        def loss(v):
+            return float((fn(lucid.tensor(v.reshape(values.shape))) ** 2).sum().item())
+
+        numeric[i] = (loss(up) - loss(down)) / (2 * step)
+
+    assert np.allclose(analytic, numeric, atol=1e-4), (analytic, numeric)
+
+
+def test_tril_zeroes_the_second_derivative_where_it_masks() -> None:
+    """The mask has to survive to the second order too."""
+    values = np.arange(1.0, 10.0).reshape(3, 3)
+    x = lucid.tensor(values, requires_grad=True)
+    (g,) = lucid.autograd.grad((lucid.tril(x) ** 3).sum(), [x], create_graph=True)
+    x.grad = None
+    g.sum().backward()
+    second = np.asarray(x.grad.numpy())
+    assert np.allclose(np.triu(second, 1), 0.0)
+    assert np.abs(np.tril(second)).max() > 0.0
