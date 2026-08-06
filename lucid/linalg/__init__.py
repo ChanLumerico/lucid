@@ -1847,10 +1847,26 @@ def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
     # input's device — a hardcoded CPU exponent raised DeviceMismatch for any
     # Metal input.
     dev = x_impl.device
+    # ...and on the input's *dtype*, for the same reason.
+    #
+    # The device was fixed here once; the dtype one line over had the
+    # identical bug and was not.  ``pow`` requires both operands to agree,
+    # so a hardcoded F32 exponent raised ``DtypeMismatch (pow): expected
+    # float64, got float32`` for every f64 input — and f64 is the default
+    # dtype for a tensor built from a Python list.  Half formats widen,
+    # since ``arange`` has no half kernel and the result of ``pow`` is
+    # what carries the dtype anyway.
+    # ``arange`` has no half kernel, so a half input widens rather than
+    # the exponent narrowing: ``pow`` wants both operands at the same
+    # dtype, and F32 is the one they can both reach.
+    exp_dtype = x_impl.dtype
+    if exp_dtype not in (_C_engine.F32, _C_engine.F64):
+        exp_dtype = _C_engine.F32
+        x_impl = _C_engine.astype(x_impl, _C_engine.F32)
     if increasing:
-        exp_impl = _C_engine.arange(0.0, float(N), 1.0, _C_engine.F32, dev)
+        exp_impl = _C_engine.arange(0.0, float(N), 1.0, exp_dtype, dev)
     else:
-        exp_impl = _C_engine.arange(float(N - 1), -1.0, -1.0, _C_engine.F32, dev)
+        exp_impl = _C_engine.arange(float(N - 1), -1.0, -1.0, exp_dtype, dev)
     x_col = _C_engine.reshape(x_impl, [n, 1])
     exp_row = _C_engine.reshape(exp_impl, [1, N])
     return _wrap(_C_engine.pow(x_col, exp_row))

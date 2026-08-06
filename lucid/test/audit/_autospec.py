@@ -161,6 +161,16 @@ def _literal_choice(text: str) -> "str | None":
 #: Names that mean "the tensor being operated on", beyond the ones the
 #: annotation already identifies.  ``self`` is here because a Tensor
 #: method arrives unbound and its receiver is an ordinary parameter.
+#: Parameter names that are an operand whatever the annotation says.
+#:
+#: The second and third arguments of the binary and ternary free
+#: functions.  Several carry no annotation, and Tensor methods spell the
+#: receiver ``Self``, so the annotation-driven rules cannot see them; the
+#: name is the only evidence there is.
+_OPERAND_NAMES = frozenset(
+    {"other", "input", "mat1", "mat2", "condition", "reps", "base_impl"}
+)
+
 _TENSOR_PARAMS = frozenset(
     {"input", "x", "tensor", "a", "b", "self", "real", "imag", "abs", "angle"}
 )
@@ -395,6 +405,22 @@ def _value_for(
         return True, (lambda *operands: operands[0] * operands[0]), False
     if _is_tensor_annotation(text) or name in _TENSOR_PARAMS:
         return True, _tensor(shape, domain, variant), True
+    # ``Self`` on a Tensor method, and the operand names the free
+    # functions use.  ``lucid.atan2(input, other)`` carries no annotation
+    # at all and ``Tensor.addmm(self, mat1, mat2)`` spells its operands
+    # ``Self``; neither reads as a tensor to the rules above, and one
+    # unresolvable parameter discards the whole symbol.
+    if re.fullmatch(r"Self|Tensor", text.strip()) or name in _OPERAND_NAMES:
+        return True, _tensor(shape, domain, variant), True
+    if name in ("t", "obj") and text in ("object", "", "Any"):
+        # ``is_complex(t)``, ``is_floating_point(t)``, ``is_tensor(obj)``
+        # — a predicate over a tensor, annotated as widely as possible.
+        return True, _tensor(shape, domain, variant), True
+    if re.search(r"_DType\b", text) or name.endswith("_dtype"):
+        return True, lucid.float32, False
+    if re.search(r"TensorImpl", text):
+        # An engine-level entry point: it wants the impl, not the wrapper.
+        return True, _tensor(shape, domain, variant)._impl, False
     if name == "module_cls" or re.search(r"^type$", text):
         return True, lucid.nn.Linear, False
     if re.search(r"PackedSequence", text):
@@ -485,6 +511,15 @@ def _build(
                 tensors_built += 1
                 if first_tensor is None:
                     first_tensor, reference = len(plan.args) - 1, value
+
+    if first_tensor is None and not signature.parameters:
+        # A zero-argument query — ``get_default_dtype``,
+        # ``is_grad_enabled``, ``initial_seed``.  ``_build`` discarded
+        # these for having no operand, which left thirteen symbols
+        # reported as unreachable when calling them is the entire test.
+        plan.primary = -1
+        plan.note = "derived from signature(), no arguments"
+        return plan
 
     if first_tensor is None:
         # No tensor *input* is not the same as nothing to check.

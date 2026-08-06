@@ -188,6 +188,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - max_unpool allocated from an unvalidated output_size
 
+- vander built its exponent at a hardcoded dtype
+
 ### Changed
 
 - give the engine ops one shared operand check
