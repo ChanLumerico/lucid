@@ -271,6 +271,8 @@ public:
 //     Negative-side slope captured at forward time; defaults to ``0.01``.
 class LUCID_API LeakyReluBackward : public UnaryOp<LeakyReluBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     double slope_ = 0.01;
     static const OpSchema schema_v1;
@@ -319,6 +321,8 @@ public:
 //     overflow in float16 for $|x| > 11$ or so.
 class LUCID_API SoftplusBackward : public UnaryOp<SoftplusBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::softplus`` to compute $y = \log(1 + e^x)$.
@@ -360,6 +364,8 @@ public:
 // by Exponential Linear Units (ELUs)", arXiv:1511.07289.
 class LUCID_API EluBackward : public UnaryOp<EluBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     double alpha_ = 1.0;
     static const OpSchema schema_v1;
@@ -411,6 +417,8 @@ public:
 // Klambauer et al., "Self-Normalizing Neural Networks", arXiv:1706.02515.
 class LUCID_API SeluBackward : public UnaryOp<SeluBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::selu`` to compute the Scaled ELU
@@ -448,6 +456,8 @@ public:
 // arXiv:1908.08681.
 class LUCID_API MishBackward : public UnaryOp<MishBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::mish`` to compute
@@ -479,6 +489,8 @@ public:
 //     ``"hard_sigmoid"``, ``AmpPolicy::KeepInput``.
 class LUCID_API HardSigmoidBackward : public UnaryOp<HardSigmoidBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::hard_sigmoid`` to compute
@@ -512,6 +524,8 @@ public:
 //     ``"hard_swish"``, ``AmpPolicy::KeepInput``.
 class LUCID_API HardSwishBackward : public UnaryOp<HardSwishBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::hard_swish`` to compute
@@ -543,6 +557,8 @@ public:
 //     ``"relu6"``, ``AmpPolicy::KeepInput``.
 class LUCID_API Relu6Backward : public UnaryOp<Relu6Backward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::relu6`` to compute $y = \mathrm{clamp}(x, 0, 6)$.

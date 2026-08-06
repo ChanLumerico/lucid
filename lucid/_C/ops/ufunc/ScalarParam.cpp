@@ -17,6 +17,10 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Compare.h"
+#include "../bfunc/Mul.h"
+#include "../gfunc/Gfunc.h"
+#include "../utils/Select.h"
 
 namespace lucid {
 
@@ -124,6 +128,21 @@ TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double
     bwd->max_ = max_v;
     kernel::NaryKernel<ClipBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
     return out;
+}
+
+// clip'(x) = 1 strictly inside the bounds, 0 at and beyond them.
+//
+// Same omission as ``maximum``: no ``grad_formula_impl``, so every
+// composite over it — ``binary_cross_entropy``, ``hardtanh``,
+// ``adjust_brightness``, ``ndtri`` — could not be differentiated twice.
+TensorImplPtr ClipBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    auto above_low = greater_op(x, full_like_op(x, min_));
+    auto below_high = less_op(x, full_like_op(x, max_));
+    auto zero = zeros_like_op(x);
+    auto slope = where_op(above_low, where_op(below_high, ones_like_op(x), zero), zero);
+    return mul_op(g, slope);
 }
 
 TensorImplPtr clip_op(const TensorImplPtr& a, double min_v, double max_v) {

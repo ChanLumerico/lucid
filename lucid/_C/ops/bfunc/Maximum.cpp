@@ -10,6 +10,9 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
+#include "../gfunc/Gfunc.h"
+#include "../utils/Select.h"
+#include "Compare.h"
 
 namespace lucid {
 
@@ -37,6 +40,23 @@ std::pair<Storage, Storage> MaximumBackward::grad_formula(const Storage& grad_ou
     Storage dx = multiply_storages(grad_out, mask_a, n, dtype_, device_);
     Storage dy = multiply_storages(grad_out, mask_b, n, dtype_, device_);
     return {std::move(dx), std::move(dy)};
+}
+
+// Graph-mode derivative.
+//
+// This had an eager ``grad_formula`` and no ``grad_formula_impl``, so
+// ``grad(create_graph=True)`` refused it — and with it every composite
+// written on top: ``clamp``, ``clip``, ``hypot``, ``logaddexp``,
+// ``celu``, ``prelu``.
+//
+// The gradient goes entirely to the operand that won.  Ties go to the
+// first, matching the forward, so the two branches sum to exactly the
+// incoming gradient and nothing is created or lost.
+std::pair<TensorImplPtr, TensorImplPtr> MaximumBackward::grad_formula_impl(
+    const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b) {
+    auto a_wins = greater_equal_op(a, b);
+    auto zero = zeros_like_op(grad_out);
+    return {where_op(a_wins, grad_out, zero), where_op(a_wins, zero, grad_out)};
 }
 
 TensorImplPtr maximum_op(const TensorImplPtr& a, const TensorImplPtr& b) {

@@ -49,6 +49,7 @@
 #include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../gfunc/Gfunc.h"
 #include "Layout.h"  // broadcast_to_op
 #include "_Detail.h"
 
@@ -130,6 +131,27 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         return {where_branch_storage(grad_out, cond_, shape_, dtype_, device_, true),
                 where_branch_storage(grad_out, cond_, shape_, dtype_, device_, false)};
+    }
+
+    // Graph-mode: the same routing, built from ops rather than storages.
+    //
+    // ``where`` had ``apply`` and no ``apply_for_graph``, so any
+    // ``grad(create_graph=True)`` that passed through one was refused
+    // with "not yet supported for op 'unknown'" — the base class raises
+    // before a name is available, which is why the message names no op
+    // and why this was the largest single unexplained bucket in the
+    // audit.  ``where`` is not exotic: it is how every piecewise
+    // function is written, so ``softplus``, ``celu``, ``prelu`` and the
+    // rest inherited the refusal from a composite they had no say in.
+    //
+    // The derivative is exactly the forward's routing.  ``x`` receives
+    // the gradient where the condition held and zero elsewhere; ``y``
+    // receives the complement.  Selecting with the *same* condition
+    // keeps the two consistent by construction.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        auto cond = std::make_shared<TensorImpl>(cond_, shape_, Dtype::Bool, device_, false);
+        auto zero = zeros_like_op(grad_out);
+        return {where_op(cond, grad_out, zero), where_op(cond, zero, grad_out)};
     }
 
     void validate_versions() override {

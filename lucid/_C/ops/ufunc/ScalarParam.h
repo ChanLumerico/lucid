@@ -250,6 +250,8 @@ public:
 // :func:`clip_op`.
 class LUCID_API ClipBackward : public UnaryOp<ClipBackward> {
 public:
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
     double min_ = 0.0;
     double max_ = 0.0;
     static const OpSchema schema_v1;

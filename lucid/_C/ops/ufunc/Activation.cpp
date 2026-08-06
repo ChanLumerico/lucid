@@ -23,10 +23,12 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/Add.h"
+#include "../bfunc/Compare.h"
 #include "../bfunc/Mul.h"
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Promote.h"
+#include "../utils/Select.h"
 #include "Arith.h"
 #include "Exponential.h"
 #include "Hyperbolic.h"
@@ -58,6 +60,108 @@ TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
     // mask = (x > 0): sign(relu(x)) gives 0 for x<=0 and 1 for x>0
     auto mask = sign_op(relu_op(x));
     return mul_op(g, mask);
+}
+
+// ── graph-mode derivatives ───────────────────────────────────────────────────
+//
+// Eight activations had an eager ``grad_formula`` and no
+// ``grad_formula_impl``, so ``grad(create_graph=True)`` refused them
+// with "Implement grad_formula_impl() to add support".  Each is built
+// from ops that are themselves differentiable, which is what makes the
+// gradient differentiable in turn.
+
+// leaky_relu'(x) = 1 where x > 0, slope elsewhere.
+TensorImplPtr LeakyReluBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                   const TensorImplPtr& x,
+                                                   const TensorImplPtr&) {
+    auto positive = greater_op(x, zeros_like_op(x));
+    auto slope = where_op(positive, ones_like_op(x), full_like_op(x, slope_));
+    return mul_op(g, slope);
+}
+
+// softplus'(x) = sigmoid(beta * x); the threshold branch is linear, and
+// its derivative is 1, which is what sigmoid already tends to there.
+TensorImplPtr SoftplusBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                  const TensorImplPtr& x,
+                                                  const TensorImplPtr&) {
+    return mul_op(g, sigmoid_op(x));
+}
+
+// elu'(x) = 1 for x > 0, and alpha*exp(x) = y + alpha below — written
+// through the saved output so the branch matches the forward exactly.
+TensorImplPtr EluBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr& x,
+                                             const TensorImplPtr& out) {
+    // Rebuilt from ``x`` rather than read from ``out``: this op does not
+    // hand its output to the graph-mode formula, and reading it gave
+    // "add: null input tensor".
+    (void)out;
+    auto positive = greater_op(x, zeros_like_op(x));
+    auto negative_side = mul_op(full_like_op(x, alpha_), exp_op(x));
+    return mul_op(g, where_op(positive, ones_like_op(x), negative_side));
+}
+
+// selu'(x) = scale for x > 0, and scale*alpha*exp(x) below.  The two
+// constants are the paper's, and the forward holds them as literals.
+TensorImplPtr SeluBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    constexpr double kAlpha = 1.6732632423543772;
+    constexpr double kScale = 1.0507009873554805;
+    auto positive = greater_op(x, zeros_like_op(x));
+    auto upper = full_like_op(x, kScale);
+    auto lower = mul_op(full_like_op(x, kScale * kAlpha), exp_op(x));
+    return mul_op(g, where_op(positive, upper, lower));
+}
+
+// mish(x) = x * tanh(softplus(x)).  Product rule, with sigmoid the
+// derivative of the inner softplus:
+//   mish' = tanh(sp) + x * (1 - tanh(sp)^2) * sigmoid(x)
+TensorImplPtr MishBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    auto t = tanh_op(softplus_op(x));
+    auto sech2 = sub_op(ones_like_op(x), mul_op(t, t));
+    auto second = mul_op(mul_op(x, sech2), sigmoid_op(x));
+    return mul_op(g, add_op(t, second));
+}
+
+// hard_sigmoid is piecewise linear: 1/6 inside the band, 0 outside.
+TensorImplPtr HardSigmoidBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                     const TensorImplPtr& x,
+                                                     const TensorImplPtr&) {
+    // ``where`` rather than multiplying by the comparison: a compare
+    // returns bool and ``mul`` refuses to mix that with a float.
+    auto above_low = greater_op(x, full_like_op(x, -3.0));
+    auto below_high = less_op(x, full_like_op(x, 3.0));
+    auto slope =
+        where_op(above_low, where_op(below_high, full_like_op(x, 1.0 / 6.0), zeros_like_op(x)),
+                 zeros_like_op(x));
+    return mul_op(g, slope);
+}
+
+// hard_swish(x) = x * hard_sigmoid(x), so inside the band the derivative
+// is (2x + 3)/6; it is 0 below -3 and 1 above 3.
+TensorImplPtr HardSwishBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                   const TensorImplPtr& x,
+                                                   const TensorImplPtr&) {
+    auto below = less_op(x, full_like_op(x, -3.0));
+    auto above = greater_op(x, full_like_op(x, 3.0));
+    auto inside_value = mul_op(add_op(mul_op(x, full_like_op(x, 2.0)), full_like_op(x, 3.0)),
+                               full_like_op(x, 1.0 / 6.0));
+    auto slope = where_op(above, ones_like_op(x), where_op(below, zeros_like_op(x), inside_value));
+    return mul_op(g, slope);
+}
+
+// relu6'(x) = 1 strictly inside (0, 6), 0 at and beyond both clamps.
+TensorImplPtr Relu6Backward::grad_formula_impl(const TensorImplPtr& g,
+                                               const TensorImplPtr& x,
+                                               const TensorImplPtr&) {
+    auto above_low = greater_op(x, zeros_like_op(x));
+    auto below_high = less_op(x, full_like_op(x, 6.0));
+    auto slope = where_op(above_low, where_op(below_high, ones_like_op(x), zeros_like_op(x)),
+                          zeros_like_op(x));
+    return mul_op(g, slope);
 }
 
 TensorImplPtr relu_op(const TensorImplPtr& a) {

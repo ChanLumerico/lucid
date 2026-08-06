@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - diff every run against a recorded coverage baseline
 
+- eleven ops gain a graph-mode derivative
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

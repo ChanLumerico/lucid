@@ -175,6 +175,22 @@ def contract(out: Any, weights: np.ndarray) -> Any:
     n = int(flat.shape[0])
     if n == 0:
         raise ValueError("op returned an empty tensor")
+    if n > weights.size:
+        # More output than covector.
+        #
+        # Every caller asks for 64 weights, and ``weights[:n]`` is a
+        # *shorter* slice when the output is bigger — so the multiply
+        # raised ``ShapeMismatch (broadcast): expected [216], got [64]``
+        # and the gradient axes reported it as though the op were at
+        # fault.  Around fifty cells, all of them ops whose output is
+        # simply larger than the probe: conv2d, batch_norm, interpolate,
+        # the 3-D poolings, pad.
+        #
+        # Extended from the same generator rather than tiled, so the
+        # weights stay independent draws and a longer covector is a
+        # superset of a shorter one — a run remains reproducible and a
+        # finding re-derivable by hand.
+        weights = rng(SEED_A).standard_normal(n)
     return (flat * as_f64(weights[:n])).sum()
 
 

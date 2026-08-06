@@ -61,6 +61,9 @@ namespace lucid {
 // MinimumBackward : Elementwise minimum (mirror operation).
 class LUCID_API MaximumBackward : public BinaryOp<MaximumBackward> {
 public:
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
+                                                              const TensorImplPtr& a,
+                                                              const TensorImplPtr& b);
     // Op registration metadata: name "maximum", schema version 1, dtype
     // promotion, deterministic.
     static const OpSchema schema_v1;
