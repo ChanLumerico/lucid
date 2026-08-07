@@ -33,7 +33,7 @@
    "total": 4
   },
   "lucid/_factories/converters.py": {
-   "covered": 119,
+   "covered": 121,
    "total": 160
   },
   "lucid/_factories/creation.py": {
@@ -513,7 +513,7 @@
    "total": 23
   },
   "lucid/nn/hooks.py": {
-   "covered": 27,
+   "covered": 32,
    "total": 49
   },
   "lucid/nn/init.py": {
@@ -537,7 +537,7 @@
    "total": 88
   },
   "lucid/nn/module.py": {
-   "covered": 424,
+   "covered": 436,
    "total": 656
   },
   "lucid/nn/modules/__init__.py": {
@@ -553,7 +553,7 @@
    "total": 241
   },
   "lucid/nn/modules/container.py": {
-   "covered": 118,
+   "covered": 159,
    "total": 225
   },
   "lucid/nn/modules/conv.py": {
@@ -865,8 +865,8 @@
    "total": 10
   },
   "lucid/utils/data/dataloader.py": {
-   "covered": 111,
-   "total": 221
+   "covered": 153,
+   "total": 258
   },
   "lucid/utils/data/dataset.py": {
    "covered": 108,
@@ -1033,7 +1033,7 @@
    "total": 28
   }
  },
- "line_covered": 23866,
- "line_total": 28033,
- "percent": 85.13537616380694
+ "line_covered": 23968,
+ "line_total": 28070,
+ "percent": 85.38653366583542
 }

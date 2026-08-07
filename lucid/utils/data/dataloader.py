@@ -14,7 +14,7 @@ from typing import Callable, Iterator, cast, final
 from lucid._tensor.tensor import Tensor
 from lucid._factories.converters import tensor as _tensor_fn
 from lucid import stack
-from lucid.utils.data.dataset import Dataset
+from lucid.utils.data.dataset import Dataset, IterableDataset
 from lucid.utils.data._worker import WorkerInfo, _set_worker_info
 from lucid.utils.data.sampler import (
     Sampler,
@@ -275,6 +275,9 @@ class _SingleProcessDataLoaderIter:
     def __init__(self, loader: DataLoader) -> None:
         self._dataset = loader.dataset
         self._collate_fn = loader.collate_fn
+        # Not ``None`` here: ``__iter__`` routes an iterable-style loader
+        # to ``_IterableDataLoaderIter`` before this class is constructed.
+        assert loader.batch_sampler is not None
         self._batch_sampler = loader.batch_sampler
         self._iter = iter(self._batch_sampler)
         # 3.2.0: detect the optional vectorised batch-fetch protocol.  A
@@ -282,7 +285,17 @@ class _SingleProcessDataLoaderIter:
         # owns its own collation — we bypass ``collate_fn`` for it.  The
         # check happens once at iterator construction so the per-batch
         # dispatch is a single attribute lookup, not a ``hasattr`` call.
-        self._getitems_fn = getattr(self._dataset, "__getitems__", None)
+        # ...but only when the caller did not ask for a different one.  The
+        # fast path *is* a collation, so taking it with a user-supplied
+        # ``collate_fn`` in hand silently discards it: the loader returns
+        # default-collated batches and the function is never called once.
+        # A custom collate is how variable-length sequences, dicts and
+        # graphs get batched, so speed must not decide this.
+        self._getitems_fn = (
+            getattr(self._dataset, "__getitems__", None)
+            if loader.collate_fn is default_collate
+            else None
+        )
 
     def __iter__(self) -> _SingleProcessDataLoaderIter:
         return self
@@ -303,6 +316,40 @@ class _SingleProcessDataLoaderIter:
             return batched
         batch = [self._dataset[i] for i in indices]  # type: ignore[attr-defined]
         return self._collate_fn(batch)  # type: ignore[arg-type, return-value]
+
+
+# ── iterable-style iterator ──────────────────────────────────────────────────
+
+
+@final
+class _IterableDataLoaderIter:
+    """Chunk an iterable-style dataset into batches.
+
+    No sampler and no indices: the dataset decides its own order and its
+    own length, and all the loader does is group what comes out and hand
+    each group to ``collate_fn``.  ``drop_last`` still applies — a short
+    trailing batch is a real thing to want to discard whether or not the
+    length was known in advance.
+    """
+
+    def __init__(self, loader: DataLoader) -> None:
+        self._iter: Iterator[object] = iter(loader.dataset)
+        self._collate_fn = loader.collate_fn
+        self._batch_size = loader.batch_size or 1
+        self._drop_last = loader.drop_last
+
+    def __iter__(self) -> _IterableDataLoaderIter:
+        return self
+
+    def __next__(self) -> Tensor | tuple[Tensor, ...]:
+        batch: list[object] = []
+        for item in self._iter:
+            batch.append(item)
+            if len(batch) == self._batch_size:
+                return cast("Tensor | tuple[Tensor, ...]", self._collate_fn(batch))
+        if batch and not self._drop_last:
+            return cast("Tensor | tuple[Tensor, ...]", self._collate_fn(batch))
+        raise StopIteration
 
 
 # ── multi-process iterator ────────────────────────────────────────────────────
@@ -567,6 +614,32 @@ class DataLoader:
             self.prefetch_factor = prefetch_factor
         self.persistent_workers = persistent_workers
 
+        # An iterable-style dataset has no length and no indices, so there
+        # is nothing for a sampler to sample.  The class docstring has
+        # always said both styles are accepted; until now the constructor
+        # built a ``SequentialSampler`` unconditionally and the first
+        # iteration died on ``len()``.
+        self.batch_sampler: Sampler | None
+        self.sampler: Sampler | None
+        self._persistent_iter: _MultiProcessDataLoaderIter | None
+        self._iterable_style = isinstance(dataset, IterableDataset)
+        if self._iterable_style:
+            if shuffle:
+                raise ValueError(
+                    "shuffle is not meaningful for an IterableDataset — it "
+                    "has no indices to permute.  Shuffle inside the "
+                    "dataset's __iter__, or use a map-style Dataset."
+                )
+            if sampler is not None or batch_sampler is not None:
+                raise ValueError(
+                    "sampler and batch_sampler do not apply to an "
+                    "IterableDataset; it decides its own order."
+                )
+            self.batch_sampler = None
+            self.sampler = None
+            self._persistent_iter = None
+            return
+
         if batch_sampler is not None:
             if batch_size != 1 or shuffle or sampler is not None or drop_last:
                 raise ValueError(
@@ -587,7 +660,7 @@ class DataLoader:
             self.batch_sampler = BatchSampler(sampler, batch_size, drop_last)
 
         self.sampler = sampler
-        self._persistent_iter: _MultiProcessDataLoaderIter | None = None
+        self._persistent_iter = None
 
     def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
         """Yield collated mini-batches for one full pass over the dataset.
@@ -603,6 +676,10 @@ class DataLoader:
             Output of ``collate_fn`` applied to each sampled batch of
             dataset items.
         """
+        if self._iterable_style:
+            yield from _IterableDataLoaderIter(self)
+            return
+
         if self.num_workers == 0:
             yield from _SingleProcessDataLoaderIter(self)
             return
@@ -628,5 +705,16 @@ class DataLoader:
             yield from _MultiProcessDataLoaderIter(self)
 
     def __len__(self) -> int:
-        """Return the number of batches per epoch (``len(batch_sampler)``)."""
+        """Return the number of batches per epoch (``len(batch_sampler)``).
+
+        An iterable-style dataset has no length to divide, so neither has
+        the loader over it.  ``TypeError`` rather than a guess: a wrong
+        ``len`` silently truncates a progress bar, a learning-rate
+        schedule, or an epoch.
+        """
+        if self.batch_sampler is None:
+            raise TypeError(
+                "this DataLoader wraps an IterableDataset, which has no "
+                "length — iterate it instead of asking how long it is."
+            )
         return len(self.batch_sampler)

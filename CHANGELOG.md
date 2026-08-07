@@ -208,6 +208,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - say so when a lazy layer's parameters were read too early
 
+- call the collate_fn that was passed, and take an IterableDataset
+
 ### Changed
 
 - give the engine ops one shared operand check
