@@ -202,6 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - return the statistic and the window that were asked for
 
+- make the transforms invert and report their Jacobian
+
 ### Changed
 
 - give the engine ops one shared operand check

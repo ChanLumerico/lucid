@@ -802,19 +802,29 @@ class StickBreakingTransform(Transform):
         Tensor
             Per-sample log-Jacobian.
         """
-        # log|det J| = Σ_k log(y_k) + log(remaining stick before y_k) —
-        # the standard simplex-to-ℝ^(K-1) Jacobian.
+        # ``dy_k/dz_k = rem_k`` and ``dz_k/dx_k = z_k (1 - z_k)``, and the
+        # map is triangular in ``k``, so
+        #
+        #     log|det J| = Σ_k [ log(rem_k · z_k) + log(1 - z_k) ]
+        #                = Σ_k [ log(y_k)         + log(1 - z_k) ]
+        #
+        # since ``y_k = rem_k · z_k``.  The ``rem`` factor is already inside
+        # ``y_k``; adding ``log(rem_k)`` on top counted it twice, which put
+        # the density off by ``Σ_k log(rem_k)`` — a quantity that varies
+        # with the sample, so it does not even cancel as a constant.  Any
+        # ``TransformedDistribution`` over the simplex was optimising the
+        # wrong objective.
         K_minus_1: int = int(x.shape[-1])
-        z: Tensor = y.narrow(-1, 0, K_minus_1)
-        # remaining-before for each k.
+        head: Tensor = y.narrow(-1, 0, K_minus_1)
+        # remaining-before for each k: rem_k = 1 − Σ_{j<k} y_j.
         remaining: list[Tensor] = []
-        cum: Tensor = z.cumsum(dim=-1)
-        ones: Tensor = lucid.ones_like(z.narrow(-1, 0, 1))
+        cum: Tensor = head.cumsum(dim=-1)
+        ones: Tensor = lucid.ones_like(head.narrow(-1, 0, 1))
         remaining.append(ones)
         for k in range(1, K_minus_1):
             remaining.append((1.0 - cum.narrow(-1, k - 1, 1)))
         rem: Tensor = lucid.cat(remaining, dim=-1)
-        return (z.log() + rem.log() + (1.0 - z / rem).log()).sum(dim=-1)
+        return (head.log() + (1.0 - head / rem).log()).sum(dim=-1)
 
 
 class LowerCholeskyTransform(Transform):
@@ -910,12 +920,21 @@ class LowerCholeskyTransform(Transform):
         diag_mask: Tensor = _eye_mask(D, y.dtype, y.device)
         tril_mask: Tensor = _tril_mask(D, y.dtype, y.device)
         off_mask: Tensor = tril_mask - diag_mask
-        # ``softplus^{-1}(z) = log(exp(z) − 1)`` — stable for z > 0.
-        diag_in: Tensor = (
-            (y * diag_mask).exp().log1p()
-            if False
-            else ((y * diag_mask).exp() - 1.0).log() * diag_mask
-        )
+        # ``softplus^{-1}(z) = log(expm1(z))``.
+        #
+        # Two things have to be right here and neither was.  Masking to the
+        # diagonal *before* the inverse leaves zeros off it, and
+        # ``log(exp(0) - 1) = log(0) = -inf``; multiplying that back by a
+        # zero mask gives NaN, so the entire strict lower triangle came back
+        # NaN and the transform had no working inverse at all — nor, in
+        # consequence, did any ``TransformedDistribution`` built on it, since
+        # ``log_prob`` goes through the inverse.  Substituting 1.0 off the
+        # diagonal keeps the masked-out lanes finite.
+        #
+        # ``exp(z) - 1`` also loses every significant digit as ``z`` grows;
+        # ``expm1`` is the form that survives a large diagonal.
+        safe: Tensor = y * diag_mask + (1.0 - diag_mask)
+        diag_in: Tensor = lucid.log(lucid.expm1(safe)) * diag_mask
         off_in: Tensor = y * off_mask
         return diag_in + off_in
 
@@ -1279,30 +1298,6 @@ class CorrCholeskyTransform(Transform):
         d = self.dim
         *batch, _ = x.shape
         z = x.tanh()  # (..., free_ndim)
-
-        L_flat = lucid.zeros(*batch, d, d, dtype=x.dtype, device=x.device)
-        # Fill strictly lower triangle column by column.
-        idx = 0
-        for col in range(d):
-            # row starts at col+1 (zero-indexed)
-            for row in range(col + 1, d):
-                # Place the raw tanh value.  Normalisation happens per-row
-                # after all elements are placed.
-                L_flat = self._scatter_elem(L_flat, batch, row, col, z[..., idx])
-                idx += 1
-
-        # Normalise rows so L Lᵀ has unit diagonal:
-        # for row i, norm² = Σ_{j=0}^{i-1} L_{ij}² + diag²  → set diag so norm=1.
-        rows = []
-        for row in range(d):
-            if row == 0:
-                # first diagonal element = 1
-                lucid.ones(*batch, 1, dtype=x.dtype, device=x.device)
-                off = lucid.zeros(*batch, d, dtype=x.dtype, device=x.device)
-                rows.append(off)
-                # Actually build row by row using a different approach below.
-            break
-        # Use the cleaner vectorised approach: build the matrix row by row.
         return self._build_chol(z, batch, d, x.dtype, x.device)
 
     def _build_chol(
@@ -1382,23 +1377,6 @@ class CorrCholeskyTransform(Transform):
         # Stack rows → (..., d, d)
         return lucid.cat(row_tensors, dim=-2)
 
-    @staticmethod
-    def _scatter_elem(
-        L: Tensor,
-        batch: list[int],
-        row: int,
-        col: int,
-        val: Tensor,
-    ) -> Tensor:
-        """Placeholder scatter helper — retained for reference, no-op currently.
-
-        The vectorised ``_build_chol`` path supersedes the original
-        element-by-element scatter; this stub is kept so callers in older
-        code paths continue to type-check.
-        """
-        # Helper — not used in the final path, kept for reference.
-        return L
-
     @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Extract the free parameters ``x`` from a Cholesky factor ``L``."""
@@ -1465,39 +1443,39 @@ class CorrCholeskyTransform(Transform):
         Tensor
             Per-sample log-Jacobian.
         """
-        # log |det J| = Σ_{row>0} Σ_{j<row} log|∂L_{row,j}/∂x_{row,j}|
-        # ∂tanh(x)/∂x = 1 - tanh²(x)  and  ∂(z·scale)/∂z = scale
-        # Net contribution: Σ log(1-z²)/2 (tanh derivative) + scale terms.
-        # We use the chain-rule result:
-        # log|det J| = Σ_{i>j} log(1 - tanh²(x_{ij})) * 0.5  (tanh term)
-        #            + Σ_{row} Σ_{j<row-1} log(scale_j)
-        # For simplicity use the closed-form from the Stan reference:
-        # log|det J| = Σ_{k=1}^{d-1} (d-k-1) * log(tanh²(x_k)) + sum log(1-tanh²)
-        # This is computed from the y (output) more directly.
+        # The domain and codomain have different dimensions, so this is the
+        # log-Jacobian of ``x`` against the *free* (strictly lower) entries
+        # of ``y``, which is the only determinant that is defined here.
+        #
+        # Two factors compose.  ``tanh`` contributes ``Σ log(1 - tanh²(x))``
+        # over the free vector.  The stick-breaking that follows scales the
+        # entry at ``(i, j)`` by ``sqrt(∏_{k<j} (1 - r_{ik}²))``, and that
+        # product is exactly ``1 - Σ_{k≤j-1} y_{ik}²`` — so the whole
+        # contribution is half the log of ``1 - cumsum(y², -1)`` read at the
+        # positions two or more columns below the diagonal.
+        #
+        # What stood here was a guess: the comment above it sketched three
+        # different formulas and settled on weighting ``log L_{rr}`` by
+        # ``d - row``.  It is off by a sample-dependent amount — ``-0.5973``
+        # against ``-0.3885`` at ``d = 3`` — which is a wrong density rather
+        # than a wrong constant, so nothing downstream normalises it away.
         d = self.dim
-        # Sum over off-diagonal log-diagonal-scale terms.
-        log_diags: list[Tensor] = []
-        for row in range(1, d):
-            diag_elem = y[..., row, row]  # L[row,row]
-            # Each diagonal contributes log(L[row,row]) * (d - row) times
-            # (from the normalisation chain) — use (d - row - 1) * log(L_{rr})
-            # per row from the Lewandowski formula.
-            log_diags.append(
-                (float(d - row - 1) + 1.0) * diag_elem.clamp(min=1e-8).log()
-            )
-        if not log_diags:
+        if d < 2:
             return lucid.zeros(tuple(x.shape[:-1]), dtype=x.dtype, device=x.device)
-        # tanh contribution: Σ log(1 - tanh²(x)) = Σ log(1 - z²)
+
         z = x.tanh()
-        raw_1mz2 = 1.0 - z * z
-        clamped_1mz2 = lucid.where(
-            raw_1mz2 < 1e-8,
-            lucid.full_like(raw_1mz2, 1e-8),
-            raw_1mz2,
-        )
-        log_1_minus_z2 = clamped_1mz2.log().sum(dim=-1)
-        diag_sum = lucid.cat([ld.unsqueeze(-1) for ld in log_diags], dim=-1).sum(dim=-1)
-        return log_1_minus_z2 + diag_sum
+        one_minus_z2 = lucid.clip(1.0 - z * z, min=1e-12)
+        tanh_logdet = one_minus_z2.log().sum(dim=-1)
+
+        # ``1 - cumsum(y², -1)`` at the entries with ``col <= row - 2``.
+        # Masked-out lanes are set to 1.0 *before* the log: a zero there
+        # would make ``log(0) * 0`` a NaN and poison the whole sum.
+        remaining = 1.0 - (y * y).cumsum(dim=-1)
+        mask = lucid.tril(lucid.ones(d, d, dtype=x.dtype, device=x.device), k=-2)
+        safe = lucid.clip(remaining, min=1e-12) * mask + (1.0 - mask)
+        stick_logdet = 0.5 * (safe.log() * mask).sum(dim=-1).sum(dim=-1)
+
+        return tanh_logdet + stick_logdet
 
 
 class CumulativeDistributionTransform(Transform):
