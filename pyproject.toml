@@ -179,3 +179,39 @@ ignore = [
 # Re-export / bootstrap ordering in package roots.
 "**/__init__.py"  = ["F401", "E402"]
 "**/__init__.pyi" = ["F401", "E402"]
+
+# ── coverage ───────────────────────────────────────────────────────────────
+# Kept here rather than passed on the command line so every run — local,
+# CI, and the audit gate — measures the same denominator and the numbers
+# are comparable between them.
+[tool.coverage.run]
+source = ["lucid"]
+omit = [
+    # The tests themselves.
+    "lucid/test/*",
+    # The model zoo is built *on* the framework rather than beside it: it
+    # introduces no primitive of its own, and some configs are several
+    # billion parameters and cannot be instantiated on a laptop.  A
+    # framework that is sound underneath carries the zoo with it, so the
+    # zoo does not belong in this measurement.
+    "lucid/models/*",
+    # Benchmark harnesses.  Covering these means running the benchmarks,
+    # which is a deliberate, heavy, separately-invoked activity — not
+    # something a regression gate should trigger.
+    "lucid/benchmarks/*",
+]
+
+[tool.coverage.report]
+# ``run.omit`` decides what is measured; ``report.omit`` decides what is
+# reported.  Both are needed — a report over data collected earlier would
+# otherwise still count the omitted files.
+omit = [
+    "lucid/test/*",
+    "lucid/models/*",
+    "lucid/benchmarks/*",
+]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
