@@ -200,6 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - index and assign the elements the key actually names
 
+- return the statistic and the window that were asked for
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -2,6 +2,7 @@
 
 import math
 import random
+from bisect import bisect_right
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
@@ -66,6 +67,62 @@ def _quantile_sorted(
     return results
 
 
+def _nanquantile_along(
+    sorted_x: Tensor,
+    counts: Tensor,
+    q_list: Sequence[float],
+    dim: int,
+    keepdim: bool,
+    interpolation: str,
+) -> list[Tensor]:
+    """Quantile along ``dim`` where each slice has its own valid count.
+
+    ``_quantile_sorted`` takes a single integer ``n``, which is all a
+    NaN-free quantile needs.  A NaN-aware one does not have that: slice
+    ``i`` may have five valid entries where slice ``j`` has six, and the
+    position ``q * (n - 1)`` differs per slice.  Collapsing the counts to
+    one number — the mean, rounded down — is what this replaces, and it
+    was wrong for *every* slice rather than only the ones holding a NaN,
+    since the mean is nobody's count.
+
+    ``counts`` is the per-slice valid count with ``dim`` kept at size 1.
+    NaNs have already been sorted to the end as ``+inf``, so index
+    ``n - 1`` is the largest real value.
+    """
+    zero = lucid.zeros_like(counts)
+    last = lucid.maximum(counts - 1.0, zero)
+    valid = counts > 0.0
+
+    def _gather(pos: Tensor) -> Tensor:
+        return lucid.take_along_dim(sorted_x, pos.to(lucid.int32), dim=dim)
+
+    results = []
+    for qi in q_list:
+        pos = last * qi
+        lo = lucid.floor(pos)
+        hi = lucid.minimum(lo + 1.0, last)
+
+        if interpolation == "linear":
+            frac = pos - lo
+            val = _gather(lo) * (1.0 - frac) + _gather(hi) * frac
+        elif interpolation == "lower":
+            val = _gather(lo)
+        elif interpolation == "higher":
+            val = _gather(hi)
+        elif interpolation == "midpoint":
+            val = (_gather(lo) + _gather(hi)) * 0.5
+        elif interpolation == "nearest":
+            val = _gather(lucid.round(pos))
+        else:
+            raise ValueError(f"Unknown interpolation method: {interpolation!r}")
+
+        # An all-NaN slice has no quantile; ``last`` clamped to 0 would
+        # otherwise hand back the ``+inf`` that stood in for the NaN.
+        val = lucid.where(valid, val, lucid.full_like(val, math.nan))
+        results.append(val if keepdim else val.squeeze(dim))
+    return results
+
+
 def _parse_q(q: float | Sequence[float] | Tensor) -> tuple[list[float], bool]:
     """Return (q_list of floats, scalar_flag)."""
     if isinstance(q, lucid.Tensor):
@@ -121,15 +178,28 @@ def quantile(
     """
     q_list, scalar_q = _parse_q(q)
 
+    # A NaN anywhere in the slice poisons its quantile — that is the whole
+    # difference from :func:`nanquantile`, and it has to be stated rather
+    # than left to fall out of the arithmetic.  Sorting puts NaN at the end,
+    # so it only reached the answer when the interpolation position happened
+    # to land beside one (``nan * 0.0`` is still ``NaN``).  Anywhere else it
+    # dropped out silently: 50 samples with three NaNs returned a perfectly
+    # ordinary median where the reference and NumPy both return NaN.
+    nan_frac = lucid.isnan(input).to(input.dtype)
+
     if dim is None:
         flat = input.reshape(-1)
         sorted_x = lucid.sort(flat)
         n = flat.shape[0]
         results = _quantile_sorted(sorted_x, q_list, None, keepdim, interpolation, n)
+        if float(nan_frac.sum().item()) > 0.0:
+            results = [lucid.full_like(r, math.nan) for r in results]
     else:
         sorted_x = lucid.sort(input, dim)
         n = input.shape[dim]
         results = _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n)
+        clean = nan_frac.sum(dim=dim, keepdim=keepdim) == 0.0
+        results = [lucid.where(clean, r, lucid.full_like(r, math.nan)) for r in results]
 
     if scalar_q:
         return results[0]
@@ -204,18 +274,9 @@ def nanquantile(
             lucid.full_like(safe, 0.0),
             lucid.full_like(safe, 1.0),
         ).sum(dim=dim, keepdim=True)
-        # Use the mean non-NaN count along this dim as n
-        n = int(non_nan_count.mean().item())
-        if n == 0:
-            out_shape = list(input.shape)
-            out_shape[dim] = len(q_list)
-            nan_val = lucid.full(
-                out_shape, math.nan, dtype=input.dtype, device=input.device
-            )
-            if scalar_q:
-                return nan_val.squeeze(dim)
-            return nan_val
-        results = _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n)
+        results = _nanquantile_along(
+            sorted_x, non_nan_count, q_list, dim, keepdim, interpolation
+        )
 
     if scalar_q:
         return results[0]
@@ -825,10 +886,19 @@ def histogram(
     else:
         counts = [0.0] * n_bins
 
+    # ``(v - lo) / (hi - lo) * n_bins`` is only the bin index when the edges
+    # are equally spaced.  Given explicit edges it silently re-bins the data
+    # onto a uniform grid of the same span: on 50 standard normals over
+    # ``[-3, -1, 0, 1, 3]`` it returned ``[1, 19, 23, 7]`` for ``[8, 12, 17,
+    # 13]`` — the right total, so nothing looks amiss.
+    uniform = isinstance(bins, int)
     for i, v in enumerate(vals):
         if v < lo or v > hi:
             continue
-        bin_idx = min(int((v - lo) / (hi - lo) * n_bins), n_bins - 1)
+        if uniform:
+            bin_idx = min(int((v - lo) / (hi - lo) * n_bins), n_bins - 1)
+        else:
+            bin_idx = min(bisect_right(edges, v) - 1, n_bins - 1)
         w = w_list[i] if w_list is not None else 1
         counts[bin_idx] += w
 
@@ -838,6 +908,10 @@ def histogram(
             counts = [
                 c / (total * (edges[j + 1] - edges[j])) for j, c in enumerate(counts)
             ]
+        hist_t = lucid.tensor(counts, dtype=_f, device=input.device)
+    elif w_list is not None:
+        # Weighted sums are not counts.  Emitting them at ``int64`` truncated
+        # every bin toward zero — ``2.2035`` came back as ``2``.
         hist_t = lucid.tensor(counts, dtype=_f, device=input.device)
     else:
         hist_t = lucid.tensor(counts, dtype=lucid.int64, device=input.device)

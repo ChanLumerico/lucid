@@ -51,6 +51,26 @@ def _length_for_sym(M: int, sym: bool) -> int:
     return M if sym else M + 1
 
 
+def _degenerate(M: int, dtype: DTypeLike, device: DeviceLike) -> Tensor | None:
+    """Return the window for ``M <= 1``, or ``None`` when there is shape to
+    compute.
+
+    One sample carries no taper and zero samples carry nothing, so both the
+    reference framework and the usual convention answer ``ones(M)``.  The
+    guard has to read the **requested** ``M``, not the working length:
+    ``sym=False`` computes ``M + 1`` samples and keeps the first, so a guard
+    on the working length lets ``M = 1`` through and hands back whatever the
+    leading sample of a two-sample window happens to be — ``0.0`` for a
+    Bartlett or a Hann, which annihilates the frame it was meant to taper,
+    and ``0.08`` for a Hamming, which is worse for being plausible.
+    """
+    if M < 0:
+        raise ValueError(f"window length must be >= 0, got {M}")
+    if M <= 1:
+        return lucid.ones(M, dtype=dtype, device=device)
+    return None
+
+
 def _trim(window: Tensor, M: int, sym: bool) -> Tensor:
     """Drop the last sample when ``sym=False`` so the periodic form has the
     user-requested length ``M``."""
@@ -114,9 +134,10 @@ def bartlett(
     >>> bartlett(5)
     Tensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 1:
-        return lucid.ones(M if M > 0 else 0, dtype=dtype, device=device)
     n = _ramp(N, dtype=dtype, device=device)
     w = 1.0 - lucid.abs(2.0 * n / float(N - 1) - 1.0)
     return _trim(w, M, sym)
@@ -171,9 +192,10 @@ def cosine(
     >>> cosine(4)
     Tensor([0.3827, 0.9239, 0.9239, 0.3827])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 0:
-        return lucid.zeros(0, dtype=dtype, device=device)
     n = _ramp(N, dtype=dtype, device=device)
     w = lucid.sin(math.pi * (n + 0.5) / float(N))
     return _trim(w, M, sym)
@@ -339,9 +361,10 @@ def general_hamming(
     >>> general_hamming(5, alpha=0.5)
     Tensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 1:
-        return lucid.ones(M if M > 0 else 0, dtype=dtype, device=device)
     n = _ramp(N, dtype=dtype, device=device)
     w = alpha - (1.0 - alpha) * lucid.cos(2.0 * math.pi * n / float(N - 1))
     return _trim(w, M, sym)
@@ -408,9 +431,10 @@ def general_cosine(
     >>> general_cosine(5, [0.5, 0.5])
     Tensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 1:
-        return lucid.ones(M if M > 0 else 0, dtype=dtype, device=device)
     n = _ramp(N, dtype=dtype, device=device)
     base = 2.0 * math.pi * n / float(N - 1)
     w = lucid.full_like(n, float(a[0]))
@@ -596,9 +620,10 @@ def gaussian(
     >>> gaussian(5, std=1.0)
     Tensor([0.1353, 0.6065, 1.0000, 0.6065, 0.1353])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 0:
-        return lucid.zeros(0, dtype=dtype, device=device)
     n = _ramp(N, dtype=dtype, device=device)
     centred = n - 0.5 * float(N - 1)
     w = lucid.exp(-0.5 * (centred / float(std)) ** 2)
@@ -663,9 +688,10 @@ def general_gaussian(
     >>> general_gaussian(5, p=2.0, sig=1.5)
     Tensor([0.4111, 0.9023, 1.0000, 0.9023, 0.4111])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 0:
-        return lucid.zeros(0, dtype=dtype, device=device)
     n = _ramp(N, dtype=dtype, device=device)
     centred = lucid.abs(n - 0.5 * float(N - 1))
     twop = 2.0 * float(p)
@@ -734,15 +760,17 @@ def exponential(
     >>> exponential(5, tau=2.0)
     Tensor([0.3679, 0.6065, 1.0000, 0.6065, 0.3679])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 0:
-        return lucid.zeros(0, dtype=dtype, device=device)
     if center is None:
-        if not sym:
-            raise ValueError(
-                "exponential: center=None requires sym=True (the periodic "
-                "form has no canonical default centre)."
-            )
+        # The periodic form does have a canonical centre: the same
+        # ``(N - 1) / 2`` on the working length ``N = M + 1`` that the
+        # symmetric form uses on ``N = M``.  Refusing it made
+        # ``exponential`` the one window in this module with no periodic
+        # form at all, while both the reference framework and the usual
+        # convention compute it.
         center = 0.5 * float(N - 1)
     n = _ramp(N, dtype=dtype, device=device)
     w = lucid.exp(-lucid.abs(n - float(center)) / float(tau))
@@ -812,9 +840,10 @@ def kaiser(
     >>> kaiser(5, beta=8.0)
     Tensor([0.0046, 0.3464, 1.0000, 0.3464, 0.0046])
     """
+    degenerate = _degenerate(M, dtype, device)
+    if degenerate is not None:
+        return degenerate
     N = _length_for_sym(M, sym)
-    if N <= 1:
-        return lucid.ones(M if M > 0 else 0, dtype=dtype, device=device)
     n = _ramp(N, dtype=dtype, device=device)
     arg = 2.0 * n / float(N - 1) - 1.0
     radical = lucid.sqrt(lucid.clip(1.0 - arg * arg, 0.0, 1.0))
