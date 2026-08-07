@@ -166,6 +166,17 @@ class Wishart(Distribution):
         dim: int = int(self.scale_tril.shape[-1])
         self._dim = dim
 
+        # ``support`` promises positive-definite draws, and the Bartlett
+        # diagonal is χ²(df − i) for i = 0, …, d − 1.  At df ≤ d − 1 the
+        # trailing concentrations reach zero and go negative, which is not a
+        # Gamma at all: the sampler returns a rank-deficient matrix outside
+        # the distribution's own declared support, with nothing to say so.
+        if float(self.df.min().item()) <= dim - 1:
+            raise ValueError(
+                f"Wishart: df must exceed dim - 1 = {dim - 1} for a "
+                f"non-singular distribution, got {float(self.df.min().item())}."
+            )
+
         # Pre-compute covariance for mean/variance.
         self._cov = self.scale_tril @ self.scale_tril.mT
 
@@ -384,10 +395,15 @@ class LKJCholesky(Distribution):
         eta: Tensor = self.concentration
         marginal_conc = eta + 0.5 * (d - 2)
 
+        # Row ``i`` of the factor has ``i`` entries below the diagonal, so its
+        # squared norm is ``y_i ~ Beta(i/2, η + (d − 1 − i)/2)``.  Row 0 has
+        # none — its draw is discarded — but ``Beta`` needs a positive pair, so
+        # it borrows row 1's, which is what the leading zero in ``offset`` is.
         offset = lucid.arange(
             0, d, 1, dtype=eta.dtype, device=eta.device
         )  # [0, 1, ..., d-1]
-        beta_conc1 = offset + 0.5  # (d,)
+        offset = lucid.clip(offset - 1.0, min=0.0)  # [0, 0, 1, ..., d-2]
+        beta_conc1 = 0.5 * offset + 0.5  # (d,)
         beta_conc0 = marginal_conc.unsqueeze(-1) - 0.5 * offset  # (*batch, d)
 
         self._beta = Beta(beta_conc1, beta_conc0)

@@ -196,6 +196,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - gather and contiguous get graph-mode; where gives its back
 
+- draw LKJ factors at the concentration asked for
+
 ### Changed
 
 - give the engine ops one shared operand check
