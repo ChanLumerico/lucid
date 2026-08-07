@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from lucid.test.audit import _axes, _console_rich, _probe, _surface
+from lucid.test.audit import _axes, _console_rich, _probe, _suite, _surface
 from lucid.test.audit._console import Console, Suppress, Timer, fmt_duration
 from lucid.test.audit._result import STATUS_STYLE, Baseline, Finding, Report, Status
 
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
 _DEFAULT_KNOWN = Path(__file__).with_name("known.json")
 _DEFAULT_COVERAGE = Path(__file__).with_name("coverage.json")
+_DEFAULT_SUITE = Path(__file__).with_name("suite.json")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,6 +77,40 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--tolerance", type=float, default=2e-5, help="relative tolerance")
     run.add_argument(
         "--fail-fast", action="store_true", help="stop at the first defect"
+    )
+
+    stage = p.add_argument_group("stages")
+    stage.add_argument(
+        "--audit-only",
+        action="store_true",
+        help="the probe sweep alone, without the test suite",
+    )
+    stage.add_argument(
+        "--tests-only",
+        action="store_true",
+        help="the test suite and line-coverage floor alone, without the sweep",
+    )
+    stage.add_argument(
+        "--suite-path",
+        default="lucid/test",
+        help="what to hand pytest (default: the whole tree; the sweep is "
+        "deselected by its marker)",
+    )
+    stage.add_argument(
+        "--no-line-coverage",
+        action="store_true",
+        help="run the suite without measuring line coverage",
+    )
+    stage.add_argument(
+        "--suite-baseline",
+        type=Path,
+        default=_DEFAULT_SUITE,
+        help="recorded line-coverage floor, compared against on every run",
+    )
+    stage.add_argument(
+        "--update-suite",
+        action="store_true",
+        help="record the current line coverage as the new floor",
     )
 
     out = p.add_argument_group("output")
@@ -749,6 +784,143 @@ def report_uncovered(console: Console, args: argparse.Namespace) -> int:
 # ── entry point ──────────────────────────────────────────────────────────────
 
 
+def _run_audit_stage(args: argparse.Namespace, console: Console) -> "tuple[int, int]":
+    """The probe sweep.  Returns ``(defects, coverage-cell regressions)``.
+
+    The record-a-new-baseline modes return zero for whatever they just
+    accepted and let the run continue: the point of folding the stages
+    together is one verdict, and a stage that exits early takes the other
+    stage's answer with it.
+    """
+    started = time.time()
+    report = run(args, console)
+    report.started = started
+    summarise(report, console, args.show.split(","))
+
+    if args.json is not None:
+        report.write_json(args.json)
+        console.always(console.paint(f"  report written to {args.json}", "grey"))
+
+    # Recording a new baseline used to exit here.  With two stages that
+    # silences the other one: ``--update-suite`` would record a floor and
+    # report success while the sweep sat on a live defect.  Record, then
+    # carry on to the verdict — the recorded stage simply contributes
+    # nothing to it, which is what "accepted" means.
+    if args.update_coverage:
+        recorded = save_coverage(args.coverage_baseline, report)
+        console.always(
+            console.paint(
+                f"  {recorded} answered cells recorded in {args.coverage_baseline}",
+                "grey",
+            )
+        )
+        return 0, 0
+
+    regressions = 0
+    if not args.no_coverage_diff:
+        recorded_cells = load_coverage(args.coverage_baseline)
+        if recorded_cells is None:
+            console.always("")
+            console.always(
+                console.paint(
+                    "  no coverage baseline yet — run --update-coverage to record one",
+                    "grey",
+                )
+            )
+        else:
+            regressions = report_coverage_diff(report, recorded_cells, console)
+
+    if args.update_known:
+        Baseline.load(args.known).save(args.known, report.defects)
+        console.always(
+            console.paint(
+                f"  {len(report.defects)} defect(s) folded into {args.known}", "grey"
+            )
+        )
+        return 0, regressions
+
+    return len(report.defects), regressions
+
+
+def _run_suite_stage(args: argparse.Namespace, console: Console) -> "tuple[int, int]":
+    """The test suite and its line-coverage floor.
+
+    Returns ``(broken tests, line-coverage regressions)``.
+    """
+    console.banner("Suite", "the values, where the sweep checks the contracts")
+    result = _suite.run_suite(
+        console,
+        args.suite_path,
+        with_coverage=not args.no_line_coverage,
+    )
+    _suite.report_suite(result, console)
+
+    if not result.ran:
+        return 0, 0
+
+    if args.update_suite:
+        if result.percent is None:
+            console.always(
+                console.paint(
+                    "  nothing to record — the run measured no coverage", "grey"
+                )
+            )
+        else:
+            _suite.save_floor(args.suite_baseline, result)
+            console.always(
+                console.paint(
+                    f"  {result.percent:.2f}% recorded in {args.suite_baseline}",
+                    "grey",
+                )
+            )
+        # A recorded floor is not a licence to ignore a broken test — the
+        # two are independent, and only the floor was just accepted.
+        return result.broken, 0
+
+    regressions = 0
+    if result.percent is not None:
+        floor = _suite.load_floor(args.suite_baseline)
+        if floor is None:
+            console.always("")
+            console.always(
+                console.paint(
+                    "  no line-coverage floor yet — run --update-suite to record one",
+                    "grey",
+                )
+            )
+        else:
+            regressions = _suite.report_line_coverage_diff(result, floor, console)
+
+    return result.broken, regressions
+
+
+def _verdict(console: Console, tallies: "dict[str, int]") -> int:
+    """One line per stage, then the answer.
+
+    The whole point of folding the two stages together is that a single
+    exit code means something.  Printing the parts as well means a red
+    run says *which* half went red without anyone re-reading the scroll.
+    """
+    console.always("")
+    console.rule("verdict", "red" if any(tallies.values()) else "green")
+    for label, count in tallies.items():
+        console.always(
+            console.paint(f"  {label}".ljust(34), "grey")
+            + console.paint(str(count), "red" if count else "green")
+        )
+    total = sum(tallies.values())
+    console.always("")
+    if total:
+        console.always(
+            console.paint(f"  {total} problem(s) — see above", "red", "bold")
+        )
+    else:
+        console.always(
+            console.paint("  clean on every stage that ran", "green", "bold")
+        )
+    return 1 if total else 0
+
+
 def main(argv: "Sequence[str] | None" = None) -> int:
     args = build_parser().parse_args(argv)
     console = Console(
@@ -764,15 +936,38 @@ def main(argv: "Sequence[str] | None" = None) -> int:
     if args.list_uncovered:
         return report_uncovered(console, args)
 
-    started = time.time()
+    if args.audit_only and args.tests_only:
+        console.always(
+            console.paint(
+                "  --audit-only and --tests-only exclude each other; "
+                "pass neither to run both",
+                "red",
+            )
+        )
+        return 2
+
+    # Both stages by default.  A gate that has to be invoked twice is a
+    # gate that gets invoked once, and this session's defects split
+    # roughly evenly between what each stage can see.
+    do_audit = not args.tests_only
+    do_suite = not args.audit_only
+
+    tallies: dict[str, int] = {}
     try:
-        report = run(args, console)
+        if do_audit:
+            defects, cell_regressions = _run_audit_stage(args, console)
+            tallies["audit defects"] = defects
+            tallies["audit coverage regressions"] = cell_regressions
+        if do_suite:
+            broken, line_regressions = _run_suite_stage(args, console)
+            tallies["suite failures"] = broken
+            tallies["line coverage regressions"] = line_regressions
     except KeyboardInterrupt:
         console.always("")
         console.always(console.paint("  interrupted — no report written", "yellow"))
         return 130
-    except SystemExit:
-        raise
+    except SystemExit as exit_:
+        return int(exit_.code or 0)
     except Exception as exc:  # noqa: BLE001
         console.always("")
         console.always(
@@ -780,45 +975,7 @@ def main(argv: "Sequence[str] | None" = None) -> int:
         )
         return 2
 
-    report.started = started
-    summarise(report, console, args.show.split(","))
-
-    if args.json is not None:
-        report.write_json(args.json)
-        console.always(console.paint(f"  report written to {args.json}", "grey"))
-    if args.update_coverage:
-        recorded = save_coverage(args.coverage_baseline, report)
-        console.always(
-            console.paint(
-                f"  {recorded} answered cells recorded in {args.coverage_baseline}",
-                "grey",
-            )
-        )
-        return 0
-
-    regressions = 0
-    if not args.no_coverage_diff:
-        recorded = load_coverage(args.coverage_baseline)
-        if recorded is None:
-            console.always("")
-            console.always(
-                console.paint(
-                    "  no coverage baseline yet — run --update-coverage to record one",
-                    "grey",
-                )
-            )
-        else:
-            regressions = report_coverage_diff(report, recorded, console)
-
-    if args.update_known:
-        Baseline.load(args.known).save(args.known, report.defects)
-        console.always(
-            console.paint(
-                f"  {len(report.defects)} defect(s) folded into {args.known}", "grey"
-            )
-        )
-        return 0
-    return 1 if (report.defects or regressions) else 0
+    return _verdict(console, tallies)
 
 
 if __name__ == "__main__":

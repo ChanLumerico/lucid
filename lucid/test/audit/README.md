@@ -1,10 +1,64 @@
-# The audit sweep
+# `lucid-audit` — the whole diagnosis, one command
 
-An exhaustive `(symbol × axis)` correctness sweep over every public Lucid
-API outside the model zoo. 1,507 symbols, 27 axes, 10,841 cells.
+Two stages, one verdict, one exit code.
 
-It is not a substitute for `pytest lucid/test/` — it is the thing that
-tells you what those tests are *not* asking.
+| stage | asks | catches |
+|---|---|---|
+| **sweep** | does each reachable symbol keep its contract? | 1,507 symbols × 27 axes = 10,841 cells |
+| **suite** | are the specific values the right values? | `pytest lucid/test` + a line-coverage floor |
+
+They fail independently, and neither is a substitute for the other.
+Measured on one session's defects: the sweep found the gradient that was
+never wired and the sampler drawing at the wrong concentration; the
+suite found the assignment writing a rectangle instead of a diagonal,
+the histogram binning onto the wrong grid, the transform whose inverse
+was NaN, and the window that deleted its own frame. A gate that runs
+only one of them reports "clean" over half a framework.
+
+```bash
+lucid-audit                 # both stages, one verdict     (~15 min)
+lucid-audit --audit-only    # the sweep alone
+lucid-audit --tests-only    # the suite and the floor alone
+```
+
+```
+── verdict ──────────────────────────────────────────────
+  audit defects                   0
+  audit coverage regressions      0
+  suite failures                  0
+  line coverage regressions       0
+
+  clean on every stage that ran
+```
+
+Exit is `0` only when every stage that ran is clean, so this works as a
+gate without reading the output. `2` means the harness itself broke —
+distinct from `1`, which means the framework did.
+
+### Why the suite runs in a subprocess
+
+By the time the sweep is done the audit has imported the whole package
+and, on some axes, patched parts of it. Collecting the suite into that
+interpreter would let one stage's state decide the other stage's result,
+which is the one thing a gate made of two independent checks must not
+allow.
+
+### Why line coverage is measured by default
+
+Because it is free. The suite takes 9m09s uninstrumented and 8m29s under
+`coverage` — the wall clock is MLX and Accelerate, not Python line
+tracing. A floor that costs nothing to check should be checked on every
+run rather than remembered. `--no-line-coverage` turns it off anyway.
+
+The floor lives in `suite.json` and is compared per module, with a
+2-point tolerance and a 20-statement minimum: adding statements to a
+well-covered file lowers its percentage honestly, and a gate that fires
+on that is a gate people learn to ignore. Record a new floor
+deliberately:
+
+```bash
+lucid-audit --tests-only --update-suite
+```
 
 ---
 
@@ -35,10 +89,12 @@ from a broken one.
 
 ### What the `[audit]` extra adds
 
-`rich`, and only `rich`. It buys the live per-subsystem display; without
-it the sweep runs identically on a stdlib ANSI console. A correctness
-tool should not fail to start over a presentation dependency, so if you
-are scripting this in CI, plain `-e .` is enough.
+`rich`, `coverage` and `pytest`. `rich` buys the live per-subsystem
+display and nothing else — without it the sweep runs identically on a
+stdlib ANSI console, because a correctness tool should not fail to start
+over a presentation dependency. `coverage` backs the line-coverage floor
+and `pytest` runs the suite stage; without either, that stage degrades
+rather than fails: it says what is missing and the sweep still reports.
 
 ### If `lucid-audit` is not found
 

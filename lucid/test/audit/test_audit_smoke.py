@@ -356,12 +356,45 @@ def test_every_symbol_has_at_least_one_axis() -> None:
     properly, the subsystems with no axis got one, and the smoke floor
     was widened to every callable.  If this regresses, some part of the
     framework has silently left the audit.
+
+    Declarations are the one exemption, and it is narrow by
+    construction: a Protocol has no implementation, a metaclass builds
+    classes rather than values, and an abstract base refuses
+    instantiation.  There is no probe to write for any of them.  The
+    exemption is asserted to *stay* narrow below, so it cannot quietly
+    become the place ops go to avoid being audited.
     """
     symbols = _surface.enumerate_surface()
     stranded = [
-        s.qualname for s in symbols if not any(a.applies(s) for a in _axes.ALL_AXES)
+        s.qualname
+        for s in symbols
+        if s.kind != "declaration" and not any(a.applies(s) for a in _axes.ALL_AXES)
     ]
     assert not stranded, f"{len(stranded)} symbols no axis reaches: {stranded[:10]}"
+
+
+def test_the_declaration_exemption_stays_narrow() -> None:
+    """The exemption above is only safe while it holds nothing runnable.
+
+    Every member has to be a Protocol, a metaclass or an abstract base —
+    re-derived here from the objects rather than read off the
+    classification, so a symbol cannot be exempted by being mislabelled.
+    """
+    declarations = [s for s in _surface.enumerate_surface() if s.kind == "declaration"]
+    assert declarations, "the classification produced nothing — it stopped working"
+
+    for symbol in declarations:
+        obj = symbol.obj
+        protocol = bool(getattr(obj, "_is_protocol", False))
+        try:
+            metaclass = isinstance(obj, type) and issubclass(obj, type)
+        except TypeError:
+            metaclass = False
+        abstract = bool(getattr(obj, "__abstractmethods__", frozenset()))
+        assert protocol or metaclass or abstract, (
+            f"{symbol.qualname} is exempt from every axis but is none of "
+            "protocol / metaclass / abstract base"
+        )
 
 
 def test_tensor_methods_resolve_to_something_callable() -> None:

@@ -1,0 +1,1039 @@
+{
+ "files": {
+  "lucid/_C/__init__.py": {
+   "covered": 1,
+   "total": 1
+  },
+  "lucid/__init__.py": {
+   "covered": 109,
+   "total": 130
+  },
+  "lucid/_audit_cli.py": {
+   "covered": 0,
+   "total": 9
+  },
+  "lucid/_ctx.py": {
+   "covered": 21,
+   "total": 21
+  },
+  "lucid/_device.py": {
+   "covered": 27,
+   "total": 33
+  },
+  "lucid/_dispatch.py": {
+   "covered": 68,
+   "total": 73
+  },
+  "lucid/_dtype.py": {
+   "covered": 92,
+   "total": 103
+  },
+  "lucid/_factories/__init__.py": {
+   "covered": 4,
+   "total": 4
+  },
+  "lucid/_factories/converters.py": {
+   "covered": 119,
+   "total": 160
+  },
+  "lucid/_factories/creation.py": {
+   "covered": 60,
+   "total": 66
+  },
+  "lucid/_factories/random.py": {
+   "covered": 91,
+   "total": 95
+  },
+  "lucid/_globals.py": {
+   "covered": 26,
+   "total": 29
+  },
+  "lucid/_ops/__init__.py": {
+   "covered": 120,
+   "total": 135
+  },
+  "lucid/_ops/_adapters.py": {
+   "covered": 220,
+   "total": 270
+  },
+  "lucid/_ops/_registry.py": {
+   "covered": 13,
+   "total": 13
+  },
+  "lucid/_ops/composite/__init__.py": {
+   "covered": 12,
+   "total": 13
+  },
+  "lucid/_ops/composite/_shared.py": {
+   "covered": 9,
+   "total": 9
+  },
+  "lucid/_ops/composite/blas.py": {
+   "covered": 22,
+   "total": 56
+  },
+  "lucid/_ops/composite/complex.py": {
+   "covered": 11,
+   "total": 18
+  },
+  "lucid/_ops/composite/constants.py": {
+   "covered": 7,
+   "total": 7
+  },
+  "lucid/_ops/composite/dtype.py": {
+   "covered": 22,
+   "total": 33
+  },
+  "lucid/_ops/composite/elementwise.py": {
+   "covered": 181,
+   "total": 213
+  },
+  "lucid/_ops/composite/indexing.py": {
+   "covered": 91,
+   "total": 141
+  },
+  "lucid/_ops/composite/predicates.py": {
+   "covered": 24,
+   "total": 52
+  },
+  "lucid/_ops/composite/reductions.py": {
+   "covered": 24,
+   "total": 52
+  },
+  "lucid/_ops/composite/shape.py": {
+   "covered": 128,
+   "total": 137
+  },
+  "lucid/_ops/composite/statistics.py": {
+   "covered": 298,
+   "total": 350
+  },
+  "lucid/_tensor/__init__.py": {
+   "covered": 2,
+   "total": 2
+  },
+  "lucid/_tensor/_dunders.py": {
+   "covered": 121,
+   "total": 150
+  },
+  "lucid/_tensor/_indexing.py": {
+   "covered": 321,
+   "total": 363
+  },
+  "lucid/_tensor/_methods.py": {
+   "covered": 32,
+   "total": 44
+  },
+  "lucid/_tensor/_repr.py": {
+   "covered": 16,
+   "total": 19
+  },
+  "lucid/_tensor/_to.py": {
+   "covered": 79,
+   "total": 93
+  },
+  "lucid/_tensor/tensor.py": {
+   "covered": 236,
+   "total": 329
+  },
+  "lucid/_threads.py": {
+   "covered": 7,
+   "total": 15
+  },
+  "lucid/_types.py": {
+   "covered": 48,
+   "total": 48
+  },
+  "lucid/amp/__init__.py": {
+   "covered": 3,
+   "total": 3
+  },
+  "lucid/amp/autocast.py": {
+   "covered": 29,
+   "total": 44
+  },
+  "lucid/amp/grad_scaler.py": {
+   "covered": 63,
+   "total": 72
+  },
+  "lucid/autograd/__init__.py": {
+   "covered": 11,
+   "total": 11
+  },
+  "lucid/autograd/_anomaly.py": {
+   "covered": 11,
+   "total": 25
+  },
+  "lucid/autograd/_backward.py": {
+   "covered": 29,
+   "total": 37
+  },
+  "lucid/autograd/_functional.py": {
+   "covered": 150,
+   "total": 165
+  },
+  "lucid/autograd/_grad_mode.py": {
+   "covered": 31,
+   "total": 39
+  },
+  "lucid/autograd/_hooks.py": {
+   "covered": 47,
+   "total": 54
+  },
+  "lucid/autograd/_python_node.py": {
+   "covered": 23,
+   "total": 23
+  },
+  "lucid/autograd/checkpoint.py": {
+   "covered": 27,
+   "total": 27
+  },
+  "lucid/autograd/function.py": {
+   "covered": 56,
+   "total": 64
+  },
+  "lucid/autograd/gradcheck.py": {
+   "covered": 65,
+   "total": 104
+  },
+  "lucid/autograd/graph.py": {
+   "covered": 15,
+   "total": 15
+  },
+  "lucid/autograd/profiler.py": {
+   "covered": 2,
+   "total": 2
+  },
+  "lucid/backends/__init__.py": {
+   "covered": 43,
+   "total": 49
+  },
+  "lucid/compile/__init__.py": {
+   "covered": 74,
+   "total": 119
+  },
+  "lucid/compile/_core/__init__.py": {
+   "covered": 0,
+   "total": 0
+  },
+  "lucid/compile/_core/attention_probe.py": {
+   "covered": 42,
+   "total": 51
+  },
+  "lucid/compile/_core/bn_runstats.py": {
+   "covered": 24,
+   "total": 27
+  },
+  "lucid/compile/_core/fallback.py": {
+   "covered": 18,
+   "total": 22
+  },
+  "lucid/compile/_core/signature.py": {
+   "covered": 33,
+   "total": 35
+  },
+  "lucid/compile/_core/symbolic_gate.py": {
+   "covered": 26,
+   "total": 30
+  },
+  "lucid/compile/_debug/__init__.py": {
+   "covered": 0,
+   "total": 0
+  },
+  "lucid/compile/_debug/diagnose.py": {
+   "covered": 49,
+   "total": 49
+  },
+  "lucid/compile/_debug/trace_dump.py": {
+   "covered": 19,
+   "total": 26
+  },
+  "lucid/compile/_entry/__init__.py": {
+   "covered": 0,
+   "total": 0
+  },
+  "lucid/compile/_entry/decode_step.py": {
+   "covered": 125,
+   "total": 144
+  },
+  "lucid/compile/_entry/function.py": {
+   "covered": 6,
+   "total": 55
+  },
+  "lucid/compile/_entry/fused_step.py": {
+   "covered": 252,
+   "total": 270
+  },
+  "lucid/compile/_entry/module.py": {
+   "covered": 219,
+   "total": 265
+  },
+  "lucid/compile/_entry/segmented_step.py": {
+   "covered": 274,
+   "total": 307
+  },
+  "lucid/compile/_entry/step.py": {
+   "covered": 130,
+   "total": 154
+  },
+  "lucid/compile/_optim/__init__.py": {
+   "covered": 0,
+   "total": 0
+  },
+  "lucid/compile/_optim/compiler.py": {
+   "covered": 950,
+   "total": 1012
+  },
+  "lucid/compile/_optim/spec.py": {
+   "covered": 50,
+   "total": 64
+  },
+  "lucid/diffeq/__init__.py": {
+   "covered": 4,
+   "total": 4
+  },
+  "lucid/diffeq/_adaptive.py": {
+   "covered": 192,
+   "total": 201
+  },
+  "lucid/diffeq/_adjoint.py": {
+   "covered": 83,
+   "total": 83
+  },
+  "lucid/diffeq/_collocation.py": {
+   "covered": 100,
+   "total": 110
+  },
+  "lucid/diffeq/_event.py": {
+   "covered": 135,
+   "total": 140
+  },
+  "lucid/diffeq/_fixed.py": {
+   "covered": 136,
+   "total": 144
+  },
+  "lucid/diffeq/_flatten.py": {
+   "covered": 51,
+   "total": 52
+  },
+  "lucid/diffeq/_fused.py": {
+   "covered": 36,
+   "total": 38
+  },
+  "lucid/diffeq/_implicit.py": {
+   "covered": 145,
+   "total": 148
+  },
+  "lucid/diffeq/_multistep.py": {
+   "covered": 116,
+   "total": 116
+  },
+  "lucid/diffeq/_solvers.py": {
+   "covered": 146,
+   "total": 146
+  },
+  "lucid/diffeq/_tableau.py": {
+   "covered": 130,
+   "total": 134
+  },
+  "lucid/diffeq/_typing.py": {
+   "covered": 17,
+   "total": 17
+  },
+  "lucid/distributions/__init__.py": {
+   "covered": 20,
+   "total": 20
+  },
+  "lucid/distributions/_util.py": {
+   "covered": 19,
+   "total": 22
+  },
+  "lucid/distributions/bernoulli.py": {
+   "covered": 77,
+   "total": 88
+  },
+  "lucid/distributions/categorical.py": {
+   "covered": 93,
+   "total": 107
+  },
+  "lucid/distributions/constraints.py": {
+   "covered": 109,
+   "total": 141
+  },
+  "lucid/distributions/continuous_extra.py": {
+   "covered": 145,
+   "total": 163
+  },
+  "lucid/distributions/discrete.py": {
+   "covered": 122,
+   "total": 155
+  },
+  "lucid/distributions/distribution.py": {
+   "covered": 58,
+   "total": 72
+  },
+  "lucid/distributions/exponential.py": {
+   "covered": 109,
+   "total": 118
+  },
+  "lucid/distributions/extra.py": {
+   "covered": 216,
+   "total": 250
+  },
+  "lucid/distributions/gamma.py": {
+   "covered": 119,
+   "total": 141
+  },
+  "lucid/distributions/independent.py": {
+   "covered": 40,
+   "total": 54
+  },
+  "lucid/distributions/kl.py": {
+   "covered": 162,
+   "total": 166
+  },
+  "lucid/distributions/matrix.py": {
+   "covered": 132,
+   "total": 137
+  },
+  "lucid/distributions/mixture.py": {
+   "covered": 28,
+   "total": 51
+  },
+  "lucid/distributions/multivariate.py": {
+   "covered": 52,
+   "total": 58
+  },
+  "lucid/distributions/normal.py": {
+   "covered": 81,
+   "total": 88
+  },
+  "lucid/distributions/relaxed.py": {
+   "covered": 62,
+   "total": 84
+  },
+  "lucid/distributions/student.py": {
+   "covered": 50,
+   "total": 54
+  },
+  "lucid/distributions/transforms.py": {
+   "covered": 434,
+   "total": 459
+  },
+  "lucid/distributions/uniform.py": {
+   "covered": 43,
+   "total": 49
+  },
+  "lucid/dtypes.py": {
+   "covered": 5,
+   "total": 5
+  },
+  "lucid/einops/__init__.py": {
+   "covered": 14,
+   "total": 14
+  },
+  "lucid/fft/__init__.py": {
+   "covered": 279,
+   "total": 304
+  },
+  "lucid/func/__init__.py": {
+   "covered": 357,
+   "total": 401
+  },
+  "lucid/linalg/__init__.py": {
+   "covered": 558,
+   "total": 673
+  },
+  "lucid/metal/__init__.py": {
+   "covered": 58,
+   "total": 83
+  },
+  "lucid/nn/__init__.py": {
+   "covered": 11,
+   "total": 15
+  },
+  "lucid/nn/_shadow.py": {
+   "covered": 143,
+   "total": 179
+  },
+  "lucid/nn/_state_dict.py": {
+   "covered": 104,
+   "total": 134
+  },
+  "lucid/nn/functional/__init__.py": {
+   "covered": 13,
+   "total": 13
+  },
+  "lucid/nn/functional/activations.py": {
+   "covered": 130,
+   "total": 157
+  },
+  "lucid/nn/functional/attention.py": {
+   "covered": 32,
+   "total": 33
+  },
+  "lucid/nn/functional/conv.py": {
+   "covered": 53,
+   "total": 53
+  },
+  "lucid/nn/functional/dropout.py": {
+   "covered": 29,
+   "total": 65
+  },
+  "lucid/nn/functional/linear.py": {
+   "covered": 31,
+   "total": 31
+  },
+  "lucid/nn/functional/loss.py": {
+   "covered": 204,
+   "total": 325
+  },
+  "lucid/nn/functional/metrics.py": {
+   "covered": 3,
+   "total": 5
+  },
+  "lucid/nn/functional/normalization.py": {
+   "covered": 86,
+   "total": 91
+  },
+  "lucid/nn/functional/pooling.py": {
+   "covered": 283,
+   "total": 298
+  },
+  "lucid/nn/functional/positional.py": {
+   "covered": 59,
+   "total": 63
+  },
+  "lucid/nn/functional/sampling.py": {
+   "covered": 183,
+   "total": 237
+  },
+  "lucid/nn/functional/sparse.py": {
+   "covered": 22,
+   "total": 23
+  },
+  "lucid/nn/hooks.py": {
+   "covered": 27,
+   "total": 49
+  },
+  "lucid/nn/init.py": {
+   "covered": 158,
+   "total": 172
+  },
+  "lucid/nn/intrinsic/__init__.py": {
+   "covered": 3,
+   "total": 4
+  },
+  "lucid/nn/intrinsic/modules.py": {
+   "covered": 14,
+   "total": 14
+  },
+  "lucid/nn/intrinsic/qat/__init__.py": {
+   "covered": 3,
+   "total": 4
+  },
+  "lucid/nn/intrinsic/qat/modules.py": {
+   "covered": 87,
+   "total": 88
+  },
+  "lucid/nn/module.py": {
+   "covered": 413,
+   "total": 648
+  },
+  "lucid/nn/modules/__init__.py": {
+   "covered": 17,
+   "total": 17
+  },
+  "lucid/nn/modules/activation.py": {
+   "covered": 219,
+   "total": 266
+  },
+  "lucid/nn/modules/attention.py": {
+   "covered": 195,
+   "total": 241
+  },
+  "lucid/nn/modules/container.py": {
+   "covered": 118,
+   "total": 225
+  },
+  "lucid/nn/modules/conv.py": {
+   "covered": 327,
+   "total": 618
+  },
+  "lucid/nn/modules/dropout.py": {
+   "covered": 54,
+   "total": 100
+  },
+  "lucid/nn/modules/flatten.py": {
+   "covered": 34,
+   "total": 64
+  },
+  "lucid/nn/modules/linear.py": {
+   "covered": 97,
+   "total": 140
+  },
+  "lucid/nn/modules/loss.py": {
+   "covered": 163,
+   "total": 258
+  },
+  "lucid/nn/modules/normalization.py": {
+   "covered": 210,
+   "total": 382
+  },
+  "lucid/nn/modules/padding.py": {
+   "covered": 106,
+   "total": 138
+  },
+  "lucid/nn/modules/pooling.py": {
+   "covered": 200,
+   "total": 258
+  },
+  "lucid/nn/modules/positional.py": {
+   "covered": 84,
+   "total": 84
+  },
+  "lucid/nn/modules/rnn.py": {
+   "covered": 298,
+   "total": 400
+  },
+  "lucid/nn/modules/sparse.py": {
+   "covered": 51,
+   "total": 73
+  },
+  "lucid/nn/modules/transformer.py": {
+   "covered": 144,
+   "total": 149
+  },
+  "lucid/nn/modules/upsampling.py": {
+   "covered": 61,
+   "total": 73
+  },
+  "lucid/nn/parameter.py": {
+   "covered": 24,
+   "total": 31
+  },
+  "lucid/nn/qat/__init__.py": {
+   "covered": 5,
+   "total": 6
+  },
+  "lucid/nn/qat/conv.py": {
+   "covered": 78,
+   "total": 92
+  },
+  "lucid/nn/qat/linear.py": {
+   "covered": 36,
+   "total": 36
+  },
+  "lucid/nn/qat/sparse.py": {
+   "covered": 17,
+   "total": 20
+  },
+  "lucid/nn/quantized/__init__.py": {
+   "covered": 11,
+   "total": 12
+  },
+  "lucid/nn/quantized/_utils.py": {
+   "covered": 44,
+   "total": 46
+  },
+  "lucid/nn/quantized/activation.py": {
+   "covered": 55,
+   "total": 55
+  },
+  "lucid/nn/quantized/conv.py": {
+   "covered": 69,
+   "total": 70
+  },
+  "lucid/nn/quantized/conv_transpose.py": {
+   "covered": 70,
+   "total": 72
+  },
+  "lucid/nn/quantized/dynamic/__init__.py": {
+   "covered": 4,
+   "total": 5
+  },
+  "lucid/nn/quantized/dynamic/linear.py": {
+   "covered": 41,
+   "total": 43
+  },
+  "lucid/nn/quantized/dynamic/rnn.py": {
+   "covered": 39,
+   "total": 40
+  },
+  "lucid/nn/quantized/functional_module.py": {
+   "covered": 42,
+   "total": 47
+  },
+  "lucid/nn/quantized/intrinsic.py": {
+   "covered": 39,
+   "total": 44
+  },
+  "lucid/nn/quantized/linear.py": {
+   "covered": 47,
+   "total": 49
+  },
+  "lucid/nn/quantized/mlx_linear.py": {
+   "covered": 46,
+   "total": 47
+  },
+  "lucid/nn/quantized/modules.py": {
+   "covered": 57,
+   "total": 59
+  },
+  "lucid/nn/quantized/sparse.py": {
+   "covered": 73,
+   "total": 76
+  },
+  "lucid/nn/utils/__init__.py": {
+   "covered": 13,
+   "total": 13
+  },
+  "lucid/nn/utils/_copy.py": {
+   "covered": 19,
+   "total": 22
+  },
+  "lucid/nn/utils/clip_grad.py": {
+   "covered": 65,
+   "total": 81
+  },
+  "lucid/nn/utils/convert_parameters.py": {
+   "covered": 29,
+   "total": 35
+  },
+  "lucid/nn/utils/fusion.py": {
+   "covered": 48,
+   "total": 67
+  },
+  "lucid/nn/utils/parametrizations.py": {
+   "covered": 2,
+   "total": 2
+  },
+  "lucid/nn/utils/parametrize.py": {
+   "covered": 53,
+   "total": 61
+  },
+  "lucid/nn/utils/prune.py": {
+   "covered": 46,
+   "total": 77
+  },
+  "lucid/nn/utils/rnn.py": {
+   "covered": 102,
+   "total": 122
+  },
+  "lucid/nn/utils/skip_init.py": {
+   "covered": 13,
+   "total": 14
+  },
+  "lucid/nn/utils/spectral_norm.py": {
+   "covered": 74,
+   "total": 85
+  },
+  "lucid/nn/utils/weight_norm.py": {
+   "covered": 58,
+   "total": 67
+  },
+  "lucid/optim/__init__.py": {
+   "covered": 7,
+   "total": 7
+  },
+  "lucid/optim/adam.py": {
+   "covered": 37,
+   "total": 37
+  },
+  "lucid/optim/lbfgs.py": {
+   "covered": 135,
+   "total": 172
+  },
+  "lucid/optim/lr_scheduler.py": {
+   "covered": 273,
+   "total": 291
+  },
+  "lucid/optim/optimizer.py": {
+   "covered": 124,
+   "total": 142
+  },
+  "lucid/optim/others.py": {
+   "covered": 158,
+   "total": 160
+  },
+  "lucid/optim/sgd.py": {
+   "covered": 22,
+   "total": 22
+  },
+  "lucid/profiler/__init__.py": {
+   "covered": 76,
+   "total": 118
+  },
+  "lucid/quantization/__init__.py": {
+   "covered": 11,
+   "total": 12
+  },
+  "lucid/quantization/_fake_quantize.py": {
+   "covered": 43,
+   "total": 43
+  },
+  "lucid/quantization/_functional.py": {
+   "covered": 61,
+   "total": 65
+  },
+  "lucid/quantization/_qgemm.py": {
+   "covered": 13,
+   "total": 14
+  },
+  "lucid/quantization/_qparams.py": {
+   "covered": 23,
+   "total": 24
+  },
+  "lucid/quantization/_qscheme.py": {
+   "covered": 27,
+   "total": 27
+  },
+  "lucid/quantization/_quantize.py": {
+   "covered": 149,
+   "total": 150
+  },
+  "lucid/quantization/_quantize_fx.py": {
+   "covered": 9,
+   "total": 9
+  },
+  "lucid/quantization/fuse_modules.py": {
+   "covered": 68,
+   "total": 78
+  },
+  "lucid/quantization/observer.py": {
+   "covered": 189,
+   "total": 193
+  },
+  "lucid/quantization/qconfig.py": {
+   "covered": 35,
+   "total": 35
+  },
+  "lucid/serialization/__init__.py": {
+   "covered": 186,
+   "total": 232
+  },
+  "lucid/signal/__init__.py": {
+   "covered": 2,
+   "total": 2
+  },
+  "lucid/signal/windows.py": {
+   "covered": 112,
+   "total": 113
+  },
+  "lucid/special/__init__.py": {
+   "covered": 325,
+   "total": 340
+  },
+  "lucid/utils/__init__.py": {
+   "covered": 6,
+   "total": 6
+  },
+  "lucid/utils/cache/__init__.py": {
+   "covered": 5,
+   "total": 5
+  },
+  "lucid/utils/cache/_base.py": {
+   "covered": 8,
+   "total": 9
+  },
+  "lucid/utils/cache/_dynamic.py": {
+   "covered": 75,
+   "total": 76
+  },
+  "lucid/utils/cache/_encoder_decoder.py": {
+   "covered": 59,
+   "total": 65
+  },
+  "lucid/utils/cache/_static.py": {
+   "covered": 83,
+   "total": 87
+  },
+  "lucid/utils/checkpoint.py": {
+   "covered": 31,
+   "total": 32
+  },
+  "lucid/utils/data/__init__.py": {
+   "covered": 6,
+   "total": 6
+  },
+  "lucid/utils/data/_mix.py": {
+   "covered": 100,
+   "total": 106
+  },
+  "lucid/utils/data/_worker.py": {
+   "covered": 8,
+   "total": 10
+  },
+  "lucid/utils/data/dataloader.py": {
+   "covered": 111,
+   "total": 221
+  },
+  "lucid/utils/data/dataset.py": {
+   "covered": 108,
+   "total": 134
+  },
+  "lucid/utils/data/sampler.py": {
+   "covered": 122,
+   "total": 174
+  },
+  "lucid/utils/tokenizer/__init__.py": {
+   "covered": 13,
+   "total": 13
+  },
+  "lucid/utils/tokenizer/_base.py": {
+   "covered": 137,
+   "total": 192
+  },
+  "lucid/utils/tokenizer/_bpe.py": {
+   "covered": 271,
+   "total": 306
+  },
+  "lucid/utils/tokenizer/_byte.py": {
+   "covered": 72,
+   "total": 98
+  },
+  "lucid/utils/tokenizer/_byte_bpe.py": {
+   "covered": 55,
+   "total": 105
+  },
+  "lucid/utils/tokenizer/_char.py": {
+   "covered": 104,
+   "total": 122
+  },
+  "lucid/utils/tokenizer/_lookup_common.py": {
+   "covered": 25,
+   "total": 29
+  },
+  "lucid/utils/tokenizer/_normalizers.py": {
+   "covered": 90,
+   "total": 111
+  },
+  "lucid/utils/tokenizer/_pre_tokenizers.py": {
+   "covered": 93,
+   "total": 108
+  },
+  "lucid/utils/tokenizer/_regex.py": {
+   "covered": 120,
+   "total": 149
+  },
+  "lucid/utils/tokenizer/_unigram.py": {
+   "covered": 261,
+   "total": 282
+  },
+  "lucid/utils/tokenizer/_whitespace.py": {
+   "covered": 101,
+   "total": 119
+  },
+  "lucid/utils/tokenizer/_word.py": {
+   "covered": 115,
+   "total": 135
+  },
+  "lucid/utils/tokenizer/_wordpiece.py": {
+   "covered": 172,
+   "total": 213
+  },
+  "lucid/utils/transforms/__init__.py": {
+   "covered": 18,
+   "total": 18
+  },
+  "lucid/utils/transforms/_autoaugment.py": {
+   "covered": 222,
+   "total": 224
+  },
+  "lucid/utils/transforms/_base.py": {
+   "covered": 117,
+   "total": 132
+  },
+  "lucid/utils/transforms/_blur.py": {
+   "covered": 200,
+   "total": 212
+  },
+  "lucid/utils/transforms/_color.py": {
+   "covered": 388,
+   "total": 411
+  },
+  "lucid/utils/transforms/_composition.py": {
+   "covered": 109,
+   "total": 125
+  },
+  "lucid/utils/transforms/_crop.py": {
+   "covered": 116,
+   "total": 136
+  },
+  "lucid/utils/transforms/_datatypes.py": {
+   "covered": 174,
+   "total": 178
+  },
+  "lucid/utils/transforms/_distortion.py": {
+   "covered": 127,
+   "total": 131
+  },
+  "lucid/utils/transforms/_dropout.py": {
+   "covered": 77,
+   "total": 81
+  },
+  "lucid/utils/transforms/_erasing.py": {
+   "covered": 65,
+   "total": 67
+  },
+  "lucid/utils/transforms/_geometric.py": {
+   "covered": 181,
+   "total": 201
+  },
+  "lucid/utils/transforms/_interpolation.py": {
+   "covered": 22,
+   "total": 28
+  },
+  "lucid/utils/transforms/_misc.py": {
+   "covered": 164,
+   "total": 187
+  },
+  "lucid/utils/transforms/_photometric.py": {
+   "covered": 72,
+   "total": 78
+  },
+  "lucid/utils/transforms/_presets.py": {
+   "covered": 156,
+   "total": 160
+  },
+  "lucid/utils/transforms/_random.py": {
+   "covered": 9,
+   "total": 10
+  },
+  "lucid/utils/transforms/_spatial.py": {
+   "covered": 292,
+   "total": 328
+  },
+  "lucid/utils/transforms/functional.py": {
+   "covered": 346,
+   "total": 358
+  },
+  "lucid/version.py": {
+   "covered": 2,
+   "total": 2
+  },
+  "lucid/weights/__init__.py": {
+   "covered": 6,
+   "total": 6
+  },
+  "lucid/weights/_base.py": {
+   "covered": 28,
+   "total": 30
+  },
+  "lucid/weights/_hub.py": {
+   "covered": 44,
+   "total": 46
+  },
+  "lucid/weights/_loading.py": {
+   "covered": 24,
+   "total": 24
+  },
+  "lucid/weights/_registry.py": {
+   "covered": 28,
+   "total": 28
+  }
+ },
+ "line_covered": 23502,
+ "line_total": 28023,
+ "percent": 83.86682368054812
+}

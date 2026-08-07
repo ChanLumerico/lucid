@@ -57,6 +57,11 @@ class Dtype:
     I64: Dtype
     Bool: Dtype
     C64: Dtype
+    C128: Dtype
+    @property
+    def name(self) -> str: ...
+    @property
+    def value(self) -> int: ...
 
 class Device:
     CPU: Device
@@ -83,10 +88,17 @@ class TensorImpl:
     @property
     def is_leaf(self) -> bool: ...
     @property
+    def retains_grad(self) -> bool: ...
+    @property
+    def stride(self) -> List[int]: ...
+    @property
+    def version(self) -> int: ...
+    @property
     def is_metal_shared(self) -> bool: ...
     @property
     def grad_fn(self) -> Node | None: ...
     def numel(self) -> int: ...
+    def nbytes(self) -> int: ...
     def data_as_python(self) -> object: ...
     def grad_as_python(self) -> object: ...
     def grad_as_impl(self) -> TensorImpl | None: ...
@@ -97,6 +109,7 @@ class TensorImpl:
     def bump_version(self) -> None: ...
     def clone_with_grad(self, requires_grad: bool = ...) -> TensorImpl: ...
     def copy_from(self, other: TensorImpl) -> None: ...
+    def assign_from(self, other: TensorImpl, name: str) -> None: ...
     def to_string(self, precision: int, threshold: int, edgeitems: int) -> str: ...
     def eval(self) -> None: ...
     def item(self) -> float | int | bool: ...
@@ -286,6 +299,7 @@ I32: Dtype
 I64: Dtype
 Bool: Dtype
 C64: Dtype
+C128: Dtype
 
 # Module-level Device aliases
 CPU: Device
@@ -594,7 +608,68 @@ def gen_engine_pyi() -> str:
 
     # Count for summary
     count = len(names)
-    return _ENGINE_HEADER + "\n".join(lines) + _ENGINE_FOOTER, count
+    text = _ENGINE_HEADER + "\n".join(lines) + _ENGINE_FOOTER
+    _check_header_against_engine(text)
+    return text, count
+
+
+def _check_header_against_engine(text: str) -> None:
+    """Fail if the hand-written header has fallen behind the engine.
+
+    ``_ENGINE_HEADER`` is a literal — ``Dtype``'s members and
+    ``TensorImpl``'s methods are typed out rather than introspected,
+    because pybind11 does not expose them in a form worth reverse
+    engineering.  A literal drifts.  It had: the engine grew
+    ``Dtype.C128`` and ``TensorImpl.assign_from``, someone hand-edited
+    the *stub* to match, and the generator kept a copy that did not know
+    about either.  Regenerating would have deleted both from the type
+    surface, and the freshness test would have gone green on the way out
+    — the failure mode where the tool that checks the thing is the thing
+    that breaks it.
+
+    So the emitted stub is checked against the loaded engine, and a
+    missing name stops the run instead of being silently dropped.
+    """
+    try:
+        from lucid._C import engine as _C_engine
+    except ImportError:  # pragma: no cover — the caller already needs it
+        return
+
+    def _body(class_name: str) -> str:
+        """The emitted text of one class, so a free function of the same
+        name cannot stand in for a missing member."""
+        head = f"class {class_name}:"
+        if head not in text:
+            return ""
+        rest = text.split(head, 1)[1]
+        lines: list[str] = []
+        for line in rest.splitlines():
+            if line and not line[0].isspace():
+                break
+            lines.append(line)
+        return "\n".join(lines)
+
+    missing: list[str] = []
+    for owner, class_name in (
+        (_C_engine.Dtype, "Dtype"),
+        (_C_engine.TensorImpl, "TensorImpl"),
+    ):
+        body = _body(class_name)
+        for name in dir(owner):
+            if name.startswith("_"):
+                continue
+            # Annotation, method, or property — all three spellings count.
+            if f" {name}:" in body or f" {name}(" in body:
+                continue
+            missing.append(f"{class_name}.{name}")
+
+    if missing:
+        raise SystemExit(
+            "[gen_pyi] the engine exposes names the header does not:\n"
+            + "\n".join(f"    {name}" for name in sorted(missing))
+            + "\n\nAdd them to _ENGINE_HEADER in tools/gen_pyi.py.  Writing the\n"
+            "stub without them would delete working API from the type surface."
+        )
 
 
 def _engine_fn_sig(name: str, fn: object) -> str:

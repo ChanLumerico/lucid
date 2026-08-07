@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - eleven ops gain a graph-mode derivative
 
+- make lucid-audit the whole diagnosis, not the first half
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
