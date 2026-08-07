@@ -20,7 +20,7 @@ never leak into the ``lucid`` top level — ``lucid.Linear`` does not exist by
 design, so there is exactly one path to each name.
 """
 
-from lucid.nn.module import Module
+from lucid.nn.module import Module, UninitializedParameterWarning
 from lucid.nn.parameter import Parameter
 from lucid.nn.hooks import (
     RemovableHandle,
@@ -200,6 +200,7 @@ from lucid.nn.modules import (
 
 __all__ = [
     "Module",
+    "UninitializedParameterWarning",
     "Parameter",
     "RemovableHandle",
     "register_module_full_backward_hook",

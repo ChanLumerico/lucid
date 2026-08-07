@@ -2,6 +2,7 @@
 nn.Module: base class for all neural network layers.
 """
 
+import warnings
 from collections import OrderedDict
 from typing import (
     Callable,
@@ -29,6 +30,16 @@ from lucid.nn.hooks import (
     RemovableHandle,
 )
 from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
+
+
+class UninitializedParameterWarning(UserWarning):
+    """A lazy layer's parameters were read before they existed.
+
+    Its own category so it can be promoted, filtered or counted on its
+    own — a blanket ``UserWarning`` filter would either swallow this or
+    turn every unrelated warning into an error.
+    """
+
 
 # _state_dict is imported lazily inside state_dict()/load_state_dict() to
 # break the Module ↔ _state_dict circular dependency.
@@ -414,8 +425,54 @@ class Module:
 
     # ── parameter / module / buffer traversal ─────────────────────────────
 
+    #: Attributes a lazy module leaves at ``None`` until its first forward.
+    #: Derived rather than declared: the thirteen lazy classes span three
+    #: files and three base classes, and a marker each of them has to
+    #: remember to set is a marker one of them will forget.
+    _PENDING_ATTRS = ("in_features", "in_channels", "num_features")
+
+    def has_uninitialized_parameters(self, recurse: bool = True) -> bool:
+        """Whether any module here is still waiting to see an input.
+
+        A lazy layer has no parameters until its first forward, and the
+        parameters it eventually builds are new objects.  Anything that
+        took a snapshot of :meth:`parameters` before then — an optimiser,
+        an EMA, a parameter-server shard — holds a list those objects are
+        not in, and will never touch them again.
+        """
+        modules = self.modules() if recurse else [self]
+        return any(
+            hasattr(m, "_initialize")
+            and any(getattr(m, a, 0) is None for a in Module._PENDING_ATTRS)
+            for m in modules
+        )
+
     def parameters(self, recurse: bool = True) -> Iterator[Parameter]:
-        """Yield all Parameters in this module (and children if recurse=True)."""
+        """Yield all Parameters in this module (and children if recurse=True).
+
+        Warns when a lazy layer has not seen an input yet.  The list is
+        not wrong — those parameters really do not exist — but it is
+        *incomplete in a way that does not announce itself*: hand it to an
+        optimiser and that layer silently never trains, with no error, no
+        shape complaint, and a loss that still goes down because the other
+        layers are learning.
+
+        A warning rather than a refusal because ``zero_grad`` and
+        ``requires_grad_`` legitimately walk an uninitialised tree and
+        should stay no-ops.  The test suite promotes it to an error (see
+        ``filterwarnings`` in ``pyproject.toml``), so the gate is strict
+        where a running program is merely told.
+        """
+        if self.has_uninitialized_parameters(recurse=recurse):
+            warnings.warn(
+                f"{type(self).__name__}.parameters() was read before a lazy "
+                "layer had seen an input, so the list is missing that "
+                "layer's weights and biases.  An optimiser built from it "
+                "will never train them.  Run one forward pass first, or "
+                "give the layer its input size explicitly.",
+                UninitializedParameterWarning,
+                stacklevel=2,
+            )
         for _, p in self.named_parameters(recurse=recurse):
             yield p
 

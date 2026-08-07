@@ -206,6 +206,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make the transforms invert and report their Jacobian
 
+- say so when a lazy layer's parameters were read too early
+
 ### Changed
 
 - give the engine ops one shared operand check

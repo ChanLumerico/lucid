@@ -12,7 +12,7 @@
     "Regenerate with:  lucid-audit --update-coverage",
     "Do that only when the new state is the intended one."
   ],
-  "cells": 6742,
+  "cells": 6744,
   "answered": {
     "broadcast::F.gumbel_softmax": "pass",
     "broadcast::Tensor.add": "pass",
@@ -196,6 +196,7 @@
     "contract::lucid.weights.WeightEntry": "pass",
     "contract::nn.Parameter": "pass",
     "contract::nn.RemovableHandle": "pass",
+    "contract::nn.UninitializedParameterWarning": "pass",
     "creategraph::F.adaptive_avg_pool1d": "pass",
     "creategraph::F.adaptive_avg_pool2d": "pass",
     "creategraph::F.adaptive_avg_pool3d": "pass",
@@ -6069,6 +6070,7 @@
     "smoke::lucid.zeros_like": "pass",
     "smoke::nn.Parameter": "pass",
     "smoke::nn.RemovableHandle": "pass",
+    "smoke::nn.UninitializedParameterWarning": "pass",
     "smoke::nn.register_module_forward_hook": "pass",
     "smoke::nn.register_module_forward_pre_hook": "pass",
     "smoke::nn.register_module_full_backward_hook": "pass",

@@ -537,8 +537,8 @@
    "total": 88
   },
   "lucid/nn/module.py": {
-   "covered": 413,
-   "total": 648
+   "covered": 424,
+   "total": 656
   },
   "lucid/nn/modules/__init__.py": {
    "covered": 17,
@@ -557,7 +557,7 @@
    "total": 225
   },
   "lucid/nn/modules/conv.py": {
-   "covered": 327,
+   "covered": 543,
    "total": 618
   },
   "lucid/nn/modules/dropout.py": {
@@ -569,7 +569,7 @@
    "total": 64
   },
   "lucid/nn/modules/linear.py": {
-   "covered": 97,
+   "covered": 132,
    "total": 140
   },
   "lucid/nn/modules/loss.py": {
@@ -577,7 +577,7 @@
    "total": 258
   },
   "lucid/nn/modules/normalization.py": {
-   "covered": 210,
+   "covered": 310,
    "total": 382
   },
   "lucid/nn/modules/padding.py": {
@@ -749,8 +749,8 @@
    "total": 291
   },
   "lucid/optim/optimizer.py": {
-   "covered": 124,
-   "total": 142
+   "covered": 126,
+   "total": 144
   },
   "lucid/optim/others.py": {
    "covered": 158,
@@ -1033,7 +1033,7 @@
    "total": 28
   }
  },
- "line_covered": 23502,
- "line_total": 28023,
- "percent": 83.86682368054812
+ "line_covered": 23866,
+ "line_total": 28033,
+ "percent": 85.13537616380694
 }

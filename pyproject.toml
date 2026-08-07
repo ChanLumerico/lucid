@@ -158,6 +158,14 @@ markers = [
     "audit:     the exhaustive (symbol x axis) sweep — ~9k cases, minutes; opt in with -m audit",
 ]
 addopts = "-v --tb=short -m 'not heavy and not audit'"
+# A lazy layer whose parameters were read too early trains nothing, in
+# silence.  ``Module.parameters`` warns rather than raises, because
+# ``zero_grad`` and ``requires_grad_`` legitimately walk an uninitialised
+# tree.  The suite has no such excuse: here it is a failure, so the gate
+# is strict where a running program is merely told.
+filterwarnings = [
+    "error::lucid.nn.UninitializedParameterWarning",
+]
 
 # ── Ruff ────────────────────────────────────────────────────────────
 # Project lint gate (paired with mypy --strict). Intent: catch real

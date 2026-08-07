@@ -163,6 +163,20 @@ class Optimizer:
         else:
             param_groups = [{"params": list(params)}]
 
+        # An optimiser over nothing steps nothing, and the loss still goes
+        # down because the rest of the model is learning — so the usual way
+        # to find out is a model that trains worse than it should for
+        # reasons nobody can name.  The commonest cause is a lazy layer
+        # whose parameters did not exist yet when ``parameters()`` was read;
+        # ``Module.parameters`` warns about that case separately, and this
+        # catches it when the whole model was lazy.
+        if not any(group.get("params") for group in param_groups):
+            raise ValueError(
+                "optimizer got an empty parameter list.  If the model has "
+                "lazy layers, run one forward pass before building the "
+                "optimizer so their parameters exist."
+            )
+
         self.param_groups: list[dict[str, object]] = []
         self._engine_optims: list[object] = []
         self.state: dict[int, dict[str, object]] = {}
