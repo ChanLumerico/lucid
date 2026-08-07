@@ -8,7 +8,8 @@ from typing import Callable, cast, override
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d, PaddingMode
 from lucid.nn.module import Module
-from lucid.nn.parameter import Parameter
+from lucid.nn.parameter import Parameter, UninitializedParameter
+from lucid.nn.modules._lazy import fill as _fill
 from lucid._factories.creation import empty
 import lucid.nn.init as init
 from lucid.nn.functional.conv import (
@@ -1624,13 +1625,15 @@ class LazyConv1d(Conv1d):
         self._has_bias: bool = bias
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
-        self.register_parameter("weight", None)
-        self.register_parameter("bias", None)
+        # Placeholders, not ``None``: an optimizer built before the first
+        # forward must be handed objects that survive being filled in.
+        self.register_parameter("weight", UninitializedParameter())
+        self.register_parameter("bias", UninitializedParameter() if bias else None)
 
     def _initialize(self, in_channels: int) -> None:
         """Internal helper for the LazyConv1d module."""
         self.in_channels = in_channels
-        self.weight = Parameter(
+        weight = Parameter(
             empty(
                 self.out_channels,
                 in_channels // self.groups,
@@ -1639,13 +1642,19 @@ class LazyConv1d(Conv1d):
                 device=self._device,
             )
         )
-        if self._has_bias:
-            self.bias = Parameter(
-                empty(self.out_channels, dtype=self._dtype, device=self._device)
-            )
+        bias = (
+            Parameter(empty(self.out_channels, dtype=self._dtype, device=self._device))
+            if self._has_bias
+            else None
+        )
+        _init_lazy_conv_weights(weight, bias)
+        # ``fill`` and not assignment — the placeholder object is what
+        # anything that read ``parameters()`` early is holding on to.
+        _fill(self, "weight", weight)
+        if bias is not None:
+            _fill(self, "bias", bias)
         else:
             self.bias = None
-        _init_lazy_conv_weights(self.weight, self.bias)
 
     @override
     def _load_from_state_dict(
@@ -1659,7 +1668,7 @@ class LazyConv1d(Conv1d):
         error_msgs: list[str],
     ) -> None:
         """Internal helper for the LazyConv1d module."""
-        if self.weight is None:
+        if self.in_channels is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
                 if len(weight.shape) != 3:
@@ -1706,7 +1715,7 @@ class LazyConv1d(Conv1d):
             spatial dimensions determined by stride, padding, dilation, and
             kernel size.
         """
-        if self.weight is None:
+        if self.in_channels is None:
             self._initialize(int(x.shape[1]))
         return Conv1d.forward(self, x)
 
@@ -1850,14 +1859,16 @@ class LazyConv2d(Conv2d):
         self._has_bias: bool = bias
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
-        self.register_parameter("weight", None)
-        self.register_parameter("bias", None)
+        # Placeholders, not ``None``: an optimizer built before the first
+        # forward must be handed objects that survive being filled in.
+        self.register_parameter("weight", UninitializedParameter())
+        self.register_parameter("bias", UninitializedParameter() if bias else None)
 
     def _initialize(self, in_channels: int) -> None:
         """Internal helper for the LazyConv2d module."""
         self.in_channels = in_channels
         kh, kw = self.kernel_size
-        self.weight = Parameter(
+        weight = Parameter(
             empty(
                 self.out_channels,
                 in_channels // self.groups,
@@ -1867,13 +1878,19 @@ class LazyConv2d(Conv2d):
                 device=self._device,
             )
         )
-        if self._has_bias:
-            self.bias = Parameter(
-                empty(self.out_channels, dtype=self._dtype, device=self._device)
-            )
+        bias = (
+            Parameter(empty(self.out_channels, dtype=self._dtype, device=self._device))
+            if self._has_bias
+            else None
+        )
+        _init_lazy_conv_weights(weight, bias)
+        # ``fill`` and not assignment — the placeholder object is what
+        # anything that read ``parameters()`` early is holding on to.
+        _fill(self, "weight", weight)
+        if bias is not None:
+            _fill(self, "bias", bias)
         else:
             self.bias = None
-        _init_lazy_conv_weights(self.weight, self.bias)
 
     @override
     def _load_from_state_dict(
@@ -1887,7 +1904,7 @@ class LazyConv2d(Conv2d):
         error_msgs: list[str],
     ) -> None:
         """Internal helper for the LazyConv2d module."""
-        if self.weight is None:
+        if self.in_channels is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
                 if len(weight.shape) != 4:
@@ -1934,7 +1951,7 @@ class LazyConv2d(Conv2d):
             spatial dimensions determined by stride, padding, dilation, and
             kernel size.
         """
-        if self.weight is None:
+        if self.in_channels is None:
             self._initialize(int(x.shape[1]))
         return Conv2d.forward(self, x)
 
@@ -2074,14 +2091,16 @@ class LazyConv3d(Conv3d):
         self._has_bias: bool = bias
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
-        self.register_parameter("weight", None)
-        self.register_parameter("bias", None)
+        # Placeholders, not ``None``: an optimizer built before the first
+        # forward must be handed objects that survive being filled in.
+        self.register_parameter("weight", UninitializedParameter())
+        self.register_parameter("bias", UninitializedParameter() if bias else None)
 
     def _initialize(self, in_channels: int) -> None:
         """Internal helper for the LazyConv3d module."""
         self.in_channels = in_channels
         kd, kh, kw = self.kernel_size
-        self.weight = Parameter(
+        weight = Parameter(
             empty(
                 self.out_channels,
                 in_channels // self.groups,
@@ -2092,13 +2111,19 @@ class LazyConv3d(Conv3d):
                 device=self._device,
             )
         )
-        if self._has_bias:
-            self.bias = Parameter(
-                empty(self.out_channels, dtype=self._dtype, device=self._device)
-            )
+        bias = (
+            Parameter(empty(self.out_channels, dtype=self._dtype, device=self._device))
+            if self._has_bias
+            else None
+        )
+        _init_lazy_conv_weights(weight, bias)
+        # ``fill`` and not assignment — the placeholder object is what
+        # anything that read ``parameters()`` early is holding on to.
+        _fill(self, "weight", weight)
+        if bias is not None:
+            _fill(self, "bias", bias)
         else:
             self.bias = None
-        _init_lazy_conv_weights(self.weight, self.bias)
 
     @override
     def _load_from_state_dict(
@@ -2112,7 +2137,7 @@ class LazyConv3d(Conv3d):
         error_msgs: list[str],
     ) -> None:
         """Internal helper for the LazyConv3d module."""
-        if self.weight is None:
+        if self.in_channels is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
                 if len(weight.shape) != 5:
@@ -2159,7 +2184,7 @@ class LazyConv3d(Conv3d):
             spatial dimensions determined by stride, padding, dilation, and
             kernel size.
         """
-        if self.weight is None:
+        if self.in_channels is None:
             self._initialize(int(x.shape[1]))
         return Conv3d.forward(self, x)
 
@@ -2295,13 +2320,15 @@ class LazyConvTranspose1d(ConvTranspose1d):
         self._has_bias: bool = bias
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
-        self.register_parameter("weight", None)
-        self.register_parameter("bias", None)
+        # Placeholders, not ``None``: an optimizer built before the first
+        # forward must be handed objects that survive being filled in.
+        self.register_parameter("weight", UninitializedParameter())
+        self.register_parameter("bias", UninitializedParameter() if bias else None)
 
     def _initialize(self, in_channels: int) -> None:
         """Internal helper for the LazyConvTranspose1d module."""
         self.in_channels = in_channels
-        self.weight = Parameter(
+        weight = Parameter(
             empty(
                 in_channels,
                 self.out_channels // self.groups,
@@ -2310,13 +2337,19 @@ class LazyConvTranspose1d(ConvTranspose1d):
                 device=self._device,
             )
         )
-        if self._has_bias:
-            self.bias = Parameter(
-                empty(self.out_channels, dtype=self._dtype, device=self._device)
-            )
+        bias = (
+            Parameter(empty(self.out_channels, dtype=self._dtype, device=self._device))
+            if self._has_bias
+            else None
+        )
+        _init_lazy_conv_weights(weight, bias)
+        # ``fill`` and not assignment — the placeholder object is what
+        # anything that read ``parameters()`` early is holding on to.
+        _fill(self, "weight", weight)
+        if bias is not None:
+            _fill(self, "bias", bias)
         else:
             self.bias = None
-        _init_lazy_conv_weights(self.weight, self.bias)
 
     @override
     def _load_from_state_dict(
@@ -2330,7 +2363,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
         error_msgs: list[str],
     ) -> None:
         """Internal helper for the LazyConvTranspose1d module."""
-        if self.weight is None:
+        if self.in_channels is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
                 if len(weight.shape) != 3:
@@ -2378,7 +2411,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
             spatial dimensions determined by stride, padding, dilation, and
             kernel size.
         """
-        if self.weight is None:
+        if self.in_channels is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose1d.forward(self, x)
 
@@ -2508,14 +2541,16 @@ class LazyConvTranspose2d(ConvTranspose2d):
         self._has_bias: bool = bias
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
-        self.register_parameter("weight", None)
-        self.register_parameter("bias", None)
+        # Placeholders, not ``None``: an optimizer built before the first
+        # forward must be handed objects that survive being filled in.
+        self.register_parameter("weight", UninitializedParameter())
+        self.register_parameter("bias", UninitializedParameter() if bias else None)
 
     def _initialize(self, in_channels: int) -> None:
         """Internal helper for the LazyConvTranspose2d module."""
         self.in_channels = in_channels
         kh, kw = self.kernel_size
-        self.weight = Parameter(
+        weight = Parameter(
             empty(
                 in_channels,
                 self.out_channels // self.groups,
@@ -2525,13 +2560,19 @@ class LazyConvTranspose2d(ConvTranspose2d):
                 device=self._device,
             )
         )
-        if self._has_bias:
-            self.bias = Parameter(
-                empty(self.out_channels, dtype=self._dtype, device=self._device)
-            )
+        bias = (
+            Parameter(empty(self.out_channels, dtype=self._dtype, device=self._device))
+            if self._has_bias
+            else None
+        )
+        _init_lazy_conv_weights(weight, bias)
+        # ``fill`` and not assignment — the placeholder object is what
+        # anything that read ``parameters()`` early is holding on to.
+        _fill(self, "weight", weight)
+        if bias is not None:
+            _fill(self, "bias", bias)
         else:
             self.bias = None
-        _init_lazy_conv_weights(self.weight, self.bias)
 
     @override
     def _load_from_state_dict(
@@ -2545,7 +2586,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
         error_msgs: list[str],
     ) -> None:
         """Internal helper for the LazyConvTranspose2d module."""
-        if self.weight is None:
+        if self.in_channels is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
                 if len(weight.shape) != 4:
@@ -2593,7 +2634,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
             spatial dimensions determined by stride, padding, dilation, and
             kernel size.
         """
-        if self.weight is None:
+        if self.in_channels is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose2d.forward(self, x)
 
@@ -2725,14 +2766,16 @@ class LazyConvTranspose3d(ConvTranspose3d):
         self._has_bias: bool = bias
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
-        self.register_parameter("weight", None)
-        self.register_parameter("bias", None)
+        # Placeholders, not ``None``: an optimizer built before the first
+        # forward must be handed objects that survive being filled in.
+        self.register_parameter("weight", UninitializedParameter())
+        self.register_parameter("bias", UninitializedParameter() if bias else None)
 
     def _initialize(self, in_channels: int) -> None:
         """Internal helper for the LazyConvTranspose3d module."""
         self.in_channels = in_channels
         kd, kh, kw = self.kernel_size
-        self.weight = Parameter(
+        weight = Parameter(
             empty(
                 in_channels,
                 self.out_channels // self.groups,
@@ -2743,13 +2786,19 @@ class LazyConvTranspose3d(ConvTranspose3d):
                 device=self._device,
             )
         )
-        if self._has_bias:
-            self.bias = Parameter(
-                empty(self.out_channels, dtype=self._dtype, device=self._device)
-            )
+        bias = (
+            Parameter(empty(self.out_channels, dtype=self._dtype, device=self._device))
+            if self._has_bias
+            else None
+        )
+        _init_lazy_conv_weights(weight, bias)
+        # ``fill`` and not assignment — the placeholder object is what
+        # anything that read ``parameters()`` early is holding on to.
+        _fill(self, "weight", weight)
+        if bias is not None:
+            _fill(self, "bias", bias)
         else:
             self.bias = None
-        _init_lazy_conv_weights(self.weight, self.bias)
 
     @override
     def _load_from_state_dict(
@@ -2763,7 +2812,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
         error_msgs: list[str],
     ) -> None:
         """Internal helper for the LazyConvTranspose3d module."""
-        if self.weight is None:
+        if self.in_channels is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
                 if len(weight.shape) != 5:
@@ -2811,7 +2860,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
             spatial dimensions determined by stride, padding, dilation, and
             kernel size.
         """
-        if self.weight is None:
+        if self.in_channels is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose3d.forward(self, x)
 

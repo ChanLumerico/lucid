@@ -210,6 +210,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - call the collate_fn that was passed, and take an IterableDataset
 
+- make a lazy layer train when the optimizer was built first
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -544,6 +544,10 @@
    "covered": 17,
    "total": 17
   },
+  "lucid/nn/modules/_lazy.py": {
+   "covered": 7,
+   "total": 8
+  },
   "lucid/nn/modules/activation.py": {
    "covered": 219,
    "total": 266
@@ -557,8 +561,8 @@
    "total": 225
   },
   "lucid/nn/modules/conv.py": {
-   "covered": 543,
-   "total": 618
+   "covered": 556,
+   "total": 631
   },
   "lucid/nn/modules/dropout.py": {
    "covered": 54,
@@ -569,16 +573,16 @@
    "total": 64
   },
   "lucid/nn/modules/linear.py": {
-   "covered": 132,
-   "total": 140
+   "covered": 134,
+   "total": 142
   },
   "lucid/nn/modules/loss.py": {
    "covered": 163,
    "total": 258
   },
   "lucid/nn/modules/normalization.py": {
-   "covered": 310,
-   "total": 382
+   "covered": 311,
+   "total": 383
   },
   "lucid/nn/modules/padding.py": {
    "covered": 106,
@@ -609,8 +613,8 @@
    "total": 73
   },
   "lucid/nn/parameter.py": {
-   "covered": 24,
-   "total": 31
+   "covered": 32,
+   "total": 36
   },
   "lucid/nn/qat/__init__.py": {
    "covered": 5,
@@ -741,7 +745,7 @@
    "total": 37
   },
   "lucid/optim/lbfgs.py": {
-   "covered": 135,
+   "covered": 134,
    "total": 172
   },
   "lucid/optim/lr_scheduler.py": {
@@ -749,8 +753,8 @@
    "total": 291
   },
   "lucid/optim/optimizer.py": {
-   "covered": 126,
-   "total": 144
+   "covered": 135,
+   "total": 155
   },
   "lucid/optim/others.py": {
    "covered": 158,
@@ -1033,7 +1037,7 @@
    "total": 28
   }
  },
- "line_covered": 23968,
- "line_total": 28070,
- "percent": 85.38653366583542
+ "line_covered": 24007,
+ "line_total": 28110,
+ "percent": 85.40377090003557
 }

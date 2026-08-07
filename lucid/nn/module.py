@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 from lucid._C import engine as _C_engine
 from lucid._tensor.tensor import Tensor
 from lucid._dispatch import _unwrap, _wrap
-from lucid.nn.parameter import Parameter
+from lucid.nn.parameter import Parameter, UninitializedParameter
 from lucid.nn.hooks import (
     _GLOBAL_BACKWARD_HOOKS,
     _GLOBAL_BACKWARD_PRE_HOOKS,
@@ -450,26 +450,31 @@ class Module:
     def parameters(self, recurse: bool = True) -> Iterator[Parameter]:
         """Yield all Parameters in this module (and children if recurse=True).
 
-        Warns when a lazy layer has not seen an input yet.  The list is
-        not wrong — those parameters really do not exist — but it is
-        *incomplete in a way that does not announce itself*: hand it to an
-        optimiser and that layer silently never trains, with no error, no
-        shape complaint, and a loss that still goes down because the other
-        layers are learning.
+        Warns when a lazy layer has not seen an input yet.
+
+        The list is complete — a lazy layer registers
+        :class:`~lucid.nn.parameter.UninitializedParameter` placeholders
+        at construction, and those objects are the ones the real weights
+        later occupy, so an optimizer built from this list does train
+        them.  What is not yet true is their *shape*: they are ``(0,)``
+        until the first forward, so anything reading shapes, counting
+        elements or flattening them into a vector is reading nothing.
 
         A warning rather than a refusal because ``zero_grad`` and
-        ``requires_grad_`` legitimately walk an uninitialised tree and
-        should stay no-ops.  The test suite promotes it to an error (see
-        ``filterwarnings`` in ``pyproject.toml``), so the gate is strict
-        where a running program is merely told.
+        ``requires_grad_`` legitimately walk a tree in this state.  The
+        test suite promotes it to an error (see ``filterwarnings`` in
+        ``pyproject.toml``), so the gate is strict where a running
+        program is merely told.
         """
         if self.has_uninitialized_parameters(recurse=recurse):
             warnings.warn(
                 f"{type(self).__name__}.parameters() was read before a lazy "
-                "layer had seen an input, so the list is missing that "
-                "layer's weights and biases.  An optimiser built from it "
-                "will never train them.  Run one forward pass first, or "
-                "give the layer its input size explicitly.",
+                "layer had seen an input.  The objects are real and an "
+                "optimizer built from them will train normally once the "
+                "shapes are known — but they are placeholders of shape "
+                "(0,) until then, so anything that reads their shapes or "
+                "flattens them now is reading nothing.  Run one forward "
+                "pass first, or give the layer its input size explicitly.",
                 UninitializedParameterWarning,
                 stacklevel=2,
             )
@@ -997,7 +1002,12 @@ class Module:
         children is handled by the top-level walker, not by this method.
         """
         for name, p in self._parameters.items():
-            if p is not None:
+            # A placeholder has no values to save, and writing its
+            # zero-element buffer would put an entry in the checkpoint
+            # that looks like a real one and restores to shape ``(0,)``.
+            # A checkpoint of a layer that has not run yet is empty, and
+            # says so.
+            if p is not None and not isinstance(p, UninitializedParameter):
                 destination[f"{prefix}{name}"] = p if keep_vars else p.detach()
         for name, b in self._buffers.items():
             if b is not None and name not in self._non_persistent_buffers:

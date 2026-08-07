@@ -1577,7 +1577,19 @@ class ModuleAxis(Axis):
                 "a container: it holds layers and defines no forward",
             )
 
-        params = list(module.parameters())
+        # A lazy layer registers placeholder parameters at construction so
+        # that anything reading ``parameters()`` early is handed the
+        # objects the real weights will occupy.  A placeholder holds no
+        # values, so ``state_dict`` leaves it out — writing its
+        # zero-element buffer would put an entry in the checkpoint that
+        # restores to shape ``(0,)``.  Counting them here made all
+        # thirteen lazy classes look like they had lost their state, with
+        # a message blaming a doubly-registered submodule.
+        params = [
+            p
+            for p in module.parameters()
+            if not isinstance(p, lucid.nn.UninitializedParameter)
+        ]
         # Non-persistent buffers are excluded from ``state_dict`` on
         # purpose — a positional-encoding table or a rotary cache is
         # recomputed from the constructor arguments, so writing it into
@@ -2103,8 +2115,22 @@ def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
     for width in widths:
         shapes += [(2, width), (2, width, 6), (2, width, 6, 6), (2, 6, width)]
 
+    # A lazy layer's parameters exist before their shapes do, and a
+    # placeholder's ``(0,)`` says nothing about the input — read as a
+    # width it produces a zero-column probe, which is how thirteen lazy
+    # classes stopped being reachable at ``forward``.  The declared
+    # ``in_channels`` above is ``None`` for them too, so they fall
+    # through to the fixed shapes, which is the right answer: only the
+    # input can say what the input is.
     try:
-        first = next(iter(module.parameters()), None)
+        first = next(
+            (
+                p
+                for p in module.parameters()
+                if not isinstance(p, lucid.nn.UninitializedParameter)
+            ),
+            None,
+        )
     except Exception:  # noqa: BLE001
         first = None
     if first is not None and hasattr(first, "shape"):

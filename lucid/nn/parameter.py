@@ -154,3 +154,50 @@ class Parameter(Tensor):
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
         return f"Parameter containing:\n{super().__repr__()}"
+
+
+class UninitializedParameter(Parameter):
+    """A parameter that exists before its shape does.
+
+    A lazy layer cannot build its weights until it sees an input, but
+    ``parameters()`` is read before that — by an optimizer, an EMA, a
+    parameter-server shard — and whatever is read then is what those
+    hold for the rest of the run.  Returning nothing means they hold
+    nothing, and the layer silently never trains.
+
+    So the object is created up front over a zero-element buffer and
+    :meth:`materialize` fills it in place.  What matters is that the
+    *object* survives: ``id(param)`` is the same before and after, so a
+    list captured early still names the weights that eventually exist.
+
+    Notes
+    -----
+    Lucid's engine optimizers capture ``TensorImpl`` pointers, one level
+    below the ``Parameter``, so preserving the Python object is
+    necessary but not sufficient — see the deferred binding in
+    :class:`~lucid.optim.Optimizer`, which is the other half.
+    """
+
+    def materialize(self, data: Tensor) -> None:
+        """Take on ``data``'s storage, shape and dtype, in place.
+
+        Parameters
+        ----------
+        data : Tensor
+            The real parameter, already the right shape and initialised.
+
+        Notes
+        -----
+        Rebinds ``_impl`` rather than copying into it: the buffer is a
+        different size, and ``copy_from`` is shape-strict by design.  The
+        instance's class is rewritten to :class:`Parameter` so nothing
+        downstream keeps treating a fully-formed weight as pending.
+        """
+        self._impl = data._impl.clone_with_grad(True)
+        # Rewriting the class is the point: nothing downstream should keep
+        # treating a fully-formed weight as pending.  mypy cannot express
+        # an instance narrowing its own type, hence the ignore.
+        self.__class__ = Parameter  # type: ignore[assignment]
+
+
+__all__ = ["Parameter", "UninitializedParameter"]

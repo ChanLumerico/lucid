@@ -100,7 +100,7 @@ class Adam(Optimizer):
         from lucid.nn.parameter import Parameter as _P
 
         params_list: list[_P] = group["params"]  # type: ignore[assignment]
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.Adam(
                 [_unwrap(p) for p in params_list],
                 cast(float, group["lr"]),
@@ -245,7 +245,7 @@ class AdamW(Optimizer):
         from lucid.nn.parameter import Parameter as _P
 
         params_list: list[_P] = group["params"]  # type: ignore[assignment]
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.AdamW(
                 [_unwrap(p) for p in params_list],
                 cast(float, group["lr"]),

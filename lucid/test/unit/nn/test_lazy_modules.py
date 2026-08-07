@@ -199,7 +199,12 @@ def test_a_stateful_instance_norm_materialises_from_its_checkpoint(kw):
 
 
 def test_state_dict_before_the_first_forward_is_empty_rather_than_wrong():
-    assert list(nn.LazyConv2d(out_channels=4, kernel_size=3).state_dict()) == []
+    """The parameters exist as placeholders, but a placeholder has no
+    values to save — and an entry holding its zero-element buffer would
+    look like a real one and restore to shape ``(0,)``."""
+    layer = nn.LazyConv2d(out_channels=4, kernel_size=3)
+    assert len(_params(layer)) == 2  # the objects are there ...
+    assert list(layer.state_dict()) == []  # ... and the checkpoint is not
 
 
 def test_repr_works_before_the_first_forward():
@@ -210,21 +215,17 @@ def test_repr_works_before_the_first_forward():
 
 
 def test_reading_parameters_too_early_says_so():
-    """The defect this file exists for.
+    """What is left to warn about, now that the training defect is gone.
 
-    A lazy layer's parameters do not exist until the first forward, and
-    the ones it then builds are *new objects*.  An optimiser built from
-    the earlier list holds something those objects are not in and never
-    touches them again: the layer does not train, nothing raises, and the
-    loss still falls because the rest of the model is learning.
-
-    The reference framework avoids it with placeholder parameters that
-    materialise in place.  Lucid warns instead — and the suite promotes
-    the warning to an error (``filterwarnings`` in ``pyproject.toml``),
-    so the gate is strict where a running program is merely told.
+    The objects are real and survive materialisation, so an optimizer is
+    fine.  Their *shapes* are not: they are ``(0,)`` until the first
+    forward, so counting elements, reading ``.shape``, or flattening
+    them into a vector reads nothing.  The suite promotes the warning to
+    an error (``filterwarnings`` in ``pyproject.toml``), so the gate is
+    strict where a running program is merely told.
     """
     model = nn.Sequential(nn.LazyConv2d(out_channels=4, kernel_size=3))
-    with pytest.warns(nn.UninitializedParameterWarning, match="never train them"):
+    with pytest.warns(nn.UninitializedParameterWarning, match="reading nothing"):
         list(model.parameters())
 
 
@@ -256,16 +257,19 @@ def test_an_eager_module_never_warns(build):
         list(build().parameters())
 
 
-def test_a_lazy_layer_mixed_with_eager_ones_still_warns():
-    """The realistic case, and the one an empty-list check misses: the
-    optimiser gets a perfectly good non-empty list that happens to be
-    missing exactly the lazy layer's weights."""
+def test_a_lazy_layer_mixed_with_eager_ones_contributes_its_placeholders():
+    """The realistic case, and the one an empty-list check misses.
+
+    The list used to hold only the eager layer's weights, so the
+    optimiser received something perfectly plausible that happened to be
+    missing exactly the lazy layer.  Now every layer is represented.
+    """
     model = nn.Sequential(
         nn.LazyConv2d(out_channels=4, kernel_size=3), nn.Flatten(), nn.Linear(144, 2)
     )
     with pytest.warns(nn.UninitializedParameterWarning):
         params = list(model.parameters())
-    assert len(params) == 2  # the Linear's weight and bias, and nothing else
+    assert len(params) == 4  # the conv's two and the Linear's two
 
 
 def test_an_optimiser_over_nothing_is_refused():
@@ -273,11 +277,41 @@ def test_an_optimiser_over_nothing_is_refused():
     it for the same reason."""
     with pytest.raises(ValueError, match="empty parameter list"):
         lucid.optim.SGD([], lr=0.1)
+
+
+def test_an_optimiser_built_before_the_first_forward_still_trains():
+    """What (b) is for, and what used to be impossible.
+
+    Placeholder parameters mean the list is not empty; the optimizer's
+    deferred engine binding means the impls it eventually steps are the
+    materialized ones.  Either half alone leaves the layer frozen.
+    """
     model = nn.Sequential(nn.LazyConv2d(out_channels=4, kernel_size=3))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", nn.UninitializedParameterWarning)
-        with pytest.raises(ValueError, match="empty parameter list"):
-            lucid.optim.SGD(model.parameters(), lr=0.1)
+        optimiser = lucid.optim.SGD(model.parameters(), lr=0.5)
+
+    x = _noisy((4, 3, 8, 8))
+    model(x)  # the parameters take their shape here, after the optimizer exists
+    before = _v(model[0].weight).copy()
+    for _ in range(3):
+        optimiser.zero_grad()
+        (model(x) ** 2).mean().backward()
+        optimiser.step()
+    assert not np.allclose(before, _v(model[0].weight))
+
+
+def test_the_placeholder_objects_are_the_ones_that_get_filled():
+    """Identity, not equality — a list captured early has to name the
+    same objects afterwards or nothing holding it benefits."""
+    model = nn.Sequential(nn.LazyConv2d(out_channels=4, kernel_size=3))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", nn.UninitializedParameterWarning)
+        early = list(model.parameters())
+    assert [tuple(p.shape) for p in early] == [(0,), (0,)]
+    model(_noisy((4, 3, 8, 8)))
+    assert [id(p) for p in early] == [id(p) for p in model.parameters()]
+    assert [tuple(p.shape) for p in early] == [(4, 3, 3, 3), (4,)]
 
 
 def test_a_dry_run_first_makes_the_layer_train():

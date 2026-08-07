@@ -178,19 +178,48 @@ class Optimizer:
             )
 
         self.param_groups: list[dict[str, object]] = []
-        self._engine_optims: list[object] = []
+        self._engines: list[object] = []
+        self._engines_built: bool = False
         self.state: dict[int, dict[str, object]] = {}
         self.defaults: dict[str, object] = defaults
 
         for group in param_groups:
             self.add_param_group(group)
 
+    @property
+    def _engine_optims(self) -> list[object]:
+        """The engine optimizers, built on first use rather than in ``__init__``.
+
+        Each engine optimizer captures ``TensorImpl`` pointers when it is
+        constructed and steps those objects directly.  Building them in
+        ``__init__`` therefore freezes whatever impls the parameters
+        happened to hold at that moment — and a lazy layer replaces its
+        impls at the first forward, which is *after* the optimizer is
+        usually built.  The engine kept stepping the old ones, so the
+        layer never moved and nothing said why.
+
+        Deferring to first use costs nothing (the first ``step`` is after
+        the first forward by construction) and fixes the general case,
+        not only lazy layers: any parameter whose impl is replaced
+        between construction and the first step is now picked up.
+        """
+        if not self._engines_built:
+            # Set first: ``_append_engine_optim`` appends through this
+            # same property, and a re-entrant build would recurse.
+            self._engines_built = True
+            for group in self.param_groups:
+                self._append_engine_optim(group)
+        return self._engines
+
     def add_param_group(self, group: dict[str, object]) -> None:
         """Add a parameter group, creating one new engine optimizer for it."""
         merged: dict[str, object] = {**self.defaults, **group}
         merged["params"] = list(merged["params"])  # type: ignore[call-overload]
         self.param_groups.append(merged)
-        self._append_engine_optim(merged)
+        # Before the build, the group is simply on the list the build reads;
+        # after it, the new group needs an engine of its own right now.
+        if self._engines_built:
+            self._append_engine_optim(merged)
 
     def _append_engine_optim(self, group: dict[str, object]) -> None:
         """Create and append one engine optimizer for a single param group.
@@ -206,7 +235,14 @@ class Optimizer:
         Preserves all accumulated optimizer state (e.g. Adam first/second moments).
         Called by LR schedulers instead of recreating engine optimizers.
         Skips read-only engine attributes silently.
+
+        A no-op before the engines exist — a scheduler constructed
+        alongside the optimizer must not be what forces them into being,
+        or the deferral above buys nothing.  The build reads
+        ``param_groups``, which is where the new values already are.
         """
+        if not self._engines_built:
+            return
         for group, eng in zip(self.param_groups, self._engine_optims):
             for k, v in group.items():
                 if k == "params":

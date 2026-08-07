@@ -8,7 +8,8 @@ from typing import override
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
-from lucid.nn.parameter import Parameter
+from lucid.nn.parameter import Parameter, UninitializedParameter
+from lucid.nn.modules._lazy import fill as _fill
 import lucid.nn.init as init
 from lucid._factories.creation import empty
 from lucid.nn.functional.linear import (
@@ -619,8 +620,10 @@ class LazyLinear(Module):
     >>> import lucid
     >>> import lucid.nn as nn
     >>> m = nn.LazyLinear(64)
-    >>> m.weight is None
+    >>> m.in_features is None          # the shape is not known yet ...
     True
+    >>> m.weight.shape                 # ... but the object already exists
+    (0,)
     >>> x = lucid.randn(4, 128)
     >>> y = m(x)              # triggers materialization
     >>> m.in_features
@@ -643,7 +646,7 @@ class LazyLinear(Module):
     >>> src = nn.Linear(512, 64)
     >>> ckpt = src.state_dict()
     >>> lazy = nn.LazyLinear(64)
-    >>> lazy.weight is None
+    >>> lazy.in_features is None
     True
     >>> lazy.load_state_dict(ckpt)  # materializes to (64, 512) from ckpt shape
     >>> lazy.in_features
@@ -664,27 +667,36 @@ class LazyLinear(Module):
         self._has_bias = bias
         self._device = device
         self._dtype = dtype
-        self.register_parameter("weight", None)
-        self.register_parameter("bias", None)
+        # Placeholders rather than ``None``: an optimizer built before the
+        # first forward has to be given objects that survive being filled
+        # in, or the layer never trains.  ``bias=False`` still registers
+        # ``None`` — a parameter that will never exist is not a pending
+        # one, and conflating the two makes every check downstream wrong.
+        self.register_parameter("weight", UninitializedParameter())
+        self.register_parameter("bias", UninitializedParameter() if bias else None)
 
     def _initialize(self, in_features: int) -> None:
         """Internal helper for the LazyLinear module."""
         self.in_features = in_features
-        self.weight = Parameter(
+        weight = Parameter(
             empty(
                 self.out_features, in_features, dtype=self._dtype, device=self._device
             )
         )
+        init.kaiming_uniform_(weight, a=math.sqrt(5))
+        # ``materialize`` and not assignment: the placeholder object is
+        # what anything that read ``parameters()`` early is holding.
+        _fill(self, "weight", weight)
+
         if self._has_bias:
-            self.bias = Parameter(
+            bound = 1.0 / math.sqrt(in_features)
+            bias = Parameter(
                 empty(self.out_features, dtype=self._dtype, device=self._device)
             )
+            init.uniform_(bias, -bound, bound)
+            _fill(self, "bias", bias)
         else:
-            self.bias = None  # type: ignore[assignment]
-        bound = 1.0 / math.sqrt(in_features)
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            init.uniform_(self.bias, -bound, bound)
+            self.bias = None
 
     @override
     def _load_from_state_dict(
@@ -697,9 +709,9 @@ class LazyLinear(Module):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
-        # If still uninitialized, materialize from the checkpoint shape first.
         """Internal helper for the LazyLinear module."""
-        if self.weight is None:
+        # If still uninitialized, materialize from the checkpoint shape first.
+        if self.in_features is None:
             weight = state_dict.get(f"{prefix}weight")
             if weight is not None:
                 if len(weight.shape) != 2:
@@ -733,8 +745,16 @@ class LazyLinear(Module):
                     bias_device = self._device or (
                         bias.device if bias is not None else weight.device
                     )
-                    self.bias = Parameter(
-                        empty(self.out_features, dtype=bias_dtype, device=bias_device)
+                    _fill(
+                        self,
+                        "bias",
+                        Parameter(
+                            empty(
+                                self.out_features,
+                                dtype=bias_dtype,
+                                device=bias_device,
+                            )
+                        ),
                     )
                 else:
                     self.bias = None
@@ -766,7 +786,10 @@ class LazyLinear(Module):
         Tensor
             Output tensor of shape :math:`(*, \text{out\_features})`.
         """
-        if self.weight is None:
+        # ``in_features`` and not ``weight is None``: the weight is now a
+        # placeholder object from construction, so its absence no longer
+        # signals "not yet built".  The recorded input size does.
+        if self.in_features is None:
             self._initialize(x.shape[-1])
         return linear(x, self.weight, self.bias)
 

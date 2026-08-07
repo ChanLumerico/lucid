@@ -7,7 +7,8 @@ from typing import override
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
-from lucid.nn.parameter import Parameter
+from lucid.nn.parameter import Parameter, UninitializedParameter
+from lucid.nn.modules._lazy import fill as _fill
 from lucid._factories.creation import ones, zeros
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -1858,8 +1859,12 @@ class _LazyBatchNormMixin(_BatchNormBase):
         self._dtype: DTypeLike = dtype
         # Placeholder slots — actual buffers / params installed lazily.
         if affine:
-            self.register_parameter("weight", None)
-            self.register_parameter("bias", None)
+            # Placeholders, not ``None``: an optimizer built before the
+            # first forward must be handed objects that survive being
+            # filled in.  Reached only when ``affine`` is on — a
+            # parameter that will never exist stays ``None``.
+            self.register_parameter("weight", UninitializedParameter())
+            self.register_parameter("bias", UninitializedParameter())
         else:
             self.weight = None
             self.bias = None
@@ -1876,11 +1881,17 @@ class _LazyBatchNormMixin(_BatchNormBase):
         """Internal helper for the _LazyBatchNormMixin module."""
         self.num_features = num_features
         if self.affine:
-            self.weight = Parameter(
-                ones(num_features, dtype=self._dtype, device=self._device)
+            # ``fill`` and not assignment — the placeholder object is what
+            # anything that read ``parameters()`` early is holding on to.
+            _fill(
+                self,
+                "weight",
+                Parameter(ones(num_features, dtype=self._dtype, device=self._device)),
             )
-            self.bias = Parameter(
-                zeros(num_features, dtype=self._dtype, device=self._device)
+            _fill(
+                self,
+                "bias",
+                Parameter(zeros(num_features, dtype=self._dtype, device=self._device)),
             )
         if self.track_running_stats:
             self._buffers["running_mean"] = zeros(
@@ -2188,8 +2199,12 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
         if affine:
-            self.register_parameter("weight", None)
-            self.register_parameter("bias", None)
+            # Placeholders, not ``None``: an optimizer built before the
+            # first forward must be handed objects that survive being
+            # filled in.  Reached only when ``affine`` is on — a
+            # parameter that will never exist stays ``None``.
+            self.register_parameter("weight", UninitializedParameter())
+            self.register_parameter("bias", UninitializedParameter())
         else:
             self.weight = None
             self.bias = None
@@ -2200,11 +2215,17 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         """Internal helper for the _LazyInstanceNormMixin module."""
         self.num_features = num_features
         if self.affine:
-            self.weight = Parameter(
-                ones(num_features, dtype=self._dtype, device=self._device)
+            # ``fill`` and not assignment — the placeholder object is what
+            # anything that read ``parameters()`` early is holding on to.
+            _fill(
+                self,
+                "weight",
+                Parameter(ones(num_features, dtype=self._dtype, device=self._device)),
             )
-            self.bias = Parameter(
-                zeros(num_features, dtype=self._dtype, device=self._device)
+            _fill(
+                self,
+                "bias",
+                Parameter(zeros(num_features, dtype=self._dtype, device=self._device)),
             )
         if self.track_running_stats:
             self._buffers["running_mean"] = zeros(

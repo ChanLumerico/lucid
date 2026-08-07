@@ -103,7 +103,7 @@ class RMSprop(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.RMSprop(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 cast(float, group["lr"]),
@@ -206,7 +206,7 @@ class Adagrad(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.Adagrad(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 cast(float, group["lr"]),
@@ -305,7 +305,7 @@ class Adadelta(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.Adadelta(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 cast(float, group["lr"]),
@@ -402,7 +402,7 @@ class Adamax(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.Adamax(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 cast(float, group["lr"]),
@@ -516,7 +516,7 @@ class RAdam(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.RAdam(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 cast(float, group["lr"]),
@@ -613,7 +613,7 @@ class NAdam(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.NAdam(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 cast(float, group["lr"]),
@@ -729,7 +729,7 @@ class ASGD(Optimizer):
         # order which left ``momentum=lambd``, ``weight_decay=alpha``,
         # ``alpha=t0``, ``t0=weight_decay`` — none of which match the
         # documented spec.  Pass keyword args so the order can't drift.
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.ASGD(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 lr=cast(float, group["lr"]),
@@ -837,7 +837,7 @@ class Rprop(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engine_optims.append(
+        self._engines.append(
             _C_engine.Rprop(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 cast(float, group["lr"]),

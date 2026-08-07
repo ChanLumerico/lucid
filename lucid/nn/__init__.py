@@ -21,7 +21,7 @@ design, so there is exactly one path to each name.
 """
 
 from lucid.nn.module import Module, UninitializedParameterWarning
-from lucid.nn.parameter import Parameter
+from lucid.nn.parameter import Parameter, UninitializedParameter
 from lucid.nn.hooks import (
     RemovableHandle,
     register_module_full_backward_hook,
@@ -202,6 +202,7 @@ __all__ = [
     "Module",
     "UninitializedParameterWarning",
     "Parameter",
+    "UninitializedParameter",
     "RemovableHandle",
     "register_module_full_backward_hook",
     "register_module_full_backward_pre_hook",
