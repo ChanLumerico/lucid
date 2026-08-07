@@ -198,6 +198,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - draw LKJ factors at the concentration asked for
 
+- index and assign the elements the key actually names
+
 ### Changed
 
 - give the engine ops one shared operand check

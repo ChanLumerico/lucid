@@ -24,6 +24,7 @@ In-place assignment:
                            (in-place, not tracked by autograd)
 """
 
+from bisect import bisect_left
 from typing import Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
@@ -405,6 +406,10 @@ def _advanced_getitem(
         range(tensor_local_dims[0], tensor_local_dims[0] + n_tensors)
     )
 
+    # Set by the branch that cannot express its post-block position as
+    # ``anchor + adv_out_ndim + mid_basic`` (see phase 5).
+    post_start: int | None = None
+
     if n_tensors == 1:
         # Single tensor: direct fancy select at adv_start_dim + tensor_local_dims[0]
         adv_start_dim + tensor_local_dims[0]
@@ -466,41 +471,53 @@ def _advanced_getitem(
 
     else:
         # Non-contiguous advanced indexing: advanced dims are NOT consecutive.
-        # The reference framework places the advanced result dims at the FRONT of the output.
-        # Strategy:
-        #   1. Permute result so tensor dims come first, then basic dims.
-        #   2. Apply coordinate_select on the first n_tensors dims.
-        #   3. Apply basic slice ops to remaining dims.
-        #   Result shape: (*bc_shape, *basic_dim_sizes)
-        all_result_dims = list(range(len(result.shape)))
-        t_dims_abs = [adv_start_dim + ld for ld in tensor_local_dims]
-        b_dims_abs = [
-            adv_start_dim + ld
-            for ld, k, _ in basic_local_dims
-            if k in ("__slice__", "__none__")
+        # The reference framework places the advanced result dims at the FRONT
+        # of the output, followed by *every* surviving dim in its original
+        # order — the ones a slice touched and the ones no index mentioned
+        # alike.  Splitting those two groups reorders the output silently:
+        # ``a[:, i, :, j]`` on a ``(2, 3, 4, 5)`` gives ``(bc, 2, 4)``, and
+        # putting the sliced dim first yields ``(bc, 4, 2)`` — same element
+        # count, wrong axes, and identical shapes whenever the two happen to
+        # match.  So the permutation keeps them in one ascending run.
+        #
+        # ``local_dim`` in ``mid_entries`` counts a ``None`` as occupying a
+        # slot, which it does in the *index expression* but not in ``result``;
+        # re-derive the real dim each entry sits on from a separate counter.
+        real = adv_start_dim
+        targets: list[int] = []
+        for _, kind, _ in mid_entries:
+            targets.append(real)
+            if kind in ("__tensor__", "__slice__"):
+                real += 1
+
+        t_dims_abs = [
+            t for t, (_, k, _) in zip(targets, mid_entries) if k == "__tensor__"
         ]
-        other_dims = [
-            d for d in all_result_dims if d not in t_dims_abs and d not in b_dims_abs
-        ]
-        perm = t_dims_abs + b_dims_abs + other_dims
-        inv_perm = [0] * len(perm)
-        for new_d, old_d in enumerate(perm):
-            inv_perm[old_d] = new_d
-        result = _C_engine.permute(result, perm)
-        # Coordinate select on first n_tensors dims
+        indexed = set(t_dims_abs)
+        keep = [d for d in range(len(result.shape)) if d not in indexed]
+        result = _C_engine.permute(result, t_dims_abs + keep)
+
+        # Coordinate select on first n_tensors dims → (*bc_shape, *keep)
         result = _coordinate_select(result, tensor_impls)
-        # Apply basic ops (now at dims n_bc through n_bc + n_basic - 1)
+
+        # Apply the mid block's basic ops where their dim landed.  ``keep`` is
+        # ascending, so a dim's output position is its rank in ``keep`` — and
+        # ``bisect_left`` gives the same answer for a ``None``, whose slot is
+        # wherever the next real dim would have gone.
         n_bc = len(bc_shape)
-        cur_basic = n_bc
-        for ld, kind, val in basic_local_dims:
+        inserted = 0
+        for (_, kind, val), target in zip(mid_entries, targets):
             if kind == "__slice__":
-                result = _select_slice(result, cur_basic, cast(slice, val))
-                cur_basic += 1
+                pos = n_bc + bisect_left(keep, target) + inserted
+                result = _select_slice(result, pos, cast(slice, val))
             elif kind == "__none__":
-                result = _C_engine.unsqueeze(result, cur_basic)
-                cur_basic += 1
+                pos = n_bc + bisect_left(keep, target) + inserted
+                result = _C_engine.unsqueeze(result, pos)
+                inserted += 1
+
         # For non-contiguous, adv result goes to front (position 0)
         adv_result_anchor = 0
+        post_start = n_bc + bisect_left(keep, real) + inserted
 
     # Phase 5: apply post block (after last tensor in original idx).
     # Result dims: [*pre_dims, *adv_dims, *mid_basic, *post]
@@ -508,7 +525,11 @@ def _advanced_getitem(
     n_mid_basic_kept = sum(
         1 for _, k, _ in basic_local_dims if k in ("__slice__", "__none__")
     )
-    cur_dim = adv_result_anchor + adv_out_ndim + n_mid_basic_kept
+    cur_dim = (
+        post_start
+        if post_start is not None
+        else adv_result_anchor + adv_out_ndim + n_mid_basic_kept
+    )
     for kind, val in post:
         if kind == "__none__":
             result = _C_engine.unsqueeze(result, cur_dim)
@@ -616,11 +637,10 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     """
     In-place assignment using Lucid engine ops only — no numpy.
 
-    Two paths:
-    • Scalar value  → mask + where(mask, full(shape, scalar), t)
-    • Tensor value  → flat-index scatter:
-        compute flat positions for all indexed dims, scatter val into flat(t),
-        reshape back.
+    Whole-tensor assignment (``t[:] = v``) has its own path; everything
+    else routes the flat positions through the *reading* path and scatters
+    into whatever comes back, so assignment can never name a different set
+    of elements than the same key would have read.
     """
     device = t._impl.device
     shape = list(t._impl.shape)
@@ -667,130 +687,49 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
             t._impl = _C_engine.full(shape, float(value), t._impl.dtype, device)
         return
 
-    # ── parse index: collect per-dim position tensors (int32) ─────────────────
-    # dim_pos[d] = 1-D int32 TensorImpl of selected positions along dim d
-    # unindexed dims keep all positions: arange(shape[d]).
-    dim_pos: dict[int, _C_engine.TensorImpl] = {}
-    tensor_dim = 0
-
-    for item in expanded:
-        if item is None:
-            continue
-        if tensor_dim >= ndim:
-            raise IndexError("Too many indices for tensor")
-        d = shape[tensor_dim]
-
-        if isinstance(item, int):
-            k = item if item >= 0 else d + item
-            dim_pos[tensor_dim] = _to_i32(
-                _C_engine.full([1], float(k), _C_engine.I32, device)
-            )
-            tensor_dim += 1
-
-        elif isinstance(item, slice):
-            dim_pos[tensor_dim] = _slice_positions(item, d, device)
-            tensor_dim += 1
-
-        elif hasattr(item, "_impl"):
-            item_impl = _unwrap(item)  # type: ignore[arg-type]
-            if item_impl.dtype == _C_engine.Bool:
-                nz = _C_engine.nonzero(item_impl)  # (n_true, k)
-                k_dims = nz.shape[1] if len(nz.shape) > 1 else 1
-                for kd in range(k_dims):
-                    col = (
-                        _C_engine.squeeze(nz, 1)
-                        if k_dims == 1
-                        else _C_engine.squeeze(
-                            _C_engine.split_at(nz, [kd, kd + 1], 1)[1], 1
-                        )
-                    )
-                    dim_pos[tensor_dim] = _to_i32(col)
-                    tensor_dim += 1
-            else:
-                dim_pos[tensor_dim] = _to_i32(_C_engine.reshape(item_impl, [-1]))
-                tensor_dim += 1
-        else:
-            raise IndexError(f"Unsupported __setitem__ index: {type(item).__name__}")
-
-    # Fill unindexed dims with arange (= "select all")
-    for d in range(ndim):
-        if d not in dim_pos:
-            dim_pos[d] = _C_engine.arange(0, shape[d], 1, _C_engine.I32, device)
-
-    # ── scalar path: mask + where ─────────────────────────────────────────────
-    if not hasattr(value, "_impl"):
-        # Build float indicator mask and apply where
-        mask_impl = _C_engine.full(shape, 1.0, _C_engine.F32, device)
-        for d, pos in dim_pos.items():
-            ind = _dim_indicator(shape[d], pos, device)
-            rs = [1] * ndim
-            rs[d] = shape[d]
-            ind_bc = _C_engine.broadcast_to(_C_engine.reshape(ind, rs), shape)
-            mask_impl = _C_engine.mul(mask_impl, ind_bc)
-        val_full = _C_engine.full(shape, float(value), t._impl.dtype, device)
-        half = _C_engine.full(shape, 0.5, _C_engine.F32, device)
-        cond = _C_engine.greater(mask_impl, half)
-        t._impl = _C_engine.where(cond, val_full, t._impl)
-        return
-
-    # ── tensor path: flat-index scatter ──────────────────────────────────────
-    # Compute flat indices for the cross-product of dim_pos along all dims.
-    # Shape of the "index grid": (len(pos0), len(pos1), ..., len(pos_{n-1}))
-    # = the shape of val (after broadcast) that maps into t.
+    # ── general path: read the positions, scatter into what came back ────────
+    # The set of elements ``t[key]`` names is exactly what ``t[key]`` reads.
+    # Deriving it a second time is where this went wrong: the old path
+    # collected one position list per dimension and took their *cross
+    # product*, which is right for slices and ints and wrong for every
+    # advanced key with more than one index array.  ``t[rows, cols] = v``
+    # wrote the whole rows x cols rectangle instead of the zipped pairs, and
+    # ``t[mask] = v`` with a full-shape mask wrote every row the mask touched
+    # anywhere.  Both wrote a superset — no error, no shape complaint, just
+    # more elements than were asked for.
     #
-    # flat_idx[i0, i1, ..., in-1] = sum_d(dim_pos[d][id] * stride_d)
-    # where stride_d = product(shape[d+1:]).
-
-    # Strides for each dim
-    strides = [1] * ndim
-    for d in range(ndim - 2, -1, -1):
-        strides[d] = strides[d + 1] * shape[d + 1]
-
-    # Build flat index as int32 tensor via outer-product-add
-    # Start with zeros shaped by the position lengths
-    grid_shape = [int(dim_pos[d].shape[0]) for d in range(ndim)]
-    flat_idx = _C_engine.zeros(grid_shape, _C_engine.I32, device)
-
-    for d in range(ndim):
-        pos = dim_pos[d]  # shape (n_d,)
-        # Scale by stride
-        stride_tensor = _C_engine.full(
-            pos.shape, float(strides[d]), _C_engine.I32, device
-        )
-        scaled = _C_engine.mul(pos, stride_tensor)  # (n_d,)
-        # Reshape to broadcast along dim d of flat_idx
-        rs = [1] * ndim
-        rs[d] = grid_shape[d]
-        scaled_bc = _C_engine.broadcast_to(_C_engine.reshape(scaled, rs), grid_shape)
-        flat_idx = _C_engine.add(flat_idx, scaled_bc)
-
-    flat_idx_1d = _to_i32(_C_engine.reshape(flat_idx, [-1]))  # (M,)
-    _prod(grid_shape)
-
-    # Flatten t
+    # So index a map of flat positions through the reading path instead.  The
+    # result carries both the positions to write and the shape the value has
+    # to broadcast to, and the two paths cannot drift apart again.
     total = _prod(shape)
-    flat_t = _C_engine.reshape(t._impl, [total])
+    positions = _C_engine.reshape(
+        _C_engine.arange(0, total, 1, _C_engine.I32, device), shape
+    )
+    if any(hasattr(item, "_impl") for item in expanded):
+        target = _advanced_getitem(positions, expanded)
+    else:
+        target = _apply_basic_index(positions, expanded)
 
-    # Prepare value: broadcast to grid_shape then flatten
-    val_impl = _unwrap(value)  # type: ignore[arg-type]
-    val_shape = list(val_impl.shape)
-    if val_shape != grid_shape:
-        n_miss = ndim - len(val_shape)
-        if n_miss > 0:
-            val_impl = _C_engine.reshape(val_impl, [1] * n_miss + val_shape)
-        val_impl = _C_engine.broadcast_to(val_impl, grid_shape)
-    flat_val = _C_engine.reshape(val_impl, [-1])
+    target_shape = list(target.shape)
+    flat_idx_1d = _to_i32(_C_engine.reshape(_C_engine.contiguous(target), [-1]))
 
-    # Cast val to t's dtype if needed
-    if flat_val.dtype != t._impl.dtype:
-        flat_val = _C_engine.astype(flat_val, t._impl.dtype)
+    if hasattr(value, "_impl"):
+        val_impl = _unwrap(value)  # type: ignore[arg-type]
+        val_shape = list(val_impl.shape)
+        if val_shape != target_shape:
+            n_miss = len(target_shape) - len(val_shape)
+            if n_miss > 0:
+                val_impl = _C_engine.reshape(val_impl, [1] * n_miss + val_shape)
+            val_impl = _C_engine.broadcast_to(val_impl, target_shape)
+        flat_val = _C_engine.reshape(_C_engine.contiguous(val_impl), [-1])
+        if flat_val.dtype != t._impl.dtype:
+            flat_val = _C_engine.astype(flat_val, t._impl.dtype)
+    else:
+        flat_val = _C_engine.full(
+            [_prod(target_shape)], float(value), t._impl.dtype, device
+        )
 
-    # Build indicator for the M target positions (to use index_copy logic):
-    # We scatter flat_val into flat_t at flat_idx_1d positions.
-    # Use: index_copy = index_fill(zeros) + index_add approach.
-    # Actually, directly:  flat_out = scatter(flat_t, 0, flat_idx_1d, flat_val)
-    # Engine scatter takes (base, dim, index, src) and REPLACES (not adds).
-    # index is same shape as src.
+    flat_t = _C_engine.reshape(_C_engine.contiguous(t._impl), [total])
     flat_out = _C_engine.scatter(flat_t, 0, flat_idx_1d, flat_val)
     t._impl = _C_engine.reshape(flat_out, shape)
 
