@@ -2,6 +2,7 @@
 nn.functional loss functions.
 """
 
+import math
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
@@ -206,7 +207,17 @@ def smooth_l1_loss(
     >>> smooth_l1_loss(pred, target, beta=1.0)
     Tensor(1.3125)
     """
-    return huber_loss(x, target, delta=beta, reduction=reduction)
+    # ``huber_loss`` alone is the wrong function: Huber's quadratic region
+    # is ``0.5 x²`` where smooth L1's is ``0.5 x² / beta``, and its linear
+    # tail is ``beta(|x| - 0.5 beta)`` where smooth L1's is ``|x| - 0.5
+    # beta``.  The two differ by a factor of ``beta`` everywhere — which is
+    # 1 at the default, so the default was right and every other ``beta``
+    # was scaled.  The ``1/beta`` this restores is the one the docstring
+    # above has always described.
+    if beta == 0.0:
+        # The degenerate limit is plain L1, as the reference also answers.
+        return l1_loss(x, target, reduction=reduction)
+    return huber_loss(x, target, delta=beta, reduction=reduction) / beta
 
 
 def huber_loss(
@@ -1282,6 +1293,36 @@ def poisson_nll_loss(
             _C_engine.add(xi, _C_engine.full(xi.shape, eps, xi.dtype, xi.device))
         )
         loss = _C_engine.sub(xi, _C_engine.mul(ti, log_xeps))
+
+    if full:
+        # ``full`` was accepted and did nothing: passing it changed the
+        # answer by exactly zero.  The term it names is Stirling's
+        # approximation to the ``log(target!)`` that the non-full form
+        # drops as constant in the parameters —
+        #
+        #     target·log(target) − target + ½·log(2π·target)
+        #
+        # applied only where ``target > 1``, since at 0 and 1 the true
+        # ``log(target!)`` is 0 and the approximation is not.
+        one = _C_engine.full(ti.shape, 1.0, ti.dtype, ti.device)
+        safe = _C_engine.maximum(ti, one)  # keeps log finite at target == 0
+        stirling = _C_engine.add(
+            _C_engine.sub(_C_engine.mul(safe, _C_engine.log(safe)), safe),
+            _C_engine.mul(
+                _C_engine.full(ti.shape, 0.5, ti.dtype, ti.device),
+                _C_engine.log(
+                    _C_engine.mul(
+                        _C_engine.full(ti.shape, 2.0 * math.pi, ti.dtype, ti.device),
+                        safe,
+                    )
+                ),
+            ),
+        )
+        zero = _C_engine.zeros(ti.shape, ti.dtype, ti.device)
+        loss = _C_engine.add(
+            loss, _C_engine.where(_C_engine.greater(ti, one), stirling, zero)
+        )
+
     return _apply_reduction(loss, reduction)
 
 

@@ -485,8 +485,8 @@
    "total": 31
   },
   "lucid/nn/functional/loss.py": {
-   "covered": 204,
-   "total": 325
+   "covered": 219,
+   "total": 334
   },
   "lucid/nn/functional/metrics.py": {
    "covered": 3,
@@ -577,7 +577,7 @@
    "total": 142
   },
   "lucid/nn/modules/loss.py": {
-   "covered": 163,
+   "covered": 182,
    "total": 258
   },
   "lucid/nn/modules/normalization.py": {
@@ -1037,7 +1037,7 @@
    "total": 28
   }
  },
- "line_covered": 24007,
- "line_total": 28110,
- "percent": 85.40377090003557
+ "line_covered": 24041,
+ "line_total": 28119,
+ "percent": 85.49735054589424
 }

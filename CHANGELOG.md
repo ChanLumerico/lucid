@@ -212,6 +212,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make a lazy layer train when the optimizer was built first
 
+- scale smooth L1 by beta and make poisson's `full` do something
+
 ### Changed
 
 - give the engine ops one shared operand check
