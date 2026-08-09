@@ -11406,6 +11406,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.modules._lazy"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.modules.activation"
     },
     {
@@ -11491,6 +11495,12 @@
     {
       "kind": "module",
       "module": "lucid.nn.utils.weight_norm"
+    }
+  ],
+  "lucid.nn.module.UninitializedParameterWarning": [
+    {
+      "kind": "module",
+      "module": "lucid.nn"
     }
   ],
   "lucid.nn.modules.activation.CELU": [
@@ -12534,6 +12544,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.modules._lazy"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.modules.activation"
     },
     {
@@ -12619,6 +12633,32 @@
     {
       "kind": "module",
       "module": "lucid.optim.sgd"
+    }
+  ],
+  "lucid.nn.parameter.UninitializedParameter": [
+    {
+      "kind": "module",
+      "module": "lucid.nn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.module"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules._lazy"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.conv"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.linear"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.normalization"
     }
   ],
   "lucid.nn.qat": [
@@ -14017,6 +14057,10 @@
     {
       "kind": "module",
       "module": "lucid.utils.data"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.data.dataloader"
     }
   ],
   "lucid.utils.data.dataset.StackDataset": [
