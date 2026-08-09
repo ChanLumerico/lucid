@@ -441,7 +441,7 @@
    "total": 401
   },
   "lucid/linalg/__init__.py": {
-   "covered": 558,
+   "covered": 588,
    "total": 673
   },
   "lucid/metal/__init__.py": {
@@ -457,7 +457,7 @@
    "total": 179
   },
   "lucid/nn/_state_dict.py": {
-   "covered": 104,
+   "covered": 108,
    "total": 134
   },
   "lucid/nn/functional/__init__.py": {
@@ -597,7 +597,7 @@
    "total": 84
   },
   "lucid/nn/modules/rnn.py": {
-   "covered": 298,
+   "covered": 379,
    "total": 400
   },
   "lucid/nn/modules/sparse.py": {
@@ -721,7 +721,7 @@
    "total": 77
   },
   "lucid/nn/utils/rnn.py": {
-   "covered": 102,
+   "covered": 105,
    "total": 122
   },
   "lucid/nn/utils/skip_init.py": {
@@ -1037,7 +1037,7 @@
    "total": 28
   }
  },
- "line_covered": 24041,
+ "line_covered": 24159,
  "line_total": 28119,
- "percent": 85.49735054589424
+ "percent": 85.91699562573349
 }
