@@ -214,6 +214,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - scale smooth L1 by beta and make poisson's `full` do something
 
+- make zero_grad(set_to_none=False) leave a zero buffer
+
 ### Changed
 
 - give the engine ops one shared operand check

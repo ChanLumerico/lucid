@@ -4,6 +4,7 @@ Optimizer base class.
 
 from typing import ClassVar, Iterable, cast, override
 
+import lucid as _lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid.nn.parameter import Parameter
@@ -262,7 +263,16 @@ class Optimizer:
                     if set_to_none:
                         p.grad = None
                     else:
-                        p._impl.zero_grad()
+                        # ``TensorImpl.zero_grad`` *resets* the gradient — it
+                        # drops the buffer rather than filling it — so this
+                        # branch used to be indistinguishable from the one
+                        # above.  ``set_to_none=False`` exists precisely to
+                        # keep an allocated zero buffer: gradient accumulation
+                        # across micro-batches reads ``p.grad`` between steps,
+                        # and a ``None`` there is an AttributeError at best and
+                        # a silently skipped update wherever the code guards
+                        # with ``if p.grad is not None``.
+                        p.grad = _lucid.zeros_like(p)
 
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single optimization step.

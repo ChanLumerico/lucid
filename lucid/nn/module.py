@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from lucid.autograd.function import FunctionCtx
 
 from lucid._C import engine as _C_engine
+import lucid as _lucid
 from lucid._tensor.tensor import Tensor
 from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.parameter import Parameter, UninitializedParameter
@@ -870,7 +871,10 @@ class Module:
                 if set_to_none:
                     p.grad = None
                 else:
-                    p._impl.zero_grad()
+                    # ``TensorImpl.zero_grad`` resets rather than fills, so
+                    # this branch was identical to the one above.  See the
+                    # same note in ``lucid.optim.Optimizer.zero_grad``.
+                    p.grad = _lucid.zeros_like(p)
 
     def requires_grad_(self, requires_grad: bool = True) -> Self:
         """Set requires_grad for all parameters."""
