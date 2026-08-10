@@ -153,6 +153,13 @@ class RandomSampler(Sampler):
         """
         self.data_source = data_source
         self.replacement = replacement
+        if num_samples is not None and num_samples <= 0:
+            # Caught here rather than at the first ``len()``, where it
+            # surfaced as ``__len__() should return >= 0`` — an error about
+            # the protocol rather than about the argument that caused it.
+            raise ValueError(
+                f"num_samples must be a positive integer, got {num_samples}."
+            )
         self._num_samples = num_samples
         self.generator = generator
 
@@ -268,11 +275,10 @@ class WeightedRandomSampler(Sampler):
         Number of indices to draw per epoch.
     replacement : bool, optional
         If ``True`` (default), draws are independent with replacement —
-        the same index may appear multiple times. If ``False``, draws use
-        weighted reservoir-style selection (via ``random.choices``); note
-        that the underlying call here still permits repeats, so callers
-        wanting strict-uniqueness should provide ``num_samples <=
-        len(weights)`` and validate downstream.
+        the same index may appear multiple times.  If ``False``, each
+        index is drawn at most once: the pool shrinks as indices are
+        taken, so ``num_samples`` may not exceed ``len(weights)`` and is
+        refused at construction if it does.
     generator : optional
         Seed-like object forwarded to ``random.Random`` for reproducibility.
 
@@ -322,6 +328,20 @@ class WeightedRandomSampler(Sampler):
             See class docstring.
         """
         self.weights = list(weights)
+        if num_samples <= 0:
+            raise ValueError(
+                f"num_samples must be a positive integer, got {num_samples}."
+            )
+        if not replacement and num_samples > len(self.weights):
+            # There are not that many distinct indices to give.  Refused
+            # here rather than silently repeating, which is what this did.
+            raise ValueError(
+                f"cannot draw {num_samples} indices without replacement from "
+                f"{len(self.weights)} weights — pass replacement=True or "
+                f"lower num_samples."
+            )
+        if any(w < 0 for w in self.weights):
+            raise ValueError("weights must be non-negative.")
         self.num_samples = num_samples
         self.replacement = replacement
         self.generator = generator
@@ -351,10 +371,36 @@ class WeightedRandomSampler(Sampler):
                         yield i
                         break
         else:
-            # Reservoir sampling (simple approach without replacement)
-            indices = list(range(n))
-            chosen = _r.choices(indices, weights=self.weights, k=self.num_samples)
-            yield from chosen
+            # ``random.choices`` samples *with* replacement — it was being
+            # called here under a comment claiming the opposite, so
+            # ``replacement=False`` returned repeats: five draws from two
+            # items gave ``[0, 1, 1, 0, 0]``.  A class-balancing sampler
+            # configured this way silently oversamples exactly the classes
+            # it was asked to visit once.
+            #
+            # It also reached for the module-level ``random`` rather than
+            # ``rng``, so ``generator`` did nothing on this branch and the
+            # epoch was not reproducible.
+            #
+            # Draw proportionally from the pool and take the chosen index
+            # out of it, which is what sampling without replacement is.
+            pool = list(range(n))
+            remaining = list(self.weights)
+            for _ in range(self.num_samples):
+                total_left = sum(remaining)
+                if total_left <= 0.0:
+                    # Every remaining weight is zero: nothing left that the
+                    # caller said it wanted.  Stop rather than fall back to
+                    # a uniform draw over items they weighted out.
+                    return
+                threshold = rng.random() * total_left
+                cumulative = 0.0
+                for slot, weight in enumerate(remaining):
+                    cumulative += weight
+                    if threshold <= cumulative:
+                        yield pool.pop(slot)
+                        remaining.pop(slot)
+                        break
 
     @override
     def __len__(self) -> int:
@@ -412,6 +458,12 @@ class BatchSampler(Sampler):
             Whether to discard the final short batch.
         """
         self.sampler = sampler
+        if batch_size <= 0:
+            # Otherwise the first ``len()`` divides by it and the caller
+            # gets a ``ZeroDivisionError`` from inside the sampler.
+            raise ValueError(
+                f"batch_size must be a positive integer, got {batch_size}."
+            )
         self.batch_size = batch_size
         self.drop_last = drop_last
 

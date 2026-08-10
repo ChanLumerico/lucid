@@ -216,6 +216,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make zero_grad(set_to_none=False) leave a zero buffer
 
+- sample without replacement when asked to
+
 ### Changed
 
 - give the engine ops one shared operand check
